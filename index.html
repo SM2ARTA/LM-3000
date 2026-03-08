@@ -2472,8 +2472,8 @@ function build(venue,venueList,skipNoBi){
         cortDated[fallbackBk].push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||'',isUnplanned:true});
         continue;
       }
-      if(!noBiAgg[s])noBiAgg[s]={sku:s,nm:nm?.nm||r["Item"]||s,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,isCort:ct};
-      noBiAgg[s].qty+=q;
+      if(!noBiAgg[s])noBiAgg[s]={sku:s,nm:nm?.nm||r["Item"]||s,qty:0,rawQty:0,pq:pqUom,ps:psVal,pqPieces:pqRaw,ok:pqUom>0&&psVal>0,isCort:ct,ppu};
+      noBiAgg[s].qty+=q;noBiAgg[s].rawQty+=_rawQ;
       noBiRows.push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||'',id:r["ID"]||r["id"]||r["Row"]||r["row"]||r["#"]||r["Material plan ID"]||r["Plan ID"]||'',isCort:ct});
       continue;
     }
@@ -2485,7 +2485,7 @@ function build(venue,venueList,skipNoBi){
       continue;
     }
     const k=dk(bi)+"|"+s;
-    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:dk(bi),qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0};agg[k].qty+=q}
+    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:dk(bi),qty:0,rawQty:0,pq:pqUom,ps:psVal,pqPieces:pqRaw,ok:pqUom>0&&psVal>0,ppu};agg[k].qty+=q;agg[k].rawQty+=_rawQ}
 
   const all=Object.values(agg),noP=all.filter(x=>!x.ok),pAll=all.filter(x=>x.ok);
   const noBiItems=Object.values(noBiAgg);
@@ -2496,7 +2496,7 @@ function build(venue,venueList,skipNoBi){
   const pool={};// sku -> {remaining, pq, ps, nm, noBiOnly}
   const datedSkus=new Set();
   pAll.forEach(x=>{
-    if(!pool[x.sku])pool[x.sku]={remaining:0,pq:x.pq,ps:x.ps,nm:x.nm,noBiOnly:false};
+    if(!pool[x.sku])pool[x.sku]={remaining:0,pq:x.pq,ps:x.ps,nm:x.nm,noBiOnly:false,ppu:x.ppu||1,pqPieces:x.pqPieces||((x.pq||1)*(x.ppu||1))};
     pool[x.sku].remaining+=x.qty;
     datedSkus.add(x.sku);
   });
@@ -2505,7 +2505,7 @@ function build(venue,venueList,skipNoBi){
   // Skip when skipNoBi=true (individual venue builds inside a cluster — cluster build handles no-BI)
   if(!skipNoBi){
     noBiPal.forEach(x=>{
-      if(!pool[x.sku])pool[x.sku]={remaining:0,pq:x.pq,ps:x.ps,nm:x.nm,noBiOnly:true};
+      if(!pool[x.sku])pool[x.sku]={remaining:0,pq:x.pq,ps:x.ps,nm:x.nm,noBiOnly:true,ppu:x.ppu||1,pqPieces:x.pqPieces||((x.pq||1)*(x.ppu||1))};
       pool[x.sku].remaining+=x.qty;
       // If this SKU also has dated entries, it's not noBiOnly
       if(datedSkus.has(x.sku))pool[x.sku].noBiOnly=false;
@@ -2531,7 +2531,10 @@ function build(venue,venueList,skipNoBi){
     for(const it of items){
       const qty=Math.min(it.qty,pool[it.sku]?.remaining||0);
       if(qty<=0)continue;
-      const exact=(qty/it.pq)*it.ps;
+      // Pallet spaces: use raw pieces basis to avoid ceil() inflation
+      // rawPlt = (qty * ppu / pqPieces) * ps — works whether ppu=1 or >1
+      const _ppu=it.ppu||1;const _pqP=it.pqPieces||((it.pq||1)*_ppu);
+      const exact=_pqP>0?(qty*_ppu/_pqP)*it.ps:(qty/it.pq)*it.ps;
       ep+=exact;
       loaded.push({sku:it.sku,nm:it.nm,sched:it.qty,loadQty:qty,loadPlt:Math.round(exact*100)/100,pq:it.pq,ps:it.ps,biK:it.biK,topUp:0,pulled:false,pulledFrom:""});
       pool[it.sku].remaining-=qty;
@@ -2630,7 +2633,8 @@ function build(venue,venueList,skipNoBi){
         }
       }
 
-      const loadPlt=(qty/it.pq)*it.ps;
+      const _ppu2=it.ppu||1;const _pqP2=it.pqPieces||((it.pq||1)*_ppu2);
+      const loadPlt=_pqP2>0?(qty*_ppu2/_pqP2)*it.ps:(qty/it.pq)*it.ps;
       loadList.push({sku:it.sku,nm:it.nm,loadQty:qty,loadPlt:Math.round(loadPlt*100)/100,
         pq:it.pq,ps:it.ps,biK:it.biK,sched:it.sched||0,topUp,
         pulled:topUp>0,pulledFrom:topUp>0?'pool':'',remainder:0,origReq:it.origReq||0});
@@ -2828,7 +2832,8 @@ function build(venue,venueList,skipNoBi){
   for(const sku in pool){
     const p=pool[sku];
     if(p.remaining>0){
-      const loadPlt=(p.remaining/p.pq)*p.ps;
+      const _ppuM=p.ppu||1;const _pqPM=p.pqPieces||((p.pq||1)*_ppuM);
+      const loadPlt=_pqPM>0?(p.remaining*_ppuM/_pqPM)*p.ps:(p.remaining/p.pq)*p.ps;
       remainingPool.push({sku,nm:p.nm,loadQty:p.remaining,loadPlt:Math.round(loadPlt*100)/100,
         pq:p.pq,ps:p.ps,biK:'no-bi',sched:0,topUp:p.remaining,pulled:true,pulledFrom:'no-bi',remainder:0});
     }
@@ -3087,7 +3092,7 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(isCort(s))a[v].hasCort=true;
   const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const pqUom=(nm?.pq||0)>0?(nm.pq/ppu):0;const psVal=nm?.ps||0;
-  if(pqUom>0&&psVal>0)a[v].ep+=(q/pqUom)*psVal;a[v].ln++;a[v].it+=q;
+  if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/nm?.pq)*psVal;a[v].ln++;a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
 }
 VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep),cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||""})).sort((a,b)=>b.plt-a.plt);
