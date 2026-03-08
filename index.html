@@ -2454,7 +2454,8 @@ function build(venue,venueList,skipNoBi){
   const cortDated={};// CORT items with dates: biK -> [{sku, nm, qty, venue}]
   const cortTotalQty={};// sku -> total qty across all dates (for X/Y display)
   for(const r of RW){if(!venuesToUse.includes(r["Venue"]))continue;const bi=pD(r["Estimated bump-in date"]);const _raw=parseInt(r["Required"])||0;if(_raw<=0)continue;
-    const s=r["Nomenclature"]||"?",nm=NOM[s];
+    const s=r["Nomenclature"]||"?";if(!NOM[s])continue;// skip items with no NOM entry (e.g. golf carts)
+    const nm=NOM[s];
     const ppu=nm?.ppu||1;const q=Math.ceil(_raw/ppu);
     // pq and ps stay in pallet-space units, but pq must be expressed in UoMs per pallet
     const pqRaw=nm?.pq||0;const pqUom=pqRaw>0?pqRaw/ppu:0;
@@ -3086,6 +3087,7 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   const bi=pD(r["Estimated bump-in date"]);
   if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
   const s=r["Nomenclature"]||"?";
+  if(!NOM[s])continue;// skip items with no NOM entry (e.g. golf carts)
   if(isCort(s))a[v].hasCort=true;
   const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const pqUom=(nm?.pq||0)>0?(nm.pq/ppu):0;const psVal=nm?.ps||0;
@@ -3824,6 +3826,7 @@ if(cv==="dashboard"){
   const calDates=Object.keys(calMap).filter(d=>d.match(/^\d{4}-/)).sort();
   // totTrucks = sum of DDD column — single source of truth so KPI card always matches table
   totTrucks=calDates.reduce((s,dk)=>s+(calMap[dk].trucks||0),0);
+  totPlt=Math.round(calDates.reduce((s,dk)=>s+(calMap[dk].pallets||0),0));
   const peakTrucks=calDates.length?Math.max(...calDates.map(d=>calMap[d].trucks)):0;
   const totalDays=calDates.length;
   const filterLabel=isClusterOv?clDisp(clusterOvName)+' Overview':(isRegion?(regionCat==='can'?'Canada Overview':'Mexico Overview'):(isFiltered?(isClusterSel2?clDisp(selCluster):sel):'All Venues'));
