@@ -2472,8 +2472,8 @@ function build(venue,venueList,skipNoBi){
         cortDated[fallbackBk].push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||'',isUnplanned:true});
         continue;
       }
-      if(!noBiAgg[s])noBiAgg[s]={sku:s,nm:nm?.nm||r["Item"]||s,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,isCort:ct};
-      noBiAgg[s].qty+=q;
+      if(!noBiAgg[s])noBiAgg[s]={sku:s,nm:nm?.nm||r["Item"]||s,rawQty:0,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,isCort:ct,ppu};
+      noBiAgg[s].rawQty+=_raw;
       noBiRows.push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||'',id:r["ID"]||r["id"]||r["Row"]||r["row"]||r["#"]||r["Material plan ID"]||r["Plan ID"]||'',isCort:ct});
       continue;
     }
@@ -2485,9 +2485,12 @@ function build(venue,venueList,skipNoBi){
       continue;
     }
     const k=dk(bi)+"|"+s;
-    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:dk(bi),qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0};agg[k].qty+=q}
+    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:dk(bi),rawQty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,ppu};agg[k].rawQty+=_raw}
 
+  // Convert accumulated raw pieces to UoMs with single ceil per (biK,sku) — avoids per-row ceil inflation
+  Object.values(agg).forEach(x=>{x.qty=Math.ceil(x.rawQty/(x.ppu||1))});
   const all=Object.values(agg),noP=all.filter(x=>!x.ok),pAll=all.filter(x=>x.ok);
+  Object.values(noBiAgg).forEach(x=>{x.qty=Math.ceil(x.rawQty/(x.ppu||1))});
   const noBiItems=Object.values(noBiAgg);
   const noBiPal=noBiItems.filter(x=>x.ok);// no-BI items WITH pallet data (non-CORT)
   const noBiNoP=noBiItems.filter(x=>!x.ok&&!x.isCort);// no-BI items WITHOUT pallet data, excluding CORT
@@ -3087,7 +3090,7 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(isCort(s))a[v].hasCort=true;
   const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const pqUom=(nm?.pq||0)>0?(nm.pq/ppu):0;const psVal=nm?.ps||0;
-  if(pqUom>0&&psVal>0)a[v].ep+=(q/pqUom)*psVal;a[v].ln++;a[v].it+=q;
+  if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/(nm.pq))*psVal;a[v].ln++;a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
 }
 VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep),cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||""})).sort((a,b)=>b.plt-a.plt);
