@@ -3737,7 +3737,8 @@ if(cv==="dashboard"){
     try{
       const vMeta=VN.find(v=>v.name===venueName)||{};
       const cl=vMeta.cluster;
-      const isNonRegionUSA=cl&&!vcIsCAN(cl)&&!vcIsMEX(cl)&&!vcIsRegion(cl);
+      // Stadiums always use their individual plan — they never participate in cluster consolidated trucks
+      const isNonRegionUSA=cl&&!vcIsCAN(cl)&&!vcIsMEX(cl)&&!vcIsRegion(cl)&&!isStadium(venueName);
 
       if(isNonRegionUSA&&useClusterPlan){
         // Multi-venue view: pump cluster consolidated plan once per cluster
