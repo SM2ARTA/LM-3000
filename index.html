@@ -174,41 +174,45 @@
   .tc{max-width:340px}
 }
 
-/* ── MOBILE BOTTOM NAV ── */
-.mob-nav{display:none}
+/* ── LM BOTTOM NAV (mobile only, inside #D) ── */
+#lm-bottom-nav{display:none}
 @media(max-width:768px){
-  /* Bottom nav bar */
-  .mob-nav{
-    display:flex;position:fixed;bottom:0;left:0;right:0;z-index:100;
-    background:var(--sf);border-top:1px solid var(--bd);
-    padding:0 0 env(safe-area-inset-bottom,0);
-    box-shadow:0 -2px 12px rgba(0,0,0,.08);
+  #lm-bottom-nav{
+    display:flex;
+    position:fixed;bottom:0;left:0;right:0;
+    z-index:80;
+    background:var(--sf);
+    border-top:2px solid var(--bd);
+    box-shadow:0 -3px 16px rgba(0,0,0,.1);
+    padding-bottom:env(safe-area-inset-bottom,0);
   }
-  .mob-nav-btn{
+  #lm-bottom-nav button{
     flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:2px;padding:8px 2px;border:none;background:none;cursor:pointer;
-    font-family:var(--fd);font-size:8px;font-weight:600;color:var(--tt);
-    letter-spacing:.3px;text-transform:uppercase;transition:color .15s;min-height:54px;
+    gap:3px;padding:10px 4px 8px;
+    border:none;background:none;cursor:pointer;
+    font-family:var(--fd);font-size:9px;font-weight:700;color:var(--tt);
+    letter-spacing:.4px;text-transform:uppercase;
+    transition:color .15s,background .15s;
+    border-top:2px solid transparent;margin-top:-2px;
   }
-  .mob-nav-btn .mob-nav-icon{font-size:18px;line-height:1}
-  .mob-nav-btn.active{color:var(--ac)}
-  .mob-nav-btn.active .mob-nav-icon{transform:scale(1.1)}
-  /* Venue sheet — slides up from bottom */
-  .sb{
-    position:fixed!important;bottom:54px!important;left:0!important;right:0!important;
-    width:100%!important;max-height:0!important;overflow:hidden!important;
+  #lm-bottom-nav button .ni{font-size:20px;line-height:1.1}
+  #lm-bottom-nav button.on{color:var(--ac);border-top-color:var(--ac)}
+  /* Venue sheet slides UP from above the bottom nav */
+  #D .sb{
+    position:fixed!important;
+    bottom:52px!important;left:0!important;right:0!important;width:100%!important;
+    max-height:0!important;overflow:hidden!important;
     border-right:none!important;border-top:1px solid var(--bd)!important;
-    transition:max-height .3s cubic-bezier(.4,0,.2,1)!important;
-    z-index:99;box-shadow:0 -4px 20px rgba(0,0,0,.1)!important;
     border-bottom:none!important;
+    transition:max-height .28s cubic-bezier(.4,0,.2,1)!important;
+    z-index:79;
+    box-shadow:0 -6px 24px rgba(0,0,0,.12)!important;
   }
-  .sb.mob-open{max-height:72vh!important;overflow-y:auto!important}
-  /* Push main content up so bottom nav doesn't cover it */
-  .cnt{padding-bottom:54px}
-  /* Hide old toggle button from header */
-  .sb-toggle{display:none!important}
-  /* Simplify header on mobile */
-  .hd>div:last-child .mod-sw{display:none}
+  #D .sb.mob-open{max-height:70vh!important;overflow-y:auto!important}
+  /* Pad main content so bottom nav doesn't obscure it */
+  #D .cnt{padding-bottom:52px}
+  /* Hide the old ☰ Venues toggle from header — bottom nav handles it */
+  #D .sb-toggle{display:none!important}
 }
 
 @media(max-width:768px){
@@ -444,22 +448,13 @@
 <div class="sbox"><input type="text" id="vs" placeholder="Search venues..."></div>
 <div style="display:flex;gap:2px;padding:4px 14px" id="vtabs"></div>
 <div class="vl" id="vl"></div></aside><main class="mn" id="mn"></main></div>
+<nav id="lm-bottom-nav">
+  <button id="lmbn-venues" onclick="lmNavVenues()"><span class="ni">☰</span>Venues</button>
+  <button id="lmbn-dashboard" onclick="lmNavTab('dashboard')"><span class="ni">📊</span>Dashboard</button>
+  <button id="lmbn-trucks" onclick="lmNavTab('trucks')"><span class="ni">🚛</span>Trucks</button>
+</nav>
 <footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
-<nav class="mob-nav" id="mobNav">
-  <button class="mob-nav-btn" id="mbn-venues" onclick="mobNavVenues()">
-    <span class="mob-nav-icon">☰</span>Venues
-  </button>
-  <button class="mob-nav-btn" id="mbn-dashboard" onclick="mobNavTab('dashboard')">
-    <span class="mob-nav-icon">📊</span>Dashboard
-  </button>
-  <button class="mob-nav-btn" id="mbn-trucks" onclick="mobNavTab('trucks')">
-    <span class="mob-nav-icon">🚛</span>Trucks
-  </button>
-  <button class="mob-nav-btn" id="mbn-mode" onclick="mobNavMode()">
-    <span class="mob-nav-icon" id="mbn-mode-icon">🌍</span><span id="mbn-mode-label">Mode</span>
-  </button>
-</nav>
 <div id="mr"></div>
 <div id="LP">
 <div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeLP"></span> <span id="sbStatusLP" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="systemReset()">↻</span></div><div style="font-size:10px;color:var(--tt)" id="lpSubtitle">Load Plan Module</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn on" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
@@ -3331,7 +3326,7 @@ function rTotals(){
   const bar=document.getElementById("totbar");
   if(bar)bar.style.display="flex";
 }
-function rT(){const icons={dashboard:'📊',trucks:'🚛'};document.getElementById("tabs").innerHTML=["dashboard","trucks"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t}</button>`).join("");if(typeof mobNavUpdateActive==="function")mobNavUpdateActive()}
+function rT(){const icons={dashboard:'📊',trucks:'🚛'};document.getElementById("tabs").innerHTML=["dashboard","trucks"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
 function B(t,c,s){return`<span class="bg ${s?'bgs':''} bg-${c}">${t}</span>`}
 function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95?"var(--rd)":p>80?"var(--or)":"var(--ac)";return`<div class="bw"><div class="btr"><div class="bfl" style="width:${p}%;background:${c}"></div></div><span class="blb" style="color:${c}">${p}%</span></div>`}
 
@@ -4498,47 +4493,30 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")clM()});
 document.getElementById("lu").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
 document.getElementById("lp").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
 
-// ── MOBILE BOTTOM NAV ──
-function mobNavUpdateActive(){
-  const isOpen=document.querySelector('.sb')?.classList.contains('mob-open');
-  document.getElementById('mbn-venues')?.classList.toggle('active',!!isOpen);
-  document.getElementById('mbn-dashboard')?.classList.toggle('active',!isOpen&&cv==='dashboard');
-  document.getElementById('mbn-trucks')?.classList.toggle('active',!isOpen&&cv==='trucks');
-  // Update mode button
-  const modeMap={lm:{icon:'🚛',label:'LM'},v26:{icon:'🌍',label:'Vision'},lp:{icon:'📦',label:'Load Plan'}};
-  const cur=document.getElementById('D').style.display!=='none'?'lm':(document.getElementById('V26').style.display!=='none'?'v26':'lp');
-  const m=modeMap[cur]||modeMap.lm;
-  const ic=document.getElementById('mbn-mode-icon');const lb=document.getElementById('mbn-mode-label');
-  if(ic)ic.textContent=m.icon;if(lb)lb.textContent=m.label;
+
+// ── LM MOBILE BOTTOM NAV ──
+function lmNavSync(){
+  if(window.innerWidth>768)return;
+  const isOpen=document.getElementById('D')?.querySelector('.sb')?.classList.contains('mob-open');
+  const d=document.getElementById('lmbn-dashboard');
+  const t=document.getElementById('lmbn-trucks');
+  const v=document.getElementById('lmbn-venues');
+  if(d)d.classList.toggle('on',!isOpen&&cv==='dashboard');
+  if(t)t.classList.toggle('on',!isOpen&&cv==='trucks');
+  if(v)v.classList.toggle('on',!!isOpen);
 }
-function mobNavVenues(){
-  const sb=document.querySelector('.sb');if(!sb)return;
-  const opening=!sb.classList.contains('mob-open');
-  sb.classList.toggle('mob-open',opening);
-  mobNavUpdateActive();
+function lmNavVenues(){
+  const sb=document.getElementById('D')?.querySelector('.sb');
+  if(!sb)return;
+  sb.classList.toggle('mob-open');
+  lmNavSync();
 }
-function mobNavTab(tab){
-  // Close venues sheet first
-  document.querySelector('.sb')?.classList.remove('mob-open');
+function lmNavTab(tab){
+  const sb=document.getElementById('D')?.querySelector('.sb');
+  if(sb)sb.classList.remove('mob-open');
   cv=tab;rT();rMain();
-  mobNavUpdateActive();
+  lmNavSync();
 }
-const _origSwitchMod=typeof switchMod==='function'?switchMod:null;
-function switchMod(m){
-  if(_origSwitchMod)_origSwitchMod(m);
-  setTimeout(mobNavUpdateActive,50);
-}
-let _mobModeIdx=0;
-function mobNavMode(){
-  const modes=['lm','v26','lp'];
-  const cur=document.getElementById('D').style.display!=='none'?'lm':(document.getElementById('V26').style.display!=='none'?'v26':'lp');
-  _mobModeIdx=(modes.indexOf(cur)+1)%modes.length;
-  switchMod(modes[_mobModeIdx]);
-}
-// Patch rMain to keep bottom nav in sync
-const _origRMain=typeof rMain==='function'?rMain:null;
-// Hook via event after rMain runs
-document.addEventListener('DOMContentLoaded',()=>{setTimeout(mobNavUpdateActive,200)});
 
 </script>
 </body>
