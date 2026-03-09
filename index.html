@@ -1429,9 +1429,10 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   ws.getRow(10).height=8;mc(ws,'A11:D11');mc(ws,'E11:I11');mc(ws,'J11:O11');ws.getRow(11).height=24;sc(ws,11,1,'SHIPPER',fSec,L,null,chF);sc(ws,11,5,'CONSIGNEE',fSec,L,null,mdF);sc(ws,11,10,'CUSTOMS BROKER',fSec,L,null,mdF);fil(ws,11,1,4,chF);fil(ws,11,5,9,mdF);fil(ws,11,10,15,mdF);box(ws,11,1,15,bM);
   const si=['FWC2026 US, Inc','396 Alhambra Circle, Ste# 400','Coral Gables, FL 33134','USA','',''];
   const pty=LP_getCIParties(dest);
-  const cnF={type:'pattern',pattern:'solid',fgColor:{argb:'FFe8eef3'}};
-  const brF={type:'pattern',pattern:'solid',fgColor:{argb:'FFecf0f1'}};
-  for(let i=0;i<6;i++){const rn=12+i;ws.getRow(rn).height=16;mc(ws,'A'+rn+':D'+rn);mc(ws,'E'+rn+':I'+rn);mc(ws,'J'+rn+':O'+rn);sc(ws,rn,1,si[i],fD,L);fil(ws,rn,1,4,l1F);sc(ws,rn,5,pty.consignee[i],fD,L);fil(ws,rn,5,9,cnF);sc(ws,rn,10,pty.broker[i],fD,L);fil(ws,rn,10,15,brF);box(ws,rn,1,15)}
+  const shpF={type:'pattern',pattern:'solid',fgColor:{argb:'FFdfe6e9'}};
+  const cnF={type:'pattern',pattern:'solid',fgColor:{argb:'FFd5dde5'}};
+  const brF={type:'pattern',pattern:'solid',fgColor:{argb:'FFe2e8e4'}};
+  for(let i=0;i<6;i++){const rn=12+i;ws.getRow(rn).height=16;mc(ws,'A'+rn+':D'+rn);mc(ws,'E'+rn+':I'+rn);mc(ws,'J'+rn+':O'+rn);sc(ws,rn,1,si[i],fD,L,null,shpF);sc(ws,rn,5,pty.consignee[i],fD,L,null,cnF);sc(ws,rn,10,pty.broker[i],fD,L,null,brF);fil(ws,rn,1,4,shpF);fil(ws,rn,5,9,cnF);fil(ws,rn,10,15,brF);box(ws,rn,1,15)}
   ws.getRow(18).height=8;const hd=['QTY','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF ORIGIN','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
   mc(ws,'F19:H19');ws.getRow(19).height=32;hd.forEach((h,i)=>{const c=ws.getRow(19).getCell(i+1);c.value=h||null;c.font=fH;c.fill=chF;c.border=bM;c.alignment=W});ws.getRow(19).getCell(6).value='DIMENSIONS';
   const sb=['','','','','','Length','Width','Height','(cm/in)','','(lbs/kgs)','(USD)','','',''];ws.getRow(20).height=15;sb.forEach((s,i)=>{const c=ws.getRow(20).getCell(i+1);c.value=s;c.font=fSub;c.fill=l2F;c.border=brd;c.alignment=AC});
