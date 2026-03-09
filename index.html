@@ -1148,6 +1148,7 @@ function LP_renderPlan(el){
   }
   const dates=Object.keys(byDate).sort();
   const maxPlt=LP_STATE.maxPallets;
+  const lpArrivedSkus=new Set((LP_STATE.arrivals||[]).map(a=>a.sku));
 
   // ── KPI Summary ──
   const lpTotalTrucks=truckList.length;
@@ -1235,6 +1236,7 @@ function LP_renderPlan(el){
           <span class="lp-cap-lbl" style="color:${isDisp?'var(--gn)':barColor}">${pct}%</span>
         </div>
         <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px">${aggSkus.map(s=>{const nom=LP_STATE.nomenclature[s.sku]||{};const arrived=lpArrivedSkus.has(s.sku);const dot=`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${arrived?'var(--gn)':'var(--rd)'};flex-shrink:0"></span>`;const src=nom.source?`<span style="color:var(--tt);font-style:italic">${nom.source}</span>`:'';return`<div style="display:flex;align-items:center;gap:5px;font-size:9px;line-height:1.3">${dot}<span class="mono" style="color:var(--ts)">${s.sku}</span><span style="color:var(--tt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name||''}</span>${src}</div>`}).join('')}</div>
         ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()">
           <input type="checkbox" ${checked} onchange="LP_toggleDispatch(${t.id},this.checked)">
           <span>${isDisp?'✅ Dispatched — locked':'Mark dispatched'}</span>
@@ -1285,6 +1287,7 @@ function LP_showTruckModal(truckId){
     shippedUpToByDestSku[k]=(shippedUpToByDestSku[k]||0)+(r.qty||0);
   }
 
+  const mdArrivedSkus=new Set((LP_STATE.arrivals||[]).map(a=>a.sku));
   let rows='';
   for(const s of aggSkus){
     const nom=LP_STATE.nomenclature[s.sku]||{};
@@ -1292,9 +1295,13 @@ function LP_showTruckModal(truckId){
     const totalDemand=totalDemandByDestSku[demKey]||0;
     const shippedUpTo=shippedUpToByDestSku[demKey]||0;
     const remain=Math.max(0,totalDemand-shippedUpTo);
+    const arrived=mdArrivedSkus.has(s.sku);
+    const dot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${arrived?'var(--gn)':'var(--rd)'}" title="${arrived?'Arrived (FF&E)':'Not arrived'}"></span>`;
     rows+=`<tr>
+      <td>${dot}</td>
       <td class="mono">${s.sku}</td>
       <td class="tcl">${s.name||'—'}</td>
+      <td style="font-size:10px;color:var(--ts)">${nom.source||'—'}</td>
       <td class="mono fw6">${s.qty.toLocaleString()}</td>
       <td class="mono">${s.pallets.toFixed(2)}</td>
       <td class="mono">${nom.palletQty||'—'}</td>
@@ -1317,7 +1324,7 @@ function LP_showTruckModal(truckId){
           <div>Utilization: <strong>${Math.round((totalPlt/LP_STATE.maxPallets)*100)}%</strong></div>
         </div>
         <div class="csf"><table class="dtb"><thead><tr>
-          <th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th><th>Plt Qty</th><th>Plt Spc</th><th>Remain</th>
+          <th style="width:20px"></th><th>SKU</th><th>Name</th><th>Source</th><th>Qty</th><th>Pallets</th><th>Plt Qty</th><th>Plt Spc</th><th>Remain</th>
         </tr></thead><tbody>${rows}</tbody></table></div>
       </div>`;
   openModal(mh,'860px');
@@ -1329,6 +1336,7 @@ function LP_exportSingleTruck(truckId){
   const agg=LP_aggregateTruck(rawPlan);
   const first=rawPlan[0];
   const dest=clDisp(first.destination);
+  const expArrivedSkus=new Set((LP_STATE.arrivals||[]).map(a=>a.sku));
   const rows=agg.map(s=>{
     const lpNom=LP_STATE.nomenclature[s.sku]||{};
     const lmNom=NOM[s.sku]||{};
@@ -1336,6 +1344,8 @@ function LP_exportSingleTruck(truckId){
     return{
       'Nomenclature code':s.sku,
       'Nomenclature name':lmNom.nm||lpNom.name||s.name||s.sku,
+      'Source':lpNom.source||'',
+      'Arrived':expArrivedSkus.has(s.sku)?'Yes':'No',
       'Qty':Math.ceil(s.qty/ppu)
     };
   });
@@ -1343,7 +1353,7 @@ function LP_exportSingleTruck(truckId){
   const hdr=[['Truck','LP-'+truckId,'Destination',dest,'Date',first.date]];
   const ws=XLSX.utils.aoa_to_sheet(hdr);
   XLSX.utils.sheet_add_json(ws,rows,{origin:'A3'});
-  ws['!cols']=[{wch:22},{wch:40},{wch:10}];
+  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:10},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'LP-'+truckId);
   XLSX.writeFile(wb,'LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_Shipping_Order.xlsx');
 }
@@ -1352,6 +1362,18 @@ function LP_exportSingleTruck(truckId){
    COMMERCIAL INVOICE EXPORT
    Uses ExcelJS if available (styled), falls back to SheetJS (plain)
    ───────────────────────────────────────────── */
+function LP_getCIParties(dest){
+  const u=(dest||'').toUpperCase();
+  if(u.includes('CAN'))return{
+    consignee:['FWC26 Canada Football Ltd','67 Mowat Avenue, Ste# 200','Toronto, ON M6K3E3','Canada','Business no: 773064001RM0001',''],
+    broker:['Rock It Cargo Canada','c/o Pacific Customs Broker','','Contact: fifa.canada@rockitcargo.com','','']
+  };
+  if(u.includes('MEX'))return{
+    consignee:['FWC2026 Mexico, S. De R.L. de C.V.','Av Paseo de la Reforma 350 - Piso 12','Col. Juarez, Alcaldia Cuauhtemoc','CP0660, CDMX','Mexico',''],
+    broker:['Cargolive, S.DE R.L.DE C.V.','Platon #409 - Colonia Poloanco V Seccion','Alcaldia Miguel Hidalgo - C.P. 11560 CDMX','MEXICO','Contact: fifa.mexico@rockitcargo.com','']
+  };
+  return{consignee:['','','','','',''],broker:['','','','','','']};
+}
 async function LP_exportCI(truckId){
   const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
   if(!rawPlan.length)return;
@@ -1370,8 +1392,9 @@ function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   const rows=agg.map(it=>{const nm=nomenclature[it.sku]||{};const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
     return{'QTY':it.qty,'DESCRIPTION':nm.name||it.name||it.sku,'ITEM #':it.sku,'HS CODE':nm.hsCode||'','COUNTRY':nm.country||'','CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
   rows.push({'QTY':tQ,'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV,'Pallets':+totalPlt.toFixed(2)});
-  const ciData=[['COMBINED INVOICE AND PACKING LIST'],[''],['DATE:',date,'','INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Mode of Transport:','Road'],[''],['SHIPPER:','FWC2026 US, Inc, 396 Alhambra Circle, Ste# 400, Coral Gables, FL 33134, USA'],['']];
-  const ws=XLSX.utils.aoa_to_sheet(ciData);XLSX.utils.sheet_add_json(ws,rows,{origin:'A10'});
+  const pty=LP_getCIParties(dest);
+  const ciData=[['COMBINED INVOICE AND PACKING LIST'],[''],['DATE:',date,'','INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Mode of Transport:','Road'],[''],['SHIPPER:','FWC2026 US, Inc, 396 Alhambra Circle, Ste# 400, Coral Gables, FL 33134, USA'],['CONSIGNEE:',pty.consignee.filter(Boolean).join(', ')],['CUSTOMS BROKER:',pty.broker.filter(Boolean).join(', ')],['']];
+  const ws=XLSX.utils.aoa_to_sheet(ciData);XLSX.utils.sheet_add_json(ws,rows,{origin:'A12'});
   ws['!cols']=[{wch:8},{wch:36},{wch:22},{wch:16},{wch:20},{wch:8},{wch:12},{wch:14},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Commercial Invoice');
   const plData=[['PACKING LIST'],[''],['Truck:','LP-'+truckId,'Date:',date,'Destination:',dest],['Items:',tQ,'Pallets:',+totalPlt.toFixed(2),'Total Value:',tV],['']];
@@ -1404,7 +1427,8 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   for(let i=0;i<6;i++){const rn=4+i;ws.getRow(rn).height=20;mc(ws,'A'+rn+':B'+rn);mc(ws,'C'+rn+':I'+rn);sc(ws,rn,1,iL[i][0],fLbl,L,null,l2F);sc(ws,rn,3,iL[i][1],i<3?fVB:fVal,L,null,whF);if(i===0){mc(ws,'J'+rn+':O'+rn);sc(ws,rn,10,iR[i][0],fSec,AC,null,dkF);fil(ws,rn,10,15,dkF)}else{mc(ws,'J'+rn+':K'+rn);sc(ws,rn,10,iR[i][0],fLbl,L,null,l2F);sc(ws,rn,12,iR[i][1],fVal,L);if(iR[i][2]){mc(ws,'M'+rn+':N'+rn);sc(ws,rn,13,iR[i][2],fLbl,L,null,l2F);sc(ws,rn,15,iR[i][3],fVal,L)}}box(ws,rn,1,15)}
   ws.getRow(10).height=8;mc(ws,'A11:D11');mc(ws,'E11:I11');mc(ws,'J11:O11');ws.getRow(11).height=24;sc(ws,11,1,'SHIPPER',fSec,L,null,chF);sc(ws,11,5,'CONSIGNEE',fSec,L,null,mdF);sc(ws,11,10,'CUSTOMS BROKER',fSec,L,null,mdF);fil(ws,11,1,4,chF);fil(ws,11,5,9,mdF);fil(ws,11,10,15,mdF);box(ws,11,1,15,bM);
   const si=['FWC2026 US, Inc','396 Alhambra Circle, Ste# 400','Coral Gables, FL 33134','USA','',''];
-  for(let i=0;i<6;i++){const rn=12+i;ws.getRow(rn).height=16;mc(ws,'A'+rn+':D'+rn);mc(ws,'E'+rn+':I'+rn);mc(ws,'J'+rn+':O'+rn);sc(ws,rn,1,si[i],fD,L);box(ws,rn,1,15)}
+  const pty=LP_getCIParties(dest);
+  for(let i=0;i<6;i++){const rn=12+i;ws.getRow(rn).height=16;mc(ws,'A'+rn+':D'+rn);mc(ws,'E'+rn+':I'+rn);mc(ws,'J'+rn+':O'+rn);sc(ws,rn,1,si[i],fD,L);sc(ws,rn,5,pty.consignee[i],fD,L);sc(ws,rn,10,pty.broker[i],fD,L);box(ws,rn,1,15)}
   ws.getRow(18).height=8;const hd=['QTY','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF ORIGIN','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
   mc(ws,'F19:H19');ws.getRow(19).height=32;hd.forEach((h,i)=>{const c=ws.getRow(19).getCell(i+1);c.value=h||null;c.font=fH;c.fill=chF;c.border=bM;c.alignment=W});ws.getRow(19).getCell(6).value='DIMENSIONS';
   const sb=['','','','','','Length','Width','Height','(cm/in)','','(lbs/kgs)','(USD)','','',''];ws.getRow(20).height=15;sb.forEach((s,i)=>{const c=ws.getRow(20).getCell(i+1);c.value=s;c.font=fSub;c.fill=l2F;c.border=brd;c.alignment=AC});
@@ -3468,14 +3492,18 @@ let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stop
 <div class="mdh"><div><h3>🚛 ${t.id}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
 <div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${LP.tCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span></div>${PB(t.pallets,LP.tCap)}
 <table class="dtb" style="margin-top:14px"><thead><tr>
-<th colspan="2" style="border-right:2px solid var(--bd)"></th>
+<th colspan="4" style="border-right:2px solid var(--bd)"></th>
 <th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--ts)">${isClusterTruck?'CLUSTER TOTAL':'VENUE TOTAL'}</th>
 ${isClusterTruck?'':`<th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--or)">REQUESTED</th>`}
 <th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--gn)">THIS TRUCK</th>
 <th style="text-align:center;color:var(--ac)">POOL LEFT</th>
 ${isClusterTruck?'':`<th style="color:var(--pu)">NOTE</th>`}
-</tr><tr><th>SKU</th><th style="border-right:2px solid var(--bd)">Item</th><th>Total Qty</th><th style="border-right:2px solid var(--bl)">Per Plt</th>${isClusterTruck?'':`<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th>`}<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th><th style="border-right:2px solid var(--bl)">Remaining</th>${isClusterTruck?'':`<th></th>`}</tr></thead><tbody>`;
+</tr><tr><th style="width:16px"></th><th>SKU</th><th>Item</th><th style="border-right:2px solid var(--bd)">Source</th><th>Total Qty</th><th style="border-right:2px solid var(--bl)">Per Plt</th>${isClusterTruck?'':`<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th>`}<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th><th style="border-right:2px solid var(--bl)">Remaining</th>${isClusterTruck?'':`<th></th>`}</tr></thead><tbody>`;
+const lmArrivedSkus=new Set((LP_STATE?.arrivals||[]).map(a=>a.sku));
 t.items.forEach(it=>{
+const lmArrived=lmArrivedSkus.has(it.sku);
+const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmArrived?'var(--gn)':'var(--rd)'}" title="${lmArrived?'Arrived (FF&E)':'Not arrived'}"></span>`;
+const lmSrc=(NOM[it.sku]?.src)||'';
 const totalForSku=it.noPallet?LP.all.filter(x=>x.sku===it.sku).reduce((s,x)=>s+x.qty,0):LP.all.filter(x=>x.sku===it.sku&&x.ok).reduce((s,x)=>s+x.qty,0);
 const poolLeft=it.noPallet?'—':(it.poolAfter!==undefined?it.poolAfter:'—');
 const reqPlt=(it.noPallet||it.pq===0)?0:(it.sched>0?((it.sched/it.pq)*it.ps):0);
@@ -3501,7 +3529,7 @@ if(it.noPallet){
   reqQtyHtml=`<span style="color:var(--tt);font-size:10px">${it.loadQty.toLocaleString()} / ${denom.toLocaleString()}</span>`;
   reqPltHtml=`<span style="color:var(--tt);font-size:10px">${lPltD} / ${denomPltD}</span>`;
 }
-h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td class="mono">${it.sku}</td><td class="tcl" style="color:var(--ts);border-right:2px solid var(--bl)">${it.nm}</td>
+h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}</td><td class="mono">${it.sku}</td><td class="tcl" style="color:var(--ts)">${it.nm}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
 <td class="fw6">${totalForSku.toLocaleString()}</td><td class="cgr" style="border-right:2px solid var(--bl)">${it.pq||'—'}</td>
 ${isClusterTruck?'':`<td style="border-right:none">${reqQtyHtml}</td><td style="border-right:2px solid var(--bl)">${reqPltHtml}</td>`}
 <td class="fw7 cgn">${it.loadQty.toLocaleString()}</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.noPallet?'<span style="color:var(--or);font-size:10px">—</span>':(Number.isInteger(it.loadPlt)?it.loadPlt:it.loadPlt.toFixed(1))}</td>
@@ -4423,6 +4451,7 @@ function exportTruck(truckIdx){
     return{
       'Nomenclature code':it.sku,
       'Nomenclature name':it.nm||nom.nm||it.sku,
+      'Source':nom.src||'',
       'Qty':it.loadQty
     };
   });
@@ -4430,7 +4459,7 @@ function exportTruck(truckIdx){
   const hdr=[['Truck',t.id,'Destination',dest]];
   const ws=XLSX.utils.aoa_to_sheet(hdr);
   XLSX.utils.sheet_add_json(ws,rows,{origin:'A3'});
-  ws['!cols']=[{wch:22},{wch:40},{wch:10}];
+  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Truck '+t.id);
   XLSX.writeFile(wb,t.id+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_Shipping_Order.xlsx');
 }
