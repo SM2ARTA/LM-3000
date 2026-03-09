@@ -941,6 +941,11 @@ function LP_renderArrivals(el){
     if(a.arrivalDate)byCont[k].dates.add(a.arrivalDate);
   }
   const conts=Object.values(byCont).sort((a,b)=>{
+    // Sort no-container to end
+    const noA=a.name==='—'||a.name==='NO CONTAINER';
+    const noB=b.name==='—'||b.name==='NO CONTAINER';
+    if(noA&&!noB)return 1;
+    if(!noA&&noB)return -1;
     const da=[...a.dates].sort()[0]||'9999';
     const db=[...b.dates].sort()[0]||'9999';
     return da.localeCompare(db);
@@ -968,65 +973,65 @@ function LP_renderArrivals(el){
     </div>`).join('')}
   </div>`;
 
-  // Container cards — same style as truck cards
-  html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">`;
+  const maxPlt=Math.max(...conts.map(x=>x.totalPlt),1);
+  // Container cards grid — dense TV layout
+  html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">`;
   for(const cont of conts){
     const color=cc(cont.name);
     const arrDates=[...cont.dates].sort().join(' · ')||'No date';
     const id='lp-cont-'+cont.name.replace(/[^a-z0-9]/gi,'_');
-    html+=`<div style="background:var(--sf);border:1.5px solid ${color}55;border-radius:12px;overflow:hidden">
-      <!-- Card header — click to expand -->
-      <div onclick="lpContToggle('${id}')" style="cursor:pointer;padding:12px 14px;display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:center;gap:8px">
-            <svg width="28" height="20" viewBox="0 0 28 20" style="flex-shrink:0">
-              <rect x="1" y="3" width="26" height="14" rx="2" fill="#1a1a2e" stroke="${color}" stroke-width="1.5"/>
-              <rect x="2" y="3" width="24" height="5" rx="1" fill="${color}" opacity="0.4"/>
-              ${[1,2,3].map(i=>`<line x1="${4+i*6}" y1="5" x2="${4+i*6}" y2="16" stroke="${color}" stroke-width="0.7" opacity="0.4"/>`).join('')}
-              <line x1="14" y1="5" x2="14" y2="16" stroke="${color}" stroke-width="1" opacity="0.7"/>
-              <rect x="3" y="17" width="22" height="2" rx="1" fill="#2a2a3e"/>
-              <circle cx="7" cy="19" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
-              <circle cx="21" cy="19" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
+    const fillPct=Math.min(100,Math.round(cont.totalPlt/maxPlt*100));
+    const noContainer=cont.name==='—'||cont.name==='NO CONTAINER';
+    html+=`<div style="background:var(--sf);border:1.5px solid ${color}44;border-radius:10px;overflow:hidden">
+      <div onclick="lpContToggle('${id}')" style="cursor:pointer;padding:9px 11px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0">
+            <svg width="22" height="16" viewBox="0 0 28 20" style="flex-shrink:0">
+              <rect x="1" y="2" width="26" height="13" rx="2" fill="#1a1a2e" stroke="${color}" stroke-width="1.8"/>
+              <rect x="2" y="2" width="24" height="5" rx="1" fill="${color}" opacity="0.35"/>
+              ${[1,2,3].map(i=>`<line x1="${4+i*6}" y1="4" x2="${4+i*6}" y2="14" stroke="${color}" stroke-width="0.6" opacity="0.35"/>`).join('')}
+              <line x1="14" y1="4" x2="14" y2="14" stroke="${color}" stroke-width="1.2" opacity="0.6"/>
+              <rect x="3" y="15" width="22" height="2" rx="1" fill="#2a2a3e"/>
+              <circle cx="7" cy="18" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
+              <circle cx="21" cy="18" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
             </svg>
-            <span style="font-size:13px;font-weight:800;color:${color}">${cont.name}</span>
+            <span style="font-size:12px;font-weight:800;color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${noContainer?'No Container':cont.name}</span>
           </div>
-          <span id="${id}-chev" style="color:var(--tt);font-size:12px;transition:transform .2s">▼</span>
+          <span id="${id}-chev" style="color:var(--tt);font-size:10px;flex-shrink:0;margin-left:4px;transition:transform .2s">▼</span>
         </div>
-        <div style="font-size:11px;color:var(--tt)">📅 ${arrDates}</div>
-        <div style="display:flex;gap:8px">
-          <div style="flex:1;background:var(--bg);border-radius:7px;padding:6px 8px;text-align:center">
-            <div style="font-size:16px;font-weight:800;color:${color}">${cont.totalPlt.toFixed(1)}</div>
-            <div style="font-size:9px;color:var(--tt)">pallets</div>
+        <div style="font-size:10px;color:var(--tt);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📅 ${arrDates}</div>
+        <div style="display:flex;gap:5px;margin-bottom:6px">
+          <div style="flex:1;background:var(--bg);border-radius:5px;padding:4px 5px;text-align:center">
+            <div style="font-size:14px;font-weight:800;color:${color};line-height:1.1">${cont.totalPlt.toFixed(1)}</div>
+            <div style="font-size:8px;color:var(--tt)">plt</div>
           </div>
-          <div style="flex:1;background:var(--bg);border-radius:7px;padding:6px 8px;text-align:center">
-            <div style="font-size:16px;font-weight:800;color:var(--ts)">${cont.totalQty.toLocaleString()}</div>
-            <div style="font-size:9px;color:var(--tt)">pieces</div>
+          <div style="flex:1;background:var(--bg);border-radius:5px;padding:4px 5px;text-align:center">
+            <div style="font-size:14px;font-weight:800;color:var(--ts);line-height:1.1">${cont.totalQty.toLocaleString()}</div>
+            <div style="font-size:8px;color:var(--tt)">pcs</div>
           </div>
-          <div style="flex:1;background:var(--bg);border-radius:7px;padding:6px 8px;text-align:center">
-            <div style="font-size:16px;font-weight:800;color:var(--ts)">${cont.items.length}</div>
-            <div style="font-size:9px;color:var(--tt)">SKUs</div>
+          <div style="flex:1;background:var(--bg);border-radius:5px;padding:4px 5px;text-align:center">
+            <div style="font-size:14px;font-weight:800;color:var(--ts);line-height:1.1">${cont.items.length}</div>
+            <div style="font-size:8px;color:var(--tt)">SKUs</div>
           </div>
         </div>
-        <!-- Fill bar -->
-        <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${Math.min(100,Math.round(cont.totalPlt/Math.max(...conts.map(x=>x.totalPlt),1)*100))}%;background:${color};border-radius:3px"></div>
+        <div style="height:4px;background:var(--bg);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${fillPct}%;background:${color};border-radius:2px"></div>
         </div>
       </div>
-      <!-- Expandable SKU list -->
-      <div id="${id}" style="display:none;border-top:1px solid ${color}33;max-height:280px;overflow-y:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <div id="${id}" style="display:none;border-top:1px solid ${color}22;max-height:240px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:10px">
           <thead><tr style="background:var(--bg)">
-            <th style="padding:6px 10px;text-align:left;color:var(--tt);font-weight:600">SKU</th>
-            <th style="padding:6px 10px;text-align:left;color:var(--tt);font-weight:600">Name</th>
-            <th style="padding:6px 10px;text-align:right;color:var(--tt);font-weight:600">Qty</th>
-            <th style="padding:6px 10px;text-align:right;color:var(--tt);font-weight:600">Plt</th>
+            <th style="padding:4px 8px;text-align:left;color:var(--tt);font-weight:600">SKU</th>
+            <th style="padding:4px 8px;text-align:left;color:var(--tt);font-weight:600">Name</th>
+            <th style="padding:4px 8px;text-align:right;color:var(--tt);font-weight:600">Qty</th>
+            <th style="padding:4px 8px;text-align:right;color:var(--tt);font-weight:600">Plt</th>
           </tr></thead>
           <tbody>
             ${cont.items.map((a,i)=>`<tr style="background:${i%2?'var(--sf)':'var(--bg)'}">
-              <td style="padding:5px 10px;font-family:monospace;color:${color};font-weight:600">${a.sku}</td>
-              <td style="padding:5px 10px;color:var(--ts);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name||'—'}</td>
-              <td style="padding:5px 10px;text-align:right;font-weight:700;color:var(--ts)">${(a.qty||0).toLocaleString()}</td>
-              <td style="padding:5px 10px;text-align:right;color:var(--tt)">${a.availPallets?a.availPallets.toFixed(1):'—'}</td>
+              <td style="padding:3px 8px;font-family:monospace;color:${color};font-weight:600">${a.sku}</td>
+              <td style="padding:3px 8px;color:var(--ts);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.name||''}">${a.name||'—'}</td>
+              <td style="padding:3px 8px;text-align:right;font-weight:700;color:var(--ts)">${(a.qty||0).toLocaleString()}</td>
+              <td style="padding:3px 8px;text-align:right;color:var(--tt)">${a.availPallets?a.availPallets.toFixed(1):'—'}</td>
             </tr>`).join('')}
           </tbody>
         </table>
