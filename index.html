@@ -1148,7 +1148,7 @@ function LP_renderPlan(el){
   }
   const dates=Object.keys(byDate).sort();
   const maxPlt=LP_STATE.maxPallets;
-  const lpArrivedSkus=new Set((LP_STATE.arrivals||[]).map(a=>a.sku));
+  const lpReadyBySku={};(LP_STATE.arrivals||[]).forEach(a=>{if(a.readyDate&&(!lpReadyBySku[a.sku]||a.readyDate<lpReadyBySku[a.sku]))lpReadyBySku[a.sku]=a.readyDate});
 
   // ── KPI Summary ──
   const lpTotalTrucks=truckList.length;
@@ -1236,7 +1236,7 @@ function LP_renderPlan(el){
           <span class="lp-cap-lbl" style="color:${isDisp?'var(--gn)':barColor}">${pct}%</span>
         </div>
         <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs</div>
-        <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px">${aggSkus.map(s=>{const nom=LP_STATE.nomenclature[s.sku]||{};const arrived=lpArrivedSkus.has(s.sku);const dot=`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${arrived?'var(--gn)':'var(--rd)'};flex-shrink:0"></span>`;const src=nom.source?`<span style="color:var(--tt);font-style:italic">${nom.source}</span>`:'';return`<div style="display:flex;align-items:center;gap:5px;font-size:9px;line-height:1.3">${dot}<span class="mono" style="color:var(--ts)">${s.sku}</span><span style="color:var(--tt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name||''}</span>${src}</div>`}).join('')}</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px">${aggSkus.map(s=>{const nom=LP_STATE.nomenclature[s.sku]||{};const ready=lpReadyBySku[s.sku]&&lpReadyBySku[s.sku]<=new Date().toISOString().slice(0,10);const dot=`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${ready?'var(--gn)':'var(--rd)'};flex-shrink:0" title="${lpReadyBySku[s.sku]?'Ready: '+lpReadyBySku[s.sku]:'No arrival data'}"></span>`;const src=nom.source?`<span style="color:var(--tt);font-style:italic">${nom.source}</span>`:'';return`<div style="display:flex;align-items:center;gap:5px;font-size:9px;line-height:1.3">${dot}<span class="mono" style="color:var(--ts)">${s.sku}</span><span style="color:var(--tt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name||''}</span>${src}</div>`}).join('')}</div>
         ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()">
           <input type="checkbox" ${checked} onchange="LP_toggleDispatch(${t.id},this.checked)">
           <span>${isDisp?'✅ Dispatched — locked':'Mark dispatched'}</span>
@@ -1287,7 +1287,7 @@ function LP_showTruckModal(truckId){
     shippedUpToByDestSku[k]=(shippedUpToByDestSku[k]||0)+(r.qty||0);
   }
 
-  const mdArrivedSkus=new Set((LP_STATE.arrivals||[]).map(a=>a.sku));
+  const mdReadyBySku={};(LP_STATE.arrivals||[]).forEach(a=>{if(a.readyDate&&(!mdReadyBySku[a.sku]||a.readyDate<mdReadyBySku[a.sku]))mdReadyBySku[a.sku]=a.readyDate});
   let rows='';
   for(const s of aggSkus){
     const nom=LP_STATE.nomenclature[s.sku]||{};
@@ -1295,8 +1295,8 @@ function LP_showTruckModal(truckId){
     const totalDemand=totalDemandByDestSku[demKey]||0;
     const shippedUpTo=shippedUpToByDestSku[demKey]||0;
     const remain=Math.max(0,totalDemand-shippedUpTo);
-    const arrived=mdArrivedSkus.has(s.sku);
-    const dot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${arrived?'var(--gn)':'var(--rd)'}" title="${arrived?'Arrived (FF&E)':'Not arrived'}"></span>`;
+    const ready=mdReadyBySku[s.sku]&&mdReadyBySku[s.sku]<=new Date().toISOString().slice(0,10);
+    const dot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${ready?'var(--gn)':'var(--rd)'}" title="${mdReadyBySku[s.sku]?'Ready: '+mdReadyBySku[s.sku]:'No arrival data'}"></span>`;
     rows+=`<tr>
       <td>${dot}</td>
       <td class="mono">${s.sku}</td>
@@ -1336,16 +1336,17 @@ function LP_exportSingleTruck(truckId){
   const agg=LP_aggregateTruck(rawPlan);
   const first=rawPlan[0];
   const dest=clDisp(first.destination);
-  const expArrivedSkus=new Set((LP_STATE.arrivals||[]).map(a=>a.sku));
+  const expReadyBySku={};(LP_STATE.arrivals||[]).forEach(a=>{if(a.readyDate&&(!expReadyBySku[a.sku]||a.readyDate<expReadyBySku[a.sku]))expReadyBySku[a.sku]=a.readyDate});
   const rows=agg.map(s=>{
     const lpNom=LP_STATE.nomenclature[s.sku]||{};
     const lmNom=NOM[s.sku]||{};
     const ppu=lmNom.ppu||1;
+    const rd=expReadyBySku[s.sku]||'';
     return{
       'Nomenclature code':s.sku,
       'Nomenclature name':lmNom.nm||lpNom.name||s.name||s.sku,
       'Source':lpNom.source||'',
-      'Arrived':expArrivedSkus.has(s.sku)?'Yes':'No',
+      'Ready':rd?(rd<=new Date().toISOString().slice(0,10)?'Yes — '+rd:'No — '+rd):'No data',
       'Qty':Math.ceil(s.qty/ppu)
     };
   });
@@ -1353,7 +1354,7 @@ function LP_exportSingleTruck(truckId){
   const hdr=[['Truck','LP-'+truckId,'Destination',dest,'Date',first.date]];
   const ws=XLSX.utils.aoa_to_sheet(hdr);
   XLSX.utils.sheet_add_json(ws,rows,{origin:'A3'});
-  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:10},{wch:10}];
+  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:18},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'LP-'+truckId);
   XLSX.writeFile(wb,'LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_Shipping_Order.xlsx');
 }
@@ -1428,7 +1429,9 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   ws.getRow(10).height=8;mc(ws,'A11:D11');mc(ws,'E11:I11');mc(ws,'J11:O11');ws.getRow(11).height=24;sc(ws,11,1,'SHIPPER',fSec,L,null,chF);sc(ws,11,5,'CONSIGNEE',fSec,L,null,mdF);sc(ws,11,10,'CUSTOMS BROKER',fSec,L,null,mdF);fil(ws,11,1,4,chF);fil(ws,11,5,9,mdF);fil(ws,11,10,15,mdF);box(ws,11,1,15,bM);
   const si=['FWC2026 US, Inc','396 Alhambra Circle, Ste# 400','Coral Gables, FL 33134','USA','',''];
   const pty=LP_getCIParties(dest);
-  for(let i=0;i<6;i++){const rn=12+i;ws.getRow(rn).height=16;mc(ws,'A'+rn+':D'+rn);mc(ws,'E'+rn+':I'+rn);mc(ws,'J'+rn+':O'+rn);sc(ws,rn,1,si[i],fD,L);sc(ws,rn,5,pty.consignee[i],fD,L);sc(ws,rn,10,pty.broker[i],fD,L);box(ws,rn,1,15)}
+  const cnF={type:'pattern',pattern:'solid',fgColor:{argb:'FFe8eef3'}};
+  const brF={type:'pattern',pattern:'solid',fgColor:{argb:'FFecf0f1'}};
+  for(let i=0;i<6;i++){const rn=12+i;ws.getRow(rn).height=16;mc(ws,'A'+rn+':D'+rn);mc(ws,'E'+rn+':I'+rn);mc(ws,'J'+rn+':O'+rn);sc(ws,rn,1,si[i],fD,L);fil(ws,rn,1,4,l1F);sc(ws,rn,5,pty.consignee[i],fD,L);fil(ws,rn,5,9,cnF);sc(ws,rn,10,pty.broker[i],fD,L);fil(ws,rn,10,15,brF);box(ws,rn,1,15)}
   ws.getRow(18).height=8;const hd=['QTY','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF ORIGIN','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
   mc(ws,'F19:H19');ws.getRow(19).height=32;hd.forEach((h,i)=>{const c=ws.getRow(19).getCell(i+1);c.value=h||null;c.font=fH;c.fill=chF;c.border=bM;c.alignment=W});ws.getRow(19).getCell(6).value='DIMENSIONS';
   const sb=['','','','','','Length','Width','Height','(cm/in)','','(lbs/kgs)','(USD)','','',''];ws.getRow(20).height=15;sb.forEach((s,i)=>{const c=ws.getRow(20).getCell(i+1);c.value=s;c.font=fSub;c.fill=l2F;c.border=brd;c.alignment=AC});
@@ -3499,10 +3502,10 @@ ${isClusterTruck?'':`<th colspan="2" style="text-align:center;border-right:2px s
 <th style="text-align:center;color:var(--ac)">POOL LEFT</th>
 ${isClusterTruck?'':`<th style="color:var(--pu)">NOTE</th>`}
 </tr><tr><th style="width:16px"></th><th>SKU</th><th>Item</th><th style="border-right:2px solid var(--bd)">Source</th><th>Total Qty</th><th style="border-right:2px solid var(--bl)">Per Plt</th>${isClusterTruck?'':`<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th>`}<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th><th style="border-right:2px solid var(--bl)">Remaining</th>${isClusterTruck?'':`<th></th>`}</tr></thead><tbody>`;
-const lmArrivedSkus=new Set((LP_STATE?.arrivals||[]).map(a=>a.sku));
+const lmReadyBySku={};(LP_STATE?.arrivals||[]).forEach(a=>{if(a.readyDate&&(!lmReadyBySku[a.sku]||a.readyDate<lmReadyBySku[a.sku]))lmReadyBySku[a.sku]=a.readyDate});
 t.items.forEach(it=>{
-const lmArrived=lmArrivedSkus.has(it.sku);
-const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmArrived?'var(--gn)':'var(--rd)'}" title="${lmArrived?'Arrived (FF&E)':'Not arrived'}"></span>`;
+const lmReady=lmReadyBySku[it.sku]&&lmReadyBySku[it.sku]<=new Date().toISOString().slice(0,10);
+const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmReady?'var(--gn)':'var(--rd)'}" title="${lmReadyBySku[it.sku]?'Ready: '+lmReadyBySku[it.sku]:'No arrival data'}"></span>`;
 const lmSrc=(NOM[it.sku]?.src)||'';
 const totalForSku=it.noPallet?LP.all.filter(x=>x.sku===it.sku).reduce((s,x)=>s+x.qty,0):LP.all.filter(x=>x.sku===it.sku&&x.ok).reduce((s,x)=>s+x.qty,0);
 const poolLeft=it.noPallet?'—':(it.poolAfter!==undefined?it.poolAfter:'—');
