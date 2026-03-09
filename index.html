@@ -434,7 +434,7 @@
 <div style="margin-top:24px;font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | <span style="font-weight:600">SM²ARTA™</span> licensed to SM2ARTA LLC</div>
 </div></div>
 <div class="pov" id="pov" style="display:none"><div class="spn"></div><div style="margin-top:16px;font-weight:600;color:var(--ts)">Processing...</div></div>
-<div id="D"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="systemReset()">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div id="D" style="position:relative"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLM()" title="Reset Last Mile">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div id="totbar" style="display:none;padding:6px 20px;background:#F8F9FB;border-bottom:1px solid var(--bd);font-size:11px;color:var(--ts);gap:8px;flex-wrap:wrap;align-items:center"><div id="tabs" style="display:flex;gap:2px"></div></div>
 <div class="cnt"><aside class="sb">
 <div class="cns"><div class="cnst" id="cnsTitle">Venue Constraints</div>
@@ -453,11 +453,22 @@
   <button id="lmbn-dashboard" onclick="lmNavTab('dashboard')"><span class="ni">📊</span>Dashboard</button>
   <button id="lmbn-trucks" onclick="lmNavTab('trucks')"><span class="ni">🚛</span>Trucks</button>
 </nav>
+<div id="LM_US" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:10;align-items:center;justify-content:center;flex-direction:column">
+  <div class="uc" style="max-width:480px;width:100%">
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:4px">🚛 Last Mile Upload</h1>
+    <p style="font-size:12px;color:var(--tt);margin-bottom:16px">Upload Nomenclature and Material Plan files</p>
+    <label class="dz" id="lm_dz" for="lm_fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files</div></label>
+    <input type="file" accept=".xlsx,.xls" multiple id="lm_fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+    <div class="fcs" id="lm_fcs"></div>
+    <div id="lm_eb" class="erbox" style="display:none"></div>
+    <button class="gbtn off" id="lm_gb">Generate Last Mile Plan</button>
+  </div>
+</div>
 <footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
 <div id="mr"></div>
-<div id="LP">
-<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeLP"></span> <span id="sbStatusLP" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="systemReset()">↻</span></div><div style="font-size:10px;color:var(--tt)" id="lpSubtitle">Load Plan Module</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn on" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div id="LP" style="position:relative">
+<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeLP"></span> <span id="sbStatusLP" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLP()" title="Reset Load Plan data">↻</span></div><div style="font-size:10px;color:var(--tt)" id="lpSubtitle">Load Plan Module</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn on" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div class="lp-body">
 <div class="lp-tabs" id="lpTabs">
 <button class="tbtn" onclick="LP_switchTab('arrivals')">📥 Arrivals</button>
@@ -465,6 +476,17 @@
 <button class="tbtn on" onclick="LP_switchTab('plan')">🚛 Plan</button>
 </div>
 <div class="lp-main" id="lpMain"></div>
+</div>
+<div id="LP_US" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:10;align-items:center;justify-content:center;flex-direction:column">
+  <div class="uc" style="max-width:480px;width:100%">
+    <h1 style="font-size:22px;font-weight:700;margin-bottom:4px">📦 Load Plan Upload</h1>
+    <p style="font-size:12px;color:var(--tt);margin-bottom:16px">Upload your Arrivals file (+ Nomenclature and Material Plan if not already loaded)</p>
+    <label class="dz" id="lp_dz" for="lp_fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files</div></label>
+    <input type="file" accept=".xlsx,.xls" multiple id="lp_fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+    <div class="fcs" id="lp_fcs"></div>
+    <div id="lp_eb" class="erbox" style="display:none"></div>
+    <button class="gbtn off" id="lp_gb">Generate Load Plan</button>
+  </div>
 </div>
 <footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
@@ -1894,12 +1916,20 @@ function switchMod(mod){
     V26_render();checkSB();
   } else if(mod==="lm"){
     dEl.classList.add("vis");
-    if(VN.length){rT();rVL();rMain()}
+    if(VN.length){rT();rVL();rMain();}
+    else if(ROLE==="admin"){initLMUpload();showLMUpload();}
   } else {
     const rb=document.getElementById("roleBadgeLP");
     if(rb)rb.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
     if(LP_STATE.planGenerated){lpEl.classList.add("vis");LP_switchTab('plan');checkSB()}
-    else{LP_loadFromSupabase().then(found=>{if(found){lpEl.classList.add("vis");LP_switchTab('plan');checkSB()}else{document.getElementById("US").style.display="flex";checkSB()}}).catch(()=>{document.getElementById("US").style.display="flex";checkSB()})}
+    else{LP_loadFromSupabase().then(found=>{
+      if(found){lpEl.classList.add("vis");LP_switchTab('plan');checkSB();}
+      else if(ROLE==="admin"){initLPUpload();showLPUpload();}
+      else{document.getElementById("US").style.display="flex";checkSB();}
+    }).catch(()=>{
+      if(ROLE==="admin"){initLPUpload();showLPUpload();}
+      else{document.getElementById("US").style.display="flex";checkSB();}
+    });}
   }
   document.querySelectorAll(".mod-sw").forEach(sw=>{sw.querySelectorAll(".mod-btn").forEach(btn=>{
     const t=btn.textContent;btn.classList.toggle("on",(t.includes("Vision")&&mod==="v26")||(t.includes("Load Plan")&&mod==="lp")||(t.includes("Last Mile")&&mod==="lm"));
@@ -2005,7 +2035,7 @@ function enterApp(){
         V26_render();
         LP_switchTab('plan');// prep LP in background
       } else if(lmOk){
-        // Only Last Mile data — show Vision 2026 anyway (with LM trucks)
+        // Only Last Mile data — show Vision 2026, and offer LP upload to admin
         document.getElementById("V26").classList.add("vis");
         curMod="v26";
         const rbv=document.getElementById('roleBadgeV26');
@@ -2023,16 +2053,18 @@ function enterApp(){
       });
       checkSB();
     } else {
-      // No data at all
-      if(ROLE==="admin"){
-        document.getElementById("US").style.display="flex";
-      } else {
-        document.getElementById("US").style.display="flex";
-        document.getElementById("US").querySelector(".uc").innerHTML=`<div class="sm-logo sm-logo-lg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><h1 style="font-size:26px;font-weight:700">The Master of the Load 3000</h1><p style="font-size:14px;color:var(--ts);margin-top:6px">Viewer Mode</p><div class="erbox" style="display:block;margin-top:24px;text-align:center">No plan published yet. Ask an Admin to upload first.</div><button class="gbtn on" style="margin-top:16px" onclick="enterApp()">Retry</button>`;
-      }
+      // No data at all — go straight to Vision 2026 (empty state)
+      document.getElementById("US").style.display="none";
+      document.getElementById("V26").classList.add("vis");
+      curMod="v26";
+      const rbv=document.getElementById('roleBadgeV26');
+      if(rbv)rbv.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
+      V26_render();
+      applyRole();
+      checkSB();
     }
   };
-  loadBoth();
+  loadBoth().then(()=>{initLPUpload();initLMUpload();});
 }
 async function saveSharedData(fullSave){
   if(ROLE==="viewer")return;// viewers cannot save
@@ -4434,51 +4466,17 @@ async function goGenerate(){
     numberAll();sel="";cv="dashboard";
     document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
 
-    // ── Load Plan processing (if arrivals file present) ──
-    if(aE&&aE.buf){
-      try{
-        LP_STATE.nomenclature=LP_parseNomenclature(nE.buf||new Uint8Array(XLSX.write(nE.wb,{type:'array',bookType:'xlsx'})));
-        LP_STATE.arrivals=LP_parseArrivals(aE.buf,LP_STATE.turnaround);
-        LP_STATE.materialPlan=LP_parseMaterialPlan(pE.buf||new Uint8Array(XLSX.write(pE.wb,{type:'array',bookType:'xlsx'})));
-        for(const d of LP_STATE.materialPlan){
-          const n=LP_STATE.nomenclature[d.sku];
-          if(n){d.name=n.name||d.name;d.palletQty=n.palletQty||0;d.palletSpc=n.palletSpc||0;d.sourceIds=[{id:d.uid,qty:d.requiredQty}]}
-        }
-        LP_STATE.generatedPlan=LP_buildLoadPlan(
-          LP_STATE.materialPlan,LP_STATE.arrivals,
-          {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature}
-        );
-        LP_STATE.planGenerated=true;
-        LP_dispatched=new Set();
-        LP_snapshotSettings();
-        LP_saveToSupabase();
-      }catch(lpErr){console.warn('LP generation skipped:',lpErr)}
-    }
+    // LP processing now handled separately via Load Plan upload panel
 
     document.getElementById("pov").style.display="none";
     document.getElementById("US").style.display="none";
-    
-    // Show Vision 2026 as default landing
-    if(LP_STATE.planGenerated){
-      document.getElementById("V26").classList.add("vis");
-      curMod="v26";
-      applyRole();saveSharedData(true);
-      const rbv=document.getElementById('roleBadgeV26');
-      if(rbv)rbv.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
-      V26_render();
-      rT();rVL();// prep LM in background
-    } else {
-      document.getElementById("D").classList.add("vis");
-      curMod="lm";
-      applyRole();saveSharedData(true);rT();rVL();rMain();
-    }
-    // Sync module switcher buttons
-    document.querySelectorAll(".mod-sw").forEach(sw=>{
-      sw.querySelectorAll(".mod-btn").forEach(btn=>{
-        const isLP=btn.textContent.includes("Load Plan");
-        btn.classList.toggle("on",(isLP&&curMod==="lp")||(!isLP&&curMod==="lm"));
-      });
-    });
+    document.getElementById("V26").classList.add("vis");
+    curMod="v26";
+    applyRole();saveSharedData(true);
+    const rbv=document.getElementById('roleBadgeV26');
+    if(rbv)rbv.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
+    V26_render();
+    rT();rVL();
     checkSB();
   }catch(err){
     document.getElementById("pov").style.display="none";
@@ -4523,6 +4521,279 @@ function lmNavTab(tab){
   if(sb)sb.classList.remove('mob-open');
   cv=tab;rT();rMain();
   lmNavSync();
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// SEPARATE MODULE RESET + UPLOAD
+// ═══════════════════════════════════════════════════════════
+
+// ── Reset Last Mile only ──────────────────────────────────
+function resetLM(){
+  if(ROLE==="viewer")return;
+  const mr=document.getElementById('mr');
+  mr.innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:420px">
+      <div class="mdh" style="background:var(--rs);border-bottom-color:var(--rd)">
+        <h3 style="color:var(--rd)">⚠ Reset Last Mile</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
+      </div>
+      <div class="mdb" style="text-align:center;padding:24px 20px">
+        <p style="font-size:13px;color:var(--tp);margin-bottom:16px">This will erase <strong>Last Mile data only</strong> (NOM + Material Plan). Load Plan data is unaffected.</p>
+        <p style="font-size:12px;color:var(--rd);font-weight:600;margin-bottom:20px">This affects all users and cannot be undone.</p>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button onclick="this.closest('.mo').remove()" style="padding:10px 24px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts)">Cancel</button>
+          <button onclick="this.closest('.mo').remove();doResetLM()" style="padding:10px 24px;border-radius:8px;border:none;background:var(--rd);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd)">Reset Last Mile</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function doResetLM(){
+  if(ROLE==="viewer")return;
+  if(SB){
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl']).then(()=>{}).catch(()=>{});
+  }
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};
+  document.getElementById("D").classList.add("vis");
+  document.getElementById("V26").classList.remove("vis");
+  document.getElementById("LP").classList.remove("vis");
+  curMod="lm";
+  initLMUpload();showLMUpload();
+}
+
+// ── Reset Load Plan only ──────────────────────────────────
+function resetLP(){
+  if(ROLE==="viewer")return;
+  const mr=document.getElementById('mr');
+  mr.innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:420px">
+      <div class="mdh" style="background:var(--rs);border-bottom-color:var(--rd)">
+        <h3 style="color:var(--rd)">⚠ Reset Load Plan</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
+      </div>
+      <div class="mdb" style="text-align:center;padding:24px 20px">
+        <p style="font-size:13px;color:var(--tp);margin-bottom:16px">This will erase <strong>Load Plan data only</strong> (Arrivals + LP plan). Last Mile data is unaffected.</p>
+        <p style="font-size:12px;color:var(--rd);font-weight:600;margin-bottom:20px">This affects all users and cannot be undone.</p>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button onclick="this.closest('.mo').remove()" style="padding:10px 24px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts)">Cancel</button>
+          <button onclick="this.closest('.mo').remove();doResetLP()" style="padding:10px 24px;border-radius:8px;border:none;background:var(--rd);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd)">Reset Load Plan</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function doResetLP(){
+  if(ROLE==="viewer")return;
+  if(SB){
+    SB.from('shared_state').delete().in('id',['lp-state']).then(()=>{}).catch(()=>{});
+  }
+  LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
+  LP_dispatched=new Set();
+  lpUf=[];lpRenderUpload();
+  document.getElementById("D").classList.remove("vis");
+  document.getElementById("V26").classList.remove("vis");
+  document.getElementById("LP").classList.add("vis");
+  curMod="lp";
+  initLPUpload();showLPUpload();
+}
+
+// ── Show / hide LP upload panel ───────────────────────────
+function showLPUpload(){
+  document.getElementById("LP").classList.add("vis");
+  document.getElementById("LP_US").style.display="flex";
+  curMod="lp";
+}
+function hideLPUpload(){
+  document.getElementById("LP_US").style.display="none";
+}
+
+// ── LP-specific file state ────────────────────────────────
+let lpUf=[];
+
+function lpRenderUpload(){
+  const labels={nom:'Nomenclature',plan:'Material Plan',arr:'FF&E Arrivals'};
+  const fcs=document.getElementById('lp_fcs');if(!fcs)return;
+  if(!lpUf.length){fcs.innerHTML='<p style="font-size:11px;color:var(--tt);margin-top:8px">No files yet</p>';lpUB();return;}
+  fcs.innerHTML=lpUf.map((f,i)=>`<div class="fc"><span class="fn">${f.file.name}</span><select onchange="lpUf[${i}].type=this.value;lpRenderUpload()"><option value="nom" ${f.type==='nom'?'selected':''}>Nomenclature</option><option value="plan" ${f.type==='plan'?'selected':''}>Material Plan</option><option value="arr" ${f.type==='arr'?'selected':''}>Arrivals</option><option value="?" ${f.type==='?'?'selected':''}>Unknown</option></select><button onclick="lpUf.splice(${i},1);lpRenderUpload()">✕</button></div>`).join('');
+  lpUB();
+}
+
+function lpUB(){
+  const btn=document.getElementById('lp_gb');if(!btn)return;
+  const hasArr=lpUf.some(f=>f.type==='arr');
+  btn.classList.toggle('off',!hasArr);
+  btn.classList.toggle('on',hasArr);
+}
+
+async function lpHF(fl){
+  for(const f of Array.from(fl)){
+    if(lpUf.some(x=>x.file.name===f.name))continue;
+    try{
+      const wb=await rXL(f);
+      const detected=det(wb);
+      if(!detected.length){lpUf.push({file:f,type:'?',wb,sheet:null});}
+      else{for(const d of detected){
+        if(lpUf.some(x=>x.type===d.type))continue;
+        const miniWb=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(miniWb,wb.Sheets[d.sheet],d.sheet);
+        lpUf.push({file:f,type:d.type,wb:miniWb,sheet:null,buf:new Uint8Array(XLSX.write(miniWb,{type:'array',bookType:'xlsx'}))});
+      }}
+    }catch(e){console.warn('LP file error:',e)}
+  }
+  lpRenderUpload();
+}
+
+async function goGenerateLP(){
+  const btn=document.getElementById('lp_gb');if(btn&&btn.classList.contains('off'))return;
+  const nE=lpUf.find(f=>f.type==='nom')||( Object.keys(NOM).length ? {wb:null,buf:null,_useGlobal:true} : null );
+  const pE=lpUf.find(f=>f.type==='plan')||( RW.length ? {wb:null,buf:null,_useGlobal:true} : null );
+  const aE=lpUf.find(f=>f.type==='arr');
+  if(!aE){const eb=document.getElementById('lp_eb');if(eb){eb.textContent='Arrivals file required.';eb.style.display='block';}return;}
+  document.getElementById('lp_eb').style.display='none';
+  document.getElementById('pov').style.display='flex';
+  try{
+    await new Promise(r=>setTimeout(r,50));
+    // Use uploaded nom/plan if provided, else fall back to already-loaded LM data
+    let nomBuf=aE.buf?null:null;
+    let nomForLP={};
+    if(nE&&!nE._useGlobal&&nE.buf){
+      nomForLP=LP_parseNomenclature(nE.buf);
+    } else if(Object.keys(NOM).length){
+      // Convert NOM to LP nomenclature format
+      Object.entries(NOM).forEach(([sku,n])=>{nomForLP[sku]={name:n.nm||n.name||sku,palletQty:n.pq||0,palletSpc:n.ps||0,source:n.src||'',unitPrice:n.ppu||0};});
+    }
+    LP_STATE.nomenclature=nomForLP;
+    LP_STATE.arrivals=LP_parseArrivals(aE.buf,LP_STATE.turnaround);
+    if(pE&&!pE._useGlobal&&pE.buf){
+      LP_STATE.materialPlan=LP_parseMaterialPlan(pE.buf);
+    } else if(RW.length){
+      // Build materialPlan from RW
+      LP_STATE.materialPlan=RW.map((r,i)=>({uid:'R'+i,destination:r['Venue']||'',sku:r['Nomenclature']||'?',name:r['Item']||r['Nomenclature']||'',requiredQty:parseInt(r['Required'])||0,rawPallets:0,inputMode:'qty'})).filter(x=>x.destination&&x.sku&&x.requiredQty>0);
+    }
+    for(const d of LP_STATE.materialPlan){
+      const n=LP_STATE.nomenclature[d.sku];
+      if(n){d.name=n.name||d.name;d.palletQty=n.palletQty||0;d.palletSpc=n.palletSpc||0;d.sourceIds=[{id:d.uid,qty:d.requiredQty}]}
+    }
+    LP_STATE.generatedPlan=LP_buildLoadPlan(
+      LP_STATE.materialPlan,LP_STATE.arrivals,
+      {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature}
+    );
+    LP_STATE.planGenerated=true;
+    LP_dispatched=new Set();
+    LP_snapshotSettings();
+    await LP_saveToSupabase();
+    document.getElementById('pov').style.display='none';
+    hideLPUpload();
+    LP_switchTab('plan');
+    LP_render();
+    lpUf=[];lpRenderUpload();
+  }catch(e){
+    document.getElementById('pov').style.display='none';
+    const eb=document.getElementById('lp_eb');if(eb){eb.textContent=e.message;eb.style.display='block';}
+    console.error('LP generate error:',e);
+  }
+}
+
+// ── Wire up LP upload panel events (called once on load) ──
+function initLPUpload(){
+  const dz=document.getElementById('lp_dz');
+  const fin=document.getElementById('lp_fi');
+  const btn=document.getElementById('lp_gb');
+  if(!dz||!fin||!btn)return;
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dov')});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('dov'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dov');if(e.dataTransfer.files.length)lpHF(e.dataTransfer.files)});
+  fin.addEventListener('change',function(){if(this.files.length)lpHF(this.files);this.value='';});
+  btn.addEventListener('click',goGenerateLP);
+}
+
+
+// ── LM upload panel functions ─────────────────────────────
+let lmUf=[];
+
+function showLMUpload(){
+  document.getElementById("LM_US").style.display="flex";
+}
+function hideLMUpload(){
+  document.getElementById("LM_US").style.display="none";
+}
+
+function lmRenderUpload(){
+  const fcs=document.getElementById('lm_fcs');if(!fcs)return;
+  if(!lmUf.length){fcs.innerHTML='<p style="font-size:11px;color:var(--tt);margin-top:8px">No files yet</p>';lmUB();return;}
+  fcs.innerHTML=lmUf.map((f,i)=>`<div class="fc"><span class="fn">${f.file.name}</span><select onchange="lmUf[${i}].type=this.value;lmRenderUpload()"><option value="nom" ${f.type==='nom'?'selected':''}>Nomenclature</option><option value="plan" ${f.type==='plan'?'selected':''}>Material Plan</option><option value="?" ${f.type==='?'?'selected':''}>Unknown</option></select><button onclick="lmUf.splice(${i},1);lmRenderUpload()">✕</button></div>`).join('');
+  lmUB();
+}
+
+function lmUB(){
+  const btn=document.getElementById('lm_gb');if(!btn)return;
+  const ok=lmUf.some(f=>f.type==='nom')&&lmUf.some(f=>f.type==='plan');
+  btn.classList.toggle('off',!ok);btn.classList.toggle('on',ok);
+}
+
+async function lmHF(fl){
+  for(const f of Array.from(fl)){
+    if(lmUf.some(x=>x.file.name===f.name))continue;
+    try{
+      const wb=await rXL(f);
+      const detected=det(wb);
+      if(!detected.length){lmUf.push({file:f,type:'?',wb,sheet:null});}
+      else{for(const d of detected){
+        if(lmUf.some(x=>x.type===d.type))continue;
+        const miniWb=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(miniWb,wb.Sheets[d.sheet],d.sheet);
+        lmUf.push({file:f,type:d.type,wb:miniWb,sheet:null,buf:new Uint8Array(XLSX.write(miniWb,{type:'array',bookType:'xlsx'}))});
+      }}
+    }catch(e){console.warn('LM file error:',e)}
+  }
+  lmRenderUpload();
+}
+
+async function goGenerateLM(){
+  const btn=document.getElementById('lm_gb');if(btn&&btn.classList.contains('off'))return;
+  const nE=lmUf.find(f=>f.type==='nom');
+  const pE=lmUf.find(f=>f.type==='plan');
+  if(!nE||!pE){const eb=document.getElementById('lm_eb');if(eb){eb.textContent='Both Nomenclature and Material Plan files required.';eb.style.display='block';}return;}
+  document.getElementById('lm_eb').style.display='none';
+  document.getElementById('pov').style.display='flex';
+  try{
+    await new Promise(r=>setTimeout(r,50));
+    NOM=pNm(nE.wb);RW=pPl(pE.wb);
+    if(!Object.keys(NOM).length)throw new Error('No nomenclature data.');
+    if(!RW.length)throw new Error('No plan data.');
+    bV();if(!VN.length)throw new Error('No venues.');
+    numberAll();sel='';cv='dashboard';
+    document.getElementById('hm').textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
+    document.getElementById('pov').style.display='none';
+    hideLMUpload();
+    saveSharedData(true);
+    rT();rVL();rMain();
+    lmUf=[];lmRenderUpload();
+    checkSB();
+  }catch(e){
+    document.getElementById('pov').style.display='none';
+    const eb=document.getElementById('lm_eb');if(eb){eb.textContent=e.message;eb.style.display='block';}
+  }
+}
+
+function initLMUpload(){
+  const dz=document.getElementById('lm_dz');
+  const fin=document.getElementById('lm_fi');
+  const btn=document.getElementById('lm_gb');
+  if(!dz||!fin||!btn)return;
+  // Remove old listeners by cloning
+  const dz2=dz.cloneNode(true);dz.parentNode.replaceChild(dz2,dz);
+  const fin2=fin.cloneNode(true);fin.parentNode.replaceChild(fin2,fin);
+  const btn2=btn.cloneNode(true);btn.parentNode.replaceChild(btn2,btn);
+  document.getElementById('lm_dz').addEventListener('dragover',e=>{e.preventDefault();document.getElementById('lm_dz').classList.add('dov')});
+  document.getElementById('lm_dz').addEventListener('dragleave',()=>document.getElementById('lm_dz').classList.remove('dov'));
+  document.getElementById('lm_dz').addEventListener('drop',e=>{e.preventDefault();document.getElementById('lm_dz').classList.remove('dov');if(e.dataTransfer.files.length)lmHF(e.dataTransfer.files)});
+  document.getElementById('lm_fi').addEventListener('change',function(){if(this.files.length)lmHF(this.files);this.value='';});
+  document.getElementById('lm_gb').addEventListener('click',goGenerateLM);
+  lmRenderUpload();
 }
 
 </script>
