@@ -4306,10 +4306,19 @@ if(P.noBiN>0){
 if(cv==="trucks"){if(!P.days.length)h+='<div class="emp fin">No palletized items.</div>';
 // Rebuild day groups from actual truck t.dd to respect date overrides
 const _dayMap={};
+const _lt=P.lt||0;// lead time in working days
 P.days.forEach(day=>{
   day.trucks.forEach(tr=>{
     const actualDate=tr.dd||day.dKey;
-    if(!_dayMap[actualDate])_dayMap[actualDate]={dKey:actualDate,dDate:new Date(actualDate+'T12:00:00'),biDate:day.biDate,isNoBi:day.isNoBi,isEarly:day.isEarly,hasOverflow:day.hasOverflow,trucks:[],exactPlt:0,totalQty:0,dayP:0,cumP:0};
+    const hasOverride=LM_dateOverrides[tr.id];
+    // Recalculate arrival: dispatch + lead time (working days forward)
+    let arrDate=day.biDate;
+    if(hasOverride&&!day.isNoBi){
+      let d=new Date(actualDate+'T12:00:00');let c=0;
+      while(c<_lt){d=aD(d,1);if(!isWE(d))c++}
+      arrDate=d;
+    }
+    if(!_dayMap[actualDate])_dayMap[actualDate]={dKey:actualDate,dDate:new Date(actualDate+'T12:00:00'),biDate:arrDate,isNoBi:day.isNoBi,isEarly:day.isEarly,hasOverflow:day.hasOverflow,trucks:[],exactPlt:0,totalQty:0,dayP:0,cumP:0};
     _dayMap[actualDate].trucks.push(tr);
     _dayMap[actualDate].exactPlt+=tr.pallets||0;
     _dayMap[actualDate].totalQty+=tr.items?tr.items.reduce((s,it)=>s+(it.loadQty||0),0):0;
