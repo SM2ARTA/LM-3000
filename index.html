@@ -1873,6 +1873,33 @@ function V26_render(){
   ];
   if(fCortN>0)v26KpiItems.push({label:'🏷 CORT',value:fCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
   v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fDests.size});
+  // Stock arrival % — unique SKUs from material plan (excl CT/STP) vs stock report
+  const _isExclSrc=sku=>{const s=(NOM[sku]?.src||'').toUpperCase().trim();return s.startsWith('CT')||s.startsWith('STP')};
+  // Determine which venues match the current filter
+  const _venueFilter=curFilter==='all'||curFilter==='usa'||curFilter==='can'||curFilter==='mex';
+  const _isVenueMatch=v=>{
+    if(curFilter==='all')return true;
+    if(curFilter==='lp')return false;// LP uses LP_STATE, not RW
+    const meta=VN.find(x=>x.name===v);
+    const cl=meta?.cluster||'';
+    if(curFilter==='can')return vcIsCAN(cl);
+    if(curFilter==='mex')return vcIsMEX(cl);
+    if(curFilter==='usa')return!vcIsCAN(cl)&&!vcIsMEX(cl);
+    return true;
+  };
+  const fDemandSkus=new Set();
+  // LM material plan (RW)
+  if(curFilter!=='lp'){
+    for(const r of RW){const sku=r["Nomenclature"];if(!sku||!NOM[sku])continue;if(_isExclSrc(sku))continue;const v=r["Venue"];if(!v||!_isVenueMatch(v))continue;fDemandSkus.add(sku)}
+  }
+  // LP material plan
+  if(curFilter==='all'||curFilter==='lp'){
+    for(const d of (LP_STATE.materialPlan||[])){if(!d.sku)continue;const src=(LP_STATE.nomenclature[d.sku]?.source||'').toUpperCase().trim();if(src.startsWith('CT')||src.startsWith('STP'))continue;fDemandSkus.add(d.sku)}
+  }
+  const fInStock=STOCK_SKUS.size>0?[...fDemandSkus].filter(s=>STOCK_SKUS.has(s)).length:0;
+  const fStockPct=fDemandSkus.size>0?Math.round(fInStock/fDemandSkus.size*100):0;
+  const stockColor=STOCK_SKUS.size===0?'var(--tt)':(fStockPct>=90?'var(--gn)':fStockPct>=50?'var(--or)':'var(--rd)');
+  v26KpiItems.push({label:'📦 In Stock',value:STOCK_SKUS.size===0?'—':fStockPct+'%',color:stockColor,sub:STOCK_SKUS.size===0?'No stock report':fInStock+' / '+fDemandSkus.size+' SKUs'});
   html+=kpiRow(v26KpiItems,'fin');
 
   html+=`<div style="display:flex;gap:4px;margin:12px 0;flex-wrap:wrap;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--tt);margin-right:4px">LOAD FROM:</span>`;
