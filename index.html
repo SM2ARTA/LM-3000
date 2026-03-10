@@ -1994,14 +1994,48 @@ function V26_render(){
   const fPeakDate=fDates.length?fDates.reduce((pk,d)=>(fByDate[d]?.length||0)>(fByDate[pk]?.length||0)?d:pk,fDates[0]):'';
   const fPeakCount=fByDate[fPeakDate]?.length||0;
 
-  // ── CALENDAR VIEW ──
+  // ── DISPATCH CHART (compact bar chart replacing calendar) ──
   if(fDates.length>0){
-    html+=renderCalendarGrid(fDates,(key)=>{
-      const dayItems=fByDate[key]||[];
-      const active=dayItems.filter(t=>!t.excluded);
-      const excl=dayItems.filter(t=>t.excluded);
-      return{trucks:active.filter(t=>t.source!=='CORT').length,cort:active.filter(t=>t.source==='CORT').length,excl:excl.length,pallets:active.reduce((s,t)=>s+t.pallets,0),click:`V26_showDay('${key}')`};
-    },{showExcluded:true,marginTop:'12px'});
+    const maxDay=Math.max(...fDates.map(d=>{const items=fByDate[d]||[];return items.filter(t=>!t.excluded).length}),1);
+    html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:14px 16px;margin-top:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700">📊 Dispatch Volume</div>
+      <div style="font-size:10px;color:var(--tt)">Peak: ${fPeakCount} trucks · ${fDates.length} days</div>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:1px;height:80px;overflow-x:auto;padding-bottom:18px;position:relative">`;
+    for(const d of fDates){
+      const items=fByDate[d]||[];
+      const active=items.filter(t=>!t.excluded);
+      const n=active.length;
+      const lp=active.filter(t=>t.source==='Load Plan').length;
+      const lm=active.filter(t=>t.source==='Last Mile').length;
+      const cort=active.filter(t=>t.source==='CORT').length;
+      const pct=Math.round(n/maxDay*100);
+      const dObj=LP_parseLocalDate(d);
+      const isWknd=dObj?(dObj.getDay()===0||dObj.getDay()===6):false;
+      const dayLbl=dObj?dObj.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+      const isFirst=fDates.indexOf(d)===0;
+      const isMonday=dObj&&dObj.getDay()===1;
+      const showLabel=isFirst||isMonday||fDates.length<=14;
+      // Stacked: LP (blue-ish) + LM (green) + CORT (red)
+      const lpH=maxDay>0?Math.round(lp/maxDay*100):0;
+      const lmH=maxDay>0?Math.round(lm/maxDay*100):0;
+      const cortH=maxDay>0?Math.round(cort/maxDay*100):0;
+      html+=`<div style="flex:1;min-width:${fDates.length>40?'4px':'8px'};max-width:${fDates.length>60?'6px':'24px'};display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;height:100%;cursor:pointer;position:relative${isWknd?';opacity:0.5':''}" onclick="V26_showDay('${d}')" title="${dayLbl}: ${n} trucks (${lp} LP, ${lm} LM, ${cort} CORT)">
+        <div style="display:flex;flex-direction:column;justify-content:flex-end;flex:1">
+          ${cort>0?`<div style="height:${cortH}%;min-height:${cort?2:0}px;background:#E8745A;border-radius:2px 2px 0 0"></div>`:''}
+          ${lm>0?`<div style="height:${lmH}%;min-height:${lm?2:0}px;background:#78C68D"></div>`:''}
+          ${lp>0?`<div style="height:${lpH}%;min-height:${lp?2:0}px;background:#6CB4EE;border-radius:${cort||lm?'0':'2px 2px'} 0 0"></div>`:''}
+        </div>
+        ${showLabel?`<div style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--tt);white-space:nowrap">${dayLbl}</div>`:''}
+      </div>`;
+    }
+    html+=`</div>
+    <div style="display:flex;gap:12px;margin-top:4px;font-size:9px;color:var(--tt)">
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#6CB4EE;vertical-align:middle;margin-right:3px"></span>LP</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#78C68D;vertical-align:middle;margin-right:3px"></span>LM</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#E8745A;vertical-align:middle;margin-right:3px"></span>CORT</span>
+    </div></div>`;
   }
 
   // ── SHIPPING TIMELINE — LP-style day headers + truck cards ──
