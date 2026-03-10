@@ -434,7 +434,7 @@
 <div style="margin-top:24px;font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | <span style="font-weight:600">SM²ARTA™</span> licensed to SM2ARTA LLC</div>
 </div></div>
 <div class="pov" id="pov" style="display:none"><div class="spn"></div><div style="margin-top:16px;font-weight:600;color:var(--ts)">Processing...</div></div>
-<div id="D" style="position:relative"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLM()" title="Reset Last Mile">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div id="D" style="position:relative"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLM()" title="Reset Last Mile">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="stockReportUpload()" id="stockBtn" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">📦 Stock Report</button><input type="file" accept=".xlsx,.xls" id="stockFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div id="totbar" style="display:none;padding:6px 20px;background:#F8F9FB;border-bottom:1px solid var(--bd);font-size:11px;color:var(--ts);gap:8px;flex-wrap:wrap;align-items:center"><div id="tabs" style="display:flex;gap:2px"></div></div>
 <div class="cnt"><aside class="sb">
 <div class="cns"><div class="cnst" id="cnsTitle">Venue Constraints</div>
@@ -500,6 +500,10 @@
    LOAD PLAN PRO ENGINE — Warehouse-model planning
    Ported from React version. All functions prefixed LP_ to avoid conflicts.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+// ── Global stock report state (declared early for all modules) ──
+var STOCK_SKUS=new Set();
+var STOCK_REPORT_NAME='';
 
 // ── LP Config defaults ──
 const LP_DEFAULT_MAX_PALLETS=26;
@@ -1148,7 +1152,6 @@ function LP_renderPlan(el){
   }
   const dates=Object.keys(byDate).sort();
   const maxPlt=LP_STATE.maxPallets;
-  const lpReadyBySku={};(LP_STATE.arrivals||[]).forEach(a=>{if(a.readyDate&&(!lpReadyBySku[a.sku]||a.readyDate<lpReadyBySku[a.sku]))lpReadyBySku[a.sku]=a.readyDate});
 
   // ── KPI Summary ──
   const lpTotalTrucks=truckList.length;
@@ -1236,7 +1239,7 @@ function LP_renderPlan(el){
           <span class="lp-cap-lbl" style="color:${isDisp?'var(--gn)':barColor}">${pct}%</span>
         </div>
         <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs</div>
-        <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px">${aggSkus.map(s=>{const nom=LP_STATE.nomenclature[s.sku]||{};const ready=lpReadyBySku[s.sku]&&lpReadyBySku[s.sku]<=new Date().toISOString().slice(0,10);const dot=`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${ready?'var(--gn)':'var(--rd)'};flex-shrink:0" title="${lpReadyBySku[s.sku]?'Ready: '+lpReadyBySku[s.sku]:'No arrival data'}"></span>`;const src=nom.source?`<span style="color:var(--tt);font-style:italic">${nom.source}</span>`:'';return`<div style="display:flex;align-items:center;gap:5px;font-size:9px;line-height:1.3">${dot}<span class="mono" style="color:var(--ts)">${s.sku}</span><span style="color:var(--tt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name||''}</span>${src}</div>`}).join('')}</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px">${aggSkus.map(s=>{const nom=LP_STATE.nomenclature[s.sku]||{};const inStock=STOCK_SKUS.has(s.sku);const dot=`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${inStock?'var(--gn)':'var(--rd)'};flex-shrink:0" title="${inStock?'In stock':'Not in stock'}"></span>`;const src=nom.source?`<span style="color:var(--tt);font-style:italic">${nom.source}</span>`:'';return`<div style="display:flex;align-items:center;gap:5px;font-size:9px;line-height:1.3">${dot}<span class="mono" style="color:var(--ts)">${s.sku}</span><span style="color:var(--tt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name||''}</span>${src}</div>`}).join('')}</div>
         ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()">
           <input type="checkbox" ${checked} onchange="LP_toggleDispatch(${t.id},this.checked)">
           <span>${isDisp?'✅ Dispatched — locked':'Mark dispatched'}</span>
@@ -1287,7 +1290,6 @@ function LP_showTruckModal(truckId){
     shippedUpToByDestSku[k]=(shippedUpToByDestSku[k]||0)+(r.qty||0);
   }
 
-  const mdReadyBySku={};(LP_STATE.arrivals||[]).forEach(a=>{if(a.readyDate&&(!mdReadyBySku[a.sku]||a.readyDate<mdReadyBySku[a.sku]))mdReadyBySku[a.sku]=a.readyDate});
   let rows='';
   for(const s of aggSkus){
     const nom=LP_STATE.nomenclature[s.sku]||{};
@@ -1295,8 +1297,8 @@ function LP_showTruckModal(truckId){
     const totalDemand=totalDemandByDestSku[demKey]||0;
     const shippedUpTo=shippedUpToByDestSku[demKey]||0;
     const remain=Math.max(0,totalDemand-shippedUpTo);
-    const ready=mdReadyBySku[s.sku]&&mdReadyBySku[s.sku]<=new Date().toISOString().slice(0,10);
-    const dot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${ready?'var(--gn)':'var(--rd)'}" title="${mdReadyBySku[s.sku]?'Ready: '+mdReadyBySku[s.sku]:'No arrival data'}"></span>`;
+    const inStock=STOCK_SKUS.has(s.sku);
+    const dot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${inStock?'var(--gn)':'var(--rd)'}" title="${inStock?'In stock':'Not in stock'}"></span>`;
     rows+=`<tr>
       <td>${dot}</td>
       <td class="mono">${s.sku}</td>
@@ -1336,17 +1338,15 @@ function LP_exportSingleTruck(truckId){
   const agg=LP_aggregateTruck(rawPlan);
   const first=rawPlan[0];
   const dest=clDisp(first.destination);
-  const expReadyBySku={};(LP_STATE.arrivals||[]).forEach(a=>{if(a.readyDate&&(!expReadyBySku[a.sku]||a.readyDate<expReadyBySku[a.sku]))expReadyBySku[a.sku]=a.readyDate});
   const rows=agg.map(s=>{
     const lpNom=LP_STATE.nomenclature[s.sku]||{};
     const lmNom=NOM[s.sku]||{};
     const ppu=lmNom.ppu||1;
-    const rd=expReadyBySku[s.sku]||'';
     return{
       'Nomenclature code':s.sku,
       'Nomenclature name':lmNom.nm||lpNom.name||s.name||s.sku,
       'Source':lpNom.source||'',
-      'Ready':rd?(rd<=new Date().toISOString().slice(0,10)?'Yes — '+rd:'No — '+rd):'No data',
+      'In Stock':STOCK_SKUS.has(s.sku)?'Yes':'No',
       'Qty':Math.ceil(s.qty/ppu)
     };
   });
@@ -1354,7 +1354,7 @@ function LP_exportSingleTruck(truckId){
   const hdr=[['Truck','LP-'+truckId,'Destination',dest,'Date',first.date]];
   const ws=XLSX.utils.aoa_to_sheet(hdr);
   XLSX.utils.sheet_add_json(ws,rows,{origin:'A3'});
-  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:18},{wch:10}];
+  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:10},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'LP-'+truckId);
   XLSX.writeFile(wb,'LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_Shipping_Order.xlsx');
 }
@@ -2019,17 +2019,17 @@ function switchMod(mod){
     v26El.classList.add("vis");
     const rb=document.getElementById("roleBadgeV26");
     if(rb)rb.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
-    V26_render();checkSB();
+    try{V26_render()}catch(e){console.error('V26_render error:',e)}checkSB();
   } else if(mod==="lm"){
     dEl.classList.add("vis");
-    if(VN.length){rT();rVL();rMain();}
+    if(VN.length){try{rT();rVL();rMain()}catch(e){console.error('LM render error:',e)}}
     else if(ROLE==="admin"){initLMUpload();showLMUpload();}
   } else {
     const rb=document.getElementById("roleBadgeLP");
     if(rb)rb.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
-    if(LP_STATE.planGenerated){lpEl.classList.add("vis");LP_switchTab('plan');checkSB()}
+    if(LP_STATE.planGenerated){lpEl.classList.add("vis");try{LP_switchTab('plan')}catch(e){console.error('LP render error:',e)}checkSB()}
     else{LP_loadFromSupabase().then(found=>{
-      if(found){lpEl.classList.add("vis");LP_switchTab('plan');checkSB();}
+      if(found){lpEl.classList.add("vis");try{LP_switchTab('plan')}catch(e){console.error('LP render error:',e)}checkSB();}
       else if(ROLE==="admin"){initLPUpload();showLPUpload();}
       else{document.getElementById("US").style.display="flex";checkSB();}
     }).catch(()=>{
@@ -2116,6 +2116,7 @@ function enterApp(){
         NOM=JSON.parse(nomD.value);RW=JSON.parse(rwD.value);
         try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
         try{const {data:exD}=await SB.from("shared_state").select("value").eq("id","fm-excl").single();if(exD)LM_excluded=new Set(JSON.parse(exD.value))}catch(e){}
+        try{await stockReportLoad()}catch(e){}
         if(Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
       }
     }catch(e){}
@@ -2203,6 +2204,7 @@ async function loadSharedData(){
     NOM=JSON.parse(nomD.value);
     RW=JSON.parse(rwD.value);
     try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
+    try{await stockReportLoad()}catch(e){}
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     bV();if(!VN.length)throw new Error("No venues.");
@@ -3504,10 +3506,9 @@ ${isClusterTruck?'':`<th colspan="2" style="text-align:center;border-right:2px s
 <th style="text-align:center;color:var(--ac)">POOL LEFT</th>
 ${isClusterTruck?'':`<th style="color:var(--pu)">NOTE</th>`}
 </tr><tr><th style="width:16px"></th><th>SKU</th><th>Item</th><th style="border-right:2px solid var(--bd)">Source</th><th>Total Qty</th><th style="border-right:2px solid var(--bl)">Per Plt</th>${isClusterTruck?'':`<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th>`}<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th><th style="border-right:2px solid var(--bl)">Remaining</th>${isClusterTruck?'':`<th></th>`}</tr></thead><tbody>`;
-const lmReadyBySku={};(LP_STATE?.arrivals||[]).forEach(a=>{if(a.readyDate&&(!lmReadyBySku[a.sku]||a.readyDate<lmReadyBySku[a.sku]))lmReadyBySku[a.sku]=a.readyDate});
 t.items.forEach(it=>{
-const lmReady=lmReadyBySku[it.sku]&&lmReadyBySku[it.sku]<=new Date().toISOString().slice(0,10);
-const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmReady?'var(--gn)':'var(--rd)'}" title="${lmReadyBySku[it.sku]?'Ready: '+lmReadyBySku[it.sku]:'No arrival data'}"></span>`;
+const lmInStock=STOCK_SKUS.has(it.sku);
+const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmInStock?'var(--gn)':'var(--rd)'}" title="${lmInStock?'In stock':'Not in stock'}"></span>`;
 const lmSrc=(NOM[it.sku]?.src)||'';
 const totalForSku=it.noPallet?LP.all.filter(x=>x.sku===it.sku).reduce((s,x)=>s+x.qty,0):LP.all.filter(x=>x.sku===it.sku&&x.ok).reduce((s,x)=>s+x.qty,0);
 const poolLeft=it.noPallet?'—':(it.poolAfter!==undefined?it.poolAfter:'—');
@@ -4457,6 +4458,7 @@ function exportTruck(truckIdx){
       'Nomenclature code':it.sku,
       'Nomenclature name':it.nm||nom.nm||it.sku,
       'Source':nom.src||'',
+      'In Stock':STOCK_SKUS.has(it.sku)?'Yes':'No',
       'Qty':it.loadQty
     };
   });
@@ -4464,7 +4466,7 @@ function exportTruck(truckIdx){
   const hdr=[['Truck',t.id,'Destination',dest]];
   const ws=XLSX.utils.aoa_to_sheet(hdr);
   XLSX.utils.sheet_add_json(ws,rows,{origin:'A3'});
-  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:10}];
+  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:10},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Truck '+t.id);
   XLSX.writeFile(wb,t.id+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_Shipping_Order.xlsx');
 }
@@ -4502,6 +4504,7 @@ function doSystemReset(){
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};
+  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();
   // Restore upload screen
@@ -4665,9 +4668,9 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-stock']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';
   document.getElementById("D").classList.add("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.remove("vis");
@@ -4810,6 +4813,106 @@ function initLPUpload(){
   fin.addEventListener('change',function(){if(this.files.length)lpHF(this.files);this.value='';});
   btn.addEventListener('click',goGenerateLP);
 }
+
+
+// ── Stock Report ─────────────────────────────────────────
+function stockReportUpload(){
+  // Show modal with current status + upload/reset options
+  const hasStock=STOCK_SKUS.size>0;
+  const mrEl=document.getElementById('mr');
+  mrEl.innerHTML=`<div class="mo" onclick="if(event.target===this)clM()"><div class="mdi" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="mdh"><div><h3>📦 Stock Report</h3><div class="mds">Upload daily warehouse stock report to track item availability</div></div><button class="mdc" onclick="clM()">✕</button></div>
+    <div class="mdb" style="padding:20px">
+      ${hasStock?`<div style="background:var(--gs);border:1px solid #B8DFCA;border-radius:8px;padding:12px 14px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--gn)">✅ Stock report loaded</div>
+        <div style="font-size:11px;color:var(--ts);margin-top:4px">${STOCK_REPORT_NAME||'Unknown file'} — ${STOCK_SKUS.size} nomenclatures in stock</div>
+      </div>`:`<div style="background:var(--os);border:1px solid #F5D6B8;border-radius:8px;padding:12px 14px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--or)">No stock report loaded</div>
+        <div style="font-size:11px;color:var(--ts);margin-top:4px">All items will show red dots until a report is uploaded</div>
+      </div>`}
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('stockFileInput').click()" style="flex:1;padding:12px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--gn)">📤 Upload New Report</button>
+        ${hasStock?`<button onclick="stockReportReset()" style="padding:12px 16px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--rd)">✕ Reset</button>`:''}
+      </div>
+    </div>
+  </div></div>`;
+}
+
+function stockReportParse(file){
+  const r=new FileReader();
+  r.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!rows.length)throw new Error('Empty file');
+      const hdrs=Object.keys(rows[0]);
+      const skuCol=hdrs.find(h=>h.toLowerCase().includes('nomenclature code'))||hdrs.find(h=>h.toLowerCase().includes('code'))||hdrs[0];
+      const skus=new Set();
+      for(const row of rows){const v=String(row[skuCol]||'').trim();if(v&&v.toLowerCase()!=='total')skus.add(v)}
+      STOCK_SKUS=skus;
+      STOCK_REPORT_NAME=file.name;
+      stockReportSave();
+      clM();
+      stockUpdateBadge();
+      // Re-render active views
+      if(typeof rMain==='function')rMain();
+      if(typeof LP_render==='function'&&LP_STATE.planGenerated)LP_render();
+    }catch(err){
+      alert('Failed to parse stock report: '+err.message);
+    }
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function stockReportReset(){
+  STOCK_SKUS=new Set();
+  STOCK_REPORT_NAME='';
+  stockReportSave();
+  clM();
+  stockUpdateBadge();
+  if(typeof rMain==='function')rMain();
+  if(typeof LP_render==='function'&&LP_STATE.planGenerated)LP_render();
+}
+
+function stockUpdateBadge(){
+  const btn=document.getElementById('stockBtn');
+  if(!btn)return;
+  if(STOCK_SKUS.size>0){
+    btn.textContent='📦 Stock: '+STOCK_SKUS.size+' SKUs';
+    btn.style.background='var(--gs)';btn.style.color='var(--gn)';btn.style.borderColor='#B8DFCA';
+  }else{
+    btn.textContent='📦 Stock Report';
+    btn.style.background='var(--os)';btn.style.color='var(--or)';btn.style.borderColor='#F5D6B8';
+  }
+}
+
+async function stockReportSave(){
+  if(ROLE==="viewer"||!SB)return;
+  try{
+    const now=new Date().toISOString();
+    await SB.from('shared_state').upsert({id:'fm-stock',value:JSON.stringify({skus:[...STOCK_SKUS],name:STOCK_REPORT_NAME}),updated_at:now});
+  }catch(e){console.warn('Stock save error:',e)}
+}
+
+async function stockReportLoad(){
+  if(!SB)return;
+  try{
+    const {data}=await SB.from('shared_state').select('value').eq('id','fm-stock').single();
+    if(data){
+      const parsed=JSON.parse(data.value);
+      STOCK_SKUS=new Set(parsed.skus||[]);
+      STOCK_REPORT_NAME=parsed.name||'';
+      stockUpdateBadge();
+    }
+  }catch(e){/* no stock data yet */}
+}
+
+// Wire up file input
+document.addEventListener('DOMContentLoaded',()=>{
+  const fi=document.getElementById('stockFileInput');
+  if(fi)fi.addEventListener('change',function(){if(this.files.length)stockReportParse(this.files[0]);this.value='';});
+});
 
 
 // ── LM upload panel functions ─────────────────────────────
