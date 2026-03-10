@@ -3088,9 +3088,11 @@ function build(venue,venueList,skipNoBi){
     todayRequests.sort((a,b)=>a.sku<b.sku?-1:a.sku>b.sku?1:0);
 
     // Build load list: for each item, calculate full pallets + top-up
+    // Shadow tracker prevents stale pool reads when same SKU appears multiple times
     const loadList=[];// [{sku, nm, loadQty, loadPlt, pq, ps, biK, sched, topUp}]
+    const _planned={};// sku -> total qty already planned in this loop (shadow deduction)
     for(const it of todayRequests){
-      const avail=pool[it.sku]?.remaining||0;
+      const avail=Math.max(0,(pool[it.sku]?.remaining||0)-(_planned[it.sku]||0));
       if(avail<=0)continue;
       let qty=Math.min(it.qty,avail);
       let topUp=0;
@@ -3114,6 +3116,7 @@ function build(venue,venueList,skipNoBi){
         }
       }
 
+      _planned[it.sku]=(_planned[it.sku]||0)+qty;// shadow-deduct so next entry sees reduced avail
       const loadPlt=(qty/it.pq)*it.ps;
       loadList.push({sku:it.sku,nm:it.nm,loadQty:qty,loadPlt:Math.round(loadPlt*100)/100,
         pq:it.pq,ps:it.ps,biK:it.biK,sched:it.sched||0,topUp,
@@ -4454,7 +4457,7 @@ if(cv==="dashboard"){
   const calDates=Object.keys(calMap).filter(d=>d.match(/^\d{4}-/)).sort();
   // totTrucks = sum of DDD column — single source of truth so KPI card always matches table
   totTrucks=calDates.reduce((s,dk)=>s+(calMap[dk].trucks||0),0);
-  totPlt=Math.round(calDates.reduce((s,dk)=>s+(calMap[dk].pallets||0),0));
+  totPlt=Math.round(calDates.reduce((s,dk)=>s+(calMap[dk].pallets||0),0)*10)/10;
   // totPcs stays as demand from venue metadata (set above from v.it)
   const peakTrucks=calDates.length?Math.max(...calDates.map(d=>calMap[d].trucks)):0;
   const totalDays=calDates.length;
@@ -4469,7 +4472,7 @@ if(cv==="dashboard"){
   const loadedPcs=calDates.reduce((s,dk)=>s+(calMap[dk].pcs||0),0);
   const pcsDelta=totPcs-loadedPcs;
   const lmKpiItems=[
-    {label:'📦 Pallets',value:totPlt.toLocaleString(),color:'var(--ac)'},
+    {label:'📦 Pallets',value:Number.isInteger(totPlt)?totPlt.toLocaleString():totPlt.toFixed(1),color:'var(--ac)'},
     {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444',sub:pcsDelta>0?`${pcsDelta.toLocaleString()} not on trucks`:(pcsDelta===0?'':'')},
     {label:'🚛 LM Trucks',value:totTrucks,color:'var(--gn)'},
     {label:'📅 Dispatch Days',value:totalDays,color:'var(--or)'},
@@ -4553,7 +4556,7 @@ const displayName=isClusterSel?clDisp(selCluster):sel;
 
 syncI();
 const cacheKey=isClusterSel?selCluster:sel;
-const P=PLAN_CACHE[cacheKey]||(isClusterSel?build(sel,clusterVenues):build(sel));
+const P=PLAN_CACHE[cacheKey]||(()=>{const _p=isClusterSel?build(sel,clusterVenues):build(sel);PLAN_CACHE[cacheKey]=_p;return _p})();
 LP=P;
 // Use globally-numbered CORT from CORT_CACHE (set by numberAll)
 const venueName=isClusterSel?null:sel;
@@ -4890,7 +4893,7 @@ function exportXL(){
   VN.filter(v=>isStadium(v.name)).forEach(v=>addVenue(v.name,v.name));
   // US clusters
   for(const cl in CLUSTERS){
-    if(vcIsCAN(cl)||vcIsMEX(cl))continue;
+    if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
     if(builtClusters2.has(cl))continue;builtClusters2.add(cl);
     addVenue(cl,cl,CLUSTERS[cl].venues);
   }
