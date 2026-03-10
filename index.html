@@ -3498,6 +3498,75 @@ function build(venue,venueList,skipNoBi){
   // Recalculate day totals
   days.forEach(d=>{d.totalQty=d.trucks.reduce((s,t)=>s+t.pcs,0);});
 
+  // ── FINAL SWEEP: guarantee every pool piece is loaded ──
+  // After all passes (main, fill-up, future-pull, mop-up, no-pallet), check for any
+  // pool items still remaining and force them into the last truck or a new one.
+  let _sweepItems=[];
+  for(const sku in pool){
+    const p=pool[sku];
+    if(p.remaining>0){
+      const plt=(p.remaining/p.pq)*p.ps;
+      _sweepItems.push({sku,nm:p.nm,loadQty:p.remaining,loadPlt:Math.round(plt*100)/100,
+        pq:p.pq,ps:p.ps,biK:'sweep',sched:0,topUp:p.remaining,pulled:true,pulledFrom:'pool-sweep',remainder:0});
+    }
+  }
+  if(_sweepItems.length>0){
+    _sweepItems.sort((a,b)=>b.loadPlt-a.loadPlt);
+    // Find last truck with space, or create one
+    let _swTruck=null;
+    for(let di=days.length-1;di>=0&&!_swTruck;di--){
+      for(let ti=days[di].trucks.length-1;ti>=0;ti--){
+        if(tCap-days[di].trucks[ti].pallets>0.01){_swTruck=days[di].trucks[ti];break}
+      }
+    }
+    if(!_swTruck){
+      const lastDay=days.length>0?days[days.length-1]:null;
+      _swTruck={items:[],pallets:0,pcs:0,biK:lastDay?lastDay.biK:'sweep',dd:lastDay?lastDay.dKey:'sweep',
+        idealDisp:lastDay?lastDay.dKey:'sweep',isOverflow:false,isEarly:false};
+      if(lastDay){lastDay.trucks.push(_swTruck)}
+      else{const dt=new Date();days.push({biK:dk(dt),biDate:dt,dDate:dt,dKey:dk(dt),trucks:[_swTruck],
+        isEarly:false,hasOverflow:false,isNoBi:true,dayPlt:0,exactPlt:0,totalQty:0})}
+    }
+    for(const sw of _sweepItems){
+      // Try to fit on existing truck, spill to new if needed
+      let space=tCap-_swTruck.pallets;
+      if(sw.loadPlt<=space+0.001){
+        const ex=_swTruck.items.find(x=>x.sku===sw.sku);
+        if(ex){ex.loadQty+=sw.loadQty;ex.topUp=(ex.topUp||0)+sw.loadQty;ex.loadPlt=Math.round((ex.loadQty/ex.pq)*ex.ps*100)/100}
+        else _swTruck.items.push({...sw,poolAfter:0});
+        _swTruck.pallets+=sw.loadPlt;_swTruck.pcs+=sw.loadQty;
+      } else {
+        // Split: fill current, create new for rest
+        if(space>0.01&&sw.pq>0){
+          const fitPlt=Math.floor(space/sw.ps);
+          if(fitPlt>0){
+            const fitQty=fitPlt*sw.pq;const fitPltV=fitPlt*sw.ps;
+            const ex=_swTruck.items.find(x=>x.sku===sw.sku);
+            if(ex){ex.loadQty+=fitQty;ex.topUp=(ex.topUp||0)+fitQty;ex.loadPlt=Math.round((ex.loadQty/ex.pq)*ex.ps*100)/100}
+            else _swTruck.items.push({sku:sw.sku,nm:sw.nm,loadQty:fitQty,loadPlt:Math.round(fitPltV*100)/100,pq:sw.pq,ps:sw.ps,biK:sw.biK,sched:0,topUp:fitQty,pulled:true,pulledFrom:'pool-sweep',remainder:0,poolAfter:0});
+            _swTruck.pallets+=fitPltV;_swTruck.pcs+=fitQty;
+            sw.loadQty-=fitQty;sw.loadPlt=Math.round((sw.loadQty/sw.pq)*sw.ps*100)/100;
+          }
+        }
+        // Remaining goes to new truck
+        if(sw.loadQty>0){
+          const lastDay=days[days.length-1];
+          _swTruck={items:[],pallets:0,pcs:0,biK:lastDay.biK,dd:lastDay.dKey,idealDisp:lastDay.dKey,isOverflow:false,isEarly:false};
+          lastDay.trucks.push(_swTruck);
+          _swTruck.items.push({...sw,poolAfter:0});
+          _swTruck.pallets+=sw.loadPlt;_swTruck.pcs+=sw.loadQty;
+        }
+      }
+      pool[sw.sku].remaining=0;
+    }
+    // Re-recalculate day totals after sweep
+    days.forEach(d=>{
+      d.totalQty=d.trucks.reduce((s,t)=>s+t.pcs,0);
+      d.dayPlt=Math.round(d.trucks.reduce((s,t)=>s+t.pallets,0)*100)/100;
+      d.exactPlt=d.trucks.reduce((s,t)=>{let e=0;t.items.forEach(it=>{if(it.pq>0)e+=(it.loadQty/it.pq)*it.ps});return s+e},0);
+    });
+  }
+
   const cortDeliveries=cortDates.map(bk=>{
     const items=cortDated[bk];
     const byS={};const venues=new Set();
@@ -3570,11 +3639,10 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
   const s=r["Nomenclature"]||"?";
   if(!NOM[s])continue;// skip items with no NOM entry (e.g. golf carts)
-  const _isCt=isCort(s);
-  if(_isCt)a[v].hasCort=true;
+  if(isCort(s))a[v].hasCort=true;
   const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const pqUom=(nm?.pq||0)>0?(nm.pq/ppu):0;const psVal=nm?.ps||0;
-  if(pqUom>0&&psVal>0&&!_isCt)a[v].ep+=(_rawQ/(nm.pq))*psVal;a[v].ln++;if(!_isCt)a[v].it+=q;
+  if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/(nm.pq))*psVal;a[v].ln++;a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
 }
 VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep),cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||""})).sort((a,b)=>b.plt-a.plt);
@@ -4388,7 +4456,7 @@ if(cv==="dashboard"){
   // totTrucks = sum of DDD column — single source of truth so KPI card always matches table
   totTrucks=calDates.reduce((s,dk)=>s+(calMap[dk].trucks||0),0);
   totPlt=Math.round(calDates.reduce((s,dk)=>s+(calMap[dk].pallets||0),0));
-  totPcs=calDates.reduce((s,dk)=>s+(calMap[dk].pcs||0),0);
+  // totPcs stays as demand from venue metadata (set above from v.it)
   const peakTrucks=calDates.length?Math.max(...calDates.map(d=>calMap[d].trucks)):0;
   const totalDays=calDates.length;
   const filterLabel=isClusterOv?clDisp(clusterOvName)+' Overview':(isRegion?(regionCat==='can'?'Canada Overview':'Mexico Overview'):(isFiltered?(isClusterSel2?clDisp(selCluster):sel):'All Venues'));
@@ -4399,11 +4467,12 @@ if(cv==="dashboard"){
   let h=`<div class="fin"><h2 style="font-size:19px;font-weight:700">📊 Dashboard — ${filterLabel}</h2>
   ${isFiltered?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing plan for selected venue/cluster. Deselect to see all.</p>':(isClusterOv?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing all venues in '+clDisp(clusterOvName)+'.</p>':(isRegion?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing all '+( regionCat==='can'?'Canadian':'Mexican')+' venues.</p>':''))}
   </div>`;
-  const demandPcs=isFiltered?(isClusterSel2?(CLUSTERS[selCluster]?.pcs||viewVenues.reduce((s,v)=>s+v.it,0)):(VN.find(v=>v.name===sel)?.it||0)):viewVenues.reduce((s,v)=>s+v.it,0);
-  const pcsDelta=demandPcs-totPcs;
+  const loadedPcs=calDates.reduce((s,dk)=>s+(calMap[dk].pcs||0),0);
+  const cortPcsTotal=calDates.reduce((s,dk)=>s+(calMap[dk].cortPcs||0),0);
+  const pcsDelta=totPcs-loadedPcs-cortPcsTotal;
   const lmKpiItems=[
     {label:'📦 Pallets',value:totPlt.toLocaleString(),color:'var(--ac)'},
-    {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444',sub:pcsDelta>0?`${pcsDelta.toLocaleString()} unloaded of ${demandPcs.toLocaleString()}`:''},
+    {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444',sub:pcsDelta>0?`${pcsDelta.toLocaleString()} unloaded of ${totPcs.toLocaleString()}`:''},
     {label:'🚛 LM Trucks',value:totTrucks,color:'var(--gn)'},
     {label:'📅 Dispatch Days',value:totalDays,color:'var(--or)'},
     {label:'📈 Peak/Day',value:peakTrucks,color:'var(--rd)'},
