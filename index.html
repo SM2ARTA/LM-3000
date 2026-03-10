@@ -408,7 +408,7 @@
 }
 /* ── VISION 2026 DASHBOARD ── */
 #V26{display:none;min-height:100vh;flex-direction:column}#V26.vis{display:flex}
-.v26-body{flex:1;overflow-y:auto;padding:10px 20px;max-width:1400px;margin:0 auto;width:100%}
+.v26-body{flex:1;overflow-y:auto;padding:10px 20px;max-width:1400px;margin:0 auto;width:100%;display:flex;flex-direction:column}
 .v26-hero{text-align:center;padding:20px 0 10px}
 .v26-hero h1{font-size:28px;font-weight:700;letter-spacing:-.5px}
 .v26-hero p{font-size:12px;color:var(--ts);margin-top:4px}
@@ -2024,12 +2024,12 @@ function V26_render(){
   // ── DISPATCH CHART (compact bar chart replacing calendar) ──
   if(fDates.length>0){
     const maxDay=Math.max(...fDates.map(d=>{const items=fByDate[d]||[];return items.filter(t=>!t.excluded).length}),1);
-    html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:8px 12px;margin-top:4px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <div style="font-size:11px;font-weight:700">📊 Dispatch Volume</div>
-      <div style="display:flex;gap:8px;font-size:8px;color:var(--tt);align-items:center"><span><span style="display:inline-block;width:6px;height:6px;border-radius:1px;background:#6CB4EE;vertical-align:middle;margin-right:2px"></span>LP</span><span><span style="display:inline-block;width:6px;height:6px;border-radius:1px;background:#78C68D;vertical-align:middle;margin-right:2px"></span>LM</span><span><span style="display:inline-block;width:6px;height:6px;border-radius:1px;background:#E8745A;vertical-align:middle;margin-right:2px"></span>CORT</span><span style="margin-left:4px">Peak: ${fPeakCount} · ${fDates.length}d</span></div>
+    html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:10px 14px;margin-top:6px;flex:1;min-height:120px;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:700">📊 Dispatch Volume</div>
+      <div style="display:flex;gap:10px;font-size:9px;color:var(--tt);align-items:center"><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#6CB4EE;vertical-align:middle;margin-right:3px"></span>LP</span><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#78C68D;vertical-align:middle;margin-right:3px"></span>LM</span><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#E8745A;vertical-align:middle;margin-right:3px"></span>CORT</span><span style="margin-left:6px;font-weight:600">Peak: ${fPeakCount} · ${fDates.length} days</span></div>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:1px;height:50px;overflow-x:auto;padding-bottom:14px;position:relative">`;
+    <div style="display:flex;align-items:flex-end;gap:2px;flex:1;min-height:0;padding-bottom:18px;position:relative">`;
     for(const d of fDates){
       const items=fByDate[d]||[];
       const active=items.filter(t=>!t.excluded);
@@ -2037,24 +2037,23 @@ function V26_render(){
       const lp=active.filter(t=>t.source==='Load Plan').length;
       const lm=active.filter(t=>t.source==='Last Mile').length;
       const cort=active.filter(t=>t.source==='CORT').length;
-      const pct=Math.round(n/maxDay*100);
       const dObj=LP_parseLocalDate(d);
       const isWknd=dObj?(dObj.getDay()===0||dObj.getDay()===6):false;
       const dayLbl=dObj?dObj.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
       const isFirst=fDates.indexOf(d)===0;
       const isMonday=dObj&&dObj.getDay()===1;
       const showLabel=isFirst||isMonday||fDates.length<=14;
-      // Stacked: LP (blue-ish) + LM (green) + CORT (red)
       const lpH=maxDay>0?Math.round(lp/maxDay*100):0;
       const lmH=maxDay>0?Math.round(lm/maxDay*100):0;
       const cortH=maxDay>0?Math.round(cort/maxDay*100):0;
-      html+=`<div style="flex:1;min-width:${fDates.length>40?'4px':'8px'};max-width:${fDates.length>60?'6px':'24px'};display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;height:100%;cursor:pointer;position:relative${isWknd?';opacity:0.5':''}" onclick="V26_showDay('${d}')" title="${dayLbl}: ${n} trucks (${lp} LP, ${lm} LM, ${cort} CORT)">
+      html+=`<div style="flex:1;min-width:${fDates.length>60?'3px':'6px'};display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;height:100%;cursor:pointer;position:relative${isWknd?';opacity:0.45':''}" onclick="V26_showDay('${d}')" title="${dayLbl}: ${n} trucks (${lp} LP, ${lm} LM, ${cort} CORT)">
         <div style="display:flex;flex-direction:column;justify-content:flex-end;flex:1">
-          ${cort>0?`<div style="height:${cortH}%;min-height:${cort?2:0}px;background:#E8745A;border-radius:2px 2px 0 0"></div>`:''}
-          ${lm>0?`<div style="height:${lmH}%;min-height:${lm?2:0}px;background:#78C68D"></div>`:''}
-          ${lp>0?`<div style="height:${lpH}%;min-height:${lp?2:0}px;background:#6CB4EE;border-radius:${cort||lm?'0':'2px 2px'} 0 0"></div>`:''}
+          ${cort>0?`<div style="height:${cortH}%;min-height:${cort?3:0}px;background:#E8745A;border-radius:2px 2px 0 0"></div>`:''}
+          ${lm>0?`<div style="height:${lmH}%;min-height:${lm?3:0}px;background:#78C68D"></div>`:''}
+          ${lp>0?`<div style="height:${lpH}%;min-height:${lp?3:0}px;background:#6CB4EE;border-radius:${cort||lm?'0':'2px 2px'} 0 0"></div>`:''}
         </div>
-        ${showLabel?`<div style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--tt);white-space:nowrap">${dayLbl}</div>`:''}
+        ${n>0?`<div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--ts);font-weight:600">${n}</div>`:''}
+        ${showLabel?`<div style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:8px;color:var(--tt);white-space:nowrap">${dayLbl}</div>`:''}
       </div>`;
     }
     html+=`</div></div>`;
