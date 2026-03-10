@@ -2631,6 +2631,7 @@ function renderTruckCard(t,opts){
     <div class="tto"><div class="tin"><span style="font-size:18px">${isLmDisp?'🔒':(isExcl?'🚫':'🚛')}</span><div>
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
       <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty</div>
+      ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">✅ Dispatched</span></div>':''}
@@ -3676,6 +3677,7 @@ let LP=null;
 let LM_excluded=new Set();// truck IDs excluded from V26/dashboards
 let LM_dispatched=new Set();// truck fingerprints marked as dispatched
 let LM_dateOverrides={};// {fingerprint: newDate} — manual date changes
+let LM_hideStaples=false;// hide STP-sourced items in truck modals
 let _dashCalMap={};// stored from rMain dashboard for day-detail popup
 let _dashFilter=null;// {type:'all'|'region'|'clusterOv'|'filtered', labels:Set, regionCat:'', clusterName:'', venueLabel:''}
 // Stable truck fingerprint — survives renumbering since it's based on content not ID
@@ -3742,7 +3744,10 @@ ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10
   <input type="checkbox" ${LM_isDispatched(t)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_isDispatched(t)?'✅ Dispatched':'Mark dispatched'}</span>
   <span style="color:var(--bd)">|</span>
   <label style="color:var(--ts)">Date:</label><input type="date" value="${t.dd||''}" style="font-size:11px;font-family:var(--fm);padding:4px 6px;border:1px solid var(--bd);border-radius:6px;color:var(--tp)" onchange="LM_changeDate(${i},this.value);clM()">
+  <span style="color:var(--bd)">|</span>
+  <input type="checkbox" ${LM_hideStaples?'checked':''} onchange="LM_hideStaples=this.checked;showM(${i})"><span>Hide Staples</span>
 </div>`:''}
+${(()=>{const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=nonStp.length>0?Math.round(inSt/nonStp.length*100):0;const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">📦 In Stock: ${STOCK_SKUS.size===0?'— (no report)':pct+'% ('+inSt+'/'+nonStp.length+' SKUs excl. STP/CT)'}</div>`})()}
 <table class="dtb" style="margin-top:14px"><thead><tr>
 <th colspan="4" style="border-right:2px solid var(--bd)"></th>
 <th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--ts)">${isClusterTruck?'CLUSTER TOTAL':'VENUE TOTAL'}</th>
@@ -3752,9 +3757,10 @@ ${isClusterTruck?'':`<th colspan="2" style="text-align:center;border-right:2px s
 ${isClusterTruck?'':`<th style="color:var(--pu)">NOTE</th>`}
 </tr><tr><th style="width:16px"></th><th>SKU</th><th>Item</th><th style="border-right:2px solid var(--bd)">Source</th><th>Total Qty</th><th style="border-right:2px solid var(--bl)">Per Plt</th>${isClusterTruck?'':`<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th>`}<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th><th style="border-right:2px solid var(--bl)">Remaining</th>${isClusterTruck?'':`<th></th>`}</tr></thead><tbody>`;
 t.items.forEach(it=>{
+const lmSrc=(NOM[it.sku]?.src)||'';
+if(LM_hideStaples&&(lmSrc.toUpperCase().startsWith('STP')))return;
 const lmInStock=STOCK_SKUS.has(it.sku);
 const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmInStock?'var(--gn)':'var(--rd)'}" title="${lmInStock?'In stock':'Not in stock'}"></span>`;
-const lmSrc=(NOM[it.sku]?.src)||'';
 const totalForSku=it.noPallet?LP.all.filter(x=>x.sku===it.sku).reduce((s,x)=>s+x.qty,0):LP.all.filter(x=>x.sku===it.sku&&x.ok).reduce((s,x)=>s+x.qty,0);
 const poolLeft=it.noPallet?'—':(it.poolAfter!==undefined?it.poolAfter:'—');
 const reqPlt=(it.noPallet||it.pq===0)?0:(it.sched>0?((it.sched/it.pq)*it.ps):0);
