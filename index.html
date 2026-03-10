@@ -1894,7 +1894,7 @@ function V26_render(){
   const totalTrucks=activeTrucks.length;
   const lmTrucks=activeTrucks.filter(t=>t.source==='Last Mile');
   const lpTrucks=activeTrucks.filter(t=>t.source==='Load Plan');
-  const totalPlt=VN.reduce((s,v)=>s+v.plt,0);
+  const totalPlt=VN.reduce((s,v)=>s+v.ep,0);
   const totalQty=VN.reduce((s,v)=>s+v.it,0);
   const totalSkus=new Set(activeTrucks.flatMap(t=>t.items.map(i=>i.sku))).size;
   const dests=new Set(activeTrucks.map(t=>t.dest));
@@ -3646,9 +3646,9 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/(nm.pq))*psVal;a[v].ln++;a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
 }
-VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep),cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||""})).sort((a,b)=>b.plt-a.plt);
+VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep*10)/10,cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||""})).sort((a,b)=>b.ep-a.ep);
 // Build cluster info
-CLUSTERS={};VN.forEach(v=>{if(v.cluster){if(!CLUSTERS[v.cluster])CLUSTERS[v.cluster]={name:v.cluster,venues:[],earlyBI:null,plt:0,pcs:0};CLUSTERS[v.cluster].venues.push(v.name);CLUSTERS[v.cluster].plt+=v.plt;CLUSTERS[v.cluster].pcs+=v.it;if(v.earlyBI&&(!CLUSTERS[v.cluster].earlyBI||v.earlyBI<CLUSTERS[v.cluster].earlyBI))CLUSTERS[v.cluster].earlyBI=v.earlyBI}});
+CLUSTERS={};VN.forEach(v=>{if(v.cluster){if(!CLUSTERS[v.cluster])CLUSTERS[v.cluster]={name:v.cluster,venues:[],earlyBI:null,plt:0,pcs:0};CLUSTERS[v.cluster].venues.push(v.name);CLUSTERS[v.cluster].plt+=v.ep;CLUSTERS[v.cluster].pcs+=v.it;if(v.earlyBI&&(!CLUSTERS[v.cluster].earlyBI||v.earlyBI<CLUSTERS[v.cluster].earlyBI))CLUSTERS[v.cluster].earlyBI=v.earlyBI}});
 }
 // ── Venue code helpers ──
 // Venue code lookup: venue name -> code
@@ -3838,11 +3838,11 @@ function rVL(){
     const isCanMex=vCat==='can'||vCat==='mex';
     const regionKey='__region_'+vCat;
     const regionLabel=vCat==='can'?'Canada Overview':'Mexico Overview';
-    const regionPlt=ls.reduce((s,v)=>s+v.plt,0);
+    const regionPlt=ls.reduce((s,v)=>s+v.ep,0);
     const regionPcs=ls.reduce((s,v)=>s+v.it,0);
     let html='';
     if(isCanMex){
-      html+=`<div class="vi ${sel===regionKey?'on':''}" onclick="selRegion('${vCat}')" style="border-bottom:1px solid var(--bl)"><div class="vn" style="font-weight:700">📊 ${regionLabel}</div><div class="vm">${ls.length} venues · ${regionPlt.toLocaleString()} plt · ${regionPcs.toLocaleString()} pcs</div></div>`;
+      html+=`<div class="vi ${sel===regionKey?'on':''}" onclick="selRegion('${vCat}')" style="border-bottom:1px solid var(--bl)"><div class="vn" style="font-weight:700">📊 ${regionLabel}</div><div class="vm">${ls.length} venues · ${Math.round(regionPlt*10)/10} plt · ${regionPcs.toLocaleString()} pcs</div></div>`;
     }
     html+=`<div style="padding:4px 14px;display:flex;gap:6px"><button class="tbtn" onclick="expAll()" style="font-size:9px;padding:2px 8px">Expand All</button><button class="tbtn" onclick="expCl={};rVL()" style="font-size:9px;padding:2px 8px">Collapse All</button></div>`;
     for(const cl of clKeys){
@@ -3861,7 +3861,7 @@ function rVL(){
       } else {
         html+=`<div onclick="selClOv('${cl.replace(/'/g,"\\'")}')" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">${clDisp(cl)} <span style="font-weight:400;opacity:.7">(${vCount})</span></div>`;
       }
-      html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${isSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${ci?.plt||0} plt${ebi?' · '+ebi:''}</div></div>`;
+      html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${isSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round((ci?.plt||0)*10)/10} plt${ebi?' · '+ebi:''}</div></div>`;
       // Venue list (if expanded)
       if(isExp){
         for(const v of groups[cl]){
@@ -3876,13 +3876,13 @@ function rVL(){
 }
 function rTotals(){
   let totPlt=0,totPcs=0,totTrucks=0,totDays=0,totVenues=VN.length;
-  VN.forEach(v=>{totPlt+=v.plt;totPcs+=v.it});
+  VN.forEach(v=>{totPlt+=v.ep;totPcs+=v.it});
   if(LP){totTrucks=LM_countActive(LP);totDays=LP.days.length}
   // Caption goes into #hm subtitle
   const hm=document.getElementById("hm");
   if(hm){
     const selLabel=sel&&sel.startsWith('__region_')?(sel==='__region_can'?'Canada Overview':'Mexico Overview'):(sel&&sel.startsWith('__cluster_')?clDisp(sel.replace('__cluster_',''))+' Overview':clDisp(sel));
-    let txt=`${totVenues} venues · ${totPlt.toLocaleString()} pallets · ${totPcs.toLocaleString()} pieces`;
+    let txt=`${totVenues} venues · ${(Math.round(totPlt*10)/10).toLocaleString()} pallets · ${totPcs.toLocaleString()} pieces`;
     if(sel&&!sel.startsWith('__region_')&&!sel.startsWith('__cluster_'))txt+=` · ${selLabel}: ${totTrucks} trucks · ${totDays} days`;
     hm.textContent=txt;
   }
@@ -4402,7 +4402,7 @@ if(cv==="dashboard"){
           const newT=pumpPlan(P,venueName,[]);
           if(newT>0){
             const trkPcs=P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.items?t.items.reduce((ss,it)=>ss+(it.loadQty||0),0):(t.pcs||0)),0);
-            venueStats.push({name:venueName,plt:vMeta.plt||0,pcs:trkPcs,trucks:newT,
+            venueStats.push({name:venueName,plt:vMeta.ep||0,pcs:trkPcs,trucks:newT,
               cortN:cortDels.length,cortPcs:cortDels.reduce((s,d)=>s+d.totalQty,0),days:P.days.length,avgU:0});
           }
         }
@@ -4413,7 +4413,7 @@ if(cv==="dashboard"){
         const cortDels=(CORT_CACHE[venueName]||P.cortDeliveries||[]).filter(cd=>!LM_excluded.has(cd.id));
         const newT=pumpPlan(P,venueName,cortDels);
         const trkPcs=P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.items?t.items.reduce((ss,it)=>ss+(it.loadQty||0),0):(t.pcs||0)),0);
-        venueStats.push({name:venueName,plt:vMeta.plt||0,pcs:trkPcs,trucks:newT,
+        venueStats.push({name:venueName,plt:vMeta.ep||0,pcs:trkPcs,trucks:newT,
           cortN:cortDels.length,cortPcs:cortDels.reduce((s,d)=>s+d.totalQty,0),days:P.days.length,
           avgU:newT>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/(P.tCap||26))*100,0)/newT):0});
       }
@@ -4424,28 +4424,28 @@ if(cv==="dashboard"){
   let viewVenues=[];
   if(isRegion){
     viewVenues=VN.filter(v=>regionCat==='can'?vcIsCAN(v.cluster):vcIsMEX(v.cluster));
-    totPlt=viewVenues.reduce((s,v)=>s+v.plt,0);
+    totPlt=viewVenues.reduce((s,v)=>s+v.ep,0);
     totPcs=viewVenues.reduce((s,v)=>s+v.it,0);
   } else if(isClusterOv){
     const cvn=CLUSTERS[clusterOvName]?CLUSTERS[clusterOvName].venues:[];
     viewVenues=VN.filter(v=>cvn.includes(v.name));
-    totPlt=viewVenues.reduce((s,v)=>s+v.plt,0);
+    totPlt=viewVenues.reduce((s,v)=>s+v.ep,0);
     totPcs=viewVenues.reduce((s,v)=>s+v.it,0);
   } else if(isFiltered){
     if(isClusterSel2){
       const cvn=CLUSTERS[selCluster].venues||[];
       viewVenues=VN.filter(v=>cvn.includes(v.name));
-      totPlt=CLUSTERS[selCluster].plt||viewVenues.reduce((s,v)=>s+v.plt,0);
+      totPlt=CLUSTERS[selCluster].plt||viewVenues.reduce((s,v)=>s+v.ep,0);
       totPcs=CLUSTERS[selCluster].pcs||viewVenues.reduce((s,v)=>s+v.it,0);
     } else {
       viewVenues=VN.filter(v=>v.name===sel);
-      totPlt=VN.find(v=>v.name===sel)?.plt||0;
+      totPlt=VN.find(v=>v.name===sel)?.ep||0;
       totPcs=VN.find(v=>v.name===sel)?.it||0;
     }
   } else {
     // All venues
     viewVenues=VN;
-    totPlt=VN.reduce((s,v)=>s+v.plt,0);
+    totPlt=VN.reduce((s,v)=>s+v.ep,0);
     totPcs=VN.reduce((s,v)=>s+v.it,0);
   }
 
@@ -4563,7 +4563,7 @@ const venueName=isClusterSel?null:sel;
 if(venueName&&CORT_CACHE[venueName])P.cortDeliveries=CORT_CACHE[venueName];
 // Ensure all trucks have IDs (fallback if not from cache)
 if(P.allT.length>0&&!P.allT[0].id){let fn=1;P.allT.forEach(t=>{if(!t.id)t.id=`LM-${fn++}`});if(P.cortDeliveries)P.cortDeliveries.forEach((cd,i)=>{if(!cd.id)cd.id=`C-${i+1}`})}
-const totalPlt=isClusterSel?CLUSTERS[selCluster].plt:(VN.find(v=>v.name===sel)?.plt||0);
+const totalPlt=isClusterSel?CLUSTERS[selCluster].plt:(VN.find(v=>v.name===sel)?.ep||0);
 const totalPcs=isClusterSel?CLUSTERS[selCluster].pcs:(VN.find(v=>v.name===sel)?.it||0);
 const nT=LM_countActive(P),nD=P.days.length,avgU=nT>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/P.tCap)*100,0)/nT):0;
 const _showCort=!isClusterSel||vcIsCAN(selCluster)||vcIsMEX(selCluster);
@@ -4573,7 +4573,7 @@ let h=`<div class="fin"><h2 style="font-size:19px;font-weight:700">${displayName
 if(isClusterSel)h+=`<p style="font-size:11px;color:var(--ts);margin-top:3px">${clusterVenues.length} venues: ${clusterVenues.slice(0,4).join(', ')}${clusterVenues.length>4?' +'+( clusterVenues.length-4)+' more':''}</p>`;
 h+=`<p style="font-size:12px;color:var(--ts);margin-top:3px">Lead: ${P.lt}d · ${P.maxT} trucks/day · ${P.tCap} plt/truck</p></div>`;
 const venueKpis=[
-  {label:'📦 Pallets',value:totalPlt,color:'var(--ac)'},
+  {label:'📦 Pallets',value:Math.round(totalPlt*10)/10,color:'var(--ac)'},
   {label:'📋 Pieces',value:totalPcs.toLocaleString(),color:'#A84444'},
   {label:'🚛 Trucks',value:nT,color:'var(--gn)'},
   {label:'📅 Days',value:nD,color:'var(--or)'},
@@ -4952,7 +4952,7 @@ function exportXL(){
   const addVenueSummary=(name,label,vl)=>{
     try{
       const P=vl?build(name,vl):build(name);
-      const plt=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.plt,0):(VN.find(v=>v.name===name)?.plt||0);
+      const plt=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.ep,0):(VN.find(v=>v.name===name)?.ep||0);
       const pcs=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.it,0):(VN.find(v=>v.name===name)?.it||0);
       const avgU=LM_countActive(P)>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/P.tCap)*100,0)/LM_countActive(P)):0;
       venRows.push({
