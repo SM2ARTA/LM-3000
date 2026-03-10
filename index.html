@@ -1429,13 +1429,10 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   ws.getRow(10).height=8;mc(ws,'A11:D11');mc(ws,'E11:I11');mc(ws,'J11:O11');ws.getRow(11).height=24;sc(ws,11,1,'SHIPPER',fSec,L,null,chF);sc(ws,11,5,'CONSIGNEE',fSec,L,null,mdF);sc(ws,11,10,'CUSTOMS BROKER',fSec,L,null,mdF);fil(ws,11,1,4,chF);fil(ws,11,5,9,mdF);fil(ws,11,10,15,mdF);box(ws,11,1,15,bM);
   const si=['FWC2026 US, Inc','396 Alhambra Circle, Ste# 400','Coral Gables, FL 33134','USA','',''];
   const pty=LP_getCIParties(dest);
-  const shpF={type:'pattern',pattern:'solid',fgColor:{argb:'FFdfe6e9'}};
-  const cnF={type:'pattern',pattern:'solid',fgColor:{argb:'FFd5e0ed'}};
-  const brF={type:'pattern',pattern:'solid',fgColor:{argb:'FFd5ead8'}};
   for(let i=0;i<6;i++){const rn=12+i;ws.getRow(rn).height=16;
-    for(let c=1;c<=4;c++)sc(ws,rn,c,c===1?si[i]:'',fD,L,null,shpF,brd);
-    for(let c=5;c<=9;c++)sc(ws,rn,c,c===5?(pty.consignee[i]||''):'',fD,L,null,cnF,brd);
-    for(let c=10;c<=15;c++)sc(ws,rn,c,c===10?(pty.broker[i]||''):'',fD,L,null,brF,brd);
+    const vals=[si[i],'','','',pty.consignee[i]||'','','','','',pty.broker[i]||'','','','','',''];
+    const fills=[l2F,l2F,l2F,l2F,tbF,tbF,tbF,tbF,tbF,l1F,l1F,l1F,l1F,l1F,l1F];
+    for(let c=0;c<15;c++){const cl=ws.getRow(rn).getCell(c+1);cl.value=vals[c];cl.font=fD;cl.alignment=L;cl.fill=fills[c];cl.border=brd}
   }
   ws.getRow(18).height=8;const hd=['QTY','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF ORIGIN','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
   mc(ws,'F19:H19');ws.getRow(19).height=32;hd.forEach((h,i)=>{const c=ws.getRow(19).getCell(i+1);c.value=h||null;c.font=fH;c.fill=chF;c.border=bM;c.alignment=W});ws.getRow(19).getCell(6).value='DIMENSIONS';
