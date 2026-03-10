@@ -1991,8 +1991,8 @@ function V26_render(){
   html+=`</div>`;
 
   // Filtered peak for timeline
-  const fPeakDate=fDates.length?fDates.reduce((pk,d)=>(fByDate[d]?.length||0)>(fByDate[pk]?.length||0)?d:pk,fDates[0]):'';
-  const fPeakCount=fByDate[fPeakDate]?.length||0;
+  const fPeakDate=fDates.length?fDates.reduce((pk,d)=>{const ac=(fByDate[d]||[]).filter(t=>!t.excluded).length;const pkc=(fByDate[pk]||[]).filter(t=>!t.excluded).length;return ac>pkc?d:pk},fDates[0]):'';
+  const fPeakCount=(fByDate[fPeakDate]||[]).filter(t=>!t.excluded).length;
 
   // ── DISPATCH CHART (compact bar chart replacing calendar) ──
   if(fDates.length>0){
