@@ -4304,7 +4304,23 @@ if(P.noBiN>0){
 }
 
 if(cv==="trucks"){if(!P.days.length)h+='<div class="emp fin">No palletized items.</div>';
+// Rebuild day groups from actual truck t.dd to respect date overrides
+const _dayMap={};
 P.days.forEach(day=>{
+  day.trucks.forEach(tr=>{
+    const actualDate=tr.dd||day.dKey;
+    if(!_dayMap[actualDate])_dayMap[actualDate]={dKey:actualDate,dDate:new Date(actualDate+'T12:00:00'),biDate:day.biDate,isNoBi:day.isNoBi,isEarly:day.isEarly,hasOverflow:day.hasOverflow,trucks:[],exactPlt:0,totalQty:0,dayP:0,cumP:0};
+    _dayMap[actualDate].trucks.push(tr);
+    _dayMap[actualDate].exactPlt+=tr.pallets||0;
+    _dayMap[actualDate].totalQty+=tr.items?tr.items.reduce((s,it)=>s+(it.loadQty||0),0):0;
+  });
+});
+const _rebDays=Object.values(_dayMap).sort((a,b)=>a.dKey.localeCompare(b.dKey));
+// Recalc cumulative
+let _cumPlt=0;const _totPlt=_rebDays.reduce((s,d)=>s+d.exactPlt,0);
+_rebDays.forEach(d=>{d.dayP=_totPlt>0?Math.round(d.exactPlt/_totPlt*100):0;_cumPlt+=d.exactPlt;d.cumP=_totPlt>0?Math.round(_cumPlt/_totPlt*100):0});
+
+_rebDays.forEach(day=>{
 const isWknd=day.dDate.getDay()===0||day.dDate.getDay()===6;
 const arrWknd=day.biDate&&!day.isNoBi?(day.biDate.getDay()===0||day.biDate.getDay()===6):false;
 const dhCls=day.isEarly?'ey':day.hasOverflow?'ov':'';
@@ -4314,7 +4330,7 @@ ${B(day.trucks.length+" truck"+(day.trucks.length>1?"s":""),"bl")} ${B(day.exact
 ${day.isEarly?B("Early","pu"):""} ${day.hasOverflow?B("Overflow","or"):""} ${day.isNoBi?B("No BI","pu"):""} ${isWknd?B("Dispatch Wknd","rd"):""} ${arrWknd?B("Arrival Wknd","rd"):""}
 <div class="dpr">${day.dayP}% · ${day.cumP}% cum</div></div><div class="tgr">`;
 day.trucks.forEach(tr=>{const ti=LP.allT.indexOf(tr);
-const arrLabel=day.isNoBi?'':'📅 '+fS(day.dDate)+' → '+fS(day.biDate);
+const arrLabel=day.isNoBi?'':'📅 '+fS(day.dDate)+(day.biDate?' → '+fS(day.biDate):'');
 h+=renderTruckCard(tr,{tCap:P.tCap,displayName:displayName,dayLabel:arrLabel,onClickFn:`showM(${ti})`,exportFn:`exportTruck(${ti})`,showExcludeCheckbox:true,truckIdx:ti})});
 h+=`</div></div>`})}
 // ── Compute CORT + excluded freight merge (used by trucks view and timeline) ──
