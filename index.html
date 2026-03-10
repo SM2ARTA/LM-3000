@@ -2958,9 +2958,10 @@ function build(venue,venueList,skipNoBi){
     const s=r["Nomenclature"]||"?";if(!NOM[s])continue;// skip items with no NOM entry (e.g. golf carts)
     const nm=NOM[s];
     const ppu=nm?.ppu||1;const q=Math.ceil(_raw/ppu);
-    // pq and ps resolved per venue type config (assembled vs disassembled)
+    // pq and ps resolved per venue type + country config (assembled vs disassembled)
     const _rowVt=LM_vtMap[r["Venue"]]||_buildVt;
-    const _eff=LM_getEffPallet(s,_rowVt);
+    const _rowCountry=LM_venueCountry(r["Venue cluster"]||'');
+    const _eff=LM_getEffPallet(s,_rowVt,_rowCountry);
     const pqRaw=_eff.pq;const pqUom=pqRaw>0?pqRaw/ppu:0;
     const psVal=_eff.ps;
     const ct=isCort(s);
@@ -3667,7 +3668,8 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(isCort(s))a[v].hasCort=true;
   const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const vt=vtMapLocal[v]||'';
-  const _eff=LM_getEffPallet(s,vt);
+  const _country=LM_venueCountry(clMap[v]);
+  const _eff=LM_getEffPallet(s,vt,_country);
   const pqUom=_eff.pq>0?(_eff.pq/ppu):0;const psVal=_eff.ps;
   if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/_eff.pq)*psVal;a[v].ln++;a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
@@ -3822,17 +3824,29 @@ function LM_initPalletCfg(){
 }
 LM_initPalletCfg();// set defaults on load
 
-function LM_getEffPallet(sku,venueType){
+// Country-level defaults for non-Stadium/IBC venue types
+const LM_COUNTRY_DEFAULTS={USA:'dis',CAN:'asm',MEX:'asm'};
+function LM_venueCountry(cluster){
+  const cl=(cluster||'').toUpperCase();
+  if(cl.startsWith('CAN')||cl.includes('TOR')||cl.includes('VAN'))return'CAN';
+  if(cl.startsWith('MEX')||cl.includes('CDMX')||cl.includes('GDL')||cl.includes('MTY'))return'MEX';
+  return'USA';
+}
+
+function LM_getEffPallet(sku,venueType,country){
   const nm=NOM[sku];if(!nm)return{pq:0,ps:0};
+  const isStaIbc=venueType==='Stadium'||venueType==='International Broadcast Centre';
   const cfg=LM_palletCfg[venueType];
-  // Determine if this SKU uses disassembled for this venue type
-  let useDis;
-  if(cfg){
-    const isOverride=cfg.overrides.has(sku);
-    useDis=cfg.mode==='dis'?!isOverride:isOverride;// override flips the default
+  // Determine base mode: Stadium/IBC use their own config mode; others use country default
+  let baseMode;
+  if(isStaIbc){
+    baseMode=cfg?cfg.mode:'dis';
   } else {
-    useDis=false;// unknown venue type → assembled
+    baseMode=LM_COUNTRY_DEFAULTS[country||'USA']||'dis';
   }
+  // Apply venue type overrides on top of base mode
+  const isOverride=cfg?cfg.overrides.has(sku):false;
+  const useDis=baseMode==='dis'?!isOverride:isOverride;
   if(useDis)return{pq:nm.pq||0,ps:nm.ps||0};
   return{pq:nm.pqA>0?nm.pqA:(nm.pq||0),ps:nm.psA>0?nm.psA:(nm.ps||0)};
 }
@@ -3870,7 +3884,7 @@ async function LM_loadPalletCfg(){
 }
 
 // ── Pallet Config Modal UI ──
-let _pcVt='Stadium';let _pcSrc='';
+let _pcVt='Stadium';let _pcSrc='';let _pcCountry='USA';
 function showPalletCfg(){
   _pcVt=_pcVt||LM_VENUE_TYPE_LIST[LM_VENUE_TYPE_LIST.indexOf('Stadium')]||LM_VENUE_TYPE_LIST[0];
   _renderPalletCfg();
@@ -3878,27 +3892,40 @@ function showPalletCfg(){
 function _renderPalletCfg(){
   const isV=ROLE==='viewer';
   const cfg=LM_palletCfg[_pcVt]||{mode:'asm',overrides:new Set()};
-  const vtMode=cfg.mode;// 'asm' or 'dis' — the default for this venue type
+  const isStaIbc=_pcVt==='Stadium'||_pcVt==='International Broadcast Centre';
+  // Effective base mode: Stadium/IBC use config mode; others use country default
+  const effBase=isStaIbc?cfg.mode:(LM_COUNTRY_DEFAULTS[_pcCountry]||'dis');
   // Collect all SKUs that have pallet data in NOM
   const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0)).sort((a,b)=>a[0]<b[0]?-1:1);
   // Get unique sources
   const sources=[...new Set(allSkus.map(([k,n])=>n.src||'').filter(Boolean))].sort();
   const filtered=_pcSrc?allSkus.filter(([k,n])=>(n.src||'')===_pcSrc):allSkus;
-  // Count: isDis = default dis and NOT overridden, or default asm and IS overridden
-  const _isDis=sku=>vtMode==='dis'?!cfg.overrides.has(sku):cfg.overrides.has(sku);
+  // Count: isDis based on effective base + overrides
+  const _isDis=sku=>{const ov=cfg.overrides.has(sku);return effBase==='dis'?!ov:ov};
   const disCount=filtered.filter(([k])=>_isDis(k)).length;
   const asmCount=filtered.length-disCount;
   const overrideCount=cfg.overrides.size;
 
+  const countryLabel={USA:'🇺🇸 USA',CAN:'🇨🇦 CAN',MEX:'🇲🇽 MEX'};
+  const countryNote=isStaIbc
+    ?'<span style="color:var(--pu);font-weight:600">Same in all countries</span>'
+    :`Default: ${Object.entries(LM_COUNTRY_DEFAULTS).map(([c,m])=>`<span style="font-weight:600;color:${c===_pcCountry?'var(--tp)':'var(--tt)'}">${countryLabel[c]} ${m==='dis'?'Dis':'Asm'}</span>`).join(' · ')}`;
+
   let h=`<div class="mo" onclick="if(event.target===this)document.getElementById('mr').innerHTML=''"><div class="mdi" style="max-width:1050px">
-  <div class="mdh"><div><h3>📐 Pallet Mode Configuration</h3><div class="mds">Choose Assembled or Disassembled pallet dimensions per venue type</div></div><button class="mdc" onclick="document.getElementById('mr').innerHTML=''">✕</button></div>
+  <div class="mdh"><div><h3>📐 Pallet Mode Configuration</h3><div class="mds">Choose Assembled or Disassembled pallet dimensions per venue type and country</div></div><button class="mdc" onclick="document.getElementById('mr').innerHTML=''">✕</button></div>
   <div class="mdb" style="padding:12px 20px">
   <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end">
     <div style="flex:1;min-width:200px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Venue Type</label>
     <select onchange="_pcVt=this.value;_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600">
-    ${LM_VENUE_TYPE_LIST.map(vt=>{const c=LM_palletCfg[vt]||{mode:'asm'};return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt} (${c.mode==='dis'?'Dis':'Asm'}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' +'+LM_palletCfg[vt].overrides.size:''})</option>`}).join('')}
+    ${LM_VENUE_TYPE_LIST.map(vt=>{const c=LM_palletCfg[vt]||{mode:'asm'};const isSI=vt==='Stadium'||vt==='International Broadcast Centre';return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt}${isSI?' ★':''}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' (+'+LM_palletCfg[vt].overrides.size+')':''}</option>`}).join('')}
     </select></div>
-    <div style="min-width:160px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Filter by Source</label>
+    <div style="min-width:100px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Preview Country</label>
+    <select onchange="_pcCountry=this.value;_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600"${isStaIbc?' disabled':''}>
+    <option value="USA"${_pcCountry==='USA'?' selected':''}>🇺🇸 USA</option>
+    <option value="CAN"${_pcCountry==='CAN'?' selected':''}>🇨🇦 CAN</option>
+    <option value="MEX"${_pcCountry==='MEX'?' selected':''}>🇲🇽 MEX</option>
+    </select></div>
+    <div style="min-width:140px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Filter by Source</label>
     <select onchange="_pcSrc=this.value;_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd)">
     <option value="">All Sources</option>${sources.map(s=>`<option value="${s}"${s===_pcSrc?' selected':''}>${s}</option>`).join('')}
     </select></div>
@@ -3909,11 +3936,12 @@ function _renderPalletCfg(){
     </div>`}
   </div>
   <div style="display:flex;gap:10px;margin-bottom:10px;font-size:11px;flex-wrap:wrap;align-items:center">
-    <span class="bg ${vtMode==='asm'?'bg-gn':'bg-or'}" style="font-size:12px">Default: ${vtMode==='asm'?'Assembled':'Disassembled'}</span>
-    <span class="bg bg-gn">${asmCount} Assembled</span>
-    <span class="bg bg-or">${disCount} Disassembled</span>
+    <span class="bg ${effBase==='asm'?'bg-gn':'bg-or'}" style="font-size:12px">Base: ${effBase==='asm'?'Assembled':'Disassembled'}</span>
+    <span class="bg bg-gn">${asmCount} Asm</span>
+    <span class="bg bg-or">${disCount} Dis</span>
     ${overrideCount>0?`<span class="bg bg-pu">${overrideCount} override${overrideCount>1?'s':''}</span>`:''}
     <span class="bg bg-gy">${filtered.length} SKUs</span>
+    <span style="font-size:10px;color:var(--ts)">${countryNote}</span>
   </div>
   <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--bl);border-radius:8px">
   <table class="dtb" style="font-size:10px"><thead><tr>
@@ -3928,7 +3956,7 @@ function _renderPalletCfg(){
     const isDis=_isDis(sku);
     const isOvr=cfg.overrides.has(sku);
     const hasAsm=nm.pqA>0&&nm.psA>0;
-    const eff=LM_getEffPallet(sku,_pcVt);
+    const eff=LM_getEffPallet(sku,_pcVt,_pcCountry);
     const effPq=eff.pq;const effPs=eff.ps;
     const dot=isDis?'var(--or)':'var(--gn)';
     const ovrMark=isOvr?' ★':'';
@@ -3956,15 +3984,17 @@ function _pcToggle(sku){
 }
 function _pcSetAll(mode){
   const cfg=LM_palletCfg[_pcVt];if(!cfg)return;
+  const isStaIbc=_pcVt==='Stadium'||_pcVt==='International Broadcast Centre';
+  const effBase=isStaIbc?cfg.mode:(LM_COUNTRY_DEFAULTS[_pcCountry]||'dis');
   const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0));
   const filtered=_pcSrc?allSkus.filter(([k,n])=>(n.src||'')===_pcSrc):allSkus;
-  if(!_pcSrc){
-    // Full set — just change the default mode and clear overrides
+  if(!_pcSrc&&isStaIbc){
+    // Stadium/IBC full set — change config mode and clear overrides
     cfg.mode=mode==='asm'?'asm':'dis';cfg.overrides=new Set();
   } else {
-    // Filtered — add/remove overrides for visible SKUs only
+    // Filtered, or non-STA/IBC (overrides only, base comes from country)
     for(const[sku]of filtered){
-      const curDis=cfg.mode==='dis'?!cfg.overrides.has(sku):cfg.overrides.has(sku);
+      const curDis=effBase==='dis'?!cfg.overrides.has(sku):cfg.overrides.has(sku);
       const wantDis=mode==='dis';
       if(curDis!==wantDis){
         if(cfg.overrides.has(sku))cfg.overrides.delete(sku);else cfg.overrides.add(sku);
