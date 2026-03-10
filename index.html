@@ -2029,7 +2029,7 @@ function V26_render(){
       <div style="font-size:12px;font-weight:700">📊 Dispatch Volume</div>
       <div style="display:flex;gap:10px;font-size:9px;color:var(--tt);align-items:center"><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#6CB4EE;vertical-align:middle;margin-right:3px"></span>LP</span><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#78C68D;vertical-align:middle;margin-right:3px"></span>LM</span><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#E8745A;vertical-align:middle;margin-right:3px"></span>CORT</span><span style="margin-left:6px;font-weight:600">Peak: ${fPeakCount} · ${fDates.length} days</span></div>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:2px;flex:1;min-height:0;padding-bottom:18px;position:relative">`;
+    <div style="display:flex;align-items:flex-end;gap:2px;height:calc(100vh - 300px);min-height:80px;padding-bottom:18px;position:relative">`;
     for(const d of fDates){
       const items=fByDate[d]||[];
       const active=items.filter(t=>!t.excluded);
