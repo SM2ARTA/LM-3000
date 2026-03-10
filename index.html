@@ -1820,17 +1820,6 @@ function V26_render(){
   
   // ── LIGHT THEME HERO with KPI cards ──
   let html=`<div style="text-align:center;padding:16px 0 8px"><h1 style="font-size:26px;font-weight:800;letter-spacing:-.5px">🌍 Vision</h1></div>`;
-  
-  const v26KpiItems=[
-    {label:'📦 Pallets',value:totalPlt.toLocaleString(),color:'var(--ac)'},
-    {label:'📋 Pieces',value:totalQty.toLocaleString()},
-    {label:'🚛 Trucks',value:totalTrucks},
-    {label:'📦 Load Plan',value:lpCount,color:'var(--ac)'},
-    {label:'🚛 Last Mile',value:lmCount,color:'var(--gn)'},
-  ];
-  if(totalCortN>0)v26KpiItems.push({label:'🏷 CORT',value:totalCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
-  v26KpiItems.push({label:'📅 Ship Dates',value:dates.length},{label:'🌎 Destinations',value:dests.size});
-  html+=kpiRow(v26KpiItems,'fin');
 
   // ── FILTER BAR — Load From (dispatch location) ──
   const v26FilterCats={};
@@ -1864,11 +1853,33 @@ function V26_render(){
   const fDates=Object.keys(fByDate).filter(d=>d.match(/^\d{4}-/)).sort();
   window._v26ByDate=fByDate;
 
+  // ── Filtered KPIs ──
+  const fActiveTrucks=filteredTrucks.filter(t=>!t.excluded);
+  const fActiveCort=filteredCort.filter(c=>!c.excluded);
+  const fTotalTrucks=fActiveTrucks.length;
+  const fTotalPlt=Math.round(fActiveTrucks.reduce((s,t)=>s+t.pallets,0));
+  const fTotalQty=fActiveTrucks.reduce((s,t)=>s+t.qty,0);
+  const fLpCount=fActiveTrucks.filter(t=>t.source==='Load Plan').length;
+  const fLmCount=fActiveTrucks.filter(t=>t.source==='Last Mile').length;
+  const fCortN=fActiveCort.length;
+  const fDests=new Set(fActiveTrucks.map(t=>t.dest));
+
+  const v26KpiItems=[
+    {label:'📦 Pallets',value:fTotalPlt.toLocaleString(),color:'var(--ac)'},
+    {label:'📋 Pieces',value:fTotalQty.toLocaleString()},
+    {label:'🚛 Trucks',value:fTotalTrucks},
+    {label:'📦 Load Plan',value:fLpCount,color:'var(--ac)'},
+    {label:'🚛 Last Mile',value:fLmCount,color:'var(--gn)'},
+  ];
+  if(fCortN>0)v26KpiItems.push({label:'🏷 CORT',value:fCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
+  v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fDests.size});
+  html+=kpiRow(v26KpiItems,'fin');
+
   html+=`<div style="display:flex;gap:4px;margin:12px 0;flex-wrap:wrap;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--tt);margin-right:4px">LOAD FROM:</span>`;
   for(const[key,cat] of Object.entries(v26FilterCats)){
     const isOn=curFilter===key;
-    const tCnt=cat.trucks.length;
-    const cCnt=cat.cort?.length||0;
+    const tCnt=cat.trucks.filter(t=>!t.excluded).length;
+    const cCnt=(cat.cort||[]).filter(c=>!c.excluded).length;
     html+=`<button class="tbtn${isOn?' on':''}" onclick="window._v26Filter='${key}';V26_render()" style="font-size:11px">${cat.label} <span style="font-size:9px;opacity:.6">(${tCnt}${cCnt>0?'+'+cCnt+'C':''})</span></button>`;
   }
   html+=`</div>`;
