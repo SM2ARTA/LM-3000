@@ -522,27 +522,18 @@ async function MI_load(){
   try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-manual-items').single();if(data)MANUAL_ITEMS=JSON.parse(data.value)||{}}catch(e){}
 }
 function MI_formHtml(key,refreshFn){
-  const items=MI_get(key);const sf=key.replace(/[^a-zA-Z0-9]/g,'_');
-  let h=`<div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px">
-    <div style="font-size:11px;font-weight:700;color:var(--ts);margin-bottom:8px">✏️ Manual Items${items.length?' ('+items.length+')':''}</div>`;
-  if(items.length){
-    h+=`<table class="dtb" style="margin-bottom:8px;font-size:10px"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Plt</th><th></th></tr></thead><tbody>`;
-    items.forEach((it,idx)=>{
-      h+=`<tr style="background:var(--ps)"><td class="mono">${it.sku}</td><td class="tcl">${it.name||''}</td><td class="fw6">${(it.qty||0).toLocaleString()}</td><td>${it.pallets||0}</td>
-      <td><button onclick="event.stopPropagation();MI_remove('${key}',${idx});${refreshFn}" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:14px;padding:0 4px">✕</button></td></tr>`;
-    });
-    h+=`</tbody></table>`;
-  }
-  if(ROLE!=="viewer"){
-    h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:end">
+  const sf=key.replace(/[^a-zA-Z0-9]/g,'_');
+  if(ROLE==="viewer")return'';
+  return`<div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px">
+    <div style="font-size:11px;font-weight:700;color:var(--ts);margin-bottom:8px">✏️ Add Manual Item</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:end">
       <div style="flex:1;min-width:90px"><label style="font-size:9px;color:var(--tt);display:block">SKU</label><input type="text" id="mi_sku_${sf}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)" placeholder="CODE"></div>
       <div style="flex:2;min-width:100px"><label style="font-size:9px;color:var(--tt);display:block">Name</label><input type="text" id="mi_nm_${sf}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px" placeholder="Item name"></div>
       <div style="width:55px"><label style="font-size:9px;color:var(--tt);display:block">Qty</label><input type="number" id="mi_qty_${sf}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px" value="1" min="1"></div>
       <div style="width:50px"><label style="font-size:9px;color:var(--tt);display:block">Pallets</label><input type="number" id="mi_plt_${sf}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px" value="0" min="0" step="0.1"></div>
       <button onclick="event.stopPropagation();MI_addFromForm('${key}','${sf}',function(){${refreshFn}})" style="padding:4px 10px;border-radius:4px;border:1px solid var(--gn);background:var(--gs);color:var(--gn);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">+ Add</button>
-    </div>`;
-  }
-  h+=`</div>`;return h;
+    </div>
+  </div>`;
 }
 function MI_addFromForm(key,sf,cb){
   const sku=(document.getElementById('mi_sku_'+sf)?.value||'').trim();
