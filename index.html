@@ -1269,6 +1269,7 @@ function LP_renderPlan(el){
           <span class="lp-cap-lbl" style="color:${isDisp?'var(--gn)':barColor}">${pct}%</span>
         </div>
         <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs</div>
+        ${MI_get(MI_lpKey(t.id)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lpKey(t.id)).length} manual item${MI_get(MI_lpKey(t.id)).length>1?'s':''}</span></div>`:''}
         ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <input type="checkbox" ${checked} onchange="LP_toggleDispatch(${t.id},this.checked)">
           <span style="flex:1">${isDisp?'✅ Dispatched':'Mark dispatched'}</span>
@@ -1351,13 +1352,14 @@ function LP_showTruckModal(truckId){
       <td class="mono">${nom.palletQty||'—'}</td>
       <td class="mono">${nom.palletSpc||'—'}</td>
       <td class="mono ${remain>0?'cor':'cgn'} fw6" title="Total demand: ${totalDemand.toLocaleString()} − Shipped (LP-1 to LP-${truckId}): ${shippedUpTo.toLocaleString()} = ${remain.toLocaleString()} remaining">${remain.toLocaleString()}</td>
+      <td></td>
     </tr>`;
   }
 
   // Manual items
   const lpMiKey=MI_lpKey(truckId);
   const lpMi=MI_get(lpMiKey);
-  for(const mi of lpMi){
+  lpMi.forEach((mi,idx)=>{
     rows+=`<tr style="background:var(--ps)">
       <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--pu)" title="Manual"></span></td>
       <td class="mono">${mi.sku}</td>
@@ -1368,8 +1370,9 @@ function LP_showTruckModal(truckId){
       <td class="mono">—</td>
       <td class="mono">—</td>
       <td class="mono">—</td>
+      <td>${ROLE!=="viewer"?`<button onclick="event.stopPropagation();MI_remove('${lpMiKey}',${idx});LP_showTruckModal(${truckId})" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:14px;padding:0 4px">✕</button>`:''}</td>
     </tr>`;
-  }
+  });
 
   const mrEl=document.getElementById('mr');
   let mh=modalHeader(
@@ -1385,7 +1388,7 @@ function LP_showTruckModal(truckId){
           <div>Utilization: <strong>${Math.round((totalPlt/LP_STATE.maxPallets)*100)}%</strong></div>
         </div>
         <div class="csf"><table class="dtb"><thead><tr>
-          <th style="width:20px"></th><th>SKU</th><th>Name</th><th>Source</th><th>Qty</th><th>Pallets</th><th>Plt Qty</th><th>Plt Spc</th><th>Remain</th>
+          <th style="width:20px"></th><th>SKU</th><th>Name</th><th>Source</th><th>Qty</th><th>Pallets</th><th>Plt Qty</th><th>Plt Spc</th><th>Remain</th><th></th>
         </tr></thead><tbody>${rows}</tbody></table></div>
         ${MI_formHtml(lpMiKey,'LP_showTruckModal('+truckId+')')}
       </div>`;
@@ -1703,6 +1706,11 @@ function LP_exportAllCI(){
       lineNo++;const n=LP_STATE.nomenclature[s.sku]||{};const uv=n.unitPrice||0;
       return{'Line':lineNo,'SKU':s.sku,'Description':s.name||n.name||'','HS Code':n.hsCode||'','Country':n.country||'','Qty':s.qty,'Unit Price':uv?+uv.toFixed(2):'','Total Value':uv?+(uv*s.qty).toFixed(2):'','Pallets':+s.pallets.toFixed(2)};
     });
+    // Append manual items
+    for(const mi of MI_get(MI_lpKey(t.id))){
+      lineNo++;
+      rows.push({'Line':lineNo,'SKU':mi.sku,'Description':mi.name||'','HS Code':'','Country':'','Qty':mi.qty||0,'Unit Price':'','Total Value':'','Pallets':mi.pallets||0});
+    }
     const sheetName=('T'+t.id).slice(0,31);
     const ws=XLSX.utils.aoa_to_sheet([
       ['COMMERCIAL INVOICE — LP-'+t.id],
@@ -1742,7 +1750,12 @@ function LP_exportPlan(){
     for(const s of agg){
       const n=LP_STATE.nomenclature[s.sku]||{};
       rows.push({'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'SKU':s.sku,'Name':s.name||n.name||'',
-        'Qty':s.qty,'Pallets':+s.pallets.toFixed(2),'Dispatched':LP_dispatched.has(t.id)?'Yes':''});
+        'Qty':s.qty,'Pallets':+s.pallets.toFixed(2),'Dispatched':LP_dispatched.has(t.id)?'Yes':'','Source':n.source||''});
+    }
+    // Manual items for this truck
+    for(const mi of MI_get(MI_lpKey(t.id))){
+      rows.push({'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'SKU':mi.sku,'Name':mi.name||'',
+        'Qty':mi.qty||0,'Pallets':mi.pallets||0,'Dispatched':LP_dispatched.has(t.id)?'Yes':'','Source':'MANUAL'});
     }
   }
   const ws=XLSX.utils.json_to_sheet(rows);
@@ -2176,6 +2189,17 @@ function V26_export(){
         'Unit Price':n.unitPrice||'','Line Value':n.unitPrice?+(n.unitPrice*it.qty).toFixed(2):''
       });
     });
+    // Append manual items
+    const miKey=t.id.startsWith('LP-')?('LP-'+t.id.replace('LP-','')):MI_lmKey(t);
+    for(const mi of MI_get(miKey)){
+      detailRows.push({
+        'Truck':t.id,'Date':t.date,'Source':'MANUAL','Destination':t.destDisplay,
+        'Nomenclature Code':mi.sku,'Nomenclature Name':mi.name||'',
+        'Qty':mi.qty||0,'Pallets':mi.pallets||0,
+        'HS Code':mi.hsCode||'','Country':mi.country||'',
+        'Unit Price':mi.unitPrice||'','Line Value':''
+      });
+    }
   });
   const ws2=XLSX.utils.json_to_sheet(detailRows);
   ws2['!cols']=[{wch:10},{wch:12},{wch:12},{wch:24},{wch:20},{wch:36},{wch:8},{wch:8},{wch:14},{wch:14},{wch:10},{wch:12}];
@@ -2712,6 +2736,7 @@ function renderTruckCard(t,opts){
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">✅ Dispatched</span></div>':''}
+      ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
@@ -4717,6 +4742,13 @@ function exportXL(){
               'Note':it.noPallet?'No pallet data':(it.pulledFrom==='no-bi'?'No bump-in':(it.topUp>0?'Top-up':(it.sched===0?'From pool':'')))
             });
           });
+          // Append manual items for this truck
+          for(const mi of MI_get(MI_lmKey(tr))){
+            truckRows.push({
+              'Venue/Cluster':label,'Truck':tr.id,'Dispatch Date':fF(day.dDate),'Bump-In Date':'',
+              'SKU':mi.sku,'Item':mi.name||'','Qty':mi.qty||0,'Pallets':mi.pallets||0,'Note':'MANUAL'
+            });
+          }
         });
       });
     }catch(e){}
