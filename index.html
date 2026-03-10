@@ -2954,8 +2954,8 @@ function build(venue,venueList,skipNoBi){
         cortDated[fallbackBk].push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||'',isUnplanned:true});
         continue;
       }
-      if(!noBiAgg[s])noBiAgg[s]={sku:s,nm:nm?.nm||r["Item"]||s,rawQty:0,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,isCort:ct,ppu};
-      noBiAgg[s].rawQty+=_raw;
+      if(!noBiAgg[s])noBiAgg[s]={sku:s,nm:nm?.nm||r["Item"]||s,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,isCort:ct,ppu};
+      noBiAgg[s].qty+=q;
       noBiRows.push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||'',id:r["ID"]||r["id"]||r["Row"]||r["row"]||r["#"]||r["Material plan ID"]||r["Plan ID"]||'',isCort:ct});
       continue;
     }
@@ -2967,12 +2967,11 @@ function build(venue,venueList,skipNoBi){
       continue;
     }
     const k=dk(bi)+"|"+s;
-    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:dk(bi),rawQty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,ppu};agg[k].rawQty+=_raw}
+    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:dk(bi),qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,ppu};agg[k].qty+=q}
 
-  // Convert accumulated raw pieces to UoMs with single ceil per (biK,sku) — avoids per-row ceil inflation
-  Object.values(agg).forEach(x=>{x.qty=Math.ceil(x.rawQty/(x.ppu||1))});
+  // qty already accumulated as per-row ceil — no further conversion needed
   const all=Object.values(agg),noP=all.filter(x=>!x.ok),pAll=all.filter(x=>x.ok);
-  Object.values(noBiAgg).forEach(x=>{x.qty=Math.ceil(x.rawQty/(x.ppu||1))});
+  // noBiAgg qty also already per-row ceiled
   const noBiItems=Object.values(noBiAgg);
   const noBiPal=noBiItems.filter(x=>x.ok);// no-BI items WITH pallet data (non-CORT)
   const noBiNoP=noBiItems.filter(x=>!x.ok&&!x.isCort);// no-BI items WITHOUT pallet data, excluding CORT
@@ -3629,7 +3628,6 @@ function binPack(items,cap){
 /* ── VENUE LIST ── */
 function bV(){const a={};const clMap={};// venue -> cluster
 const vcMap={};// venue -> venue code (parsed from Material Plan "Venue code" column)
-const _rawAgg={};// venue|biK|sku -> rawQty (non-CORT: aggregate then ceil, matching engine)
 for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(r["Venue cluster"])clMap[v]=r["Venue cluster"];
   const vc=String(r["Venue code"]||"").trim().toUpperCase();
@@ -3639,25 +3637,11 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
   const s=r["Nomenclature"]||"?";
   if(!NOM[s])continue;
-  const nm=NOM[s];const ppu=nm?.ppu||1;
+  if(isCort(s))a[v].hasCort=true;
+  const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const pqUom=(nm?.pq||0)>0?(nm.pq/ppu):0;const psVal=nm?.ps||0;
-  const ct=isCort(s);
-  if(ct){a[v].hasCort=true;a[v].it+=Math.ceil(_rawQ/ppu)}// CORT: per-row ceil (engine does same)
-  else{
-    // Non-CORT: aggregate raw by (venue, biK, sku), ceil once later — matching engine
-    const biK=bi?dk(bi):'no-bi';
-    const aggK=v+'|'+biK+'|'+s;
-    if(!_rawAgg[aggK])_rawAgg[aggK]={venue:v,raw:0,ppu};
-    _rawAgg[aggK].raw+=_rawQ;
-  }
-  if(pqUom>0&&psVal>0&&!ct)a[v].ep+=(_rawQ/(nm.pq))*psVal;
-  a[v].ln++;
+  if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/(nm.pq))*psVal;a[v].ln++;a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
-}
-// Ceil once per (venue, biK, sku) — exactly matches engine's agg logic
-for(const k in _rawAgg){
-  const e=_rawAgg[k];
-  a[e.venue].it+=Math.ceil(e.raw/e.ppu);
 }
 VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep),cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||""})).sort((a,b)=>b.plt-a.plt);
 // Build cluster info
