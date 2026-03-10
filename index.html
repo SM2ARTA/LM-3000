@@ -1239,10 +1239,10 @@ function LP_renderPlan(el){
           <span class="lp-cap-lbl" style="color:${isDisp?'var(--gn)':barColor}">${pct}%</span>
         </div>
         <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs</div>
-        <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px">${aggSkus.map(s=>{const nom=LP_STATE.nomenclature[s.sku]||{};const inStock=STOCK_SKUS.has(s.sku);const dot=`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${inStock?'var(--gn)':'var(--rd)'};flex-shrink:0" title="${inStock?'In stock':'Not in stock'}"></span>`;const src=nom.source?`<span style="color:var(--tt);font-style:italic">${nom.source}</span>`:'';return`<div style="display:flex;align-items:center;gap:5px;font-size:9px;line-height:1.3">${dot}<span class="mono" style="color:var(--ts)">${s.sku}</span><span style="color:var(--tt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name||''}</span>${src}</div>`}).join('')}</div>
-        ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()">
+        ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <input type="checkbox" ${checked} onchange="LP_toggleDispatch(${t.id},this.checked)">
-          <span>${isDisp?'✅ Dispatched — locked':'Mark dispatched'}</span>
+          <span style="flex:1">${isDisp?'✅ Dispatched':'Mark dispatched'}</span>
+          <input type="date" value="${t.date}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="LP_changeDate(${t.id},this.value)">
         </div>`}
       </div>`;
     }
@@ -1259,6 +1259,18 @@ function LP_toggleDispatch(truckId,checked){
   if(checked)LP_dispatched.add(truckId);else LP_dispatched.delete(truckId);
   LP_saveToSupabase();
   // Re-render to update visual state
+  LP_render();
+}
+
+function LP_changeDate(truckId,newDate){
+  if(ROLE==="viewer"||!newDate)return;
+  // Update all plan rows for this truck to the new date
+  for(const r of LP_STATE.generatedPlan){
+    if(r.truckId===truckId)r.date=newDate;
+  }
+  // Auto-mark as dispatched (locks it from regeneration)
+  LP_dispatched.add(truckId);
+  LP_saveToSupabase();
   LP_render();
 }
 
