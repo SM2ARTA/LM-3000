@@ -505,6 +505,54 @@
 var STOCK_SKUS=new Set();
 var STOCK_REPORT_NAME='';
 
+// ── Manual truck items (added by user, persisted to Supabase) ──
+var MANUAL_ITEMS={};
+function MI_lpKey(truckId){return'LP-'+truckId}
+function MI_lmKey(t){return'LM-'+(typeof LM_fp==='function'?LM_fp(t):(t.id||''))}
+function MI_get(key){return MANUAL_ITEMS[key]||[]}
+function MI_add(key,item){if(!MANUAL_ITEMS[key])MANUAL_ITEMS[key]=[];MANUAL_ITEMS[key].push(item);MI_save()}
+function MI_remove(key,idx){if(!MANUAL_ITEMS[key])return;MANUAL_ITEMS[key].splice(idx,1);if(!MANUAL_ITEMS[key].length)delete MANUAL_ITEMS[key];MI_save()}
+async function MI_save(){
+  if(ROLE==="viewer"||!SB)return;
+  try{await SB.from('shared_state').upsert({id:'fm-manual-items',value:JSON.stringify(MANUAL_ITEMS),updated_at:new Date().toISOString()})}catch(e){console.warn('MI save:',e)}
+}
+async function MI_load(){
+  if(!SB)return;
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-manual-items').single();if(data)MANUAL_ITEMS=JSON.parse(data.value)||{}}catch(e){}
+}
+function MI_formHtml(key,refreshFn){
+  const items=MI_get(key);const sf=key.replace(/[^a-zA-Z0-9]/g,'_');
+  let h=`<div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px">
+    <div style="font-size:11px;font-weight:700;color:var(--ts);margin-bottom:8px">✏️ Manual Items${items.length?' ('+items.length+')':''}</div>`;
+  if(items.length){
+    h+=`<table class="dtb" style="margin-bottom:8px;font-size:10px"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Plt</th><th></th></tr></thead><tbody>`;
+    items.forEach((it,idx)=>{
+      h+=`<tr style="background:var(--ps)"><td class="mono">${it.sku}</td><td class="tcl">${it.name||''}</td><td class="fw6">${(it.qty||0).toLocaleString()}</td><td>${it.pallets||0}</td>
+      <td><button onclick="event.stopPropagation();MI_remove('${key}',${idx});${refreshFn}" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:14px;padding:0 4px">✕</button></td></tr>`;
+    });
+    h+=`</tbody></table>`;
+  }
+  if(ROLE!=="viewer"){
+    h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:end">
+      <div style="flex:1;min-width:90px"><label style="font-size:9px;color:var(--tt);display:block">SKU</label><input type="text" id="mi_sku_${sf}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)" placeholder="CODE"></div>
+      <div style="flex:2;min-width:100px"><label style="font-size:9px;color:var(--tt);display:block">Name</label><input type="text" id="mi_nm_${sf}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px" placeholder="Item name"></div>
+      <div style="width:55px"><label style="font-size:9px;color:var(--tt);display:block">Qty</label><input type="number" id="mi_qty_${sf}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px" value="1" min="1"></div>
+      <div style="width:50px"><label style="font-size:9px;color:var(--tt);display:block">Pallets</label><input type="number" id="mi_plt_${sf}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px" value="0" min="0" step="0.1"></div>
+      <button onclick="event.stopPropagation();MI_addFromForm('${key}','${sf}',function(){${refreshFn}})" style="padding:4px 10px;border-radius:4px;border:1px solid var(--gn);background:var(--gs);color:var(--gn);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">+ Add</button>
+    </div>`;
+  }
+  h+=`</div>`;return h;
+}
+function MI_addFromForm(key,sf,cb){
+  const sku=(document.getElementById('mi_sku_'+sf)?.value||'').trim();
+  const name=(document.getElementById('mi_nm_'+sf)?.value||'').trim();
+  const qty=parseInt(document.getElementById('mi_qty_'+sf)?.value)||1;
+  const pallets=parseFloat(document.getElementById('mi_plt_'+sf)?.value)||0;
+  if(!sku){alert('SKU is required');return}
+  MI_add(key,{sku,name,qty,pallets,hsCode:'',country:'',unitPrice:0,source:'MANUAL'});
+  if(cb)cb();
+}
+
 // ── LP Config defaults ──
 const LP_DEFAULT_MAX_PALLETS=26;
 const LP_DEFAULT_MAX_TRUCKS=4;
@@ -1305,6 +1353,23 @@ function LP_showTruckModal(truckId){
     </tr>`;
   }
 
+  // Manual items
+  const lpMiKey=MI_lpKey(truckId);
+  const lpMi=MI_get(lpMiKey);
+  for(const mi of lpMi){
+    rows+=`<tr style="background:var(--ps)">
+      <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--pu)" title="Manual"></span></td>
+      <td class="mono">${mi.sku}</td>
+      <td class="tcl">${mi.name||'—'}</td>
+      <td style="font-size:10px;color:var(--pu)">MANUAL</td>
+      <td class="mono fw6">${(mi.qty||0).toLocaleString()}</td>
+      <td class="mono">${mi.pallets||0}</td>
+      <td class="mono">—</td>
+      <td class="mono">—</td>
+      <td class="mono">—</td>
+    </tr>`;
+  }
+
   const mrEl=document.getElementById('mr');
   let mh=modalHeader(
     `${isDisp?'🔒':'🚛'} LP-${truckId}${isDisp?' <span style="color:var(--gn);font-size:12px">Dispatched</span>':''}`,
@@ -1321,6 +1386,7 @@ function LP_showTruckModal(truckId){
         <div class="csf"><table class="dtb"><thead><tr>
           <th style="width:20px"></th><th>SKU</th><th>Name</th><th>Source</th><th>Qty</th><th>Pallets</th><th>Plt Qty</th><th>Plt Spc</th><th>Remain</th>
         </tr></thead><tbody>${rows}</tbody></table></div>
+        ${MI_formHtml(lpMiKey,'LP_showTruckModal('+truckId+')')}
       </div>`;
   openModal(mh,'860px');
 }
@@ -1343,6 +1409,10 @@ function LP_exportSingleTruck(truckId){
       'Qty':Math.ceil(s.qty/ppu)
     };
   });
+  // Append manual items
+  for(const mi of MI_get(MI_lpKey(truckId))){
+    rows.push({'Nomenclature code':mi.sku,'Nomenclature name':mi.name||'','Source':'MANUAL','In Stock':'—','Qty':mi.qty||0});
+  }
   const wb=XLSX.utils.book_new();
   const hdr=[['Truck','LP-'+truckId,'Destination',dest,'Date',first.date]];
   const ws=XLSX.utils.aoa_to_sheet(hdr);
@@ -1373,7 +1443,11 @@ async function LP_exportCI(truckId){
   if(!rawPlan.length)return;
   const first=rawPlan[0];
   const agg=LP_aggregateTruck(rawPlan);
-  const totalPlt=rawPlan.reduce((s,r)=>s+(r.pallets||0),0);
+  // Append manual items
+  for(const mi of MI_get(MI_lpKey(truckId))){
+    agg.push({sku:mi.sku,name:mi.name||'',qty:mi.qty||0,pallets:mi.pallets||0});
+  }
+  const totalPlt=rawPlan.reduce((s,r)=>s+(r.pallets||0),0)+MI_get(MI_lpKey(truckId)).reduce((s,m)=>s+(m.pallets||0),0);
   const nomenclature=LP_STATE.nomenclature;
   const dest=first.destination,date=first.date;
   if(typeof ExcelJS!=='undefined'){
@@ -2301,6 +2375,7 @@ function enterApp(){
     // Always load stock report and LM overrides (independent of LM data)
     try{await stockReportLoad()}catch(e){}
     try{await LM_loadDateOverrides()}catch(e){}
+    try{await MI_load()}catch(e){}
     // Load LP data
     try{lpOk=await LP_loadFromSupabase()}catch(e){}
     
@@ -2387,6 +2462,7 @@ async function loadSharedData(){
     try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
     try{await stockReportLoad()}catch(e){}
     try{await LM_loadDateOverrides()}catch(e){}
+    try{await MI_load()}catch(e){}
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     bV();if(!VN.length)throw new Error("No venues.");
@@ -3792,7 +3868,21 @@ ${isClusterTruck?'':`<td style="border-right:none">${reqQtyHtml}</td><td style="
 <td class="fw7 cgn">${it.loadQty.toLocaleString()}</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.noPallet?'<span style="color:var(--or);font-size:10px">—</span>':(Number.isInteger(it.loadPlt)?it.loadPlt:it.loadPlt.toFixed(1))}</td>
 <td class="${typeof poolLeft==='number'&&poolLeft>0?'fw6 cbl':'cgr'}" style="border-right:2px solid var(--bl)">${typeof poolLeft==='number'?poolLeft.toLocaleString():'—'}</td>
 ${isClusterTruck?'':`<td style="font-size:10px">${note?B(note,it.noPallet?"or":(it.topUp>0?"gn":"or"),1):""}</td>`}</tr>`});
-h+=`</tbody></table></div></div></div>`;document.getElementById("mr").innerHTML=h}
+h+=`</tbody></table>`;
+// Manual items for this LM truck
+const lmMiKey=MI_lmKey(t);
+const lmMi=MI_get(lmMiKey);
+if(lmMi.length){
+  h+=`<div style="margin-top:8px;font-size:10px;font-weight:700;color:var(--pu)">✏️ Manual Items</div>`;
+  h+=`<table class="dtb" style="font-size:10px"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th><th></th></tr></thead><tbody>`;
+  lmMi.forEach((mi,idx)=>{
+    h+=`<tr style="background:var(--ps)"><td class="mono">${mi.sku}</td><td class="tcl">${mi.name||''}</td><td class="fw6">${(mi.qty||0).toLocaleString()}</td><td>${mi.pallets||0}</td>
+    <td>${ROLE!=="viewer"?`<button onclick="event.stopPropagation();MI_remove('${lmMiKey}',${idx});showM(${i})" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:14px">✕</button>`:''}</td></tr>`;
+  });
+  h+=`</tbody></table>`;
+}
+h+=MI_formHtml(lmMiKey,'showM('+i+')');
+h+=`</div></div></div>`;document.getElementById("mr").innerHTML=h}
 function clM(e){if(!e||e.target.classList.contains("mo"))document.getElementById("mr").innerHTML=""}
 
 // ── Day Detail Popup: shows all trucks dispatched on a given date ──
@@ -4738,6 +4828,10 @@ function exportTruck(truckIdx){
       'Qty':it.loadQty
     };
   });
+  // Append manual items
+  for(const mi of MI_get(MI_lmKey(t))){
+    rows.push({'Nomenclature code':mi.sku,'Nomenclature name':mi.name||'','Source':'MANUAL','In Stock':'—','Qty':mi.qty||0});
+  }
   const wb=XLSX.utils.book_new();
   const hdr=[['Truck',t.id,'Destination',dest]];
   const ws=XLSX.utils.aoa_to_sheet(hdr);
@@ -4780,7 +4874,7 @@ function doSystemReset(){
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};
-  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};
+  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();
   // Restore upload screen
@@ -4944,9 +5038,9 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-stock','fm-lm-dispatch']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-stock','fm-lm-dispatch','fm-manual-items']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
   document.getElementById("D").classList.add("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.remove("vis");
