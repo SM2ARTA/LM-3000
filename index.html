@@ -3570,10 +3570,11 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
   const s=r["Nomenclature"]||"?";
   if(!NOM[s])continue;// skip items with no NOM entry (e.g. golf carts)
-  if(isCort(s))a[v].hasCort=true;
+  const _isCt=isCort(s);
+  if(_isCt)a[v].hasCort=true;
   const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const pqUom=(nm?.pq||0)>0?(nm.pq/ppu):0;const psVal=nm?.ps||0;
-  if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/(nm.pq))*psVal;a[v].ln++;a[v].it+=q;
+  if(pqUom>0&&psVal>0&&!_isCt)a[v].ep+=(_rawQ/(nm.pq))*psVal;a[v].ln++;if(!_isCt)a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
 }
 VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep),cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||""})).sort((a,b)=>b.plt-a.plt);
@@ -4387,6 +4388,7 @@ if(cv==="dashboard"){
   // totTrucks = sum of DDD column — single source of truth so KPI card always matches table
   totTrucks=calDates.reduce((s,dk)=>s+(calMap[dk].trucks||0),0);
   totPlt=Math.round(calDates.reduce((s,dk)=>s+(calMap[dk].pallets||0),0));
+  totPcs=calDates.reduce((s,dk)=>s+(calMap[dk].pcs||0),0);
   const peakTrucks=calDates.length?Math.max(...calDates.map(d=>calMap[d].trucks)):0;
   const totalDays=calDates.length;
   const filterLabel=isClusterOv?clDisp(clusterOvName)+' Overview':(isRegion?(regionCat==='can'?'Canada Overview':'Mexico Overview'):(isFiltered?(isClusterSel2?clDisp(selCluster):sel):'All Venues'));
@@ -4397,9 +4399,11 @@ if(cv==="dashboard"){
   let h=`<div class="fin"><h2 style="font-size:19px;font-weight:700">📊 Dashboard — ${filterLabel}</h2>
   ${isFiltered?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing plan for selected venue/cluster. Deselect to see all.</p>':(isClusterOv?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing all venues in '+clDisp(clusterOvName)+'.</p>':(isRegion?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing all '+( regionCat==='can'?'Canadian':'Mexican')+' venues.</p>':''))}
   </div>`;
+  const demandPcs=isFiltered?(isClusterSel2?(CLUSTERS[selCluster]?.pcs||viewVenues.reduce((s,v)=>s+v.it,0)):(VN.find(v=>v.name===sel)?.it||0)):viewVenues.reduce((s,v)=>s+v.it,0);
+  const pcsDelta=demandPcs-totPcs;
   const lmKpiItems=[
     {label:'📦 Pallets',value:totPlt.toLocaleString(),color:'var(--ac)'},
-    {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444'},
+    {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444',sub:pcsDelta>0?`${pcsDelta.toLocaleString()} unloaded of ${demandPcs.toLocaleString()}`:''},
     {label:'🚛 LM Trucks',value:totTrucks,color:'var(--gn)'},
     {label:'📅 Dispatch Days',value:totalDays,color:'var(--or)'},
     {label:'📈 Peak/Day',value:peakTrucks,color:'var(--rd)'},
