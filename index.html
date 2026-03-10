@@ -1857,7 +1857,7 @@ function V26_render(){
   const fActiveTrucks=filteredTrucks.filter(t=>!t.excluded);
   const fActiveCort=filteredCort.filter(c=>!c.excluded);
   const fTotalTrucks=fActiveTrucks.length;
-  const fTotalPlt=Math.round(fActiveTrucks.reduce((s,t)=>s+t.pallets,0));
+  const fLmPlt=Math.round(fActiveTrucks.filter(t=>t.source!=='Load Plan').reduce((s,t)=>s+t.pallets,0));
   const fTotalQty=fActiveTrucks.reduce((s,t)=>s+t.qty,0);
   const fLpCount=fActiveTrucks.filter(t=>t.source==='Load Plan').length;
   const fLmCount=fActiveTrucks.filter(t=>t.source==='Last Mile').length;
@@ -1865,7 +1865,7 @@ function V26_render(){
   const fDests=new Set(fActiveTrucks.map(t=>t.dest));
 
   const v26KpiItems=[
-    {label:'📦 Pallets',value:fTotalPlt.toLocaleString(),color:'var(--ac)'},
+    {label:'📦 Pallets',value:fLmPlt.toLocaleString(),color:'var(--ac)',sub:'excl. LP (bulk)'},
     {label:'📋 Pieces',value:fTotalQty.toLocaleString()},
     {label:'🚛 Trucks',value:fTotalTrucks},
     {label:'📦 Load Plan',value:fLpCount,color:'var(--ac)'},
@@ -1996,7 +1996,7 @@ function V26_render(){
   
   el.innerHTML=html;
   const sub=document.getElementById('v26Subtitle');
-  if(sub)sub.textContent=`${filteredTrucks.length} trucks${filteredCort.length>0?' + '+filteredCort.length+' CORT':''} · ${totalPlt.toLocaleString()} pallets · ${fDates.length} dates`;
+  if(sub)sub.textContent=`${fActiveTrucks.length} trucks${fActiveCort.length>0?' + '+fActiveCort.length+' CORT':''} · ${fLmPlt.toLocaleString()} pallets · ${fDates.length} dates`;
 }
 
 function V26_showTruck(id){
@@ -2295,11 +2295,12 @@ function enterApp(){
         NOM=JSON.parse(nomD.value);RW=JSON.parse(rwD.value);
         try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
         try{const {data:exD}=await SB.from("shared_state").select("value").eq("id","fm-excl").single();if(exD)LM_excluded=new Set(JSON.parse(exD.value))}catch(e){}
-        try{await stockReportLoad()}catch(e){}
-        try{await LM_loadDateOverrides()}catch(e){}
         if(Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
       }
     }catch(e){}
+    // Always load stock report and LM overrides (independent of LM data)
+    try{await stockReportLoad()}catch(e){}
+    try{await LM_loadDateOverrides()}catch(e){}
     // Load LP data
     try{lpOk=await LP_loadFromSupabase()}catch(e){}
     
