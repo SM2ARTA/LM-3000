@@ -116,8 +116,11 @@
 
 /* ── WIDE SCREEN / TV PRESENTATION (1600px+) ── */
 @media(min-width:1600px){
-  .v26-body{max-width:1800px;padding:28px 40px}
-  .v26-section h3{font-size:17px}
+  .v26-body{max-width:1800px;padding:12px 40px}
+  .v26-section h3{font-size:14px}
+  #V26 .sr{gap:8px;margin:6px 0}#V26 .sc{padding:10px 14px}#V26 .sl{font-size:10px}#V26 .sv{font-size:22px}
+  #V26 .lp-day-hdr{padding:6px 14px}#V26 .lp-day-hdr .dt{font-size:13px}
+  #V26 .lp-truck{max-width:340px;padding:10px 12px}#V26 .lp-truck-grid{gap:10px;margin-bottom:10px}
   .mn{padding:24px 28px}
   .sr{gap:14px}.sc{padding:16px 20px}.sl{font-size:11px}.sv{font-size:26px}
   .dh{padding:12px 18px}.dh .dtt{font-size:16px}
@@ -150,7 +153,9 @@
 
 /* ── ULTRA WIDE / 4K TV (2200px+) ── */
 @media(min-width:2200px){
-  .v26-body{max-width:2200px;padding:36px 60px}
+  .v26-body{max-width:2200px;padding:16px 60px}
+  #V26 .sr{gap:10px;margin:8px 0}#V26 .sc{padding:12px 16px}#V26 .sl{font-size:11px}#V26 .sv{font-size:26px}
+  #V26 .lp-truck{max-width:400px;padding:12px 14px}#V26 .lp-truck-grid{gap:12px;margin-bottom:12px}
   .mn{padding:32px 36px}
   .sr{gap:16px}.sc{padding:20px 24px;border-radius:14px}.sl{font-size:12px}.sv{font-size:32px}
   .tc{padding:20px;max-width:420px;border-radius:14px}
@@ -403,11 +408,24 @@
 }
 /* ── VISION 2026 DASHBOARD ── */
 #V26{display:none;min-height:100vh;flex-direction:column}#V26.vis{display:flex}
-.v26-body{flex:1;overflow-y:auto;padding:20px;max-width:1400px;margin:0 auto;width:100%}
+.v26-body{flex:1;overflow-y:auto;padding:10px 20px;max-width:1400px;margin:0 auto;width:100%}
 .v26-hero{text-align:center;padding:20px 0 10px}
 .v26-hero h1{font-size:28px;font-weight:700;letter-spacing:-.5px}
 .v26-hero p{font-size:12px;color:var(--ts);margin-top:4px}
-.v26-section{margin-top:20px}
+#V26 .app-footer{display:none}
+.v26-section{margin-top:8px}
+#V26 .sr{gap:6px;margin:6px 0}
+#V26 .sc{padding:8px 10px;min-width:70px}
+#V26 .sl{font-size:9px}
+#V26 .sv{font-size:18px;margin-top:1px}
+#V26 .lp-day-hdr{padding:6px 10px}
+#V26 .lp-day-hdr .dt{font-size:12px}
+#V26 .lp-day-hdr .ds{font-size:10px}
+#V26 .lp-day-hdr .dp{font-size:9px}
+#V26 .lp-truck{padding:8px 10px}
+#V26 .lp-truck-id{font-size:11px}
+#V26 .lp-truck-cap{font-size:13px}
+#V26 .lp-truck-grid{gap:8px;margin-bottom:8px}
 .v26-section h3{font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 
 @media(max-width:768px){
@@ -1898,7 +1916,7 @@ function V26_render(){
   const lastDate=lastTruck?lastTruck.date:'—';
   
   // ── LIGHT THEME HERO with KPI cards ──
-  let html=`<div style="text-align:center;padding:16px 0 8px"><h1 style="font-size:26px;font-weight:800;letter-spacing:-.5px">🌍 Vision</h1></div>`;
+  let html=``;
 
   // ── FILTER BAR — Load From (dispatch location) ──
   const v26FilterCats={};
@@ -1979,9 +1997,18 @@ function V26_render(){
   const fStockPct=fDemandSkus.size>0?Math.round(fInStock/fDemandSkus.size*100):0;
   const stockColor=STOCK_SKUS.size===0?'var(--tt)':(fStockPct>=90?'var(--gn)':fStockPct>=50?'var(--or)':'var(--rd)');
   v26KpiItems.push({label:'📦 In Stock',value:STOCK_SKUS.size===0?'—':fStockPct+'%',color:stockColor,sub:STOCK_SKUS.size===0?'No stock report':fInStock+' / '+fDemandSkus.size+' SKUs'});
-  html+=kpiRow(v26KpiItems,'fin');
+  // Compact inline KPIs for TV mode
+  html+=`<div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap">`;
+  v26KpiItems.forEach(k=>{
+    html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:8px;padding:6px 10px;flex:1 1 70px;min-width:70px${k.style?';'+k.style:''}">
+      <div style="font-size:8px;color:${k.labelColor||'var(--tt)'};font-weight:600">${k.label}</div>
+      <div style="font-size:18px;font-weight:700;letter-spacing:-.5px;color:${k.color||'var(--ts)'}">${k.value}</div>
+      ${k.sub?`<div style="font-size:7px;color:var(--tt)">${k.sub}</div>`:''}
+    </div>`;
+  });
+  html+=`</div>`;
 
-  html+=`<div style="display:flex;gap:4px;margin:12px 0;flex-wrap:wrap;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--tt);margin-right:4px">LOAD FROM:</span>`;
+  html+=`<div style="display:flex;gap:3px;margin:4px 0;flex-wrap:wrap;align-items:center"><span style="font-size:8px;font-weight:700;color:var(--tt);margin-right:3px">LOAD FROM:</span>`;
   for(const[key,cat] of Object.entries(v26FilterCats)){
     const isOn=curFilter===key;
     const tCnt=cat.trucks.filter(t=>!t.excluded).length;
@@ -1997,12 +2024,12 @@ function V26_render(){
   // ── DISPATCH CHART (compact bar chart replacing calendar) ──
   if(fDates.length>0){
     const maxDay=Math.max(...fDates.map(d=>{const items=fByDate[d]||[];return items.filter(t=>!t.excluded).length}),1);
-    html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:14px 16px;margin-top:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700">📊 Dispatch Volume</div>
-      <div style="font-size:10px;color:var(--tt)">Peak: ${fPeakCount} trucks · ${fDates.length} days</div>
+    html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:8px 12px;margin-top:4px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:11px;font-weight:700">📊 Dispatch Volume</div>
+      <div style="display:flex;gap:8px;font-size:8px;color:var(--tt);align-items:center"><span><span style="display:inline-block;width:6px;height:6px;border-radius:1px;background:#6CB4EE;vertical-align:middle;margin-right:2px"></span>LP</span><span><span style="display:inline-block;width:6px;height:6px;border-radius:1px;background:#78C68D;vertical-align:middle;margin-right:2px"></span>LM</span><span><span style="display:inline-block;width:6px;height:6px;border-radius:1px;background:#E8745A;vertical-align:middle;margin-right:2px"></span>CORT</span><span style="margin-left:4px">Peak: ${fPeakCount} · ${fDates.length}d</span></div>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:1px;height:80px;overflow-x:auto;padding-bottom:18px;position:relative">`;
+    <div style="display:flex;align-items:flex-end;gap:1px;height:50px;overflow-x:auto;padding-bottom:14px;position:relative">`;
     for(const d of fDates){
       const items=fByDate[d]||[];
       const active=items.filter(t=>!t.excluded);
@@ -2030,16 +2057,17 @@ function V26_render(){
         ${showLabel?`<div style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--tt);white-space:nowrap">${dayLbl}</div>`:''}
       </div>`;
     }
-    html+=`</div>
-    <div style="display:flex;gap:12px;margin-top:4px;font-size:9px;color:var(--tt)">
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#6CB4EE;vertical-align:middle;margin-right:3px"></span>LP</span>
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#78C68D;vertical-align:middle;margin-right:3px"></span>LM</span>
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#E8745A;vertical-align:middle;margin-right:3px"></span>CORT</span>
-    </div></div>`;
+    html+=`</div></div>`;
   }
 
-  // ── SHIPPING TIMELINE — LP-style day headers + truck cards ──
-  html+=`<div class="v26-section" style="margin-top:12px"><h3>📅 Shipping Timeline <span style="font-size:11px;color:var(--tt);font-weight:400">${fDates.length} days</span></h3>`;
+  // ── SHIPPING TIMELINE — collapsible, collapsed by default ──
+  const tlOpen=window._v26TimelineOpen||false;
+  html+=`<div style="margin-top:6px"><div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 0" onclick="window._v26TimelineOpen=!window._v26TimelineOpen;V26_render()">
+    <span style="font-size:13px;font-weight:700">📅 Shipping Timeline</span>
+    <span style="font-size:10px;color:var(--tt)">${fDates.length} days · ${fActiveTrucks.length} trucks</span>
+    <span style="font-size:10px;color:var(--ac);margin-left:auto">${tlOpen?'▲ Collapse':'▼ Expand'}</span>
+  </div>`;
+  if(tlOpen){
   
   for(const d of fDates){
     const dayTrucks=fByDate[d];
@@ -2105,6 +2133,7 @@ function V26_render(){
     });
     html+=`</div>`;
   }
+  }// end if(tlOpen)
   html+=`</div>`;
   
   el.innerHTML=html;
