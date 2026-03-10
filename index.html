@@ -838,25 +838,6 @@ function LP_regenerate(){
       return;
     }
     
-    // ── Find the latest dispatched date — block it and all dates up to and including it ──
-    const dispatchedDates=new Set(dispatchedRows.map(r=>r.date));
-    let latestDispDate='0000-00-00';
-    for(const d of dispatchedDates){if(d>latestDispDate)latestDispDate=d}
-    // Block all dates up to and including latest dispatched date
-    const blockedDates=new Set();
-    if(latestDispDate!=='0000-00-00'){
-      // Generate all dates from earliest arrival to latestDispDate
-      const earliest=LP_STATE.arrivals.reduce((m,a)=>(!m||a.readyDate<m)?a.readyDate:m,null);
-      if(earliest){
-        let d=earliest;
-        for(let i=0;i<730;i++){
-          blockedDates.add(d);
-          if(d>=latestDispDate)break;
-          d=LP_addDays(d,1);
-        }
-      }
-    }
-    
     // ── Calculate consumed inventory by dispatched trucks (aggregate by SKU) ──
     const consumedBySku={};
     for(const r of dispatchedRows){
@@ -903,12 +884,12 @@ function LP_regenerate(){
       }
     }
     
-    // ── Run engine on remainder — blocked dates ensure new trucks start day after last dispatch ──
+    // ── Run engine on remainder — dispatched trucks are frozen, engine replans the rest freely ──
     const maxDispatchedId=Math.max(0,...LP_dispatched);
     const newRows=LP_buildLoadPlan(
       remainDemand,remainArrivals,
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,
-       startTruckId:maxDispatchedId,blockedDates:[...blockedDates],nomenclature:LP_STATE.nomenclature}
+       startTruckId:maxDispatchedId,nomenclature:LP_STATE.nomenclature}
     );
     
     // ── Merge: dispatched (frozen) + new plan ──
@@ -2129,6 +2110,7 @@ function enterApp(){
         try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
         try{const {data:exD}=await SB.from("shared_state").select("value").eq("id","fm-excl").single();if(exD)LM_excluded=new Set(JSON.parse(exD.value))}catch(e){}
         try{await stockReportLoad()}catch(e){}
+        try{await LM_loadDateOverrides()}catch(e){}
         if(Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
       }
     }catch(e){}
@@ -2217,6 +2199,7 @@ async function loadSharedData(){
     RW=JSON.parse(rwD.value);
     try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
     try{await stockReportLoad()}catch(e){}
+    try{await LM_loadDateOverrides()}catch(e){}
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     bV();if(!VN.length)throw new Error("No venues.");
@@ -2468,7 +2451,12 @@ function renderTruckCard(t,opts){
       <div class="tfn" style="color:${fc}">${pDisp}<span>/${tCap}</span></div>
     </div></div>
     ${PB(t.pallets||0,tCap)}
-    ${opts.showExcludeCheckbox&&ROLE!=="viewer"?`<div class="lp-dispatch-row" onclick="event.stopPropagation()"><input type="checkbox" ${isExcl?'checked':''} onchange="LM_toggleExclude('${t.id}',this.checked)"><span>${isExcl?'🚫 Excluded from Dispatch':'Exclude from Dispatch'}</span></div>`:''}
+    ${opts.showExcludeCheckbox&&ROLE!=="viewer"?`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <input type="checkbox" ${isExcl?'checked':''} onchange="LM_toggleExclude('${t.id}',this.checked)"><span>${isExcl?'🚫 Excluded':'Exclude'}</span>
+      <span style="color:var(--bd);margin:0 2px">|</span>
+      <input type="checkbox" ${LM_dispatched.has(t.id)?'checked':''} onchange="LM_toggleDispatchTruck(${opts.truckIdx!=null?opts.truckIdx:-1},this.checked)"><span>${LM_dispatched.has(t.id)?'✅ Dispatched':'Dispatch'}</span>
+      <input type="date" value="${t.dd||''}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px;margin-left:auto" onchange="LM_changeDate(${opts.truckIdx!=null?opts.truckIdx:-1},this.value)">
+    </div>`:''}
   </div>`;
   return h;
 }
@@ -3363,6 +3351,8 @@ function numberAll(){
   // Sort and number CORT globally C-1, C-2...
   allCort.sort((a,b)=>a.dateK<b.dateK?-1:a.dateK>b.dateK?1:0);
   let cn=1;allCort.forEach(e=>{e.ref.id=`C-${cn++}`;e.ref.destDisplay=e.venueName||''});
+  // Re-apply manual date overrides after re-numbering
+  LM_applyDateOverrides();
 }
 
 /* ── RENDER ── */
@@ -3495,6 +3485,8 @@ function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95
 
 let LP=null;
 let LM_excluded=new Set();// truck IDs excluded from V26/dashboards
+let LM_dispatched=new Set();// truck IDs marked as dispatched (date-locked)
+let LM_dateOverrides={};// {truckId: newDate} — manual date changes
 let _dashCalMap={};// stored from rMain dashboard for day-detail popup
 let _dashFilter=null;// {type:'all'|'region'|'clusterOv'|'filtered', labels:Set, regionCat:'', clusterName:'', venueLabel:''}
 function LM_countActive(P){return P.allT.filter(t=>!LM_excluded.has(t.id)).length}
@@ -3502,6 +3494,48 @@ function LM_toggleExclude(truckId,checked){
   if(ROLE==="viewer")return;
   if(checked)LM_excluded.add(truckId);else LM_excluded.delete(truckId);
   saveSharedData();rMain();
+}
+function LM_changeDate(truckIdx,newDate){
+  if(ROLE==="viewer"||!newDate||!LP)return;
+  const t=LP.allT[truckIdx];if(!t)return;
+  t.dd=newDate;
+  LM_dateOverrides[t.id]=newDate;
+  LM_dispatched.add(t.id);
+  LM_saveDateOverrides();
+  rMain();
+}
+function LM_toggleDispatchTruck(truckIdx,checked){
+  if(ROLE==="viewer"||!LP)return;
+  const t=LP.allT[truckIdx];if(!t)return;
+  if(checked){LM_dispatched.add(t.id)}else{LM_dispatched.delete(t.id);delete LM_dateOverrides[t.id]}
+  LM_saveDateOverrides();
+  rMain();
+}
+async function LM_saveDateOverrides(){
+  if(ROLE==="viewer"||!SB)return;
+  try{
+    const now=new Date().toISOString();
+    await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides}),updated_at:now});
+  }catch(e){console.warn('LM dispatch save error:',e)}
+}
+async function LM_loadDateOverrides(){
+  if(!SB)return;
+  try{
+    const {data}=await SB.from('shared_state').select('value').eq('id','fm-lm-dispatch').single();
+    if(data){
+      const p=JSON.parse(data.value);
+      LM_dispatched=new Set(p.dispatched||[]);
+      LM_dateOverrides=p.dateOverrides||{};
+    }
+  }catch(e){/* no data yet */}
+}
+function LM_applyDateOverrides(){
+  // Re-apply date overrides to truck objects after numberAll()
+  if(!Object.keys(LM_dateOverrides).length)return;
+  for(const label of Object.keys(PLAN_CACHE)){
+    const P=PLAN_CACHE[label];if(!P)continue;
+    P.allT.forEach(t=>{if(LM_dateOverrides[t.id])t.dd=LM_dateOverrides[t.id]});
+  }
 }
 function showM(i){const t=LP.allT[i];if(!t)return;const fp=Math.round(t.pallets/LP.tCap*100);
 const pDisp=Number.isInteger(t.pallets)?t.pallets:t.pallets.toFixed(1);
@@ -4126,7 +4160,7 @@ ${day.isEarly?B("Early","pu"):""} ${day.hasOverflow?B("Overflow","or"):""} ${day
 <div class="dpr">${day.dayP}% · ${day.cumP}% cum</div></div><div class="tgr">`;
 day.trucks.forEach(tr=>{const ti=LP.allT.indexOf(tr);
 const arrLabel=day.isNoBi?'':'📅 '+fS(day.dDate)+' → '+fS(day.biDate);
-h+=renderTruckCard(tr,{tCap:P.tCap,displayName:displayName,dayLabel:arrLabel,onClickFn:`showM(${ti})`,exportFn:`exportTruck(${ti})`,showExcludeCheckbox:true})});
+h+=renderTruckCard(tr,{tCap:P.tCap,displayName:displayName,dayLabel:arrLabel,onClickFn:`showM(${ti})`,exportFn:`exportTruck(${ti})`,showExcludeCheckbox:true,truckIdx:ti})});
 h+=`</div></div>`})}
 // ── Compute CORT + excluded freight merge (used by trucks view and timeline) ──
 const showClusterCort=!isClusterSel||vcIsCAN(selCluster)||vcIsMEX(selCluster);
@@ -4516,7 +4550,7 @@ function doSystemReset(){
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};
-  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';
+  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();
   // Restore upload screen
@@ -4680,9 +4714,9 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-stock']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-stock','fm-lm-dispatch']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};
   document.getElementById("D").classList.add("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.remove("vis");
