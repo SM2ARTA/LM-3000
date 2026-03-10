@@ -4504,6 +4504,7 @@ const showClusterCort=!isClusterSel||vcIsCAN(selCluster)||vcIsMEX(selCluster);
 let cortWithMerge=[];
 if(P.cortDeliveries&&P.cortDeliveries.length>0&&showClusterCort){
   const exclFreightItems={};// dateKey -> [{sku,nm,qty,truckId}]
+  const _isStp=sku=>{const s=(NOM[sku]?.src||'').toUpperCase();return s.startsWith('STP')};
   P.days.forEach(d=>{
     d.trucks.forEach(t=>{
       if(!LM_excluded.has(t.id))return;
@@ -4511,18 +4512,29 @@ if(P.cortDeliveries&&P.cortDeliveries.length>0&&showClusterCort){
       if(!exclFreightItems[dKey])exclFreightItems[dKey]=[];
       t.items.forEach(it=>{
         if(isCort(it.sku))return;
+        if(LM_hideStaples&&_isStp(it.sku))return;
         exclFreightItems[dKey].push({sku:it.sku,nm:it.nm,qty:it.loadQty,truckId:t.id});
       });
+      // Include manual items from excluded trucks
+      for(const mi of MI_get(MI_lmKey(t))){
+        exclFreightItems[dKey].push({sku:mi.sku,nm:mi.name||'',qty:mi.qty||0,truckId:t.id});
+      }
       // Also index no-BI trucks under 'no-bi'/'NO-BI' so they can match CORT cards without BI date
       if(t.isNoBi||d.isNoBi){
         if(!exclFreightItems['no-bi'])exclFreightItems['no-bi']=[];
         if(!exclFreightItems['NO-BI'])exclFreightItems['NO-BI']=[];
         t.items.forEach(it=>{
           if(isCort(it.sku))return;
+          if(LM_hideStaples&&_isStp(it.sku))return;
           const entry={sku:it.sku,nm:it.nm,qty:it.loadQty,truckId:t.id};
           exclFreightItems['no-bi'].push(entry);
           exclFreightItems['NO-BI'].push(entry);
         });
+        for(const mi of MI_get(MI_lmKey(t))){
+          const entry={sku:mi.sku,nm:mi.name||'',qty:mi.qty||0,truckId:t.id};
+          exclFreightItems['no-bi'].push(entry);
+          exclFreightItems['NO-BI'].push(entry);
+        }
       }
     });
   });
