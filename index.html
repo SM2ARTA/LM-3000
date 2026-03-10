@@ -2432,18 +2432,20 @@ function renderTruckCard(t,opts){
   const fc=fp>90?'var(--gn)':fp>70?'var(--or)':'var(--rd)';
   const pDisp=Number.isInteger(t.pallets)?t.pallets:(t.pallets||0).toFixed(1);
   const isExcl=LM_excluded.has(t.id);
-  const exStyle=isExcl?'opacity:0.4;':'';
+  const isLmDisp=LM_dispatched.has(t.id);
+  const exStyle=isExcl?'opacity:0.4;':(isLmDisp?'opacity:0.7;border-color:var(--gn);background:linear-gradient(135deg,#FAFBFC,#F0FAF4);':'');
   const dest=t.destDisplay||t.dest||opts.displayName||'';
   const ovBorder=t.isOverflow?'border-left:3px solid var(--or)':'';
   const skus=t.items?t.items.length:(t.skus||0);
   const pcs=(()=>{if(t.items&&t.items.length){return t.items.reduce((s,it)=>s+(it.loadQty!=null?it.loadQty:(it.qty||0)),0);}return t.pcs||t.qty||0;})();
 
   let h=`<div class="tc" style="${ovBorder}${exStyle}" onclick="${opts.onClickFn||''}">
-    <div class="tto"><div class="tin"><span style="font-size:18px">${isExcl?'🚫':'🚛'}</span><div>
+    <div class="tto"><div class="tin"><span style="font-size:18px">${LM_dispatched.has(t.id)?'🔒':(isExcl?'🚫':'🚛')}</span><div>
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
       <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty</div>
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}</div>
-      ${opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:''}
+      ${LM_dateOverrides[t.id]?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_dateOverrides[t.id]+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
+      ${LM_dispatched.has(t.id)?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">✅ Dispatched</span></div>':''}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
