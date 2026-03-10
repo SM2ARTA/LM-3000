@@ -3629,21 +3629,35 @@ function binPack(items,cap){
 /* ── VENUE LIST ── */
 function bV(){const a={};const clMap={};// venue -> cluster
 const vcMap={};// venue -> venue code (parsed from Material Plan "Venue code" column)
+const _rawAgg={};// venue|biK|sku -> rawQty (non-CORT: aggregate then ceil, matching engine)
 for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(r["Venue cluster"])clMap[v]=r["Venue cluster"];
-  // Parse Venue code — take first non-empty value found for each venue
   const vc=String(r["Venue code"]||"").trim().toUpperCase();
   if(vc&&!vcMap[v])vcMap[v]=vc;
   const _rawQ=parseInt(r["Required"])||0;if(_rawQ<=0)continue;
   const bi=pD(r["Estimated bump-in date"]);
   if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
   const s=r["Nomenclature"]||"?";
-  if(!NOM[s])continue;// skip items with no NOM entry (e.g. golf carts)
-  if(isCort(s))a[v].hasCort=true;
-  const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
+  if(!NOM[s])continue;
+  const nm=NOM[s];const ppu=nm?.ppu||1;
   const pqUom=(nm?.pq||0)>0?(nm.pq/ppu):0;const psVal=nm?.ps||0;
-  if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/(nm.pq))*psVal;a[v].ln++;a[v].it+=q;
+  const ct=isCort(s);
+  if(ct){a[v].hasCort=true;a[v].it+=Math.ceil(_rawQ/ppu)}// CORT: per-row ceil (engine does same)
+  else{
+    // Non-CORT: aggregate raw by (venue, biK, sku), ceil once later — matching engine
+    const biK=bi?dk(bi):'no-bi';
+    const aggK=v+'|'+biK+'|'+s;
+    if(!_rawAgg[aggK])_rawAgg[aggK]={venue:v,raw:0,ppu};
+    _rawAgg[aggK].raw+=_rawQ;
+  }
+  if(pqUom>0&&psVal>0&&!ct)a[v].ep+=(_rawQ/(nm.pq))*psVal;
+  a[v].ln++;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
+}
+// Ceil once per (venue, biK, sku) — exactly matches engine's agg logic
+for(const k in _rawAgg){
+  const e=_rawAgg[k];
+  a[e.venue].it+=Math.ceil(e.raw/e.ppu);
 }
 VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep),cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||""})).sort((a,b)=>b.plt-a.plt);
 // Build cluster info
@@ -4469,10 +4483,11 @@ if(cv==="dashboard"){
   </div>`;
   const loadedPcs=calDates.reduce((s,dk)=>s+(calMap[dk].pcs||0),0);
   const cortPcsTotal=calDates.reduce((s,dk)=>s+(calMap[dk].cortPcs||0),0);
-  const pcsDelta=totPcs-loadedPcs-cortPcsTotal;
+  const actualPcs=loadedPcs+cortPcsTotal;
+  const pcsDelta=totPcs-actualPcs;
   const lmKpiItems=[
     {label:'📦 Pallets',value:totPlt.toLocaleString(),color:'var(--ac)'},
-    {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444',sub:pcsDelta>0?`${pcsDelta.toLocaleString()} unloaded of ${totPcs.toLocaleString()}`:''},
+    {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444',sub:pcsDelta>0?`${pcsDelta.toLocaleString()} not on trucks`:'✓ all loaded'},
     {label:'🚛 LM Trucks',value:totTrucks,color:'var(--gn)'},
     {label:'📅 Dispatch Days',value:totalDays,color:'var(--or)'},
     {label:'📈 Peak/Day',value:peakTrucks,color:'var(--rd)'},
@@ -4512,7 +4527,7 @@ if(cv==="dashboard"){
       <td style="color:#E31837">${d.cortPcs>0?d.cortPcs.toLocaleString():'—'}</td>
       <td><div style="height:14px;background:#F0F1F3;border-radius:3px;overflow:hidden"><div style="width:${barW}%;height:100%;background:${d.trucks>=10?"#C0392B":d.trucks>=6?"#E8745A":d.trucks>=3?"#F0C36D":"#78C68D"};border-radius:3px"></div></div></td></tr>`;
     });
-    h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="2" style="font-size:12px">Total · ${calDates.length} days</td><td style="color:var(--gn)">${_totTrk}</td><td style="color:#E31837">${_totCrt||'—'}</td><td>${Number.isInteger(_totPlt)?_totPlt:_totPlt.toFixed(1)}</td><td>${_totPcs.toLocaleString()}</td><td style="color:#E31837">${_totCrtPcs>0?_totCrtPcs.toLocaleString():"—"}</td><td></td></tr></tfoot></table></div>`;
+    h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="2" style="font-size:12px">Total · ${calDates.length} days</td><td style="color:var(--gn)">${_totTrk}</td><td style="color:#E31837">${_totCrt||'—'}</td><td>${Number.isInteger(_totPlt)?_totPlt:_totPlt.toFixed(1)}</td><td>${(_totPcs+_totCrtPcs).toLocaleString()}</td><td style="color:#E31837">${_totCrtPcs>0?_totCrtPcs.toLocaleString():"—"}</td><td></td></tr></tfoot></table></div>`;
   }
 
   // ── Venue/Cluster summary ──
