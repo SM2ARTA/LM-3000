@@ -1401,45 +1401,194 @@ function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
 }
 async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature){
   const wb=new ExcelJS.Workbook();
-  const CH='FF2d3436',DK='FF3d3d3d',MD='FF636e72',L1='FFf5f6fa',L2='FFecf0f1',L3='FFdfe6e9',WH='FFFFFFFF',TB='FFe8eef3';
-  const tG={style:'thin',color:{argb:L3}},mC={style:'medium',color:{argb:CH}};
-  const brd={top:tG,left:tG,bottom:tG,right:tG},bM={top:mC,left:mC,bottom:mC,right:mC};
-  const chF={type:'pattern',pattern:'solid',fgColor:{argb:CH}},dkF={type:'pattern',pattern:'solid',fgColor:{argb:DK}},mdF={type:'pattern',pattern:'solid',fgColor:{argb:MD}};
-  const l1F={type:'pattern',pattern:'solid',fgColor:{argb:L1}},l2F={type:'pattern',pattern:'solid',fgColor:{argb:L2}},whF={type:'pattern',pattern:'solid',fgColor:{argb:WH}},tbF={type:'pattern',pattern:'solid',fgColor:{argb:TB}};
-  const fT={name:'Calibri',size:16,bold:true,color:{argb:WH}},fSec={name:'Calibri',size:11,bold:true,color:{argb:WH}};
-  const fLbl={name:'Calibri',size:9,bold:true,color:{argb:MD}},fVal={name:'Calibri',size:9,color:{argb:CH}},fVB={name:'Calibri',size:9,bold:true,color:{argb:CH}};
-  const fH={name:'Calibri',size:8,bold:true,color:{argb:WH}},fSub={name:'Calibri',size:8,color:{argb:'FF95a5a6'}},fD={name:'Calibri',size:9,color:{argb:'FF2d3436'}};
-  const fTot={name:'Calibri',size:11,bold:true,color:{argb:CH}},fFt={name:'Calibri',size:7.5,italic:true,color:{argb:'FF95a5a6'}},fFtB={name:'Calibri',size:7.5,italic:true,bold:true,color:{argb:MD}},fSig={name:'Calibri',size:9,bold:true,color:{argb:CH}};
-  const AC={horizontal:'center',vertical:'middle'},L={horizontal:'left',vertical:'middle'},R={horizontal:'right',vertical:'middle'},W={horizontal:'center',vertical:'middle',wrapText:true};
-  const mc=(s,r)=>{try{s.mergeCells(r)}catch(e){}},box=(s,rn,c1,c2,b)=>{for(let i=c1;i<=c2;i++)s.getRow(rn).getCell(i).border=b||brd},fil=(s,rn,c1,c2,f)=>{for(let i=c1;i<=c2;i++)s.getRow(rn).getCell(i).fill=f};
-  const sc=(s,rn,ci,v,fo,al,fm,fl,bd)=>{const c=s.getRow(rn).getCell(ci);c.value=v;if(fo)c.font=fo;if(al)c.alignment=al;if(fm)c.numFmt=fm;if(fl)c.fill=fl;if(bd)c.border=bd};
   const ws=wb.addWorksheet('Commercial Invoice',{pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+
+  // ── Column widths ──
   ws.columns=[{width:7},{width:36},{width:18},{width:18},{width:22},{width:8},{width:8},{width:8},{width:11},{width:11},{width:11},{width:10},{width:11},{width:14},{width:28}];
-  ws.getRow(1).height=4;mc(ws,'A2:O2');ws.getRow(2).height=40;sc(ws,2,1,'COMBINED INVOICE AND PACKING LIST',fT,AC,null,chF);fil(ws,2,1,15,chF);box(ws,2,1,15,bM);ws.getRow(3).height=2;
-  const iL=[['DATE:',date],['INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['VENUE ADDRESS:',''],['VENUE CONTACT:',''],['DELIVERY DEADLINE:','']];
-  const iR=[['SHIPMENT DETAILS','','',''],['Total # of Pieces:','','Type of Packaging:','Pallets'],['Total Gross Weight:','','',''],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Port of Departure:','','Port of Arrival:',''],['Mode of Transport:','Road','','']];
-  for(let i=0;i<6;i++){const rn=4+i;ws.getRow(rn).height=20;mc(ws,'A'+rn+':B'+rn);mc(ws,'C'+rn+':I'+rn);sc(ws,rn,1,iL[i][0],fLbl,L,null,l2F);sc(ws,rn,3,iL[i][1],i<3?fVB:fVal,L,null,whF);if(i===0){mc(ws,'J'+rn+':O'+rn);sc(ws,rn,10,iR[i][0],fSec,AC,null,dkF);fil(ws,rn,10,15,dkF)}else{mc(ws,'J'+rn+':K'+rn);sc(ws,rn,10,iR[i][0],fLbl,L,null,l2F);sc(ws,rn,12,iR[i][1],fVal,L);if(iR[i][2]){mc(ws,'M'+rn+':N'+rn);sc(ws,rn,13,iR[i][2],fLbl,L,null,l2F);sc(ws,rn,15,iR[i][3],fVal,L)}}box(ws,rn,1,15)}
-  ws.getRow(10).height=8;mc(ws,'A11:D11');mc(ws,'E11:I11');mc(ws,'J11:O11');ws.getRow(11).height=24;sc(ws,11,1,'SHIPPER',fSec,L,null,chF);sc(ws,11,5,'CONSIGNEE',fSec,L,null,mdF);sc(ws,11,10,'CUSTOMS BROKER',fSec,L,null,mdF);fil(ws,11,1,4,chF);fil(ws,11,5,9,mdF);fil(ws,11,10,15,mdF);box(ws,11,1,15,bM);
-  const si=['FWC2026 US, Inc','396 Alhambra Circle, Ste# 400','Coral Gables, FL 33134','USA','',''];
-  const pty=LP_getCIParties(dest);
-  for(let i=0;i<6;i++){const rn=12+i;ws.getRow(rn).height=16;
-    const vals=[si[i],'','','',pty.consignee[i]||'','','','','',pty.broker[i]||'','','','','',''];
-    for(let c=0;c<15;c++){const cl=ws.getRow(rn).getCell(c+1);cl.value=vals[c];cl.font=fD;cl.alignment=L;cl.fill=l2F;cl.border=brd}
+  const COLS=15;
+
+  // ── Colors ──
+  const C_DARK='FF2d3436',C_DK2='FF3d3d3d',C_MED='FF636e72',C_L1='FFf5f6fa',C_L2='FFecf0f1',C_L3='FFdfe6e9',C_WH='FFFFFFFF',C_TB='FFe8eef3';
+
+  // ── Reusable styles ──
+  const mkFill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const fillDark=mkFill(C_DARK),fillDk2=mkFill(C_DK2),fillMed=mkFill(C_MED);
+  const fillL1=mkFill(C_L1),fillL2=mkFill(C_L2),fillWh=mkFill(C_WH),fillTB=mkFill(C_TB);
+
+  const brdThin={top:{style:'thin',color:{argb:C_L3}},left:{style:'thin',color:{argb:C_L3}},bottom:{style:'thin',color:{argb:C_L3}},right:{style:'thin',color:{argb:C_L3}}};
+  const brdMed={top:{style:'medium',color:{argb:C_DARK}},left:{style:'medium',color:{argb:C_DARK}},bottom:{style:'medium',color:{argb:C_DARK}},right:{style:'medium',color:{argb:C_DARK}}};
+
+  const fTitle={name:'Calibri',size:16,bold:true,color:{argb:C_WH}};
+  const fSection={name:'Calibri',size:11,bold:true,color:{argb:C_WH}};
+  const fLabel={name:'Calibri',size:9,bold:true,color:{argb:C_MED}};
+  const fVal={name:'Calibri',size:9,color:{argb:C_DARK}};
+  const fValB={name:'Calibri',size:9,bold:true,color:{argb:C_DARK}};
+  const fHdr={name:'Calibri',size:8,bold:true,color:{argb:C_WH}};
+  const fSub={name:'Calibri',size:8,color:{argb:'FF95a5a6'}};
+  const fData={name:'Calibri',size:9,color:{argb:'FF2d3436'}};
+  const fTotal={name:'Calibri',size:11,bold:true,color:{argb:C_DARK}};
+  const fFooter={name:'Calibri',size:7.5,italic:true,color:{argb:'FF95a5a6'}};
+  const fFooterB={name:'Calibri',size:7.5,italic:true,bold:true,color:{argb:C_MED}};
+  const fSig={name:'Calibri',size:9,bold:true,color:{argb:C_DARK}};
+
+  const alC={horizontal:'center',vertical:'middle'},alL={horizontal:'left',vertical:'middle'},alR={horizontal:'right',vertical:'middle'},alW={horizontal:'center',vertical:'middle',wrapText:true};
+
+  // ── Helper: style a single cell ──
+  const cell=(r,c,val,font,align,fill,border,fmt)=>{const cl=ws.getRow(r).getCell(c);cl.value=val!=null?val:'';if(font)cl.font=font;if(align)cl.alignment=align;if(fill)cl.fill=fill;if(border)cl.border=border;if(fmt)cl.numFmt=fmt;return cl};
+  // ── Helper: fill a range with same style ──
+  const fillRange=(r,c1,c2,fill,border)=>{for(let c=c1;c<=c2;c++){const cl=ws.getRow(r).getCell(c);cl.value='';cl.fill=fill;if(border)cl.border=border}};
+  // ── Helper: merge (safe) ──
+  const mg=(range)=>{try{ws.mergeCells(range)}catch(e){}};
+
+  // ══════════════════════════════════════════════════════════
+  // ROW 1: spacer
+  ws.getRow(1).height=4;
+
+  // ROW 2: Title bar
+  ws.getRow(2).height=40;
+  fillRange(2,1,COLS,fillDark,brdMed);
+  mg('A2:O2');
+  cell(2,1,'COMBINED INVOICE AND PACKING LIST',fTitle,alC,fillDark,brdMed);
+
+  // ROW 3: spacer
+  ws.getRow(3).height=2;
+
+  // ROWS 4-9: Left info + Right shipment details
+  const infoLeft=[['DATE:',date],['INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['VENUE ADDRESS:',''],['VENUE CONTACT:',''],['DELIVERY DEADLINE:','']];
+  const infoRight=[['SHIPMENT DETAILS','','',''],['Total # of Pieces:','','Type of Packaging:','Pallets'],['Total Gross Weight:','','',''],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Port of Departure:','','Port of Arrival:',''],['Mode of Transport:','Road','','']];
+
+  for(let i=0;i<6;i++){
+    const rn=4+i;ws.getRow(rn).height=20;
+    // Left: label A-B merged, value C-I merged
+    fillRange(rn,1,COLS,fillWh,brdThin);
+    mg('A'+rn+':B'+rn);mg('C'+rn+':I'+rn);
+    cell(rn,1,infoLeft[i][0],fLabel,alL,fillL2,brdThin);
+    cell(rn,3,infoLeft[i][1],i<3?fValB:fVal,alL,fillWh,brdThin);
+    // Right side
+    if(i===0){
+      mg('J'+rn+':O'+rn);
+      cell(rn,10,infoRight[i][0],fSection,alC,fillDk2,brdThin);
+      for(let c=10;c<=COLS;c++)ws.getRow(rn).getCell(c).fill=fillDk2;
+    } else {
+      mg('J'+rn+':K'+rn);
+      cell(rn,10,infoRight[i][0],fLabel,alL,fillL2,brdThin);
+      cell(rn,12,infoRight[i][1],fVal,alL,null,brdThin);
+      if(infoRight[i][2]){mg('M'+rn+':N'+rn);cell(rn,13,infoRight[i][2],fLabel,alL,fillL2,brdThin);cell(rn,15,infoRight[i][3],fVal,alL,null,brdThin)}
+    }
   }
-  ws.getRow(18).height=8;const hd=['QTY','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF ORIGIN','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
-  mc(ws,'F19:H19');ws.getRow(19).height=32;hd.forEach((h,i)=>{const c=ws.getRow(19).getCell(i+1);c.value=h||null;c.font=fH;c.fill=chF;c.border=bM;c.alignment=W});ws.getRow(19).getCell(6).value='DIMENSIONS';
-  const sb=['','','','','','Length','Width','Height','(cm/in)','','(lbs/kgs)','(USD)','','',''];ws.getRow(20).height=15;sb.forEach((s,i)=>{const c=ws.getRow(20).getCell(i+1);c.value=s;c.font=fSub;c.fill=l2F;c.border=brd;c.alignment=AC});
-  const DS=21;let tQ=0,tV=0;items.forEach((it,idx)=>{const nm=nomenclature[it.sku]||{};const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;const rn=DS+idx;ws.getRow(rn).height=19;const bg=idx%2===1?l1F:whF;[it.qty,nm.name||it.name||it.sku,it.sku,nm.hsCode||'',nm.country||'','','','','','','','USD',up,tv,'Re-Export (Temporary Imported)'].forEach((v,i)=>{const al=i===0?AC:(i===11?AC:([12,13].includes(i)?R:L));const fm=i===12?'#,##0.00':(i===13?'$ #,##0.00':null);sc(ws,rn,i+1,v,fD,al,fm,bg,brd)})});
-  const TR=DS+items.length;ws.getRow(TR).height=28;for(let i=0;i<15;i++){const v=i===0?tQ:(i===13?tV:'');const al=i===0?AC:(i===13?R:L);const fm=i===13?'$ #,##0.00':null;sc(ws,TR,i+1,v,v?fTot:fD,al,fm,tbF,bM)}ws.getRow(TR+1).height=2;
-  const F=TR+3;[[F,'* The items stated are confirmed to be true & correct to the best of our knowledge.',fFt],[F+1,'* Goods values are for customs purposes only.',fFt],[F+2,'* Goods to be imported for "FIFA WORLD CUP 2026"',fFtB]].forEach(([rn,txt,fo])=>{mc(ws,'A'+rn+':O'+rn);sc(ws,rn,1,txt,fo,L)});
-  const S=F+4;mc(ws,'A'+S+':E'+S);sc(ws,S,1,"Declarant's Signature:",fSig,L);ws.getRow(S).height=10;mc(ws,'A'+(S+1)+':E'+(S+1));ws.getRow(S+1).height=28;for(let i=1;i<=5;i++)ws.getRow(S+1).getCell(i).border={bottom:{style:'thin',color:{argb:CH}}};mc(ws,'A'+(S+3)+':E'+(S+3));sc(ws,S+3,1,"Name (Print):",fSig,L);ws.getRow(S+3).height=10;mc(ws,'A'+(S+4)+':E'+(S+4));ws.getRow(S+4).height=28;for(let i=1;i<=5;i++)ws.getRow(S+4).getCell(i).border={bottom:{style:'thin',color:{argb:CH}}};
+
+  // ROW 10: spacer
+  ws.getRow(10).height=8;
+
+  // ROW 11: Section headers (SHIPPER / CONSIGNEE / CUSTOMS BROKER)
+  ws.getRow(11).height=24;
+  fillRange(11,1,COLS,fillDark,brdMed);
+  mg('A11:D11');mg('E11:I11');mg('J11:O11');
+  cell(11,1,'SHIPPER',fSection,alL,fillDark,brdMed);
+  cell(11,5,'CONSIGNEE',fSection,alL,fillMed,brdMed);
+  cell(11,10,'CUSTOMS BROKER',fSection,alL,fillMed,brdMed);
+  for(let c=5;c<=9;c++)ws.getRow(11).getCell(c).fill=fillMed;
+  for(let c=10;c<=COLS;c++)ws.getRow(11).getCell(c).fill=fillMed;
+
+  // ROWS 12-17: Party data (NO merges — just fill every cell, text overflows naturally)
+  const shipper=['FWC2026 US, Inc','396 Alhambra Circle, Ste# 400','Coral Gables, FL 33134','USA','',''];
+  const pty=LP_getCIParties(dest);
+
+  for(let i=0;i<6;i++){
+    const rn=12+i;ws.getRow(rn).height=16;
+    // Fill ALL 15 cells first with background + border + font
+    for(let c=1;c<=COLS;c++){
+      const cl=ws.getRow(rn).getCell(c);
+      cl.value='';cl.font=fData;cl.alignment=alL;cl.border=brdThin;cl.fill=fillL2;
+    }
+    // Then set text values on the first cell of each section
+    ws.getRow(rn).getCell(1).value=shipper[i]||'';
+    ws.getRow(rn).getCell(5).value=pty.consignee[i]||'';
+    ws.getRow(rn).getCell(10).value=pty.broker[i]||'';
+  }
+
+  // ROW 18: spacer
+  ws.getRow(18).height=8;
+
+  // ROW 19: Table header
+  const headers=['QTY','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF ORIGIN','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
+  mg('F19:H19');
+  ws.getRow(19).height=32;
+  headers.forEach((h,i)=>{const cl=ws.getRow(19).getCell(i+1);cl.value=h||'';cl.font=fHdr;cl.fill=fillDark;cl.border=brdMed;cl.alignment=alW});
+  ws.getRow(19).getCell(6).value='DIMENSIONS';
+
+  // ROW 20: Sub-header
+  const subHdr=['','','','','','Length','Width','Height','(cm/in)','','(lbs/kgs)','(USD)','','',''];
+  ws.getRow(20).height=15;
+  subHdr.forEach((s,i)=>{const cl=ws.getRow(20).getCell(i+1);cl.value=s;cl.font=fSub;cl.fill=fillL2;cl.border=brdThin;cl.alignment=alC});
+
+  // DATA ROWS (21+)
+  const DS=21;let tQ=0,tV=0;
+  items.forEach((it,idx)=>{
+    const nm=nomenclature[it.sku]||{};const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
+    const rn=DS+idx;ws.getRow(rn).height=19;
+    const bg=idx%2===1?fillL1:fillWh;
+    const vals=[it.qty,nm.name||it.name||it.sku,it.sku,nm.hsCode||'',nm.country||'','','','','','','','USD',up,tv,'Re-Export (Temporary Imported)'];
+    vals.forEach((v,i)=>{
+      const al=i===0?alC:(i===11?alC:([12,13].includes(i)?alR:alL));
+      const fmt=i===12?'#,##0.00':(i===13?'$ #,##0.00':null);
+      cell(rn,i+1,v,fData,al,bg,brdThin,fmt);
+    });
+  });
+
+  // TOTALS ROW
+  const TR=DS+items.length;ws.getRow(TR).height=28;
+  for(let i=0;i<COLS;i++){
+    const v=i===0?tQ:(i===13?tV:'');
+    const al=i===0?alC:(i===13?alR:alL);
+    const fmt=i===13?'$ #,##0.00':null;
+    cell(TR,i+1,v,v?fTotal:fData,al,fillTB,brdMed,fmt);
+  }
+  ws.getRow(TR+1).height=2;
+
+  // FOOTER NOTES
+  const F=TR+3;
+  [[F,'* The items stated are confirmed to be true & correct to the best of our knowledge.',fFooter],
+   [F+1,'* Goods values are for customs purposes only.',fFooter],
+   [F+2,'* Goods to be imported for "FIFA WORLD CUP 2026"',fFooterB]
+  ].forEach(([rn,txt,fo])=>{mg('A'+rn+':O'+rn);cell(rn,1,txt,fo,alL)});
+
+  // SIGNATURE
+  const S=F+4;
+  mg('A'+S+':E'+S);cell(S,1,"Declarant's Signature:",fSig,alL);ws.getRow(S).height=10;
+  mg('A'+(S+1)+':E'+(S+1));ws.getRow(S+1).height=28;
+  for(let i=1;i<=5;i++)ws.getRow(S+1).getCell(i).border={bottom:{style:'thin',color:{argb:C_DARK}}};
+  mg('A'+(S+3)+':E'+(S+3));cell(S+3,1,"Name (Print):",fSig,alL);ws.getRow(S+3).height=10;
+  mg('A'+(S+4)+':E'+(S+4));ws.getRow(S+4).height=28;
+  for(let i=1;i<=5;i++)ws.getRow(S+4).getCell(i).border={bottom:{style:'thin',color:{argb:C_DARK}}};
+
+  // ══════════════════════════════════════════════════════════
+  // PACKING LIST SHEET
   const p=wb.addWorksheet('Packing List',{pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
-  p.columns=[{width:5},{width:22},{width:38},{width:10},{width:10},{width:18},{width:16},{width:12},{width:14}];p.getRow(1).height=4;mc(p,'A2:I2');p.getRow(2).height=36;sc(p,2,1,'PACKING LIST',fT,AC,null,chF);fil(p,2,1,9,chF);box(p,2,1,9,bM);p.getRow(3).height=2;
-  p.getRow(4).height=22;[[1,'Truck:',fLbl],[2,'LP-'+truckId,fVB],[4,'Date:',fLbl],[5,date,fVal],[7,'Destination:',fLbl],[8,dest,fVB]].forEach(([c,v,f])=>sc(p,4,c,v,f,L,null,null,brd));
-  p.getRow(5).height=22;const tPal=+totalPlt.toFixed(2);[[1,'Items:',fLbl,null],[2,tQ,fVB,null],[4,'Pallets:',fLbl,null],[5,tPal,fVB,null],[7,'Total Value:',fLbl,null],[8,tV,fVB,'$ #,##0.00']].forEach(([c,v,f,fm])=>sc(p,5,c,v,f,L,fm,null,brd));
-  p.getRow(6).height=6;p.getRow(7).height=28;['#','Nomenclature Code','Nomenclature Name','Qty','Pallets','HS Code','Country','Unit Price','Line Total'].forEach((h,i)=>{const c=p.getRow(7).getCell(i+1);c.value=h;c.font=fH;c.fill=chF;c.border=bM;c.alignment=W});
-  items.forEach((it,idx)=>{const nm=nomenclature[it.sku]||{};const rn=8+idx;p.getRow(rn).height=18;const bg=idx%2===1?l1F:whF;[idx+1,it.sku,nm.name||it.name||it.sku,it.qty,+it.pallets.toFixed(3),nm.hsCode||'',nm.country||'',nm.unitPrice||0,(nm.unitPrice||0)*it.qty].forEach((v,i)=>{const al=i===0?AC:([7,8].includes(i)?R:L);const fm=i===7?'#,##0.00':(i===8?'$ #,##0.00':null);sc(p,rn,i+1,v,fD,al,fm,bg,brd)})});
-  const pTR=8+items.length+1;p.getRow(pTR).height=26;['','','TOTAL:',tQ,tPal,'','','',tV].forEach((v,i)=>{const al=i===8?R:(i===3?AC:L);const fm=i===8?'$ #,##0.00':null;sc(p,pTR,i+1,v,v?fTot:fD,al,fm,tbF,bM)});p.getRow(pTR+1).height=2;
+  p.columns=[{width:5},{width:22},{width:38},{width:10},{width:10},{width:18},{width:16},{width:12},{width:14}];
+  const pc=(r,c,val,font,align,fill,border,fmt)=>{const cl=p.getRow(r).getCell(c);cl.value=val!=null?val:'';if(font)cl.font=font;if(align)cl.alignment=align;if(fill)cl.fill=fill;if(border)cl.border=border;if(fmt)cl.numFmt=fmt};
+  const pfr=(r,c1,c2,fill,border)=>{for(let c=c1;c<=c2;c++){const cl=p.getRow(r).getCell(c);cl.value='';cl.fill=fill;if(border)cl.border=border}};
+  const pmg=(range)=>{try{p.mergeCells(range)}catch(e){}};
+
+  p.getRow(1).height=4;
+  p.getRow(2).height=36;pfr(2,1,9,fillDark,brdMed);pmg('A2:I2');pc(2,1,'PACKING LIST',fTitle,alC,fillDark,brdMed);
+  p.getRow(3).height=2;
+  p.getRow(4).height=22;[[1,'Truck:',fLabel],[2,'LP-'+truckId,fValB],[4,'Date:',fLabel],[5,date,fVal],[7,'Destination:',fLabel],[8,dest,fValB]].forEach(([c,v,f])=>pc(4,c,v,f,alL,null,brdThin));
+  const tPal=+totalPlt.toFixed(2);
+  p.getRow(5).height=22;[[1,'Items:',fLabel,null],[2,tQ,fValB,null],[4,'Pallets:',fLabel,null],[5,tPal,fValB,null],[7,'Total Value:',fLabel,null],[8,tV,fValB,'$ #,##0.00']].forEach(([c,v,f,fm])=>pc(5,c,v,f,alL,null,brdThin,fm));
+  p.getRow(6).height=6;
+  p.getRow(7).height=28;['#','Nomenclature Code','Nomenclature Name','Qty','Pallets','HS Code','Country','Unit Price','Line Total'].forEach((h,i)=>{const cl=p.getRow(7).getCell(i+1);cl.value=h;cl.font=fHdr;cl.fill=fillDark;cl.border=brdMed;cl.alignment=alW});
+  items.forEach((it,idx)=>{const nm=nomenclature[it.sku]||{};const rn=8+idx;p.getRow(rn).height=18;const bg=idx%2===1?fillL1:fillWh;
+    [idx+1,it.sku,nm.name||it.name||it.sku,it.qty,+it.pallets.toFixed(3),nm.hsCode||'',nm.country||'',nm.unitPrice||0,(nm.unitPrice||0)*it.qty].forEach((v,i)=>{
+      const al=i===0?alC:([7,8].includes(i)?alR:alL);const fmt=i===7?'#,##0.00':(i===8?'$ #,##0.00':null);
+      pc(rn,i+1,v,fData,al,bg,brdThin,fmt);
+    });
+  });
+  const pTR=8+items.length+1;p.getRow(pTR).height=26;
+  ['','','TOTAL:',tQ,tPal,'','','',tV].forEach((v,i)=>{const al=i===8?alR:(i===3?alC:alL);const fmt=i===8?'$ #,##0.00':null;pc(pTR,i+1,v,v?fTotal:fData,al,fillTB,brdMed,fmt)});
+  p.getRow(pTR+1).height=2;
+
+  // ── Write file ──
   const buf=await wb.xlsx.writeBuffer();const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CI_T'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx';a.click();URL.revokeObjectURL(url);
 }
 
