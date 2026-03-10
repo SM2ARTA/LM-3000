@@ -2043,16 +2043,12 @@ function V26_render(){
       const isFirst=fDates.indexOf(d)===0;
       const isMonday=dObj&&dObj.getDay()===1;
       const showLabel=isFirst||isMonday||fDates.length<=14;
-      const lpH=maxDay>0?Math.round(lp/maxDay*100):0;
-      const lmH=maxDay>0?Math.round(lm/maxDay*100):0;
-      const cortH=maxDay>0?Math.round(cort/maxDay*100):0;
       html+=`<div style="flex:1;min-width:${fDates.length>60?'3px':'6px'};display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;height:100%;cursor:pointer;position:relative${isWknd?';opacity:0.45':''}" onclick="V26_showDay('${d}')" title="${dayLbl}: ${n} trucks (${lp} LP, ${lm} LM, ${cort} CORT)">
-        <div style="display:flex;flex-direction:column;justify-content:flex-end;flex:1">
-          ${cort>0?`<div style="height:${cortH}%;min-height:${cort?3:0}px;background:#E8745A;border-radius:2px 2px 0 0"></div>`:''}
-          ${lm>0?`<div style="height:${lmH}%;min-height:${lm?3:0}px;background:#78C68D"></div>`:''}
-          ${lp>0?`<div style="height:${lpH}%;min-height:${lp?3:0}px;background:#6CB4EE;border-radius:${cort||lm?'0':'2px 2px'} 0 0"></div>`:''}
-        </div>
-        ${n>0?`<div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--ts);font-weight:600">${n}</div>`:''}
+        <div style="flex:${maxDay-n};min-height:0"></div>
+        ${cort>0?`<div style="flex:${cort};background:#E8745A;border-radius:2px 2px 0 0;min-height:3px"></div>`:''}
+        ${lm>0?`<div style="flex:${lm};background:#78C68D;min-height:3px"></div>`:''}
+        ${lp>0?`<div style="flex:${lp};background:#6CB4EE;min-height:3px;border-radius:${cort||lm?'0':'2px 2px'} 0 0"></div>`:''}
+        ${n>0?`<div style="position:absolute;top:${Math.max(0,Math.round((1-n/maxDay)*100)-8)}%;left:50%;transform:translateX(-50%);font-size:7px;color:var(--ts);font-weight:600">${n}</div>`:''}
         ${showLabel?`<div style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:8px;color:var(--tt);white-space:nowrap">${dayLbl}</div>`:''}
       </div>`;
     }
