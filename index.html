@@ -1437,7 +1437,7 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
     for(let c=5;c<=9;c++){const cl=ws.getRow(rn).getCell(c);cl.fill=cnF;cl.font=fD;cl.alignment=L;cl.border=brd}
     for(let c=10;c<=15;c++){const cl=ws.getRow(rn).getCell(c);cl.fill=brF;cl.font=fD;cl.alignment=L;cl.border=brd}
     ws.getRow(rn).getCell(1).value=si[i];ws.getRow(rn).getCell(5).value=pty.consignee[i];ws.getRow(rn).getCell(10).value=pty.broker[i];
-    mc(ws,'A'+rn+':D'+rn);mc(ws,'E'+rn+':I'+rn);mc(ws,'J'+rn+':O'+rn)}
+  }
   ws.getRow(18).height=8;const hd=['QTY','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF ORIGIN','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
   mc(ws,'F19:H19');ws.getRow(19).height=32;hd.forEach((h,i)=>{const c=ws.getRow(19).getCell(i+1);c.value=h||null;c.font=fH;c.fill=chF;c.border=bM;c.alignment=W});ws.getRow(19).getCell(6).value='DIMENSIONS';
   const sb=['','','','','','Length','Width','Height','(cm/in)','','(lbs/kgs)','(USD)','','',''];ws.getRow(20).height=15;sb.forEach((s,i)=>{const c=ws.getRow(20).getCell(i+1);c.value=s;c.font=fSub;c.fill=l2F;c.border=brd;c.alignment=AC});
