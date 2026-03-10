@@ -2581,7 +2581,7 @@ function renderTruckCard(t,opts){
   const fc=fp>90?'var(--gn)':fp>70?'var(--or)':'var(--rd)';
   const pDisp=Number.isInteger(t.pallets)?t.pallets:(t.pallets||0).toFixed(1);
   const isExcl=LM_excluded.has(t.id);
-  const isLmDisp=LM_dispatched.has(t.id);
+  const isLmDisp=LM_isDispatched(t);
   const exStyle=isExcl?'opacity:0.4;':(isLmDisp?'opacity:0.7;border-color:var(--gn);background:linear-gradient(135deg,#FAFBFC,#F0FAF4);':'');
   const dest=t.destDisplay||t.dest||opts.displayName||'';
   const ovBorder=t.isOverflow?'border-left:3px solid var(--or)':'';
@@ -2589,12 +2589,12 @@ function renderTruckCard(t,opts){
   const pcs=(()=>{if(t.items&&t.items.length){return t.items.reduce((s,it)=>s+(it.loadQty!=null?it.loadQty:(it.qty||0)),0);}return t.pcs||t.qty||0;})();
 
   let h=`<div class="tc" style="${ovBorder}${exStyle}" onclick="${opts.onClickFn||''}">
-    <div class="tto"><div class="tin"><span style="font-size:18px">${LM_dispatched.has(t.id)?'🔒':(isExcl?'🚫':'🚛')}</span><div>
+    <div class="tto"><div class="tin"><span style="font-size:18px">${isLmDisp?'🔒':(isExcl?'🚫':'🚛')}</span><div>
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
       <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty</div>
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}</div>
-      ${LM_dateOverrides[t.id]?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_dateOverrides[t.id]+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
-      ${LM_dispatched.has(t.id)?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">✅ Dispatched</span></div>':''}
+      ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
+      ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">✅ Dispatched</span></div>':''}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
@@ -2604,7 +2604,7 @@ function renderTruckCard(t,opts){
     ${opts.showExcludeCheckbox&&ROLE!=="viewer"?`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <input type="checkbox" ${isExcl?'checked':''} onchange="LM_toggleExclude('${t.id}',this.checked)"><span>${isExcl?'🚫 Excluded':'Exclude'}</span>
       <span style="color:var(--bd);margin:0 2px">|</span>
-      <input type="checkbox" ${LM_dispatched.has(t.id)?'checked':''} onchange="LM_toggleDispatchTruck(${opts.truckIdx!=null?opts.truckIdx:-1},this.checked)"><span>${LM_dispatched.has(t.id)?'✅ Dispatched':'Dispatch'}</span>
+      <input type="checkbox" ${isLmDisp?'checked':''} onchange="LM_toggleDispatchTruck(${opts.truckIdx!=null?opts.truckIdx:-1},this.checked)"><span>${isLmDisp?'✅ Dispatched':'Dispatch'}</span>
       <input type="date" value="${t.dd||''}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px;margin-left:auto" onchange="LM_changeDate(${opts.truckIdx!=null?opts.truckIdx:-1},this.value)">
     </div>`:''}
   </div>`;
@@ -3635,10 +3635,12 @@ function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95
 
 let LP=null;
 let LM_excluded=new Set();// truck IDs excluded from V26/dashboards
-let LM_dispatched=new Set();// truck IDs marked as dispatched (date-locked)
-let LM_dateOverrides={};// {truckId: newDate} — manual date changes
+let LM_dispatched=new Set();// truck fingerprints marked as dispatched
+let LM_dateOverrides={};// {fingerprint: newDate} — manual date changes
 let _dashCalMap={};// stored from rMain dashboard for day-detail popup
 let _dashFilter=null;// {type:'all'|'region'|'clusterOv'|'filtered', labels:Set, regionCat:'', clusterName:'', venueLabel:''}
+// Stable truck fingerprint — survives renumbering since it's based on content not ID
+function LM_fp(t){const dest=t.destLabel||t.dest||'';const skus=t.items?t.items.map(i=>i.sku).sort().join(','):'';return dest+'|'+skus}
 function LM_countActive(P){return P.allT.filter(t=>!LM_excluded.has(t.id)).length}
 function LM_toggleExclude(truckId,checked){
   if(ROLE==="viewer")return;
@@ -3648,19 +3650,23 @@ function LM_toggleExclude(truckId,checked){
 function LM_changeDate(truckIdx,newDate){
   if(ROLE==="viewer"||!newDate||!LP)return;
   const t=LP.allT[truckIdx];if(!t)return;
+  const fp=LM_fp(t);
   t.dd=newDate;
-  LM_dateOverrides[t.id]=newDate;
-  LM_dispatched.add(t.id);
+  LM_dateOverrides[fp]=newDate;
+  LM_dispatched.add(fp);
   LM_saveDateOverrides();
   rMain();
 }
 function LM_toggleDispatchTruck(truckIdx,checked){
   if(ROLE==="viewer"||!LP)return;
   const t=LP.allT[truckIdx];if(!t)return;
-  if(checked){LM_dispatched.add(t.id)}else{LM_dispatched.delete(t.id);delete LM_dateOverrides[t.id]}
+  const fp=LM_fp(t);
+  if(checked){LM_dispatched.add(fp)}else{LM_dispatched.delete(fp);delete LM_dateOverrides[fp]}
   LM_saveDateOverrides();
   rMain();
 }
+function LM_isDispatched(t){return LM_dispatched.has(LM_fp(t))}
+function LM_getDateOverride(t){return LM_dateOverrides[LM_fp(t)]||null}
 async function LM_saveDateOverrides(){
   if(ROLE==="viewer"||!SB)return;
   try{
@@ -3680,11 +3686,10 @@ async function LM_loadDateOverrides(){
   }catch(e){/* no data yet */}
 }
 function LM_applyDateOverrides(){
-  // Re-apply date overrides to truck objects after numberAll()
   if(!Object.keys(LM_dateOverrides).length)return;
   for(const label of Object.keys(PLAN_CACHE)){
     const P=PLAN_CACHE[label];if(!P)continue;
-    P.allT.forEach(t=>{if(LM_dateOverrides[t.id])t.dd=LM_dateOverrides[t.id]});
+    P.allT.forEach(t=>{const ov=LM_dateOverrides[LM_fp(t)];if(ov)t.dd=ov});
   }
 }
 function showM(i){const t=LP.allT[i];if(!t)return;const fp=Math.round(t.pallets/LP.tCap*100);
@@ -3695,7 +3700,7 @@ let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stop
 <div class="mdh"><div><h3>🚛 ${t.id}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
 <div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${LP.tCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span></div>${PB(t.pallets,LP.tCap)}
 ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10px 0;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:11px;flex-wrap:wrap">
-  <input type="checkbox" ${LM_dispatched.has(t.id)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_dispatched.has(t.id)?'✅ Dispatched':'Mark dispatched'}</span>
+  <input type="checkbox" ${LM_isDispatched(t)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_isDispatched(t)?'✅ Dispatched':'Mark dispatched'}</span>
   <span style="color:var(--bd)">|</span>
   <label style="color:var(--ts)">Date:</label><input type="date" value="${t.dd||''}" style="font-size:11px;font-family:var(--fm);padding:4px 6px;border:1px solid var(--bd);border-radius:6px;color:var(--tp)" onchange="LM_changeDate(${i},this.value);clM()">
 </div>`:''}
@@ -4310,7 +4315,7 @@ const _lt=P.lt||0;// lead time in working days
 P.days.forEach(day=>{
   day.trucks.forEach(tr=>{
     const actualDate=tr.dd||day.dKey;
-    const hasOverride=LM_dateOverrides[tr.id];
+    const hasOverride=LM_getDateOverride(tr);
     // Recalculate arrival: dispatch + lead time (working days forward)
     let arrDate=day.biDate;
     if(hasOverride&&!day.isNoBi){
