@@ -3544,6 +3544,11 @@ const isClusterTruck=!!(selCluster&&CLUSTERS[selCluster]);
 let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stopPropagation()">
 <div class="mdh"><div><h3>🚛 ${t.id}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
 <div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${LP.tCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span></div>${PB(t.pallets,LP.tCap)}
+${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10px 0;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:11px;flex-wrap:wrap">
+  <input type="checkbox" ${LM_dispatched.has(t.id)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_dispatched.has(t.id)?'✅ Dispatched':'Mark dispatched'}</span>
+  <span style="color:var(--bd)">|</span>
+  <label style="color:var(--ts)">Date:</label><input type="date" value="${t.dd||''}" style="font-size:11px;font-family:var(--fm);padding:4px 6px;border:1px solid var(--bd);border-radius:6px;color:var(--tp)" onchange="LM_changeDate(${i},this.value);clM()">
+</div>`:''}
 <table class="dtb" style="margin-top:14px"><thead><tr>
 <th colspan="4" style="border-right:2px solid var(--bd)"></th>
 <th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--ts)">${isClusterTruck?'CLUSTER TOTAL':'VENUE TOTAL'}</th>
