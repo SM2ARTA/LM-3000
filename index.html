@@ -2501,6 +2501,7 @@ function enterApp(){
         NOM=JSON.parse(nomD.value);RW=JSON.parse(rwD.value);
         try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
         LM_cleanVS();
+        if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
         try{const {data:exD}=await SB.from("shared_state").select("value").eq("id","fm-excl").single();if(exD)LM_excluded=new Set(JSON.parse(exD.value))}catch(e){}
         if(Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
       }
@@ -2595,6 +2596,7 @@ async function loadSharedData(){
     RW=JSON.parse(rwD.value);
     try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
     LM_cleanVS();
+    if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
     try{await stockReportLoad()}catch(e){}
     try{await LM_loadDateOverrides()}catch(e){}
     try{await MI_load()}catch(e){}
@@ -2659,16 +2661,21 @@ function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-17","Boston Stadium":"2026-05-17","Dallas Stadium":"2026-05-16","Guadalajara Stadium":"2026-05-14","Houston Stadium":"2026-05-16","International Broadcast Centre":"2026-04-28","International Broadcast Coordination Centre":"2026-04-28","Kansas City Stadium":"2026-05-19","Los Angeles Stadium":"2026-05-15","Los Angeles - Rose Bowl Stadium":"2026-05-15","Mexico City Stadium":"2026-05-14","Miami Stadium":"2026-05-17","Monterrey Stadium":"2026-05-16","New York / New Jersey Stadium":"2026-05-16","Philadelphia Stadium":"2026-05-16","San Francisco Bay Area Stadium":"2026-05-16","Seattle Stadium":"2026-05-18","Toronto Stadium":"2026-05-15","Vancouver Stadium":"2026-05-16"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 
-// Strip VS entries that match hard-coded defaults (migration for stale Supabase data)
+// Strip VS entries that match hard-coded defaults OR old system defaults (migration for stale Supabase data)
 function LM_cleanVS(){
   for(const key in VS){
     const s=VS[key];if(!s)continue;
+    const hasTCDefault=LM_DEFAULT_TC[key]!==undefined;
+    const hasMTDefault=LM_DEFAULT_MT[key]!==undefined;
+    const hasLTDefault=LM_DEFAULT_LT[key]!==undefined;
+    const hasBIDefault=LM_DEFAULT_BI[key]!==undefined;
     const defTC=LM_DEFAULT_TC[key]||26;const defMT=LM_DEFAULT_MT[key]||2;
     const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||"2026-05-04";
-    if(s.tc===defTC)delete s.tc;
-    if(s.mt===defMT)delete s.mt;
-    if(s.lt===defLT)delete s.lt;
-    if(s.bi===defBI)delete s.bi;
+    // Remove if matches new default OR if matches old system default (26/2/0/2026-05-04) for venues with hard-coded values
+    if(s.tc===defTC||(hasTCDefault&&s.tc===26))delete s.tc;
+    if(s.mt===defMT||(hasMTDefault&&s.mt===2))delete s.mt;
+    if(s.lt===defLT||(hasLTDefault&&s.lt===0))delete s.lt;
+    if(s.bi===defBI||(hasBIDefault&&s.bi==="2026-05-04"))delete s.bi;
     if(Object.keys(s).length===0)delete VS[key];
   }
 }
