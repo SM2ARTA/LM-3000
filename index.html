@@ -766,6 +766,34 @@ let LP_STATE={
 };
 let LP_TAB='plan';
 let LP_dispatched=new Set();// truck IDs marked as dispatched
+let LP_contDateOverrides={};// container name -> new arrival date (YYYY-MM-DD)
+
+function LP_applyContDateOverrides(){
+  const ta=LP_STATE.turnaround||6;
+  for(const a of LP_STATE.arrivals){
+    const k=a.container||'';
+    if(!k)continue;
+    if(LP_contDateOverrides[k]){
+      if(!a._origArrDate)a._origArrDate=a.arrivalDate;// preserve original
+      a.arrivalDate=LP_contDateOverrides[k];
+      const rawReady=LP_addDays(a.arrivalDate,ta);
+      a.readyDate=LP_nextWorkday(rawReady);
+    } else if(a._origArrDate){
+      // Override removed — restore original
+      a.arrivalDate=a._origArrDate;
+      const rawReady=LP_addDays(a.arrivalDate,ta);
+      a.readyDate=LP_nextWorkday(rawReady);
+      delete a._origArrDate;
+    }
+  }
+}
+function LP_setContDate(container,newDate){
+  if(ROLE==='viewer')return;
+  if(!newDate){delete LP_contDateOverrides[container]}
+  else{LP_contDateOverrides[container]=newDate}
+  LP_applyContDateOverrides();
+  LP_regenerate();
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOAD PLAN PRO — Phase 3 UI (all LP_ prefixed)
@@ -788,7 +816,8 @@ async function LP_saveToSupabase(){
       ricStartDate:LP_STATE.ricStartDate,
       planGenerated:LP_STATE.planGenerated,
       generatedPlan:LP_STATE.generatedPlan,
-      dispatched:[...LP_dispatched]
+      dispatched:[...LP_dispatched],
+      contDateOverrides:LP_contDateOverrides
     };
     await SB.from('shared_state').upsert({id:'lp-state',value:JSON.stringify(payload),updated_at:now});
   }catch(e){console.warn('LP save error:',e)}
@@ -812,6 +841,8 @@ async function LP_loadFromSupabase(){
     LP_STATE.planGenerated=true;
     LP_STATE.generatedPlan=p.generatedPlan;
     LP_dispatched=new Set(p.dispatched||[]);
+    LP_contDateOverrides=p.contDateOverrides||{};
+    LP_applyContDateOverrides();
     LP_snapshotSettings();
     return true;
   }catch(e){console.warn('LP load error:',e);return false}
@@ -987,11 +1018,13 @@ function LP_renderArrivals(el){
   const byCont={};
   for(const a of arr){
     const k=a.container||'—';
-    if(!byCont[k])byCont[k]={name:k,items:[],totalQty:0,totalPlt:0,dates:new Set()};
+    if(!byCont[k])byCont[k]={name:k,items:[],totalQty:0,totalPlt:0,dates:new Set(),origDates:new Set()};
     byCont[k].items.push(a);
     byCont[k].totalQty+=a.qty||0;
     byCont[k].totalPlt+=a.availPallets||0;
     if(a.arrivalDate)byCont[k].dates.add(a.arrivalDate);
+    if(a._origArrDate)byCont[k].origDates.add(a._origArrDate);
+    else if(a.arrivalDate)byCont[k].origDates.add(a.arrivalDate);
   }
   const conts=Object.values(byCont).sort((a,b)=>{
     // Sort no-container to end
@@ -1012,6 +1045,7 @@ function LP_renderArrivals(el){
   const totalPlt=arr.reduce((s,a)=>s+(a.availPallets||0),0);
   const byDate=new Set(arr.map(a=>a.arrivalDate).filter(Boolean));
 
+  const ovrCount=Object.keys(LP_contDateOverrides).length;
   // KPI strip
   let html=`<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
     ${[
@@ -1020,7 +1054,7 @@ function LP_renderArrivals(el){
       [totalPlt.toFixed(0),'Pallets','var(--rd)'],
       [totalQty.toLocaleString(),'Pieces','var(--rd)'],
       [arr.length,'SKU Lines','var(--gn)'],
-    ].map(([v,l,col])=>`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px 18px">
+      ...(ovrCount>0?[[ovrCount,'Date Overrides','var(--pu)']]:[])].map(([v,l,col])=>`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px 18px">
       <div style="font-size:22px;font-weight:800;color:${col}">${v}</div>
       <div style="font-size:10px;color:var(--tt);margin-top:1px">${l}</div>
     </div>`).join('')}
@@ -1035,7 +1069,12 @@ function LP_renderArrivals(el){
     const id='lp-cont-'+cont.name.replace(/[^a-z0-9]/gi,'_');
     const fillPct=Math.min(100,Math.round(cont.totalPlt/maxPlt*100));
     const noContainer=cont.name==='—'||cont.name==='NO CONTAINER';
-    html+=`<div style="background:var(--sf);border:1.5px solid ${color}44;border-radius:10px;overflow:hidden">
+    const _hasOvr=!noContainer&&LP_contDateOverrides[cont.name];
+    const _ovrDate=_hasOvr?LP_contDateOverrides[cont.name]:'';
+    const _origDate=[...cont.origDates].sort()[0]||'';
+    const _origDatesStr=[...cont.origDates].sort().join(' · ')||'No date';
+    const _cEsc=cont.name.replace(/'/g,"\\'");
+    html+=`<div style="background:var(--sf);border:1.5px solid ${_hasOvr?'var(--pu)':color+'44'};border-radius:10px;overflow:hidden${_hasOvr?';box-shadow:0 0 0 1px var(--pu)':''}">
       <div onclick="lpContToggle('${id}')" style="cursor:pointer;padding:9px 11px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
           <div style="display:flex;align-items:center;gap:6px;min-width:0">
@@ -1052,7 +1091,8 @@ function LP_renderArrivals(el){
           </div>
           <span id="${id}-chev" style="color:var(--tt);font-size:10px;flex-shrink:0;margin-left:4px;transition:transform .2s">▼</span>
         </div>
-        <div style="font-size:10px;color:var(--tt);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📅 ${arrDates}</div>
+        <div style="font-size:10px;color:${_hasOvr?'var(--pu)':'var(--tt)'};margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${_hasOvr?'700':'400'}">📅 ${_hasOvr?_ovrDate+' <span style="color:var(--tt);font-weight:400;text-decoration:line-through">'+_origDatesStr+'</span>':arrDates}</div>
+        ${(!noContainer&&ROLE!=='viewer')?`<div onclick="event.stopPropagation()" style="margin-bottom:6px;display:flex;align-items:center;gap:4px"><input type="date" value="${_ovrDate||_origDate}" onchange="LP_setContDate('${_cEsc}',this.value)" style="width:100%;padding:2px 5px;border-radius:4px;border:1px solid ${_hasOvr?'var(--pu)':'var(--bd)'};font-size:10px;font-family:var(--fd);${_hasOvr?'background:var(--ps);font-weight:700':''}">${_hasOvr?`<button onclick="LP_setContDate('${_cEsc}','')" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0" title="Reset to original">✕</button>`:''}</div>`:''}
         <div style="display:flex;gap:5px;margin-bottom:6px">
           <div style="flex:1;background:var(--bg);border-radius:5px;padding:4px 5px;text-align:center">
             <div style="font-size:14px;font-weight:800;color:${color};line-height:1.1">${cont.totalPlt.toFixed(1)}</div>
@@ -3945,7 +3985,7 @@ function _renderPalletCfg(){
   </div>
   <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--bl);border-radius:8px">
   <table class="dtb" style="font-size:10px"><thead><tr>
-  <th style="width:16px"></th><th>SKU</th><th>Item</th><th>Source</th>
+  <th>SKU</th><th>Item</th><th>Source</th>
   <th style="text-align:center;color:var(--or)">Dis Qty</th><th style="text-align:center;color:var(--or)">Dis Spc</th>
   <th style="text-align:center;color:var(--gn)">Asm Qty</th><th style="text-align:center;color:var(--gn)">Asm Spc</th>
   <th style="text-align:center">Mode</th>
@@ -3958,10 +3998,8 @@ function _renderPalletCfg(){
     const hasAsm=nm.pqA>0&&nm.psA>0;
     const eff=LM_getEffPallet(sku,_pcVt,_pcCountry);
     const effPq=eff.pq;const effPs=eff.ps;
-    const dot=isDis?'var(--or)':'var(--gn)';
     const ovrMark=isOvr?' ★':'';
     h+=`<tr style="${isDis?'background:#FEF8F4':''}${isOvr?';border-left:3px solid var(--pu)':''}">
-    <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dot}"></span></td>
     <td class="mono">${sku}</td><td class="tcl" style="max-width:200px">${nm.nm||sku}</td>
     <td style="color:var(--tt)">${nm.src||'—'}</td>
     <td style="text-align:center;${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.pq||'—'}</td>
