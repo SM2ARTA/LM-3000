@@ -2506,6 +2506,7 @@ function enterApp(){
         LM_cleanVS();
         if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
         try{const {data:exD}=await SB.from("shared_state").select("value").eq("id","fm-excl").single();if(exD)LM_excluded=new Set(JSON.parse(exD.value))}catch(e){}
+        try{const {data:eoD}=await SB.from("shared_state").select("value").eq("id","fm-excl-ovr").single();if(eoD)LM_excludeUserOvr=JSON.parse(eoD.value)||{}}catch(e){}
         if(Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
       }
     }catch(e){}
@@ -2577,6 +2578,7 @@ async function saveSharedData(fullSave){
     // Always save lightweight settings (small payloads)
     await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:now});
     await SB.from('shared_state').upsert({id:'fm-excl',value:JSON.stringify([...LM_excluded]),updated_at:now});
+    await SB.from('shared_state').upsert({id:'fm-excl-ovr',value:JSON.stringify(LM_excludeUserOvr),updated_at:now});
     // Only save heavy data (NOM, RW) on full save (initial generation / file upload)
     if(fullSave){
       await SB.from('shared_state').upsert({id:'fm-nom',value:JSON.stringify(NOM),updated_at:now});
@@ -2941,7 +2943,7 @@ function renderTruckCard(t,opts){
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
       <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty</div>
       ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
-      <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}${isExcl?'':rateInputHtml(t.id,t.dest||opts.displayName||'',tCap,true,'rMain()')}</div>
+      <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}${isExcl?'':rateInputHtml(t.id,t.destLabel||t.dest||opts.displayName||'',tCap,true,'rMain()')}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">✅ Dispatched</span></div>':''}
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
@@ -3929,7 +3931,21 @@ function numberAll(){
   // Auto-exclude Step B (individual cluster venue) trucks by default on every re-number
   // First clear ALL LM-N IDs (they change on re-number), then re-add Step B ones fresh
   for(const id of [...LM_excluded])if(id.startsWith('LM-'))LM_excluded.delete(id);
-  allTrucks.forEach(e=>{if(e.ref._isStepB)LM_excluded.add(e.ref.id)});
+  allTrucks.forEach(e=>{
+    if(e.ref._isStepB){
+      const fp=LM_fp(e.ref);
+      // Check if user has explicitly overridden this truck's exclusion
+      if(LM_excludeUserOvr[fp]===false){
+        // User un-excluded this truck — don't auto-exclude
+      } else {
+        LM_excluded.add(e.ref.id);
+      }
+    } else {
+      // Non-Step-B truck: check if user explicitly excluded it
+      const fp=LM_fp(e.ref);
+      if(LM_excludeUserOvr[fp]===true)LM_excluded.add(e.ref.id);
+    }
+  });
   // Sort and number CORT globally C-1, C-2...
   allCort.sort((a,b)=>a.dateK<b.dateK?-1:a.dateK>b.dateK?1:0);
   let cn=1;allCort.forEach(e=>{e.ref.id=`C-${cn++}`;e.ref.destDisplay=e.venueName||''});
@@ -4262,6 +4278,7 @@ function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95
 
 let LP=null;
 let LM_excluded=new Set();// truck IDs excluded from V26/dashboards
+let LM_excludeUserOvr={};// fingerprint -> true/false (user explicit override of auto-exclude)
 let LM_dispatched=new Set();// truck fingerprints marked as dispatched
 let LM_dateOverrides={};// {fingerprint: newDate} — manual date changes
 let LM_hideStaples=false;// hide STP-sourced items in truck modals
@@ -4273,6 +4290,10 @@ function LM_countActive(P){return P.allT.filter(t=>!LM_excluded.has(t.id)).lengt
 function LM_toggleExclude(truckId,checked){
   if(ROLE==="viewer")return;
   if(checked)LM_excluded.add(truckId);else LM_excluded.delete(truckId);
+  // Find truck object and save override by fingerprint
+  const allT=[...Object.values(PLAN_CACHE)].flatMap(p=>p.allT||[]);
+  const t=allT.find(x=>x.id===truckId);
+  if(t){const fp=LM_fp(t);LM_excludeUserOvr[fp]=checked}
   saveSharedData();rMain();
 }
 function LM_changeDate(truckIdx,newDate){
@@ -5489,7 +5510,7 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-stock','fm-lm-dispatch','fm-manual-items']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items']).then(()=>{}).catch(()=>{});
   }
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
   document.getElementById("D").classList.add("vis");
