@@ -2661,23 +2661,16 @@ function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-17","Boston Stadium":"2026-05-17","Dallas Stadium":"2026-05-16","Guadalajara Stadium":"2026-05-14","Houston Stadium":"2026-05-16","International Broadcast Centre":"2026-04-28","International Broadcast Coordination Centre":"2026-04-28","Kansas City Stadium":"2026-05-19","Los Angeles Stadium":"2026-05-15","Los Angeles - Rose Bowl Stadium":"2026-05-15","Mexico City Stadium":"2026-05-14","Miami Stadium":"2026-05-17","Monterrey Stadium":"2026-05-16","New York / New Jersey Stadium":"2026-05-16","Philadelphia Stadium":"2026-05-16","San Francisco Bay Area Stadium":"2026-05-16","Seattle Stadium":"2026-05-18","Toronto Stadium":"2026-05-15","Vancouver Stadium":"2026-05-16"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 
-// Strip VS entries that match hard-coded defaults OR old system defaults (migration for stale Supabase data)
+// One-time migration: strip stale VS entries for venues with hard-coded defaults
 function LM_cleanVS(){
-  for(const key in VS){
-    const s=VS[key];if(!s)continue;
-    const hasTCDefault=LM_DEFAULT_TC[key]!==undefined;
-    const hasMTDefault=LM_DEFAULT_MT[key]!==undefined;
-    const hasLTDefault=LM_DEFAULT_LT[key]!==undefined;
-    const hasBIDefault=LM_DEFAULT_BI[key]!==undefined;
-    const defTC=LM_DEFAULT_TC[key]||26;const defMT=LM_DEFAULT_MT[key]||2;
-    const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||"2026-05-04";
-    // Remove if matches new default OR if matches old system default (26/2/0/2026-05-04) for venues with hard-coded values
-    if(s.tc===defTC||(hasTCDefault&&s.tc===26))delete s.tc;
-    if(s.mt===defMT||(hasMTDefault&&s.mt===2))delete s.mt;
-    if(s.lt===defLT||(hasLTDefault&&s.lt===0))delete s.lt;
-    if(s.bi===defBI||(hasBIDefault&&s.bi==="2026-05-04"))delete s.bi;
-    if(Object.keys(s).length===0)delete VS[key];
+  if(VS._defaultsV2)return;// already migrated
+  const defaulted=new Set([...Object.keys(LM_DEFAULT_TC),...Object.keys(LM_DEFAULT_MT),...Object.keys(LM_DEFAULT_LT),...Object.keys(LM_DEFAULT_BI)]);
+  for(const key of defaulted){
+    if(!VS[key])continue;
+    delete VS[key].tc;delete VS[key].mt;delete VS[key].lt;delete VS[key].bi;
+    if(Object.keys(VS[key]).length===0)delete VS[key];
   }
+  VS._defaultsV2=true;// mark as migrated
 }
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
