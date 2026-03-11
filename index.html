@@ -1217,7 +1217,7 @@ function LP_renderDemand(el){
 
   let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h2 style="font-size:18px;font-weight:700">📋 Demand Summary</h2>
-    <div style="display:flex;gap:8px;align-items:center"><span class="bg bg-bl">${skus.length} SKUs · ${totalDests.size} dests</span><span class="bg bg-gy">${grandQty.toLocaleString()} pcs · ${grandPlt.toFixed(1)} plt</span>${pltOvrCount?`<span class="bg bg-pu">★ ${pltOvrCount} pallet override${pltOvrCount>1?'s':''}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LP_palletOverrides={};LP_applyPalletOverrides();LP_render();LP_saveToSupabase()" style="font-size:9px;padding:2px 6px" title="Clear all pallet overrides">↻ Reset</button>`:''}':''}</div>
+    <div style="display:flex;gap:8px;align-items:center"><span class="bg bg-bl">${skus.length} SKUs · ${totalDests.size} dests</span><span class="bg bg-gy">${grandQty.toLocaleString()} pcs · ${grandPlt.toFixed(1)} plt</span>${pltOvrCount?`<span class="bg bg-pu">★ ${pltOvrCount} pallet override${pltOvrCount>1?'s':''}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LP_palletOverrides={};LP_applyPalletOverrides();LP_render();LP_saveToSupabase()" style="font-size:9px;padding:2px 6px" title="Clear all pallet overrides">↻ Reset</button>`:''}`:''}</div>
   </div>
   ${pltOvrCount?'<div class="note note-pu" style="margin-bottom:10px">Pallet qty overrides active (★). <strong>Regenerate</strong> the plan to apply new pallet dimensions to undispatched trucks.</div>':''}
   <input type="text" class="lp-search" placeholder="Search by SKU or name..." id="lpDemSearch" oninput="LP_filterDemand()">
