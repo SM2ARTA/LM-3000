@@ -462,7 +462,6 @@
   <div class="cf"><label>Max trucks / day</label><input type="number" id="i-mt" value="2"></div>
   <div class="cf"><label>Lead time (days)</label><input type="number" id="i-lt" value="0" min="0"></div>
   <div class="cf"><label>Bump-in start</label><input type="date" id="i-bi" value="2026-05-04"></div>
-  <div class="cf cful" style="display:flex;gap:4px;margin-top:4px"><button class="rbtn" onclick="exportConstraints()" style="flex:1;font-size:9px;padding:4px 6px" title="Export all venue constraints to Excel">⬇ Export</button><button class="rbtn" onclick="document.getElementById('vc-import').click()" style="flex:1;font-size:9px;padding:4px 6px" title="Import venue constraints from Excel">⬆ Import</button><input type="file" id="vc-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="importConstraints(this.files);this.value=''"></div>
 </div></div>
 <div class="sbox"><input type="text" id="vs" placeholder="Search venues..."></div>
 <div style="display:flex;gap:2px;padding:4px 14px" id="vtabs"></div>
@@ -2661,10 +2660,10 @@ function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-17","Boston Stadium":"2026-05-17","Dallas Stadium":"2026-05-16","Guadalajara Stadium":"2026-05-14","Houston Stadium":"2026-05-16","International Broadcast Centre":"2026-04-28","International Broadcast Coordination Centre":"2026-04-28","Kansas City Stadium":"2026-05-19","Los Angeles Stadium":"2026-05-15","Los Angeles - Rose Bowl Stadium":"2026-05-15","Mexico City Stadium":"2026-05-14","Miami Stadium":"2026-05-17","Monterrey Stadium":"2026-05-16","New York / New Jersey Stadium":"2026-05-16","Philadelphia Stadium":"2026-05-16","San Francisco Bay Area Stadium":"2026-05-16","Seattle Stadium":"2026-05-18","Toronto Stadium":"2026-05-15","Vancouver Stadium":"2026-05-16"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 
-// Migration: wipe all VS constraint overrides so hard-coded defaults take effect
+// Always wipe VS on load — all defaults are now hard-coded in LM_DEFAULT_* maps
+// VS only stores admin overrides that DIFFER from defaults (written by saveCurrentConstraints)
 function LM_cleanVS(){
-  if(VS._defaultsV3)return;// already migrated
-  VS={_defaultsV3:true};// full wipe — all defaults now come from LM_DEFAULT_* maps
+  VS={};
 }
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
@@ -4568,7 +4567,6 @@ function showHelp(){
   <strong>Max trucks/day</strong> — daily truck limit (default: 2). Controls how many trucks can arrive per day.<br>
   <strong>Lead time</strong> — working days before bump-in to dispatch (default: 0). Ensures goods arrive with buffer time.<br>
   <strong>Bump-in start</strong> — earliest date planning starts. Items before this date are flagged as "Early".<br>
-  <strong>⬇ Export / ⬆ Import</strong> — export all venue constraints to an Excel file, or import them back. Use this to save your constraint settings before re-uploading data files. The import matches venues by name and applies capacity, max trucks, lead time, and bump-in start.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">Roles & Access</h4>
   <p><strong>Admin</strong> — full access: upload files, edit venue constraints, generate/regenerate plans, mark trucks as dispatched, system reset. All changes sync to the database and are visible to viewers in real-time.<br>
@@ -5045,116 +5043,6 @@ delete PLAN_CACHE[cK];
 numberAll();
 saveSharedData();rVL();rMain()}
 
-// ── Export / Import Venue Constraints ──
-function exportConstraints(){
-  const rows=[];
-  // Export clusters first
-  for(const cl in CLUSTERS){
-    const s=VS[cl]||{};
-    rows.push({
-      'Type':'Cluster',
-      'Venue/Cluster':cl,
-      'Display Name':clDisp(cl),
-      'Venue Code':'',
-      'Truck Capacity (plt)':gTC(cl),
-      'Max Trucks / Day':gMT(cl),
-      'Lead Time (days)':gLT(cl),
-      'Bump-In Start':gBI(cl)
-    });
-  }
-  // Export ALL individual venues
-  VN.forEach(v=>{
-    const s=VS[v.name]||{};
-    rows.push({
-      'Type':'Venue',
-      'Venue/Cluster':v.name,
-      'Display Name':v.name,
-      'Venue Code':v.venueCode||'',
-      'Truck Capacity (plt)':gTC(v.name),
-      'Max Trucks / Day':gMT(v.name),
-      'Lead Time (days)':gLT(v.name),
-      'Bump-In Start':gBI(v.name)
-    });
-  });
-  if(rows.length===0){alert('No venues to export.');return}
-  const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.json_to_sheet(rows);
-  ws['!cols']=[{wch:10},{wch:36},{wch:28},{wch:14},{wch:18},{wch:16},{wch:14},{wch:14}];
-  XLSX.utils.book_append_sheet(wb,ws,'Venue Constraints');
-  XLSX.writeFile(wb,'ML3000_Venue_Constraints.xlsx');
-}
-
-async function importConstraints(files){
-  if(!files||!files.length)return;
-  if(ROLE==="viewer"){alert('Viewers cannot import constraints.');return}
-  const f=files[0];
-  try{
-    const buf=await f.arrayBuffer();
-    const wb=XLSX.read(buf,{type:'array'});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
-    if(!rows.length){alert('No data found in file.');return}
-
-    // Find columns (flexible matching)
-    const hdrs=Object.keys(rows[0]);
-    const typeCol=hdrs.find(h=>/^type$/i.test(h.trim()));
-    const nameCol=hdrs.find(h=>/^venue\/cluster$/i.test(h.trim()))||hdrs.find(h=>/^venue$/i.test(h.trim()))||hdrs.find(h=>h.toLowerCase().includes('venue')&&!h.toLowerCase().includes('code'));
-    const tcCol=hdrs.find(h=>/truck.*cap|capacity/i.test(h));
-    const mtCol=hdrs.find(h=>/max.*truck/i.test(h));
-    const ltCol=hdrs.find(h=>/lead.*time/i.test(h));
-    const biCol=hdrs.find(h=>/bump.*in.*start|bump.*start/i.test(h));
-
-    if(!nameCol){alert('Could not find "Venue/Cluster" or "Venue" column in the file.');return}
-
-    let imported=0,skipped=0;
-    const applyConstraints=(key,r)=>{
-      if(!VS[key])VS[key]={};
-      if(tcCol){const v=parseInt(r[tcCol]);if(!isNaN(v)&&v>0)VS[key].tc=v}
-      if(mtCol){const v=parseInt(r[mtCol]);if(!isNaN(v)&&v>0)VS[key].mt=v}
-      if(ltCol){const v=parseInt(r[ltCol]);if(!isNaN(v)&&v>=0)VS[key].lt=v}
-      if(biCol){
-        const raw=r[biCol];
-        if(typeof raw==='number'){
-          const d=new Date((raw-25569)*86400000);
-          if(!isNaN(d))VS[key].bi=dk(d);
-        } else {
-          const s=String(raw).trim();
-          const d=pD(s);
-          if(d)VS[key].bi=dk(d);
-          else if(s.match(/^\d{4}-\d{2}-\d{2}$/))VS[key].bi=s;
-        }
-      }
-    };
-
-    for(const r of rows){
-      const name=String(r[nameCol]||'').trim();
-      if(!name)continue;
-      const type=typeCol?String(r[typeCol]||'').trim().toLowerCase():'';
-
-      if(type==='cluster'){
-        // Match to a known cluster
-        if(CLUSTERS[name]){applyConstraints(name,r);imported++}
-        else{skipped++}
-      } else {
-        // Match to a known venue
-        const match=VN.find(v=>v.name===name);
-        if(match){applyConstraints(name,r);imported++}
-        // Also try matching as cluster (backward compat if no Type column)
-        else if(!typeCol&&CLUSTERS[name]){applyConstraints(name,r);imported++}
-        else{skipped++}
-      }
-    }
-
-    // Rebuild everything
-    PLAN_CACHE={};
-    numberAll();
-    saveSharedData();
-    syncI();rVL();rMain();
-    alert(`Imported constraints for ${imported} venue${imported!==1?'s':''}${skipped>0?' ('+skipped+' not matched)':''}.`);
-  }catch(e){
-    alert('Error reading file: '+e.message);
-  }
-}
 function exportXL(){
   const wb=XLSX.utils.book_new();
 
