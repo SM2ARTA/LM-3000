@@ -2023,12 +2023,13 @@ function V26_render(){
     {label:'🚛 Trucks',value:fTotalTrucks},
   ];
   // Total distribution cost (active non-excluded trucks only, CORT excluded)
-  const fDistCost=fActiveTrucks.reduce((s,t)=>{
-    const isLM=t.source==='Last Mile';
-    const tc=isLM?(LM_DEFAULT_TC[t.dest]||12):26;
-    return s+getEffRate(t.id,t.dest,tc,isLM);
+  const fLpCost=fActiveTrucks.filter(t=>t.source==='Load Plan').reduce((s,t)=>s+getEffRate(t.id,t.dest,26,false),0);
+  const fLmCost=fActiveTrucks.filter(t=>t.source==='Last Mile').reduce((s,t)=>{
+    const tc=LM_DEFAULT_TC[t.dest]||12;
+    return s+getEffRate(t.id,t.dest,tc,true);
   },0);
-  v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:fActiveTrucks.length+' trucks'});
+  const fDistCost=fLpCost+fLmCost;
+  v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:'LP $'+Math.round(fLpCost).toLocaleString()+' · LM $'+Math.round(fLmCost).toLocaleString()});
   if(fCortN>0)v26KpiItems.push({label:'🏷 CORT',value:fCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
   v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fDests.size});
   // Stock arrival % — unique SKUs from material plan (excl CT/STP) vs stock report
