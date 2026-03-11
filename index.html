@@ -2639,10 +2639,23 @@ function applyRole(){
 }
 function vG(v){return VS[v]||{}}
 function vS(v,k,val){if(!VS[v])VS[v]={};VS[v][k]=val}
-function gTC(v){return Math.max(1,vG(v).tc||26)}
-function gMT(v){return Math.max(1,vG(v).mt||2)}
-function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt):0}
-function gBI(v){return vG(v).bi||"2026-05-04"}
+// Default truck capacity (pallets) and max trucks/day per stadium (from Distribution Truck Capacity Calculator)
+// tc = pallet capacity per truck based on truck size: 53'→26, 26'→12
+// mt = floor(daily pallet receiving capacity / tc)
+// Default venue constraints from Distribution Truck Capacity Calculator
+// Truck sizes: 53' = 26 pallets, 26' = 12 pallets. maxT = floor(daily_capacity / tCap)
+const LM_DEFAULT_TC={"Seattle Stadium":12,"Vancouver Stadium":12,"Guadalajara Stadium":12,"Mexico City Stadium":12,"Monterrey Stadium":12};
+const LM_DEFAULT_MT={"Seattle Stadium":5,"San Francisco Bay Area Stadium":2,"Los Angeles Stadium":2,"Los Angeles - Rose Bowl Stadium":2,"Houston Stadium":3,"Dallas Stadium":2,"Kansas City Stadium":3,"Miami Stadium":2,"Philadelphia Stadium":2,"New York / New Jersey Stadium":2,"Toronto Stadium":2,"Vancouver Stadium":5,"Guadalajara Stadium":5,"Mexico City Stadium":5,"Monterrey Stadium":5};
+function gTC(v){return Math.max(1,vG(v).tc||LM_DEFAULT_TC[v]||26)}
+function gMT(v){return Math.max(1,vG(v).mt||LM_DEFAULT_MT[v]||2)}
+// Default lead times (transit days from Dallas, single 53ft, rounded up)
+// Default lead times (days) from Dallas warehouse — 53ft single transit, rounded up
+// From Transit_times_MAT.xlsx: address-to-city mapped, ceiling of fractional days
+const LM_DEFAULT_LT={"Atlanta / CORT":1,"Austin / CORT":0,"Boston / CORT":3,"Charlotte / CORT":2,"Columbus / CORT":2,"Dallas / CORT":0,"Houston / CORT":0,"Houston / RIC":0,"Kansas City / CORT":1,"Kansas City / RIC":1,"Knoxville / CORT":2,"Los Angeles / CORT":2,"Nashville / CORT":1,"New York / CORT":3,"New York New Jersey / RIC":3,"Philadelphia / CORT":3,"Phoenix / CORT":2,"Portland / CORT":3,"Roanoke / CORT":2,"Salt Lake City / CORT":2,"San Diego / CORT":2,"San Francisco / CORT":3,"Seattle / CORT":3,"South Florida / CORT":2,"Tampa / CORT":2,"TSE Atlanta / CORT":1,"TSE Boston / CORT":3,"TSE Los Angeles / CORT":2,"TSE Orlando / CORT":2,"TSE San Francisco / CORT":3,"TSE Seattle / CORT":3,"TSE Washington / CORT":2,"USA / CORT":0,"USA / RGS":0,"USA CENT / CORT":1,"USA EAST / CORT":3,"Washington DC / CORT":2,"Atlanta Stadium":1,"Boston Stadium":3,"Dallas Stadium":0,"Houston Stadium":0,"Kansas City Stadium":1,"Los Angeles Stadium":2,"Los Angeles - Rose Bowl Stadium":2,"Miami Stadium":2,"New York / New Jersey Stadium":3,"Philadelphia Stadium":3,"San Francisco Bay Area Stadium":3,"Seattle Stadium":3,"International Broadcast Centre":0,"International Broadcast Coordination Centre":0};
+function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt):(LM_DEFAULT_LT[v]!==undefined?LM_DEFAULT_LT[v]:0)}
+// Default bump-in dates per stadium (from Stadium Bump-in Schedule)
+const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-17","Boston Stadium":"2026-05-17","Dallas Stadium":"2026-05-16","Guadalajara Stadium":"2026-05-14","Houston Stadium":"2026-05-16","International Broadcast Centre":"2026-04-28","International Broadcast Coordination Centre":"2026-04-28","Kansas City Stadium":"2026-05-19","Los Angeles Stadium":"2026-05-15","Los Angeles - Rose Bowl Stadium":"2026-05-15","Mexico City Stadium":"2026-05-14","Miami Stadium":"2026-05-17","Monterrey Stadium":"2026-05-16","New York / New Jersey Stadium":"2026-05-16","Philadelphia Stadium":"2026-05-16","San Francisco Bay Area Stadium":"2026-05-16","Seattle Stadium":"2026-05-18","Toronto Stadium":"2026-05-15","Vancouver Stadium":"2026-05-16"};
+function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
 
@@ -4581,8 +4594,8 @@ function showHelp(){
 }
 
 function syncI(){if(!sel)return;const s=VS[sel]||{};
-document.getElementById("i-tc").value=s.tc||26;document.getElementById("i-mt").value=s.mt||2;
-document.getElementById("i-lt").value=s.lt!==undefined?s.lt:0;document.getElementById("i-bi").value=s.bi||"2026-05-04"}
+document.getElementById("i-tc").value=gTC(sel);document.getElementById("i-mt").value=gMT(sel);
+document.getElementById("i-lt").value=gLT(sel);document.getElementById("i-bi").value=gBI(sel)}
 
 function rMain(){const el=document.getElementById("mn");
 
@@ -5019,10 +5032,10 @@ function exportConstraints(){
       'Venue/Cluster':cl,
       'Display Name':clDisp(cl),
       'Venue Code':'',
-      'Truck Capacity (plt)':s.tc||26,
-      'Max Trucks / Day':s.mt||2,
-      'Lead Time (days)':s.lt!==undefined?s.lt:0,
-      'Bump-In Start':s.bi||'2026-05-04'
+      'Truck Capacity (plt)':gTC(cl),
+      'Max Trucks / Day':gMT(cl),
+      'Lead Time (days)':gLT(cl),
+      'Bump-In Start':gBI(cl)
     });
   }
   // Export ALL individual venues
@@ -5033,10 +5046,10 @@ function exportConstraints(){
       'Venue/Cluster':v.name,
       'Display Name':v.name,
       'Venue Code':v.venueCode||'',
-      'Truck Capacity (plt)':s.tc||26,
-      'Max Trucks / Day':s.mt||2,
-      'Lead Time (days)':s.lt!==undefined?s.lt:0,
-      'Bump-In Start':s.bi||'2026-05-04'
+      'Truck Capacity (plt)':gTC(v.name),
+      'Max Trucks / Day':gMT(v.name),
+      'Lead Time (days)':gLT(v.name),
+      'Bump-In Start':gBI(v.name)
     });
   });
   if(rows.length===0){alert('No venues to export.');return}
