@@ -2814,9 +2814,9 @@ function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==
 
 // ── Distribution Rates (FTL from Dallas, USD) ──
 // From RIC Rates sheet: Dallas → destination
-const DIST_RATE_53={Toronto:7345,Vancouver:11896,Guadalajara:8989,'Mexico City':8224,Monterrey:5628,Atlanta:2730,Boston:6170,Dallas:0,Houston:1788,'Kansas City':2348,'Los Angeles':3705,Miami:4935,'New York':6655,Philadelphia:4665,'San Francisco':5340,Seattle:6825};
-const DIST_RATE_53_LM={Toronto:7345,Vancouver:11896,Guadalajara:8989,'Mexico City':8224,Monterrey:5628,Atlanta:3303,Boston:6475,Dallas:1573,Houston:1788,'Kansas City':2348,'Los Angeles':4279,Miami:5509,'New York':6655,Philadelphia:5239,'San Francisco':5914,Seattle:7400};
-const DIST_RATE_24={Toronto:7345,Vancouver:11896,Guadalajara:8989,'Mexico City':8224,Monterrey:5628,Atlanta:3303,Boston:6475,Dallas:1573,Houston:1788,'Kansas City':2348,'Los Angeles':4279,Miami:5509,'New York':6655,Philadelphia:5239,'San Francisco':5914,Seattle:7400};
+const DIST_RATE_53={Toronto:7628,Vancouver:12196,Guadalajara:9353,'Mexico City':8580,Monterrey:5983,Atlanta:3577,Boston:7031,Dallas:1841,Houston:2057,'Kansas City':2619,'Los Angeles':4556,Miami:5791,'New York':6940,Philadelphia:5520,'San Francisco':6197,Seattle:7688};
+const DIST_RATE_53_LM={Toronto:7628,Vancouver:12196,Guadalajara:9353,'Mexico City':8580,Monterrey:5983,Atlanta:3577,Boston:7031,Dallas:1841,Houston:2057,'Kansas City':2619,'Los Angeles':4556,Miami:5791,'New York':6940,Philadelphia:5520,'San Francisco':6197,Seattle:7688};
+const DIST_RATE_24={Toronto:7628,Vancouver:12196,Guadalajara:9353,'Mexico City':8580,Monterrey:5983,Atlanta:3577,Boston:7031,Dallas:1841,Houston:2057,'Kansas City':2619,'Los Angeles':4556,Miami:5791,'New York':6940,Philadelphia:5520,'San Francisco':6197,Seattle:7688};
 // Map destination/cluster/venue labels to rate cities
 const DIST_CITY_MAP=[
   ['Dallas','DAL','DALS','Arlington','IBC','Broadcast','USA / RGS','USA / CORT','USA CENT','Carrollton','Round Rock','Austin'],
