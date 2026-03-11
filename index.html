@@ -1240,8 +1240,8 @@ function LP_renderDemand(el){
       <td class="mono">${s.sku}${isOvr?'<span style="color:var(--pu);font-size:9px" title="Pallet override active"> ★</span>':''}</td>
       <td class="tcl">${s.name||'—'}</td>
       <td class="mono fw7">${s.totalQty.toLocaleString()}</td>
-      <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<span id="lpPq-v-${s.sku}" ${isOvr?'title="Original: '+origPq+'"':''}>${pq||'—'}</span> <button onclick="LP_editPallet('${s.sku}')" id="lpPq-e-${s.sku}" style="background:none;border:none;cursor:pointer;font-size:10px;padding:0 1px;color:var(--ts)" title="Edit pallet qty">✏️</button><input id="lpPq-i-${s.sku}" type="number" value="${pq}" min="1" step="1" style="display:none;width:55px;font-size:10px;font-family:var(--fm);padding:1px 4px;border:1px solid var(--ac);border-radius:3px" onkeydown="if(event.key==='Enter')LP_savePallet('${s.sku}');if(event.key==='Escape')LP_render()"><button id="lpPq-s-${s.sku}" onclick="LP_savePallet('${s.sku}')" style="display:none;background:none;border:none;cursor:pointer;font-size:10px;padding:0 1px;color:var(--gn)">💾</button>`:`${pq||'—'}`}</td>
-      <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<span id="lpPs-v-${s.sku}" ${isOvr?'title="Original: '+origPs+'"':''}>${ps||'—'}</span> <button onclick="LP_editPalletSpc('${s.sku}')" id="lpPs-e-${s.sku}" style="background:none;border:none;cursor:pointer;font-size:10px;padding:0 1px;color:var(--ts)" title="Edit pallet spaces">✏️</button><input id="lpPs-i-${s.sku}" type="number" value="${ps}" min="1" step="1" style="display:none;width:55px;font-size:10px;font-family:var(--fm);padding:1px 4px;border:1px solid var(--ac);border-radius:3px" onkeydown="if(event.key==='Enter')LP_savePalletSpc('${s.sku}');if(event.key==='Escape')LP_render()"><button id="lpPs-s-${s.sku}" onclick="LP_savePalletSpc('${s.sku}')" style="display:none;background:none;border:none;cursor:pointer;font-size:10px;padding:0 1px;color:var(--gn)">💾</button>`:`${ps||'—'}`}</td>
+      <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<input type="number" value="${pq||''}" min="1" step="1" data-sku="${s.sku}" data-field="palletQty" data-orig="${origPq}" onchange="LP_palletInput(this)" onkeydown="if(event.key==='Enter')this.blur()" style="width:55px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${isOvr?'var(--pu)':'var(--bd)'};border-radius:4px;color:${isOvr?'var(--pu)':'var(--tp)'};outline:none;background:${isOvr?'var(--ps)':'var(--sf)'}" ${isOvr?'title="Original: '+origPq+'"':''}>`:`${pq||'—'}`}</td>
+      <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<input type="number" value="${ps||''}" min="1" step="1" data-sku="${s.sku}" data-field="palletSpc" data-orig="${origPs}" onchange="LP_palletInput(this)" onkeydown="if(event.key==='Enter')this.blur()" style="width:45px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${isOvr?'var(--pu)':'var(--bd)'};border-radius:4px;color:${isOvr?'var(--pu)':'var(--tp)'};outline:none;background:${isOvr?'var(--ps)':'var(--sf)'}" ${isOvr?'title="Original: '+origPs+'"':''}>`:`${ps||'—'}`}</td>
       <td class="mono">${s.totalPlt>0?s.totalPlt.toFixed(1):'—'}</td>
       <td style="white-space:normal">${destBadges}</td>
     </tr>`;
@@ -1251,54 +1251,18 @@ function LP_renderDemand(el){
 }
 
 function LP_filterDemand(){filterBySearch('lpDemSearch','#lpDemBody','.dtb tbody tr')}
-function LP_editPallet(sku){
+function LP_palletInput(el){
   if(ROLE==='viewer')return;
-  document.getElementById('lpPq-v-'+sku).style.display='none';
-  document.getElementById('lpPq-e-'+sku).style.display='none';
-  const inp=document.getElementById('lpPq-i-'+sku);
-  inp.style.display='';inp.focus();inp.select();
-  document.getElementById('lpPq-s-'+sku).style.display='';
-}
-function LP_savePallet(sku){
-  if(ROLE==='viewer')return;
-  const inp=document.getElementById('lpPq-i-'+sku);
-  const newPq=parseFloat(inp.value);
-  const n=LP_STATE.nomenclature[sku]||{};
-  const origPq=n._origPalletQty!==undefined?n._origPalletQty:(n.palletQty||0);
-  if(newPq>0&&newPq!==origPq){
-    LP_setPalletOvr(sku,'palletQty',newPq);
-  } else {
-    // Restore pq to original — remove palletQty override only
-    if(LP_palletOverrides[sku]){
-      delete LP_palletOverrides[sku].palletQty;
-      if(!Object.keys(LP_palletOverrides[sku]).length)delete LP_palletOverrides[sku];
-      LP_applyPalletOverrides();LP_render();LP_saveToSupabase();
-    }
-  }
-}
-function LP_editPalletSpc(sku){
-  if(ROLE==='viewer')return;
-  document.getElementById('lpPs-v-'+sku).style.display='none';
-  document.getElementById('lpPs-e-'+sku).style.display='none';
-  const inp=document.getElementById('lpPs-i-'+sku);
-  inp.style.display='';inp.focus();inp.select();
-  document.getElementById('lpPs-s-'+sku).style.display='';
-}
-function LP_savePalletSpc(sku){
-  if(ROLE==='viewer')return;
-  const inp=document.getElementById('lpPs-i-'+sku);
-  const newPs=parseFloat(inp.value);
-  const n=LP_STATE.nomenclature[sku]||{};
-  const origPs=n._origPalletSpc!==undefined?n._origPalletSpc:(n.palletSpc||0);
-  if(newPs>0&&newPs!==origPs){
-    LP_setPalletOvr(sku,'palletSpc',newPs);
-  } else {
-    // Restore ps to original — remove palletSpc override only
-    if(LP_palletOverrides[sku]){
-      delete LP_palletOverrides[sku].palletSpc;
-      if(!Object.keys(LP_palletOverrides[sku]).length)delete LP_palletOverrides[sku];
-      LP_applyPalletOverrides();LP_render();LP_saveToSupabase();
-    }
+  const sku=el.dataset.sku;
+  const field=el.dataset.field;
+  const orig=parseFloat(el.dataset.orig)||0;
+  const val=parseFloat(el.value);
+  if(val>0&&val!==orig){
+    LP_setPalletOvr(sku,field,val);
+  } else if(LP_palletOverrides[sku]){
+    delete LP_palletOverrides[sku][field];
+    if(!Object.keys(LP_palletOverrides[sku]).length)delete LP_palletOverrides[sku];
+    LP_applyPalletOverrides();LP_render();LP_saveToSupabase();
   }
 }
 
