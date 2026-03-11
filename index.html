@@ -2630,7 +2630,7 @@ function enterApp(){
   
   // Try loading both modules from Supabase
   const loadBoth=async()=>{
-    let lmOk=false,lpOk=false;
+    let lmOk=false,lpOk=false,hasLmData=false;
     // Load Last Mile data
     try{
       if(!SB)throw new Error("No DB");
@@ -2643,7 +2643,7 @@ function enterApp(){
         if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
         try{const {data:exD}=await SB.from("shared_state").select("value").eq("id","fm-excl").single();if(exD)LM_excluded=new Set(JSON.parse(exD.value))}catch(e){}
         try{const {data:eoD}=await SB.from("shared_state").select("value").eq("id","fm-excl-ovr").single();if(eoD)LM_excludeUserOvr=JSON.parse(eoD.value)||{}}catch(e){}
-        if(Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
+        hasLmData=true;
       }
     }catch(e){}
     // Always load stock report and LM overrides (independent of LM data)
@@ -2652,6 +2652,8 @@ function enterApp(){
     try{await MI_load()}catch(e){}
     try{await LM_loadPalletCfg()}catch(e){}
     try{await DIST_loadOverrides()}catch(e){}
+    // Now build venues and trucks AFTER all config is loaded
+    if(hasLmData&&Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
     // Load LP data
     try{lpOk=await LP_loadFromSupabase()}catch(e){}
     
@@ -4599,7 +4601,7 @@ if(it.noPallet){
   reqPltHtml=`<span style="color:var(--tt);font-size:10px">${lPltD} / ${denomPltD}</span>`;
 }
 h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}</td><td class="mono">${it.sku}</td><td class="tcl" style="color:var(--ts)">${it.nm}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
-<td class="fw6">${totalForSku.toLocaleString()}</td><td class="cgr" style="border-right:2px solid var(--bl)">${it.pq||'—'}</td>
+<td class="fw6">${totalForSku.toLocaleString()}</td><td class="cgr" style="border-right:2px solid var(--bl)" title="${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'Pallet qty '+(it.pq*_ppu)+' ÷ PPU '+_ppu+' = '+it.pq:'Pallet qty per UOM';})()}">${it.pq||'—'}${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'<span style="font-size:8px;color:var(--tt)"> ×'+_ppu+'</span>':'';})()}</td>
 ${isClusterTruck?'':`<td style="border-right:none">${reqQtyHtml}</td><td style="border-right:2px solid var(--bl)">${reqPltHtml}</td>`}
 <td class="fw7 cgn">${it.loadQty.toLocaleString()}</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.noPallet?'<span style="color:var(--or);font-size:10px">—</span>':(Number.isInteger(it.loadPlt)?it.loadPlt:it.loadPlt.toFixed(1))}</td>
 <td class="${typeof poolLeft==='number'&&poolLeft>0?'fw6 cbl':'cgr'}" style="border-right:2px solid var(--bl)">${typeof poolLeft==='number'?poolLeft.toLocaleString():'—'}</td>
