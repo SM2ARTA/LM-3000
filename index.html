@@ -2661,16 +2661,10 @@ function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-17","Boston Stadium":"2026-05-17","Dallas Stadium":"2026-05-16","Guadalajara Stadium":"2026-05-14","Houston Stadium":"2026-05-16","International Broadcast Centre":"2026-04-28","International Broadcast Coordination Centre":"2026-04-28","Kansas City Stadium":"2026-05-19","Los Angeles Stadium":"2026-05-15","Los Angeles - Rose Bowl Stadium":"2026-05-15","Mexico City Stadium":"2026-05-14","Miami Stadium":"2026-05-17","Monterrey Stadium":"2026-05-16","New York / New Jersey Stadium":"2026-05-16","Philadelphia Stadium":"2026-05-16","San Francisco Bay Area Stadium":"2026-05-16","Seattle Stadium":"2026-05-18","Toronto Stadium":"2026-05-15","Vancouver Stadium":"2026-05-16"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 
-// One-time migration: strip stale VS entries for venues with hard-coded defaults
+// Migration: wipe all VS constraint overrides so hard-coded defaults take effect
 function LM_cleanVS(){
-  if(VS._defaultsV2)return;// already migrated
-  const defaulted=new Set([...Object.keys(LM_DEFAULT_TC),...Object.keys(LM_DEFAULT_MT),...Object.keys(LM_DEFAULT_LT),...Object.keys(LM_DEFAULT_BI)]);
-  for(const key of defaulted){
-    if(!VS[key])continue;
-    delete VS[key].tc;delete VS[key].mt;delete VS[key].lt;delete VS[key].bi;
-    if(Object.keys(VS[key]).length===0)delete VS[key];
-  }
-  VS._defaultsV2=true;// mark as migrated
+  if(VS._defaultsV3)return;// already migrated
+  VS={_defaultsV3:true};// full wipe — all defaults now come from LM_DEFAULT_* maps
 }
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
