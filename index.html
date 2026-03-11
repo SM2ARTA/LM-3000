@@ -2681,7 +2681,7 @@ function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==
 
 // ── Distribution Rates (FTL from Dallas, USD) ──
 // From RIC Rates sheet: Dallas → destination
-const DIST_RATE_53={Toronto:5570,Vancouver:10120,Guadalajara:5400,'Mexico City':4635,Monterrey:3195,Atlanta:2730,Boston:6170,Dallas:0,Houston:1215,'Kansas City':1775,'Los Angeles':3705,Miami:4935,'New York':6080,Philadelphia:4665,'San Francisco':5340,Seattle:6825};
+const DIST_RATE_53={Toronto:5570,Vancouver:10120,Guadalajara:5400,'Mexico City':9375,Monterrey:3195,Atlanta:2730,Boston:6170,Dallas:0,Houston:1215,'Kansas City':1775,'Los Angeles':3705,Miami:4935,'New York':6080,Philadelphia:4665,'San Francisco':5340,Seattle:6825};
 const DIST_RATE_24={Toronto:5735,Vancouver:10225,Guadalajara:5735,'Mexico City':4970,Monterrey:3530,Atlanta:2650,Boston:5965,Dallas:0,Houston:815,'Kansas City':1710,'Los Angeles':4870,Miami:4450,'New York':5275,Philadelphia:4945,'San Francisco':5850,Seattle:7440};
 // Map destination/cluster/venue labels to rate cities
 const DIST_CITY_MAP=[
@@ -2709,14 +2709,18 @@ function getDistCity(label){
   return null;
 }
 const DIST_LOCAL_RATE=950;// USD local distribution within city
-const DIST_LOCAL_LM=new Set(['Toronto','Vancouver','Guadalajara','Mexico City','Monterrey','New York / New Jersey Stadium','Kansas City Stadium','Houston Stadium']);
+const DIST_LOCAL_LM=new Set(['Toronto','Vancouver','Guadalajara','Mexico City','Monterrey','New York / New Jersey Stadium','Kansas City Stadium','Houston Stadium','Dallas Stadium']);
+const DIST_LOCAL_CLUSTERS=new Set(['Dallas']);// cluster city names that should use local rate
 function getDistRate(dest,tCap,isLM){
-  // LM: CAN/MEX venues + specific stadiums use local rate
+  // LM: CAN/MEX venues + specific stadiums/clusters use local rate
   if(isLM){
     const u=(dest||'').toUpperCase();
     if(u.startsWith('CAN ')||u.includes('TOR')||u.includes('VAN'))return DIST_LOCAL_RATE;
     if(u.startsWith('MEX ')||u.includes('CDMX')||u.includes('GDL')||u.includes('MTY')||u.includes('GUADALAJARA')||u.includes('MEXICO CITY')||u.includes('MONTERREY'))return DIST_LOCAL_RATE;
     if(DIST_LOCAL_LM.has(dest))return DIST_LOCAL_RATE;
+    // Check if destination cluster city matches local rate cities
+    const city=getDistCity(dest);
+    if(city&&DIST_LOCAL_CLUSTERS.has(city))return DIST_LOCAL_RATE;
   }
   const city=getDistCity(dest);
   if(!city)return 0;
