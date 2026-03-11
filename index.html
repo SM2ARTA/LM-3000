@@ -2024,12 +2024,17 @@ function V26_render(){
   ];
   // Total distribution cost (active non-excluded trucks only, CORT excluded)
   const fLpCost=fActiveTrucks.filter(t=>t.source==='Load Plan').reduce((s,t)=>s+getEffRate(t.id,t.dest,26,false),0);
-  const fLmCost=fActiveTrucks.filter(t=>t.source==='Last Mile').reduce((s,t)=>{
-    const tc=LM_DEFAULT_TC[t.dest]||12;
-    return s+getEffRate(t.id,t.dest,tc,true);
-  },0);
-  const fDistCost=fLpCost+fLmCost;
-  v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:'LP $'+Math.round(fLpCost).toLocaleString()+' · LM $'+Math.round(fLmCost).toLocaleString()});
+  const _isLmCAN=d=>{const u=(d||'').toUpperCase();return u.startsWith('CAN ')||u.includes('TOR')||u.includes('VAN')};
+  const _isLmMEX=d=>{const u=(d||'').toUpperCase();return u.startsWith('MEX ')||u.includes('CDMX')||u.includes('GDL')||u.includes('MTY')||u.includes('GUADALAJARA')||u.includes('MEXICO CITY')||u.includes('MONTERREY')};
+  const _isLmSta=d=>d&&(d.includes('Stadium')||d.includes('Broadcast'));
+  const fLmSta=fActiveTrucks.filter(t=>t.source==='Last Mile'&&_isLmSta(t.dest));
+  const fLmCluster=fActiveTrucks.filter(t=>t.source==='Last Mile'&&!_isLmSta(t.dest)&&!_isLmCAN(t.dest)&&!_isLmMEX(t.dest));
+  const fLmLocal=fActiveTrucks.filter(t=>t.source==='Last Mile'&&(_isLmCAN(t.dest)||_isLmMEX(t.dest)));
+  const fLmStaCost=fLmSta.reduce((s,t)=>s+getEffRate(t.id,t.dest,LM_DEFAULT_TC[t.dest]||12,true),0);
+  const fLmClusterCost=fLmCluster.reduce((s,t)=>s+getEffRate(t.id,t.dest,LM_DEFAULT_TC[t.dest]||12,true),0);
+  const fLmLocalCost=fLmLocal.reduce((s,t)=>s+getEffRate(t.id,t.dest,LM_DEFAULT_TC[t.dest]||12,true),0);
+  const fDistCost=fLpCost+fLmStaCost+fLmClusterCost+fLmLocalCost;
+  v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:`LP $${Math.round(fLpCost).toLocaleString()} · Stadiums $${Math.round(fLmStaCost).toLocaleString()} · Clusters $${Math.round(fLmClusterCost).toLocaleString()} (${fLmCluster.length}) · Local $${Math.round(fLmLocalCost).toLocaleString()}`});
   if(fCortN>0)v26KpiItems.push({label:'🏷 CORT',value:fCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
   v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fDests.size});
   // Stock arrival % — unique SKUs from material plan (excl CT/STP) vs stock report
