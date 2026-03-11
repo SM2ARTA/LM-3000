@@ -2636,9 +2636,9 @@ function vS(v,k,val){if(!VS[v])VS[v]={};VS[v][k]=val}
 // mt = floor(daily pallet receiving capacity / tc)
 // Default venue constraints from Distribution Truck Capacity Calculator
 // Truck sizes: 53' = 26 pallets, 26' = 12 pallets. maxT = floor(daily_capacity / tCap)
-const LM_DEFAULT_TC={"Seattle Stadium":12,"Vancouver Stadium":12,"Guadalajara Stadium":12,"Mexico City Stadium":12,"Monterrey Stadium":12};
+const LM_DEFAULT_TC={"Seattle Stadium":12,"Vancouver Stadium":12,"Guadalajara Stadium":12,"Mexico City Stadium":12,"Monterrey Stadium":12,"San Francisco Bay Area Stadium":26,"Los Angeles Stadium":26,"Los Angeles - Rose Bowl Stadium":26,"Houston Stadium":26,"Dallas Stadium":26,"Kansas City Stadium":26,"Atlanta Stadium":26,"Miami Stadium":26,"Boston Stadium":26,"Philadelphia Stadium":26,"New York / New Jersey Stadium":26,"Toronto Stadium":26,"International Broadcast Centre":26,"International Broadcast Coordination Centre":26};
 const LM_DEFAULT_MT={"Seattle Stadium":5,"San Francisco Bay Area Stadium":2,"Los Angeles Stadium":2,"Los Angeles - Rose Bowl Stadium":2,"Houston Stadium":3,"Dallas Stadium":2,"Kansas City Stadium":3,"Miami Stadium":2,"Philadelphia Stadium":2,"New York / New Jersey Stadium":2,"Toronto Stadium":2,"Vancouver Stadium":5,"Guadalajara Stadium":5,"Mexico City Stadium":5,"Monterrey Stadium":5};
-function gTC(v){return Math.max(1,vG(v).tc||LM_DEFAULT_TC[v]||26)}
+function gTC(v){return Math.max(1,vG(v).tc||LM_DEFAULT_TC[v]||12)}
 function gMT(v){return Math.max(1,vG(v).mt||LM_DEFAULT_MT[v]||2)}
 // Default lead times (transit days from Dallas, single 53ft, rounded up)
 // Default lead times (days) from Dallas warehouse — 53ft single transit, rounded up
@@ -4602,7 +4602,7 @@ function rConstraints(){
   }
   const tc=gTC(key),mt=gMT(key),lt=gLT(key),bi=gBI(key);
   console.log('[ML3000 v10.1] rConstraints',key,': tc='+tc,'mt='+mt,'lt='+lt,'bi='+bi,'VS[key]=',JSON.stringify(VS[key]||null));
-  const defTC=LM_DEFAULT_TC[key]||26;
+  const defTC=LM_DEFAULT_TC[key]||12;
   const defMT=LM_DEFAULT_MT[key]||2;
   const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;
   const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
@@ -4642,7 +4642,7 @@ function _onConstraintChange(){
   const mt=parseInt(document.getElementById('i-mt')?.value)||2;
   const ltVal=parseInt(document.getElementById('i-lt')?.value);const lt=isNaN(ltVal)?0:Math.max(0,ltVal);
   const bi=document.getElementById('i-bi')?.value||'';
-  const defTC=LM_DEFAULT_TC[key]||26;const defMT=LM_DEFAULT_MT[key]||2;
+  const defTC=LM_DEFAULT_TC[key]||12;const defMT=LM_DEFAULT_MT[key]||2;
   const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
   if(!VS[key])VS[key]={};
   if(tc!==defTC)VS[key].tc=tc;else delete VS[key].tc;
