@@ -3109,7 +3109,7 @@ function build(venue,venueList,skipNoBi){
     const ppu=nm?.ppu||1;const q=Math.ceil(_raw/ppu);
     // pq and ps resolved per venue type + country config (assembled vs disassembled)
     const _rowVt=LM_vtMap[r["Venue"]]||_buildVt;
-    const _rowCountry=LM_venueCountry(r["Venue cluster"]||'');
+    const _rowCountry=LM_venueCountry(r["Venue cluster"]||'', r["Venue"]||'');
     const _eff=LM_getEffPallet(s,_rowVt,_rowCountry);
     const pqRaw=_eff.pq;const pqUom=pqRaw>0?pqRaw/ppu:0;
     const psVal=_eff.ps;
@@ -3818,7 +3818,7 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(isCort(s))a[v].hasCort=true;
   const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const vt=vtMapLocal[v]||'';
-  const _country=LM_venueCountry(clMap[v]);
+  const _country=LM_venueCountry(clMap[v], v);
   // Track SKU per venue type + country for pallet config filtering
   if(vt&&(nm.pq>0||nm.pqA>0)){
     if(!_vtSkuMap[vt])_vtSkuMap[vt]={};
@@ -4000,8 +4000,18 @@ LM_initPalletCfg();// set defaults on load
 
 // Country-level defaults for all venue types
 const LM_COUNTRY_DEFAULTS={USA:'dis',CAN:'asm',MEX:'asm'};
-function LM_venueCountry(cluster){
-  const cl=(cluster||'').toUpperCase();
+// Country detection: venue name is most reliable (always contains city), cluster as fallback
+const _CAN_VENUE_KEYS=['Toronto','Vancouver','Nottawasaga','Billy Bishop'];
+const _MEX_VENUE_KEYS=['Guadalajara','Mexico City','Monterrey','Mayakoba','Benito Juarez','Aeropuerto','Estadio Universitario','Pumas La Cantera','Chivas','Rayados','CF Pachuca','Centro de Alto','Club America','Live Aqua','Hyatt Regency Andares'];
+function LM_venueCountry(clusterOrName, venueName){
+  // Check venue name first (most reliable)
+  if(venueName){
+    const vn=venueName;
+    if(_CAN_VENUE_KEYS.some(k=>vn.includes(k)))return'CAN';
+    if(_MEX_VENUE_KEYS.some(k=>vn.includes(k)))return'MEX';
+  }
+  // Fall back to cluster
+  const cl=(clusterOrName||'').toUpperCase();
   if(cl.startsWith('CAN')||cl.includes('TOR')||cl.includes('VAN'))return'CAN';
   if(cl.startsWith('MEX')||cl.includes('CDMX')||cl.includes('GDL')||cl.includes('MTY'))return'MEX';
   return'USA';
