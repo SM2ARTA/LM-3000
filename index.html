@@ -2666,7 +2666,7 @@ function gMT(v){return Math.max(1,vG(v).mt||LM_DEFAULT_MT[v]||2)}
 const LM_DEFAULT_LT={"Atlanta / CORT":1,"Austin / CORT":0,"Boston / CORT":3,"Charlotte / CORT":2,"Columbus / CORT":2,"Dallas / CORT":0,"Houston / CORT":0,"Houston / RIC":0,"Kansas City / CORT":1,"Kansas City / RIC":1,"Knoxville / CORT":2,"Los Angeles / CORT":2,"Nashville / CORT":1,"New York / CORT":3,"New York New Jersey / RIC":3,"Philadelphia / CORT":3,"Phoenix / CORT":2,"Portland / CORT":3,"Roanoke / CORT":2,"Salt Lake City / CORT":2,"San Diego / CORT":2,"San Francisco / CORT":3,"Seattle / CORT":3,"South Florida / CORT":2,"Tampa / CORT":2,"TSE Atlanta / CORT":1,"TSE Boston / CORT":3,"TSE Los Angeles / CORT":2,"TSE Orlando / CORT":2,"TSE San Francisco / CORT":3,"TSE Seattle / CORT":3,"TSE Washington / CORT":2,"USA / CORT":0,"USA / RGS":0,"USA CENT / CORT":1,"USA EAST / CORT":3,"Washington DC / CORT":2,"Atlanta Stadium":1,"Boston Stadium":3,"Dallas Stadium":0,"Houston Stadium":0,"Kansas City Stadium":1,"Los Angeles Stadium":2,"Los Angeles - Rose Bowl Stadium":2,"Miami Stadium":2,"New York / New Jersey Stadium":3,"Philadelphia Stadium":3,"San Francisco Bay Area Stadium":3,"Seattle Stadium":3,"International Broadcast Centre":0,"International Broadcast Coordination Centre":0};
 function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt):(LM_DEFAULT_LT[v]!==undefined?LM_DEFAULT_LT[v]:0)}
 // Default bump-in dates per stadium (from Stadium Bump-in Schedule)
-const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-17","Boston Stadium":"2026-05-17","Dallas Stadium":"2026-05-16","Guadalajara Stadium":"2026-05-14","Houston Stadium":"2026-05-16","International Broadcast Centre":"2026-04-28","International Broadcast Coordination Centre":"2026-04-28","Kansas City Stadium":"2026-05-19","Los Angeles Stadium":"2026-05-15","Los Angeles - Rose Bowl Stadium":"2026-05-15","Mexico City Stadium":"2026-05-14","Miami Stadium":"2026-05-17","Monterrey Stadium":"2026-05-16","New York / New Jersey Stadium":"2026-05-16","Philadelphia Stadium":"2026-05-16","San Francisco Bay Area Stadium":"2026-05-16","Seattle Stadium":"2026-05-18","Toronto Stadium":"2026-05-15","Vancouver Stadium":"2026-05-16"};
+const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-16","Boston Stadium":"2026-05-14","Dallas Stadium":"2026-05-15","Guadalajara Stadium":"2026-05-12","Houston Stadium":"2026-05-15","International Broadcast Centre":"2026-04-27","International Broadcast Coordination Centre":"2026-04-27","Kansas City Stadium":"2026-05-17","Los Angeles Stadium":"2026-05-13","Los Angeles - Rose Bowl Stadium":"2026-05-13","Mexico City Stadium":"2026-05-12","Miami Stadium":"2026-05-22","Monterrey Stadium":"2026-05-15","New York / New Jersey Stadium":"2026-05-14","Philadelphia Stadium":"2026-05-15","San Francisco Bay Area Stadium":"2026-05-14","Seattle Stadium":"2026-05-16","Toronto Stadium":"2026-05-13","Vancouver Stadium":"2026-05-14"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 
 // Always wipe VS on load — all defaults are now hard-coded in LM_DEFAULT_* maps
@@ -3979,15 +3979,12 @@ let LM_vtMap={};// venue name -> venue type
 function LM_initPalletCfg(){
   LM_palletCfg={};
   for(const vt of LM_VENUE_TYPE_LIST){
-    if(vt==='Stadium'||vt==='International Broadcast Centre')
-      LM_palletCfg[vt]={mode:'dis',overrides:new Set(LM_DIS_SKUS_STA)};// default dis, 9 SKUs assembled
-    else
-      LM_palletCfg[vt]={mode:'asm',overrides:new Set()};// default asm, no exceptions
+    LM_palletCfg[vt]={mode:'asm',overrides:new Set()};// default asm, country defaults apply at runtime
   }
 }
 LM_initPalletCfg();// set defaults on load
 
-// Country-level defaults for non-Stadium/IBC venue types
+// Country-level defaults for all venue types
 const LM_COUNTRY_DEFAULTS={USA:'dis',CAN:'asm',MEX:'asm'};
 function LM_venueCountry(cluster){
   const cl=(cluster||'').toUpperCase();
@@ -3998,15 +3995,9 @@ function LM_venueCountry(cluster){
 
 function LM_getEffPallet(sku,venueType,country){
   const nm=NOM[sku];if(!nm)return{pq:0,ps:0};
-  const isStaIbc=venueType==='Stadium'||venueType==='International Broadcast Centre';
   const cfg=LM_palletCfg[venueType];
-  // Determine base mode: Stadium/IBC use their own config mode; others use country default
-  let baseMode;
-  if(isStaIbc){
-    baseMode=cfg?cfg.mode:'dis';
-  } else {
-    baseMode=LM_COUNTRY_DEFAULTS[country||'USA']||'dis';
-  }
+  // All venue types use country defaults as base mode
+  const baseMode=LM_COUNTRY_DEFAULTS[country||'USA']||'dis';
   // Apply venue type overrides on top of base mode
   const isOverride=cfg?cfg.overrides.has(sku):false;
   const useDis=baseMode==='dis'?!isOverride:isOverride;
@@ -4016,8 +4007,9 @@ function LM_getEffPallet(sku,venueType,country){
 
 function LM_getVenueType(venueName){return LM_vtMap[venueName]||''}
 
-// Hard-coded venue name → venue type map (from Venues master file 10-Mar-2026)
+// Venue name → venue type map (from Venues master file)
 const LM_VENUE_TYPE_MAP={"Academia Atlas FC":"FWC26 Team Base Camp Training Site","Aeropuerto Internacional Felipe Angeles":"FWC26 Airport","Aeropuerto Internacional de Toluca":"FWC26 Airport","Aeropuerto del Noreste":"FWC26 Airport","Arizona Athletic Grounds TBCTS":"FWC26 Team Base Camp Training Site","Atlanta Accreditation Centre":"Accreditation Centre","Atlanta FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Atlanta FIFA Venue Hotel":"FIFA Venue Hotel","Atlanta Main Ticketing Centre":"Main Ticketing Centre","Atlanta Stadium":"Stadium","Atlanta Ticketing Centre":"Ticketing Centre","Atlanta Transport Fleet Depot":"Fleet Depot","Atlanta Uniform Distribution Centre":"Uniform Distribution Centre","Atlanta United Training Centre":"FWC26 Venue Specific Training Sites","Atlanta United Training Centre FCWC25":"Venue Specific Training Site","Atlanta United Training Centre TBCTS":"FWC26 Team Base Camp Training Site","Atlanta Volunteer Centre":"Volunteer Centre","Austin FC Stadium TBCTS":"FWC26 Team Base Camp Training Site","Babson College TBCTS":"FWC26 Team Base Camp Training Site","Barry University":"FCWC25 Team Base Camp Training Site","Baylor School":"FCWC25 Team Base Camp Training Site","Baylor School TBCTS":"FWC26 Team Base Camp Training Site","Belmont University":"Uniform Distribution Centre","Benito Juarez International Airport":"FWC26 Airport","Billy Bishop Toronto City Airport":"FWC26 Airport","Boston Accreditation Centre":"Accreditation Centre","Boston FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Boston FIFA Venue Hotel":"FIFA Venue Hotel","Boston Harbor Hotel VIPH":"FIFA VIP Hotel","Boston Logan International Airport":"FWC26 Airport","Boston Main Ticketing Centre":"Main Ticketing Centre","Boston Stadium":"Stadium","Boston Ticketing Centre":"Ticketing Centre","Boston Transport Fleet Depot":"Fleet Depot","Boston Uniform Distribution Centre":"Uniform Distribution Centre","Boston Volunteer Centre":"Volunteer Centre","Bryant University TBCTS":"FWC26 Team Base Camp Training Site","Bryant University VSTS":"FWC26 Venue Specific Training Sites","CF Pachuca - Universidad Del Futbol":"FWC26 Team Base Camp Training Site","Centennial Park VSTS":"FWC26 Venue Specific Training Sites","Central Piedmont Community College Parr Center":"Uniform Distribution Centre","Centro de Alto Rendimiento (CAR)":"FWC26 Team Base Camp Training Site","Ceremonies Rehearsal Site Los Angeles":"Ceremonies","Ceremonies Rehearsal Site Mexico City":"Ceremonies","Ceremonies Rehearsal Site Miami":"Ceremonies","Ceremonies Rehearsal Site New York":"Ceremonies","Ceremonies Rehearsal Site Toronto":"Ceremonies","ChampionsGate Sports Complex":"FCWC25 Team Base Camp Training Site","Charlotte Douglas International Airport":"Airport","Charlotte FC TBCTS":"FWC26 Team Base Camp Training Site","Charlotte FC TBCTS FCWC25":"FCWC25 Team Base Camp Training Site","Charlotte FC VSTS":"Venue Specific Training Site","Charlotte Stadium":"Stadium","Chivas Verde Valle":"FWC26 Team Base Camp Training Site","Cincinnati Stadium":"Stadium","Cincinnati/Northern Kentucky International Airport":"Airport","Club America VSTS":"FWC26 Venue Specific Training Sites","Columbia Park Training Facility TBCTS":"FWC26 Team Base Camp Training Site","Columbia Park Training Facility VSTS":"FWC26 Venue Specific Training Sites","Columbus Crew Performance Centre TBCTS":"FWC26 Team Base Camp Training Site","Cotton Bowl":"FWC26 Venue Specific Training Sites","DC United Training Centre":"FCWC25 Team Base Camp Training Site","Dallas Accreditation Centre":"Accreditation Centre","Dallas FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Dallas FIFA Venue Hotel":"FIFA Venue Hotel","Dallas Love Field Airport":"FWC26 Airport","Dallas Main Ticketing Centre":"Main Ticketing Centre","Dallas Stadium":"Stadium","Dallas Ticketing Centre":"Ticketing Centre","Dallas Transport Fleet Depot":"Fleet Depot","Dallas Uniform Distribution Centre":"Uniform Distribution Centre","Dallas Volunteer Centre":"Volunteer Centre","Dallas/Fort Worth International Airport":"FWC26 Airport","Del Norte International Airport":"Airport","Episcopal High School":"FCWC25 Team Base Camp Training Site","Episcopal High School TBCTS":"FWC26 Team Base Camp Training Site","Estadio Universitario":"FWC26 Venue Specific Training Sites","FC Cincinnati":"Venue Specific Training Site","FC Dallas Stadium TBCTS":"FWC26 Team Base Camp Training Site","FIFA Headquarters Accreditation":"Accreditation Centre","FIFA VIP Hotel HQ":"FIFA VIP Hotel","FIFA26 US Headquarters":"Headquaters","Fairmont Pacific Rim VIPH":"FIFA VIP Hotel","Florida Atlantic University TBCTS":"FWC26 Team Base Camp Training Site","Florida International University":"Venue Specific Training Site","Fort Lauderdale-Hollywood International Airport":"FWC26 Airport","Four Seasons Hotel Los Angeles at Beverly Hills VIPH":"FIFA VIP Hotel","Four Seasons Houston VIPH":"FIFA VIP Hotel","Four Seasons Mexico City VIPH":"FIFA VIP Hotel","Gardens North County District Park":"FCWC25 Team Base Camp Training Site","Gardens North County District Park TBCTS":"FWC26 Team Base Camp Training Site","George Bush Intercontinental Airport":"FWC26 Airport","George Washington University Lerner Health & Wellness Center":"Uniform Distribution Centre","Georgia Tech Bill Moore Student Success Center":"Uniform Distribution Centre","Gonzaga University TBCTS":"FWC26 Team Base Camp Training Site","Grand Beach Hotel Surfside VIPH":"FIFA VIP Hotel","Great Park Sports Complex TBCTS":"FWC26 Team Base Camp Training Site","Guadalajara Accreditation Centre":"Accreditation Centre","Guadalajara FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Guadalajara FIFA Venue Hotel":"FIFA Venue Hotel","Guadalajara International Airport":"FWC26 Airport","Guadalajara Main Ticketing Centre":"Main Ticketing Centre","Guadalajara Stadium":"Stadium","Guadalajara Transport Fleet Depot":"Fleet Depot","Guadalajara Uniform Distribution Centre":"Uniform Distribution Centre","Guadalajara Volunteer Centre":"Volunteer Centre","Hard Rock Stadium Tennis Grandstand Facility":"Uniform Distribution Centre","Hartsfield-Jackson Atlanta International Airport":"FWC26 Airport","Hotel Valencia Santana Row VIPH":"FIFA VIP Hotel","Houston Accreditation Centre":"Accreditation Centre","Houston Dash & Dynamo Stadium VSTS":"FWC26 Venue Specific Training Sites","Houston FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Houston FIFA Venue Hotel":"FIFA Venue Hotel","Houston Main Ticketing Centre":"Main Ticketing Centre","Houston Sports Park":"FWC26 Venue Specific Training Sites","Houston Stadium":"Stadium","Houston Training Centre TBCTS":"FWC26 Team Base Camp Training Site","Houston Transport Fleet Depot":"Fleet Depot","Houston Uniform Distribution Centre":"Uniform Distribution Centre","Houston Volunteer Centre":"Volunteer Centre","Hyatt Regency Andares Guadalajara VIPH":"FIFA VIP Hotel","IMG Academy":"FCWC25 Team Base Camp Training Site","Inter Miami CF":"Venue Specific Training Site","Inter Miami CF Stadium":"FWC26 Venue Specific Training Sites","Inter Miami CF Training Centre":"FCWC25 Team Base Camp Training Site","Inter Miami CF Training Centre TBCTS":"FCWC25 Team Base Camp Training Site","International Broadcast Centre":"International Broadcast Centre","International Broadcast Coordination Centre":"International Broadcast Centre","John F. Kennedy International Airport":"FWC26 Airport","KC Current Stadium":"FWC26 Venue Specific Training Sites","KC Current Training Facility":"FWC26 Team Base Camp Training Site","Kansas City Accreditation Centre":"Accreditation Centre","Kansas City FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Kansas City FIFA Venue Hotel":"FIFA Venue Hotel","Kansas City International Airport":"FWC26 Airport","Kansas City Main Ticketing Centre":"Main Ticketing Centre","Kansas City Stadium":"Stadium","Kansas City Ticketing Centre":"Ticketing Centre","Kansas City Transport Fleet Depot":"Fleet Depot","Kansas City Uniform Distribution Centre":"Uniform Distribution Centre","Kansas City Volunteer Centre":"Volunteer Centre","Kennesaw State University":"FWC26 Venue Specific Training Sites","Kennesaw State University FCWC25":"Venue Specific Training Site","Killarney Park VSTS":"FWC26 Venue Specific Training Sites","Kino Sports Complex TBCTS":"FWC26 Team Base Camp Training Site","LaGuardia Airport":"FWC26 Airport","Landon School":"FCWC25 Team Base Camp Training Site","Live Aqua Urban VIPH":"FIFA VIP Hotel","Loews Kansas City Hotel VIPH":"FIFA VIP Hotel","Logistics Coordination Centre":"Event Logistics","Los Angeles - Rose Bowl Stadium":"Stadium","Los Angeles Accreditation Centre":"Accreditation Centre","Los Angeles FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Los Angeles FIFA Venue Hotel":"FIFA Venue Hotel","Los Angeles International Airport":"FWC26 Airport","Los Angeles Main Ticketing Centre":"Main Ticketing Centre","Los Angeles Memorial Coliseum":"FCWC25 Team Base Camp Training Site","Los Angeles Stadium":"Stadium","Los Angeles Ticketing Centre":"Ticketing Centre","Los Angeles Transport Fleet Depot":"Fleet Depot","Los Angeles Uniform Distribution Centre":"Uniform Distribution Centre","Los Angeles Volunteer Centre":"Volunteer Centre","Lotte Hotel Seattle VIPH":"FIFA VIP Hotel","Loyola Marymount University":"FCWC25 Team Base Camp Training Site","Lynn University":"FCWC25 Team Base Camp Training Site","Main Logistics Centre":"Event Logistics","Mansfield Multipurpose Stadium TBCTS":"FWC26 Team Base Camp Training Site","Mayakoba Training Centre Cancun":"FWC26 Team Base Camp Training Site","Melanie Lane Training Ground FCWC25":"FCWC25 Team Base Camp Training Site","Melanie Lane Training Ground VSTS":"Venue Specific Training Site","Melanie Lane Training Grounds VSTS":"FWC26 Venue Specific Training Sites","Mercer University":"FCWC25 Team Base Camp Training Site","Mexico City Accreditation Centre":"Accreditation Centre","Mexico City FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Mexico City FIFA Venue Hotel":"FIFA Venue Hotel","Mexico City Main Ticketing Centre":"Main Ticketing Centre","Mexico City Stadium":"Stadium","Mexico City Ticketing Centre":"Ticketing Centre","Mexico City Transport Fleet Depot":"Fleet Depot","Mexico City Uniform Distribution Centre":"Uniform Distribution Centre","Mexico City Volunteer Centre":"Volunteer Centre","Miami Accreditation Centre":"Accreditation Centre","Miami Executive Airport":"Airport","Miami FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Miami FIFA Venue Hotel":"FIFA Venue Hotel","Miami Headquarters Uniform Distribution Centre":"Uniform Distribution Centre","Miami International Airport":"FWC26 Airport","Miami Main Ticketing Centre":"Main Ticketing Centre","Miami Stadium":"Stadium","Miami Ticketing Centre":"Ticketing Centre","Miami Transport Fleet Depot":"Fleet Depot","Miami Uniform Distribution Centre":"Uniform Distribution Centre","Miami Volunteer Centre":"Volunteer Centre","Miami-Opa Locka Executive Airport":"Airport","Monterey Transport Fleet Depot":"Fleet Depot","Monterrey Accreditation Centre":"Accreditation Centre","Monterrey FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Monterrey FIFA Venue Hotel":"FIFA Venue Hotel","Monterrey International Airport":"FWC26 Airport","Monterrey Main Ticketing Centre":"Main Ticketing Centre","Monterrey Stadium":"Stadium","Monterrey Uniform Distribution Centre":"Uniform Distribution Centre","Monterrey Volunteer Centre":"Volunteer Centre","Mt. San Antonio College":"Venue Specific Training Site","Nashville International Airport":"Airport","Nashville SC Training Facility":"Venue Specific Training Site","Nashville SC Training Facility TBCTS":"FWC26 Team Base Camp Training Site","Nashville Stadium":"Stadium","National Soccer Development Centre TBCTS":"FWC26 Team Base Camp Training Site","National Soccer Development Centre VSTS":"FWC26 Venue Specific Training Sites","New England Revolution Training Centre VSTS":"FWC26 Venue Specific Training Sites","New York / New Jersey Accreditation Centre":"Accreditation Centre","New York / New Jersey FIFA Venue Hotel":"FIFA Venue Hotel","New York / New Jersey Main Ticketing Centre":"Main Ticketing Centre","New York / New Jersey Stadium":"Stadium","New York / New Jersey Ticketing Centre":"Ticketing Centre","New York / New Jersey Transport Fleet Depot":"Fleet Depot","New York / New Jersey Uniform Distribution Centre":"Uniform Distribution Centre","New York / New Jersey Volunteer Centre":"Volunteer Centre","New York City Football Club":"Venue Specific Training Site","New York New Jersey FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Newark Liberty International Airport":"FWC26 Airport","Norman Y. Mineta San Jose International Airport":"FWC26 Airport","North Seattle College":"Uniform Distribution Centre","Nottawasaga Training Site":"FWC26 Team Base Camp Training Site","Nova Southeastern University 2":"FCWC25 Team Base Camp Training Site","Nova Southeastern University FCWC25":"FCWC25 Team Base Camp Training Site","Nova Southeastern University VSTS":"FWC26 Venue Specific Training Sites","Oakland Roots / Soul Training Facility TBCTS":"FWC26 Team Base Camp Training Site","Oakland University":"FCWC25 Team Base Camp Training Site","Omni Atlanta Hotel at Centennial Park":"Accreditation Centre","Orlando - Camping World Stadium":"Stadium","Orlando - Inter&Co Stadium":"Stadium","Orlando City SC Training Ground":"Venue Specific Training Site","Orlando International Airport":"Airport","Pace Academy VSTS":"FWC26 Venue Specific Training Sites","Pennsylvania Convention Center":"Uniform Distribution Centre","Philadelphia Accreditation Centre":"Accreditation Centre","Philadelphia Eagles Performance Centre FCWC25":"Venue Specific Training Site","Philadelphia Eagles Performance Centre VSTS":"FWC26 Venue Specific Training Sites","Philadelphia FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Philadelphia FIFA Venue Hotel":"FIFA Venue Hotel","Philadelphia International Airport":"FWC26 Airport","Philadelphia Main Ticketing Centre":"Main Ticketing Centre","Philadelphia Stadium":"Stadium","Philadelphia Transport Fleet Depot":"Fleet Depot","Philadelphia Uniform Distribution Centre":"Uniform Distribution Centre","Philadelphia Union TBCTS":"FWC26 Team Base Camp Training Site","Philadelphia Union Training Facility":"FCWC25 Team Base Camp Training Site","Philadelphia Volunteer Centre":"Volunteer Centre","Pumas La Cantera":"FWC26 Venue Specific Training Sites","RSL Stadium TBCTS":"FWC26 Team Base Camp Training Site","Ramapo College":"FCWC25 Team Base Camp Training Site","Rayados Training Centre":"FWC26 Team Base Camp Training Site","Referee Base Camp Hotel":"Referee Base Camp Hotel","Referee Base Camp Hotel - Miami":"Referee Base Camp Hotel","Referee Base Camp Hotel VAR":"Referee Base Camp Hotel","Referee Base Camp Training Site - Miami":"Referee Base Camp Training Site","Referee Base Camp Training Site - Miami Dade College":"Referee Base Camp Training Site","Remote Interpretation Centre":"International Broadcast Centre","Renaissance Hotel Meadowlands":"Uniform Distribution Centre","Rosewood Mansion Dallas VIPH":"FIFA VIP Hotel","Rutgers University":"FCWC25 Team Base Camp Training Site","Rutgers University TBCTS":"FWC26 Team Base Camp Training Site","Rutgers University VSTS":"Venue Specific Training Site","SDJA":"FWC26 Team Base Camp Training Site","SMU":"FWC26 Venue Specific Training Sites","San Francisco Bay Area Accreditation Centre":"Accreditation Centre","San Francisco Bay Area FIFA Venue Hotel":"FIFA Venue Hotel","San Francisco Bay Area Main Ticketing Centre":"Main Ticketing Centre","San Francisco Bay Area Stadium":"Stadium","San Francisco Bay Area Transport Fleet Depot":"Fleet Depot","San Francisco Bay Area Uniform Distribution Centre":"Uniform Distribution Centre","San Francisco Bay Area Volunteer Centre":"Volunteer Centre","San Francisco Bay Oakland International Airport":"FWC26 Airport","San Francisco FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","San Francisco International Airport":"FWC26 Airport","San Jose Park VSTS":"FWC26 Venue Specific Training Sites","Seattle Accreditation Centre":"Accreditation Centre","Seattle FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Seattle FIFA Venue Hotel":"FIFA Venue Hotel","Seattle Main Ticketing Centre":"Main Ticketing Centre","Seattle Seahawk Training Centre":"FCWC25 Team Base Camp Training Site","Seattle Sounders FC Performance Center & Clubhouse VSTS":"Venue Specific Training Site","Seattle Sounders FC Performance Centre and Clubhouse TBCTS":"FWC26 Team Base Camp Training Site","Seattle Stadium":"Stadium","Seattle Transport Fleet Depot":"Fleet Depot","Seattle Uniform Distribution Centre":"Uniform Distribution Centre","Seattle University":"FWC26 Venue Specific Training Sites","Seattle Volunteer Centre":"Volunteer Centre","Seattle-Tacoma International Airport":"FWC26 Airport","Shangri-La Toronto VIPH":"FIFA VIP Hotel","Shiloh Baptist Church":"Uniform Distribution Centre","Sounders FC Clubhouse and Training Facility":"FCWC25 Team Base Camp Training Site","Spartan Soccer Complex TBCTS":"FWC26 Team Base Camp Training Site","Sporting KC Stadium VSTS":"FWC26 Venue Specific Training Sites","Sporting KC Training Centre TBCTS":"FWC26 Team Base Camp Training Site","Sports Arena VSTS":"FWC26 Venue Specific Training Sites","St Regis Buckhead VIPH":"FIFA VIP Hotel","Starfire Sports":"FCWC25 Team Base Camp Training Site","Stockton University":"FCWC25 Team Base Camp Training Site","Stockton University TBCTS":"FWC26 Team Base Camp Training Site","Swope Soccer Village TBCTS":"FWC26 Team Base Camp Training Site","Team Base Camp Hotel 1":"Team Base Camp Hotel","Team Base Camp Hotel 10":"Team Base Camp Hotel","Team Base Camp Hotel 11":"Team Base Camp Hotel","Team Base Camp Hotel 12":"Team Base Camp Hotel","Team Base Camp Hotel 13":"Team Base Camp Hotel","Team Base Camp Hotel 14":"Team Base Camp Hotel","Team Base Camp Hotel 15":"Team Base Camp Hotel","Team Base Camp Hotel 16":"Team Base Camp Hotel","Team Base Camp Hotel 17":"Team Base Camp Hotel","Team Base Camp Hotel 18":"Team Base Camp Hotel","Team Base Camp Hotel 19":"Team Base Camp Hotel","Team Base Camp Hotel 2":"Team Base Camp Hotel","Team Base Camp Hotel 20":"Team Base Camp Hotel","Team Base Camp Hotel 21":"Team Base Camp Hotel","Team Base Camp Hotel 22":"Team Base Camp Hotel","Team Base Camp Hotel 23":"Team Base Camp Hotel","Team Base Camp Hotel 24":"Team Base Camp Hotel","Team Base Camp Hotel 25":"Team Base Camp Hotel","Team Base Camp Hotel 26":"Team Base Camp Hotel","Team Base Camp Hotel 27":"Team Base Camp Hotel","Team Base Camp Hotel 28":"Team Base Camp Hotel","Team Base Camp Hotel 29":"Team Base Camp Hotel","Team Base Camp Hotel 3":"Team Base Camp Hotel","Team Base Camp Hotel 30":"Team Base Camp Hotel","Team Base Camp Hotel 31":"Team Base Camp Hotel","Team Base Camp Hotel 32":"Team Base Camp Hotel","Team Base Camp Hotel 33":"Team Base Camp Hotel","Team Base Camp Hotel 34":"Team Base Camp Hotel","Team Base Camp Hotel 35":"Team Base Camp Hotel","Team Base Camp Hotel 36":"Team Base Camp Hotel","Team Base Camp Hotel 37":"Team Base Camp Hotel","Team Base Camp Hotel 38":"Team Base Camp Hotel","Team Base Camp Hotel 39":"Team Base Camp Hotel","Team Base Camp Hotel 4":"Team Base Camp Hotel","Team Base Camp Hotel 40":"Team Base Camp Hotel","Team Base Camp Hotel 41":"Team Base Camp Hotel","Team Base Camp Hotel 42":"Team Base Camp Hotel","Team Base Camp Hotel 43":"Team Base Camp Hotel","Team Base Camp Hotel 44":"Team Base Camp Hotel","Team Base Camp Hotel 45":"Team Base Camp Hotel","Team Base Camp Hotel 46":"Team Base Camp Hotel","Team Base Camp Hotel 47":"Team Base Camp Hotel","Team Base Camp Hotel 48":"Team Base Camp Hotel","Team Base Camp Hotel 5":"Team Base Camp Hotel","Team Base Camp Hotel 6":"Team Base Camp Hotel","Team Base Camp Hotel 7":"Team Base Camp Hotel","Team Base Camp Hotel 8":"Team Base Camp Hotel","Team Base Camp Hotel 9":"Team Base Camp Hotel","Technology Command Centre":"Technology","Technology Deployment Centre":"Technology","Teterboro Airport":"Airport","The Bellevue Hotel Philadelphia VIPH":"FIFA VIP Hotel","The Greenbrier Sports Performance Centre TBCTS":"FWC26 Team Base Camp Training Site","The Greenbrier Sports Training Centre":"FCWC25 Team Base Camp Training Site","The Pingry School TBCTS":"FWC26 Team Base Camp Training Site","The Stadium at Harrison":"Venue Specific Training Site","Toronto Accreditation Centre":"Accreditation Centre","Toronto FC Training Ground VSTS":"FWC26 Venue Specific Training Sites","Toronto FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Toronto FIFA Venue Hotel":"FIFA Venue Hotel","Toronto Main Ticketing Centre":"Main Ticketing Centre","Toronto Pearson International Airport":"FWC26 Airport","Toronto Stadium":"Stadium","Toronto Transport Fleet Depot":"Fleet Depot","Toronto Uniform Distribution Centre":"Uniform Distribution Centre","Toronto Volunteer Centre":"Volunteer Centre","Tournament Operations Centre":"Headquaters","UCLA":"FCWC25 Team Base Camp Training Site","UCSB- Harder Stadium TBCTS":"FWC26 Team Base Camp Training Site","UNC Charlotte":"FCWC25 Team Base Camp Training Site","UNC Charlotte VSTS":"Venue Specific Training Site","UNC Greensboro":"FCWC25 Team Base Camp Training Site","UNC Greensboro TBCTS":"FWC26 Team Base Camp Training Site","University of California Irvine":"FCWC25 Team Base Camp Training Site","University of Central Florida":"Venue Specific Training Site","University of Kansas":"FWC26 Team Base Camp Training Site","University of Maryland":"Venue Specific Training Site","University of Pennsylvania FCWC25":"Venue Specific Training Site","University of Pennsylvania VSTS":"FWC26 Venue Specific Training Sites","University of Portland":"FCWC25 Team Base Camp Training Site","University of Portland TBCTS":"FWC26 Team Base Camp Training Site","University of San Diego - Torero Stadium TBCTS":"FWC26 Team Base Camp Training Site","University of South Carolina":"FCWC25 Team Base Camp Training Site","University of Southern California SKS Hall":"Uniform Distribution Centre","University of Washington VSTS":"FWC26 Venue Specific Training Sites","Vancouver Accreditation Centre":"Accreditation Centre","Vancouver FIFA Corporate Ticketing Centre":"FIFA Corporate Ticketing Centre","Vancouver FIFA Venue Hotel":"FIFA Venue Hotel","Vancouver International Airport":"FWC26 Airport","Vancouver Main Ticketing Centre":"Main Ticketing Centre","Vancouver Stadium":"Stadium","Vancouver Transport Fleet Depot":"Fleet Depot","Vancouver Uniform Distribution Centre":"Uniform Distribution Centre","Vancouver Volunteer Centre":"Volunteer Centre","Venue Specific Team Hotel 10":"Venue Specific Team Hotel","Venue Specific Team Hotel 11":"Venue Specific Team Hotel","Venue Specific Team Hotel 12":"Venue Specific Team Hotel","Venue Specific Team Hotel 13":"Venue Specific Team Hotel","Venue Specific Team Hotel 14":"Venue Specific Team Hotel","Venue Specific Team Hotel 15":"Venue Specific Team Hotel","Venue Specific Team Hotel 16":"Venue Specific Team Hotel","Venue Specific Team Hotel 17":"Venue Specific Team Hotel","Venue Specific Team Hotel 18":"Venue Specific Team Hotel","Venue Specific Team Hotel 19":"Venue Specific Team Hotel","Venue Specific Team Hotel 2":"Venue Specific Team Hotel","Venue Specific Team Hotel 20":"Venue Specific Team Hotel","Venue Specific Team Hotel 21":"Venue Specific Team Hotel","Venue Specific Team Hotel 22":"Venue Specific Team Hotel","Venue Specific Team Hotel 23":"Venue Specific Team Hotel","Venue Specific Team Hotel 24":"Venue Specific Team Hotel","Venue Specific Team Hotel 25":"Venue Specific Team Hotel","Venue Specific Team Hotel 26":"Venue Specific Team Hotel","Venue Specific Team Hotel 27":"Venue Specific Team Hotel","Venue Specific Team Hotel 28":"Venue Specific Team Hotel","Venue Specific Team Hotel 29":"Venue Specific Team Hotel","Venue Specific Team Hotel 3":"Venue Specific Team Hotel","Venue Specific Team Hotel 30":"Venue Specific Team Hotel","Venue Specific Team Hotel 31":"Venue Specific Team Hotel","Venue Specific Team Hotel 32":"Venue Specific Team Hotel","Venue Specific Team Hotel 33":"Venue Specific Team Hotel","Venue Specific Team Hotel 34":"Venue Specific Team Hotel","Venue Specific Team Hotel 35":"Venue Specific Team Hotel","Venue Specific Team Hotel 36":"Venue Specific Team Hotel","Venue Specific Team Hotel 4":"Venue Specific Team Hotel","Venue Specific Team Hotel 5":"Venue Specific Team Hotel","Venue Specific Team Hotel 6":"Venue Specific Team Hotel","Venue Specific Team Hotel 7":"Venue Specific Team Hotel","Venue Specific Team Hotel 8":"Venue Specific Team Hotel","Venue Specific Team Hotel 9":"Venue Specific Team Hotel","Venue Specific Training Site 30":"Venue Specific Training Site","Venue Specific Training Site 31":"Venue Specific Training Site","Venue Specific Training Site 32":"Venue Specific Training Site","Venue Specific Training Site 7":"FWC26 Venue Specific Training Sites","Venue-Specific Team Hotel 1":"Venue Specific Team Hotel","Virginia Mason Athletic Centre":"FCWC25 Team Base Camp Training Site","Wake Forest University TBCTS":"FWC26 Team Base Camp Training Site","Waldorf Astoria New York VIPH":"FIFA VIP Hotel","Washington DC Stadium":"Stadium","Washington Dulles International Airport":"Airport","Waters Sportsplex":"FCWC25 Team Base Camp Training Site","Waters Sportsplex TBCTS":"FWC26 Team Base Camp Training Site","WeWork Office Coral Gables":"Uniform Distribution Centre","Westmont College":"FCWC25 Team Base Camp Training Site","Westmont College TBCTS":"FWC26 Team Base Camp Training Site","Wide World of Sports Complex":"FCWC25 Team Base Camp Training Site","William P. Hobby Airport":"FWC26 Airport","Xavier University Cintas Center":"Uniform Distribution Centre"};
+
 function LM_getVenueTypeFromMap(name){return LM_VENUE_TYPE_MAP[name]||''}
 
 // Persistence helpers
@@ -4055,9 +4047,8 @@ function showPalletCfg(){
 function _renderPalletCfg(){
   const isV=ROLE==='viewer';
   const cfg=LM_palletCfg[_pcVt]||{mode:'asm',overrides:new Set()};
-  const isStaIbc=_pcVt==='Stadium'||_pcVt==='International Broadcast Centre';
-  // Effective base mode: Stadium/IBC use config mode; others use country default
-  const effBase=isStaIbc?cfg.mode:(LM_COUNTRY_DEFAULTS[_pcCountry]||'dis');
+  // All venue types use country defaults as base mode
+  const effBase=LM_COUNTRY_DEFAULTS[_pcCountry]||'dis';
   // Collect all SKUs that have pallet data in NOM
   const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0)).sort((a,b)=>a[0]<b[0]?-1:1);
   // Get unique sources
@@ -4071,8 +4062,8 @@ function _renderPalletCfg(){
     const sku=r["Nomenclature"]||"";if(!sku)continue;
     const vt=LM_vtMap[v]||LM_VENUE_TYPE_MAP[v]||'';
     if(vt!==_pcVt)continue;
-    // Country filter (not for Stadium/IBC which are same across countries)
-    if(!isStaIbc){
+    // Country filter for all venue types
+    {
       const cl=r["Venue cluster"]||'';
       const country=LM_venueCountry(cl);
       if(country!==_pcCountry)continue;
@@ -4098,9 +4089,7 @@ function _renderPalletCfg(){
   const overrideCount=cfg.overrides.size;
 
   const countryLabel={USA:'🇺🇸 USA',CAN:'🇨🇦 CAN',MEX:'🇲🇽 MEX'};
-  const countryNote=isStaIbc
-    ?'<span style="color:var(--pu);font-weight:600">Same in all countries</span>'
-    :`Default: ${Object.entries(LM_COUNTRY_DEFAULTS).map(([c,m])=>`<span style="font-weight:600;color:${c===_pcCountry?'var(--tp)':'var(--tt)'}">${countryLabel[c]} ${m==='dis'?'Dis':'Asm'}</span>`).join(' · ')}`;
+  const countryNote=`Default: ${Object.entries(LM_COUNTRY_DEFAULTS).map(([c,m])=>`<span style="font-weight:600;color:${c===_pcCountry?'var(--tp)':'var(--tt)'}">${countryLabel[c]} ${m==='dis'?'Dis':'Asm'}</span>`).join(' · ')}`;
 
   let h=`<div class="mo" onclick="if(event.target===this)document.getElementById('mr').innerHTML=''"><div class="mdi" style="max-width:1050px">
   <div class="mdh"><div><h3>📐 Pallet Mode Configuration</h3><div class="mds">Choose Assembled or Disassembled pallet dimensions per venue type and country</div></div><button class="mdc" onclick="document.getElementById('mr').innerHTML=''">✕</button></div>
@@ -4108,10 +4097,10 @@ function _renderPalletCfg(){
   <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end">
     <div style="flex:1;min-width:200px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Venue Type</label>
     <select onchange="_pcVt=this.value;_pcSrc='';_pcSearch='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600">
-    ${LM_VENUE_TYPE_LIST.map(vt=>{const c=LM_palletCfg[vt]||{mode:'asm'};const isSI=vt==='Stadium'||vt==='International Broadcast Centre';return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt}${isSI?' ★':''}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' (+'+LM_palletCfg[vt].overrides.size+')':''}</option>`}).join('')}
+    ${LM_VENUE_TYPE_LIST.map(vt=>{return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' (+'+LM_palletCfg[vt].overrides.size+')':''}</option>`}).join('')}
     </select></div>
     <div style="min-width:100px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Preview Country</label>
-    <select onchange="_pcCountry=this.value;_pcSrc='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600"${isStaIbc?' disabled':''}>
+    <select onchange="_pcCountry=this.value;_pcSrc='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600">
     <option value="USA"${_pcCountry==='USA'?' selected':''}>🇺🇸 USA</option>
     <option value="CAN"${_pcCountry==='CAN'?' selected':''}>🇨🇦 CAN</option>
     <option value="MEX"${_pcCountry==='MEX'?' selected':''}>🇲🇽 MEX</option>
@@ -4135,7 +4124,7 @@ function _renderPalletCfg(){
     <span style="font-size:10px;color:var(--ts)">${countryNote}</span>
     <div style="margin-left:auto"><input type="text" placeholder="Search SKU or item name…" value="${_pcSearch.replace(/"/g,'&quot;')}" oninput="_pcSearch=this.value;_renderPalletCfg()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--bd);font-size:11px;font-family:var(--fd);width:200px;outline:none"></div>
   </div>
-  ${mpSkus.size===0?'<div class="note note-or" style="margin-bottom:10px">No Material Plan data found for <strong>'+_pcVt+'</strong>'+(isStaIbc?'':' in <strong>'+_pcCountry+'</strong>')+'. Upload a Material Plan to see venue-specific nomenclatures.</div>':''}
+  ${mpSkus.size===0?'<div class="note note-or" style="margin-bottom:10px">No Material Plan data found for <strong>'+_pcVt+'</strong> in <strong>'+_pcCountry+'</strong>. Upload a Material Plan to see venue-specific nomenclatures.</div>':''}
   <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--bl);border-radius:8px">
   <table class="dtb" style="font-size:10px"><thead><tr>
   <th>SKU</th><th>Item</th><th>Source</th>
@@ -4175,29 +4164,21 @@ function _pcToggle(sku){
 }
 function _pcSetAll(mode){
   const cfg=LM_palletCfg[_pcVt];if(!cfg)return;
-  const isStaIbc=_pcVt==='Stadium'||_pcVt==='International Broadcast Centre';
-  const effBase=isStaIbc?cfg.mode:(LM_COUNTRY_DEFAULTS[_pcCountry]||'dis');
+  const effBase=LM_COUNTRY_DEFAULTS[_pcCountry]||'dis';
   const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0));
   // Build Material Plan SKU set for current venue type + country
   const mpSkus=new Set();
   for(const r of RW){const v=r["Venue"];if(!v)continue;const sku=r["Nomenclature"]||"";if(!sku)continue;
     const vt=LM_vtMap[v]||LM_VENUE_TYPE_MAP[v]||'';if(vt!==_pcVt)continue;
-    if(!isStaIbc){const cl=r["Venue cluster"]||'';if(LM_venueCountry(cl)!==_pcCountry)continue}
+    const cl=r["Venue cluster"]||'';if(LM_venueCountry(cl)!==_pcCountry)continue;
     if(NOM[sku]&&(NOM[sku].pq>0||NOM[sku].pqA>0))mpSkus.add(sku)}
   let filtered=allSkus.filter(([k])=>mpSkus.has(k));
   if(_pcSrc)filtered=filtered.filter(([k,n])=>(n.src||'')===_pcSrc);
-  if(!_pcSrc&&isStaIbc&&mpSkus.size===0){
-    // Stadium/IBC full set — change config mode and clear overrides (fallback if no MP data)
-    cfg.mode=mode==='asm'?'asm':'dis';cfg.overrides=new Set();
-  } else if(!_pcSrc&&isStaIbc&&filtered.length===allSkus.filter(([k])=>mpSkus.has(k)).length){
-    cfg.mode=mode==='asm'?'asm':'dis';cfg.overrides=new Set();
-  } else {
-    for(const[sku]of filtered){
-      const curDis=effBase==='dis'?!cfg.overrides.has(sku):cfg.overrides.has(sku);
-      const wantDis=mode==='dis';
-      if(curDis!==wantDis){
-        if(cfg.overrides.has(sku))cfg.overrides.delete(sku);else cfg.overrides.add(sku);
-      }
+  for(const[sku]of filtered){
+    const curDis=effBase==='dis'?!cfg.overrides.has(sku):cfg.overrides.has(sku);
+    const wantDis=mode==='dis';
+    if(curDis!==wantDis){
+      if(cfg.overrides.has(sku))cfg.overrides.delete(sku);else cfg.overrides.add(sku);
     }
   }
   _renderPalletCfg();LM_savePalletCfg();bV();numberAll();rVL();
@@ -4249,23 +4230,24 @@ function rVL(){
   let ls=VN.filter(v=>catFilter(v));
   if(q)ls=ls.filter(v=>v.name.toLowerCase().includes(q)||((v.cluster||'').toLowerCase().includes(q)));
 
-  // Split stadiums and non-stadiums
-  const staVenues=ls.filter(v=>isStadium(v.name));
-  const nonSta=ls.filter(v=>!isStadium(v.name));
-
-  // Group non-stadium venues by cluster
-  const groups={};nonSta.forEach(v=>{const cl=v.cluster||'Other';if(!groups[cl])groups[cl]=[];groups[cl].push(v)});
-  for(const cl in groups){groups[cl].sort((a,b)=>{const ad=a.earlyBI?a.earlyBI.getTime():Infinity;const bd=b.earlyBI?b.earlyBI.getTime():Infinity;return ad-bd})}
-  const clKeys=Object.keys(groups).sort((a,b)=>{const ea=CLUSTERS[a]?.earlyBI?.getTime()||Infinity;const eb=CLUSTERS[b]?.earlyBI?.getTime()||Infinity;return ea-eb});
   const isCanMex=vCat==='can'||vCat==='mex';
   const isUS=vCat==='us';
+
+  // In USA: split stadiums out; in CAN/MEX: stadiums stay in their clusters
+  const staVenues=isUS?ls.filter(v=>isStadium(v.name)):[];
+  const groupable=isUS?ls.filter(v=>!isStadium(v.name)):ls;
+
+  // Group venues by cluster
+  const groups={};groupable.forEach(v=>{const cl=v.cluster||'Other';if(!groups[cl])groups[cl]=[];groups[cl].push(v)});
+  for(const cl in groups){groups[cl].sort((a,b)=>{const ad=a.earlyBI?a.earlyBI.getTime():Infinity;const bd=b.earlyBI?b.earlyBI.getTime():Infinity;return ad-bd})}
+  const clKeys=Object.keys(groups).sort((a,b)=>{const ea=CLUSTERS[a]?.earlyBI?.getTime()||Infinity;const eb=CLUSTERS[b]?.earlyBI?.getTime()||Infinity;return ea-eb});
   const regionKey='__region_'+vCat;
   const regionLabel=vCat==='us'?'USA Overview':vCat==='can'?'Canada Overview':'Mexico Overview';
   const regionPlt=ls.reduce((s,v)=>s+v.ep,0);
   const regionPcs=ls.reduce((s,v)=>s+v.it,0);
   let html='';
 
-  // Region overview (for CAN/MEX, or for all — now also useful for USA)
+  // Region overview for CAN/MEX
   if(isCanMex){
     html+=`<div class="vi ${sel===regionKey?'on':''}" onclick="selRegion('${vCat}')" style="border-bottom:1px solid var(--bl)"><div class="vn" style="font-weight:700">📊 ${regionLabel}</div><div class="vm">${ls.length} venues · ${Math.round(regionPlt*10)/10} plt · ${regionPcs.toLocaleString()} pcs</div></div>`;
   }
@@ -4276,15 +4258,15 @@ function rVL(){
 
   html+=`<div style="padding:4px 14px;display:flex;gap:6px"><button class="tbtn" onclick="expAll()" style="font-size:9px;padding:2px 8px">Expand All</button><button class="tbtn" onclick="expCl={};rVL()" style="font-size:9px;padding:2px 8px">Collapse All</button></div>`;
 
-  // Stadiums group (if any stadiums in this country)
-  if(staVenues.length>0){
+  // USA only: Stadiums + IBC group
+  if(isUS&&staVenues.length>0){
     const staKey='__sta_'+vCat;
     const staExp=!!expCl[staKey];
     const staPlt=staVenues.reduce((s,v)=>s+v.ep,0);
     const staSel=sel===staKey;
     html+=`<div style="display:flex;align-items:center;border-bottom:1px solid var(--bl);${staSel?'background:var(--ac);color:#fff':'background:#FEF8F4;color:var(--or)'};position:sticky;top:0;z-index:1">`;
     html+=`<div onclick="expCl['${staKey}']=!expCl['${staKey}']; rVL()" style="cursor:pointer;padding:6px 4px 6px 14px;font-size:12px">${staExp?'▼':'▶'}</div>`;
-    html+=`<div onclick="expCl['${staKey}']=!expCl['${staKey}']; rVL()" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">🏟️ Stadiums <span style="font-weight:400;opacity:.7">(${staVenues.length})</span></div>`;
+    html+=`<div onclick="expCl['${staKey}']=!expCl['${staKey}']; rVL()" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">🏟️ Stadiums + IBC <span style="font-weight:400;opacity:.7">(${staVenues.length})</span></div>`;
     html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${staSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round(staPlt*10)/10} plt</div></div>`;
     if(staExp){
       staVenues.sort((a,b)=>b.ep-a.ep);
@@ -4294,7 +4276,7 @@ function rVL(){
     }
   }
 
-  // Cluster groups (non-stadium venues)
+  // Cluster groups
   for(const cl of clKeys){
     const ci=CLUSTERS[cl];const ebi=ci?.earlyBI?fS(ci.earlyBI):'';
     const isSel=selCluster===cl||sel===('__cluster_'+cl);
@@ -5223,7 +5205,7 @@ function selAll(){saveCurrentConstraints();saveSharedData();sel="";selCluster=""
 function selRegion(region){saveCurrentConstraints();saveSharedData();sel="__region_"+region;selCluster="";cv="dashboard";closeMobSb();rT();rVL();rMain()}
 function selCl(cl){saveCurrentConstraints();saveSharedData();selCluster=cl;sel=cl;expCl[cl]=true;closeMobSb();rVL();rMain()}
 function selClOv(cl){saveCurrentConstraints();saveSharedData();sel="__cluster_"+cl;selCluster="";cv="dashboard";expCl[cl]=true;closeMobSb();rT();rVL();rMain()}
-function expAll(){for(const cl in CLUSTERS)expCl[cl]=true;rVL()}
+function expAll(){for(const cl in CLUSTERS)expCl[cl]=true;expCl['__sta_us']=true;expCl['__sta_can']=true;expCl['__sta_mex']=true;rVL()}
 function sV(v){cv=v;rT();rMain()}
 
 // ── Supply Chain Network Map ──
