@@ -1327,12 +1327,12 @@ function LP_renderPlan(el){
           <div class="lp-cap-track"><div class="lp-cap-fill" style="width:${pct}%;background:${isDisp?'var(--gn)':barColor}"></div></div>
           <span class="lp-cap-lbl" style="color:${isDisp?'var(--gn)':barColor}">${pct}%</span>
         </div>
-        <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs${rateInputHtml('LP-'+t.id,t.dest,LP_STATE.maxPallets,false,'LP_render()')}</div>
+        <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs · ${t.totalPlt.toFixed(1)} plt${rateInputHtml('LP-'+t.id,t.dest,LP_STATE.maxPallets,false,'LP_render()')}</div>
         ${MI_get(MI_lpKey(t.id)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lpKey(t.id)).length} manual item${MI_get(MI_lpKey(t.id)).length>1?'s':''}</span></div>`:''}
         ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <input type="checkbox" ${checked} onchange="LP_toggleDispatch(${t.id},this.checked)">
-          <span style="flex:1">${isDisp?'✅ Dispatched':'Mark dispatched'}</span>
-          <input type="date" value="${t.date}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="LP_changeDate(${t.id},this.value)">
+          <input type="checkbox" ${checked} onclick="event.stopPropagation();LP_toggleDispatch(${t.id},this.checked)">
+          <span onclick="event.stopPropagation()" style="flex:1">${isDisp?'✅ Dispatched':'Mark dispatched'}</span>
+          <input type="date" value="${t.date}" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate(${t.id},this.value)">
         </div>`}
       </div>`;
     }
@@ -1345,11 +1345,10 @@ function LP_renderPlan(el){
 function LP_filterPlan(){filterBySearch('lpPlanSearch','#lpPlanBody','.lp-truck',{dayHdrSel:'.lp-day-hdr'})}
 
 function LP_toggleDispatch(truckId,checked){
-  if(ROLE==="viewer")return;// viewers cannot mark dispatched
+  if(ROLE==="viewer")return;
   if(checked)LP_dispatched.add(truckId);else LP_dispatched.delete(truckId);
   LP_saveToSupabase();
-  // Re-render to update visual state
-  LP_render();
+  setTimeout(()=>LP_render(),50);
 }
 
 function LP_changeDate(truckId,newDate){
@@ -1595,8 +1594,9 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   ws.getRow(3).height=2;
 
   // ROWS 4-9: Left info + Right shipment details
+  const ciTotalPcs=items.reduce((s,it)=>s+(it.qty||0),0);
   const infoLeft=[['DATE:',date],['INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['VENUE ADDRESS:',''],['VENUE CONTACT:',''],['DELIVERY DEADLINE:','']];
-  const infoRight=[['SHIPMENT DETAILS','','',''],['Total # of Pieces:','','Type of Packaging:','Pallets'],['Total Gross Weight:','','',''],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Port of Departure:','','Port of Arrival:',''],['Mode of Transport:','Road','','']];
+  const infoRight=[['SHIPMENT DETAILS','','',''],['Total # of Pieces:',ciTotalPcs.toLocaleString(),'Type of Packaging:','Pallets'],['Total Gross Weight:','','Total Pallets:',Math.round(totalPlt*10)/10],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Port of Departure:','','Port of Arrival:',''],['Mode of Transport:','Road','','']];
 
   for(let i=0;i<6;i++){
     const rn=4+i;ws.getRow(rn).height=20;
