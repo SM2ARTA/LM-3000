@@ -792,7 +792,8 @@ function LP_setContDate(container,newDate){
   if(!newDate){delete LP_contDateOverrides[container]}
   else{LP_contDateOverrides[container]=newDate}
   LP_applyContDateOverrides();
-  LP_regenerate();
+  LP_render();// re-render so button activates and dates update
+  LP_saveToSupabase();
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -890,16 +891,18 @@ function LP_render(){
 }
 
 // ── Track last-generated settings to enable Re-Generate only on change ──
-let LP_lastGenSettings={maxPallets:0,maxTrucks:0,maxDests:0,turnaround:0,ricStartDate:''};
+let LP_lastGenSettings={maxPallets:0,maxTrucks:0,maxDests:0,turnaround:0,ricStartDate:'',contDateHash:''};
+function _contDateHash(){return JSON.stringify(LP_contDateOverrides)}
 function LP_settingsChanged(){
   return LP_lastGenSettings.maxPallets!==LP_STATE.maxPallets||
     LP_lastGenSettings.maxTrucks!==LP_STATE.maxTrucks||
     LP_lastGenSettings.maxDests!==LP_STATE.maxDests||
     LP_lastGenSettings.turnaround!==LP_STATE.turnaround||
-    LP_lastGenSettings.ricStartDate!==LP_STATE.ricStartDate;
+    LP_lastGenSettings.ricStartDate!==LP_STATE.ricStartDate||
+    LP_lastGenSettings.contDateHash!==_contDateHash();
 }
 function LP_snapshotSettings(){
-  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate};
+  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash()};
 }
 
 // ── Helpers ──
