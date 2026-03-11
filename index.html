@@ -1246,8 +1246,9 @@ function LP_renderPlan(el){
   const lpDispDays=dates.length;
   const lpAvgUtil=lpTotalTrucks>0?Math.round(truckList.reduce((s,t)=>s+(t.totalPlt/maxPlt)*100,0)/lpTotalTrucks):0;
   const lpPeakDay=dates.length?Math.max(...dates.map(d=>byDate[d].length)):0;
+  const lpDistCost=truckList.reduce((s,t)=>s+getDistRate(t.dest,maxPlt),0);
 
-  let html=kpiRow([
+  const lpKpis=[
     {label:'📦 Pallets',value:Math.round(lpTotalPlt).toLocaleString(),color:'var(--ac)'},
     {label:'📋 Pieces',value:lpTotalPcs.toLocaleString(),color:'#A84444'},
     {label:'🚛 Trucks',value:lpTotalTrucks,color:'var(--gn)'},
@@ -1255,7 +1256,9 @@ function LP_renderPlan(el){
     {label:'📅 Dispatch Days',value:lpDispDays,color:'var(--or)'},
     {label:'📈 Peak/Day',value:lpPeakDay,color:'var(--rd)'},
     {label:'📊 Avg Util',value:lpAvgUtil+'%',color:lpAvgUtil>80?'var(--gn)':'var(--or)'}
-  ],'fin');
+  ];
+  if(lpDistCost>0)lpKpis.push({label:'💰 Dist. Cost',value:'$'+Math.round(lpDistCost).toLocaleString(),color:'var(--pu)',sub:'FTL from Dallas'});
+  let html=kpiRow(lpKpis,'fin');
 
   // Constraints panel
   const dispCount=LP_dispatched.size;
@@ -1324,7 +1327,7 @@ function LP_renderPlan(el){
           <div class="lp-cap-track"><div class="lp-cap-fill" style="width:${pct}%;background:${isDisp?'var(--gn)':barColor}"></div></div>
           <span class="lp-cap-lbl" style="color:${isDisp?'var(--gn)':barColor}">${pct}%</span>
         </div>
-        <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs</div>
+        <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs${(()=>{const r=getDistRate(t.dest,LP_STATE.maxPallets);return r>0?' · <span style="color:var(--pu);font-weight:600">'+fmtUSD(r)+'</span>':''})()}</div>
         ${MI_get(MI_lpKey(t.id)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lpKey(t.id)).length} manual item${MI_get(MI_lpKey(t.id)).length>1?'s':''}</span></div>`:''}
         ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <input type="checkbox" ${checked} onchange="LP_toggleDispatch(${t.id},this.checked)">
@@ -2019,6 +2022,12 @@ function V26_render(){
     {label:'📋 Pieces',value:fTotalQty.toLocaleString()},
     {label:'🚛 Trucks',value:fTotalTrucks},
   ];
+  // Total distribution cost (active non-excluded trucks only, CORT excluded)
+  const fDistCost=fActiveTrucks.reduce((s,t)=>{
+    const tc=t.source==='Load Plan'?26:(LM_DEFAULT_TC[t.dest]||12);
+    return s+getDistRate(t.dest,tc);
+  },0);
+  if(fDistCost>0)v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:'FTL from Dallas'});
   if(fCortN>0)v26KpiItems.push({label:'🏷 CORT',value:fCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
   v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fDests.size});
   // Stock arrival % — unique SKUs from material plan (excl CT/STP) vs stock report
@@ -2159,7 +2168,7 @@ function V26_render(){
           <div class="lp-cap-track"><div class="lp-cap-fill" style="width:${pct}%;background:${barColor}"></div></div>
           <span class="lp-cap-lbl" style="color:${barColor}">${pct}%</span>
         </div>
-        <div style="font-size:10px;color:var(--tt);margin-top:4px">${t.items.length} SKUs · ${t.qty.toLocaleString()} pcs · 📍 ${t.destDisplay}</div>
+        <div style="font-size:10px;color:var(--tt);margin-top:4px">${t.items.length} SKUs · ${t.qty.toLocaleString()} pcs · 📍 ${t.destDisplay}${(()=>{const r=t.excluded?0:getDistRate(t.dest,t.source==='Load Plan'?26:(LM_DEFAULT_TC[t.dest]||12));return r>0?' · <span style="color:var(--pu);font-weight:600">'+fmtUSD(r)+'</span>':''})()}</div>
         ${t.excluded?'<div style="font-size:9px;color:var(--tt);margin-top:2px">🚫 Excluded</div>':''}
       </div>`;
     });
@@ -2659,6 +2668,42 @@ function LM_cleanVS(){
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
 
+// ── Distribution Rates (FTL from Dallas, USD) ──
+// From RIC Rates sheet: Dallas → destination
+const DIST_RATE_53={Toronto:5570,Vancouver:10120,Guadalajara:5400,'Mexico City':4635,Monterrey:3195,Atlanta:2730,Boston:6170,Dallas:0,Houston:1215,'Kansas City':1775,'Los Angeles':3705,Miami:4935,'New York':6080,Philadelphia:4665,'San Francisco':5340,Seattle:6825};
+const DIST_RATE_24={Toronto:5735,Vancouver:10225,Guadalajara:5735,'Mexico City':4970,Monterrey:3530,Atlanta:2650,Boston:5965,Dallas:0,Houston:815,'Kansas City':1710,'Los Angeles':4870,Miami:4450,'New York':5275,Philadelphia:4945,'San Francisco':5850,Seattle:7440};
+// Map destination/cluster/venue labels to rate cities
+const DIST_CITY_MAP=[
+  ['Dallas','DAL','DALS','Arlington','IBC','Broadcast','USA / RGS','USA / CORT','USA CENT','Carrollton','Round Rock','Austin'],
+  ['Houston','HOU','HOUS','NRG'],['Kansas City','KC','KCYS','Arrowhead','Columbus'],
+  ['Atlanta','ATL','ATLS','Charlotte','Knoxville','Nashville','Roanoke'],
+  ['Boston','BOS','SBOS','Foxborough'],
+  ['Los Angeles','LA','LSAS','Inglewood','Anaheim','Rose Bowl','San Diego','Phoenix','Salt Lake'],
+  ['Miami','MIA','MIAS','Pompano','South Florida','Orlando','Tampa'],
+  ['New York','NY','NYJ','NYJS','New Jersey','MetLife','North Bergen','USA EAST'],
+  ['Philadelphia','PHL','PHLS','Washington','Moorestown'],
+  ['San Francisco','SF','SFBS','Santa Clara','Hayward'],
+  ['Seattle','SEA','SEAS','Kent','Portland'],
+  ['Toronto','TOR','TORS'],['Vancouver','VAN','BCPS'],
+  ['Guadalajara','GDL','GDLS'],['Mexico City','CDMX','CDMS','Azteca'],['Monterrey','MTY','MTYS'],
+];
+function getDistCity(label){
+  if(!label)return null;
+  const u=label.toUpperCase();
+  for(const arr of DIST_CITY_MAP){
+    const city=arr[0];
+    for(let i=1;i<arr.length;i++){if(u.includes(arr[i].toUpperCase()))return city}
+    if(u.includes(city.toUpperCase()))return city;
+  }
+  return null;
+}
+function getDistRate(dest,tCap){
+  const city=getDistCity(dest);
+  if(!city)return 0;
+  return(tCap&&tCap<=12)?DIST_RATE_24[city]||0:DIST_RATE_53[city]||0;
+}
+function fmtUSD(v){return v>=1000?'$'+Math.round(v).toLocaleString():'$'+Math.round(v)}
+
 function det(wb){
   // Scan all sheets in the workbook for type detection
   const results=[];
@@ -2855,7 +2900,7 @@ function renderTruckCard(t,opts){
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
       <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty</div>
       ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
-      <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}</div>
+      <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}${(()=>{const r=isExcl?0:getDistRate(t.dest||opts.displayName||'',tCap);return r>0?' · <span style="font-weight:700">'+fmtUSD(r)+'</span>':''})()}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">✅ Dispatched</span></div>':''}
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
