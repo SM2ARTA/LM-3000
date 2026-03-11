@@ -671,7 +671,8 @@ function LP_buildLoadPlan(demand,arrivals,cfg){
   const destAllowedOnDate=(dest,date)=>isRic(dest)?date>=RIC_START:true;
   if(!demand.length||!arrivals.length)return[];
   const nomMap={};
-  for(const d of demand)if(!nomMap[d.sku])nomMap[d.sku]={palletQty:d.palletQty||0,palletSpc:d.palletSpc||0,name:d.name};
+  const _cfgNom=cfg?.nomenclature||{};
+  for(const d of demand){if(!nomMap[d.sku]){const cn=_cfgNom[d.sku];nomMap[d.sku]={palletQty:cn?.palletQty||d.palletQty||0,palletSpc:cn?.palletSpc||d.palletSpc||0,name:cn?.name||d.name}}}
   const upp=sku=>{const m=nomMap[sku]||{};return(m.palletQty>0&&m.palletSpc>0)?m.palletQty/m.palletSpc:0};
   const u2spc=(sku,qty)=>{const u=upp(sku);return u>0?qty/u:0};
   const floorPallets=(sku,qty)=>{const pq=nomMap[sku]?.palletQty||0;const ps=nomMap[sku]?.palletSpc||0;if(!pq||!ps)return 0;return Math.floor(qty/pq)*ps};
@@ -809,6 +810,11 @@ function LP_applyPalletOverrides(){
       n.palletQty=n._origPalletQty;n.palletSpc=n._origPalletSpc;
       delete n._origPalletQty;delete n._origPalletSpc;
     }
+  }
+  // Sync materialPlan rows so demand display and build engine stay consistent
+  for(const d of (LP_STATE.materialPlan||[])){
+    const n=LP_STATE.nomenclature[d.sku];
+    if(n){d.palletQty=n.palletQty;d.palletSpc=n.palletSpc}
   }
 }
 function LP_setPalletOvr(sku,field,val){
