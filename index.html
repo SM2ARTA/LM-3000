@@ -4009,9 +4009,10 @@ function LM_venueCountry(cluster){
 
 function LM_getEffPallet(sku,venueType,country){
   const nm=NOM[sku];if(!nm)return{pq:0,ps:0};
+  const isStaIbc=venueType==='Stadium'||venueType==='International Broadcast Centre';
   const cfg=LM_palletCfg[venueType];
-  // All venue types use country defaults as base mode
-  const baseMode=LM_COUNTRY_DEFAULTS[country||'USA']||'dis';
+  // Stadium/IBC use their own config mode; others use country default
+  const baseMode=isStaIbc?(cfg?.mode||'dis'):(LM_COUNTRY_DEFAULTS[country||'USA']||'dis');
   // Apply venue type overrides on top of base mode
   const isOverride=cfg?cfg.overrides.has(sku):false;
   const useDis=baseMode==='dis'?!isOverride:isOverride;
@@ -4055,6 +4056,9 @@ async function LM_loadPalletCfg(){
 // ── Pallet Config Modal UI ──
 let _pcVt='Stadium';let _pcSrc='';let _pcCountry='USA';let _pcSearch='';
 function showPalletCfg(){
+  // Auto-select first venue type present in Material Plan
+  const availableVTs=LM_VENUE_TYPE_LIST.filter(vt=>LM_vtSkuMap[vt]);
+  if(availableVTs.length>0&&!LM_vtSkuMap[_pcVt])_pcVt=availableVTs[0];
   _pcVt=_pcVt||LM_VENUE_TYPE_LIST[LM_VENUE_TYPE_LIST.indexOf('Stadium')]||LM_VENUE_TYPE_LIST[0];
   _renderPalletCfg();
 }
@@ -4103,7 +4107,7 @@ function _renderPalletCfg(){
   <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end">
     <div style="flex:1;min-width:200px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Venue Type</label>
     <select onchange="_pcVt=this.value;_pcSrc='';_pcSearch='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600">
-    ${LM_VENUE_TYPE_LIST.map(vt=>{const isSI=vt==='Stadium'||vt==='International Broadcast Centre';return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt}${isSI?' ★':''}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' (+'+LM_palletCfg[vt].overrides.size+')':''}</option>`}).join('')}
+    ${(Object.keys(LM_vtSkuMap).length>0?LM_VENUE_TYPE_LIST.filter(vt=>LM_vtSkuMap[vt]):LM_VENUE_TYPE_LIST).map(vt=>{const isSI=vt==='Stadium'||vt==='International Broadcast Centre';return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt}${isSI?' ★':''}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' (+'+LM_palletCfg[vt].overrides.size+')':''}</option>`}).join('')}
     </select></div>
     <div style="min-width:100px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Preview Country</label>
     <select onchange="_pcCountry=this.value;_pcSrc='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600"${isStaIbc?' disabled':''}>
