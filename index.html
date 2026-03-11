@@ -2169,7 +2169,7 @@ function V26_render(){
           <div class="lp-cap-track"><div class="lp-cap-fill" style="width:${pct}%;background:${barColor}"></div></div>
           <span class="lp-cap-lbl" style="color:${barColor}">${pct}%</span>
         </div>
-        <div style="font-size:10px;color:var(--tt);margin-top:4px">${t.items.length} SKUs · ${t.qty.toLocaleString()} pcs · 📍 ${t.destDisplay}${(()=>{if(t.excluded)return'';const isLM=t.source==='Last Mile';const tc=isLM?(LM_DEFAULT_TC[t.dest]||12):26;const r=getEffRate(t.id,t.dest,tc,isLM);return r>0?' · <span style="color:var(--pu);font-weight:600">'+fmtUSD(r)+'</span>':''})()}</div>
+        <div style="font-size:10px;color:var(--tt);margin-top:4px">${t.items.length} SKUs · ${t.qty.toLocaleString()} pcs · 📍 ${t.destDisplay}${(()=>{if(t.excluded)return'';const isLM=t.source==='Last Mile';const tc=isLM?(LM_DEFAULT_TC[t.dest]||12):26;const r=getEffRate(t.id,t.dest,tc,isLM);return' · <span style="color:var(--pu);font-weight:600">'+fmtUSD(r)+'</span>'})()}</div>
         ${t.excluded?'<div style="font-size:9px;color:var(--tt);margin-top:2px">🚫 Excluded</div>':''}
       </div>`;
     });
@@ -2742,7 +2742,6 @@ function rateInputHtml(truckId,dest,tCap,isLM,rerenderFn){
   const defR=getDistRate(dest,tCap,isLM);
   const effR=getEffRate(truckId,dest,tCap,isLM);
   const isOvr=DIST_OVERRIDES[truckId]!==undefined;
-  if(defR<=0&&!isOvr)return'';
   const tid=truckId.replace(/'/g,"\\'");
   return` <span onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:2px"><span style="color:var(--pu)">💰</span><input type="number" value="${effR}" style="width:55px;padding:1px 3px;border:1px solid ${isOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;font-family:var(--fm);color:var(--pu);font-weight:600;${isOvr?'background:var(--ps)':''}" onchange="setRateOverride('${tid}',this.value);${rerenderFn}">${isOvr?`<span onclick="setRateOverride('${tid}',NaN);${rerenderFn}" style="color:var(--rd);cursor:pointer;font-size:11px" title="Reset">✕</span>`:''}</span>`;
 }
