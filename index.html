@@ -3803,6 +3803,7 @@ function binPack(items,cap){
 function bV(){const a={};const clMap={};// venue -> cluster
 const vcMap={};// venue -> venue code (parsed from Material Plan "Venue code" column)
 const vtMapLocal={};// venue -> venue type
+const _vtSkuMap={};// venueType -> country -> Set(sku)
 for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(r["Venue cluster"])clMap[v]=r["Venue cluster"];
   const vc=String(r["Venue code"]||"").trim().toUpperCase();
@@ -3818,12 +3819,24 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   const nm=NOM[s];const ppu=nm?.ppu||1;const q=Math.ceil(_rawQ/ppu);
   const vt=vtMapLocal[v]||'';
   const _country=LM_venueCountry(clMap[v]);
+  // Track SKU per venue type + country for pallet config filtering
+  if(vt&&(nm.pq>0||nm.pqA>0)){
+    if(!_vtSkuMap[vt])_vtSkuMap[vt]={};
+    if(!_vtSkuMap[vt][_country])_vtSkuMap[vt][_country]=new Set();
+    _vtSkuMap[vt][_country].add(s);
+    // Stadium/IBC: also add to a special 'ALL' country key
+    if(vt==='Stadium'||vt==='International Broadcast Centre'){
+      if(!_vtSkuMap[vt]['ALL'])_vtSkuMap[vt]['ALL']=new Set();
+      _vtSkuMap[vt]['ALL'].add(s);
+    }
+  }
   const _eff=LM_getEffPallet(s,vt,_country);
   const pqUom=_eff.pq>0?(_eff.pq/ppu):0;const psVal=_eff.ps;
   if(pqUom>0&&psVal>0)a[v].ep+=(_rawQ/_eff.pq)*psVal;a[v].ln++;a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
 }
 LM_vtMap=vtMapLocal;// store globally
+LM_vtSkuMap=_vtSkuMap;// store globally for pallet config
 VN=Object.values(a).map(v=>({...v,plt:Math.round(v.ep*10)/10,cluster:clMap[v.name]||"",venueCode:vcMap[v.name]||"",vtype:vtMapLocal[v.name]||""})).sort((a,b)=>b.ep-a.ep);
 // Build cluster info
 CLUSTERS={};VN.forEach(v=>{if(v.cluster){if(!CLUSTERS[v.cluster])CLUSTERS[v.cluster]={name:v.cluster,venues:[],earlyBI:null,plt:0,pcs:0};CLUSTERS[v.cluster].venues.push(v.name);CLUSTERS[v.cluster].plt+=v.ep;CLUSTERS[v.cluster].pcs+=v.it;if(v.earlyBI&&(!CLUSTERS[v.cluster].earlyBI||v.earlyBI<CLUSTERS[v.cluster].earlyBI))CLUSTERS[v.cluster].earlyBI=v.earlyBI}});
@@ -3975,6 +3988,7 @@ const LM_VENUE_TYPE_LIST=['Accreditation Centre','Airport','Ceremonies','Event L
 const LM_DIS_SKUS_STA=new Set(['FEMHE-001-002','FEMHE-003-002','FEMHE-004-002','FNCAB-002-003','FNCHR-001-002','FNCHR-006-002','FNLCR-001-003','FNLCR-002-003','LQENQ-001-002']);
 let LM_palletCfg={};// venueType -> {mode:'asm'|'dis', overrides:Set of SKU codes that are OPPOSITE of mode}
 let LM_vtMap={};// venue name -> venue type
+let LM_vtSkuMap={};// venueType -> country -> Set(sku) — built by bV()
 
 function LM_initPalletCfg(){
   LM_palletCfg={};
@@ -4047,29 +4061,19 @@ function showPalletCfg(){
 function _renderPalletCfg(){
   const isV=ROLE==='viewer';
   const cfg=LM_palletCfg[_pcVt]||{mode:'asm',overrides:new Set()};
-  // All venue types use country defaults as base mode
-  const effBase=LM_COUNTRY_DEFAULTS[_pcCountry]||'dis';
   // Collect all SKUs that have pallet data in NOM
   const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0)).sort((a,b)=>a[0]<b[0]?-1:1);
   // Get unique sources
   const sources=[...new Set(allSkus.map(([k,n])=>n.src||'').filter(Boolean))].sort();
 
-  // ── Build set of SKUs present in Material Plan for this venue type + country ──
-  const mpSkus=new Set();
+  // ── Get SKUs from pre-built map (populated during bV()) ──
+  const isStaIbc=_pcVt==='Stadium'||_pcVt==='International Broadcast Centre';
+  // Effective base mode: Stadium/IBC use config mode; others use country default
+  const effBase=isStaIbc?cfg.mode:(LM_COUNTRY_DEFAULTS[_pcCountry]||'dis');
+  const vtEntry=LM_vtSkuMap[_pcVt]||{};
+  const mpSkus=isStaIbc?(vtEntry['ALL']||new Set()):(vtEntry[_pcCountry]||new Set());
   const mpSources=new Set();
-  for(const r of RW){
-    const v=r["Venue"];if(!v)continue;
-    const sku=r["Nomenclature"]||"";if(!sku)continue;
-    const vt=LM_vtMap[v]||LM_VENUE_TYPE_MAP[v]||'';
-    if(vt!==_pcVt)continue;
-    // Country filter for all venue types
-    {
-      const cl=r["Venue cluster"]||'';
-      const country=LM_venueCountry(cl);
-      if(country!==_pcCountry)continue;
-    }
-    if(NOM[sku]&&(NOM[sku].pq>0||NOM[sku].pqA>0)){mpSkus.add(sku);mpSources.add(NOM[sku].src||'')}
-  }
+  for(const sku of mpSkus){if(NOM[sku])mpSources.add(NOM[sku].src||'')}
   // Filter: only SKUs in Material Plan for this venue type + country
   let filtered=allSkus.filter(([k])=>mpSkus.has(k));
   // Source filter
@@ -4089,7 +4093,9 @@ function _renderPalletCfg(){
   const overrideCount=cfg.overrides.size;
 
   const countryLabel={USA:'🇺🇸 USA',CAN:'🇨🇦 CAN',MEX:'🇲🇽 MEX'};
-  const countryNote=`Default: ${Object.entries(LM_COUNTRY_DEFAULTS).map(([c,m])=>`<span style="font-weight:600;color:${c===_pcCountry?'var(--tp)':'var(--tt)'}">${countryLabel[c]} ${m==='dis'?'Dis':'Asm'}</span>`).join(' · ')}`;
+  const countryNote=isStaIbc
+    ?'<span style="color:var(--pu);font-weight:600">Same in all countries</span>'
+    :`Default: ${Object.entries(LM_COUNTRY_DEFAULTS).map(([c,m])=>`<span style="font-weight:600;color:${c===_pcCountry?'var(--tp)':'var(--tt)'}">${countryLabel[c]} ${m==='dis'?'Dis':'Asm'}</span>`).join(' · ')}`;
 
   let h=`<div class="mo" onclick="if(event.target===this)document.getElementById('mr').innerHTML=''"><div class="mdi" style="max-width:1050px">
   <div class="mdh"><div><h3>📐 Pallet Mode Configuration</h3><div class="mds">Choose Assembled or Disassembled pallet dimensions per venue type and country</div></div><button class="mdc" onclick="document.getElementById('mr').innerHTML=''">✕</button></div>
@@ -4097,10 +4103,10 @@ function _renderPalletCfg(){
   <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end">
     <div style="flex:1;min-width:200px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Venue Type</label>
     <select onchange="_pcVt=this.value;_pcSrc='';_pcSearch='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600">
-    ${LM_VENUE_TYPE_LIST.map(vt=>{return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' (+'+LM_palletCfg[vt].overrides.size+')':''}</option>`}).join('')}
+    ${LM_VENUE_TYPE_LIST.map(vt=>{const isSI=vt==='Stadium'||vt==='International Broadcast Centre';return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt}${isSI?' ★':''}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' (+'+LM_palletCfg[vt].overrides.size+')':''}</option>`}).join('')}
     </select></div>
     <div style="min-width:100px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Preview Country</label>
-    <select onchange="_pcCountry=this.value;_pcSrc='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600">
+    <select onchange="_pcCountry=this.value;_pcSrc='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600"${isStaIbc?' disabled':''}>
     <option value="USA"${_pcCountry==='USA'?' selected':''}>🇺🇸 USA</option>
     <option value="CAN"${_pcCountry==='CAN'?' selected':''}>🇨🇦 CAN</option>
     <option value="MEX"${_pcCountry==='MEX'?' selected':''}>🇲🇽 MEX</option>
@@ -4124,7 +4130,7 @@ function _renderPalletCfg(){
     <span style="font-size:10px;color:var(--ts)">${countryNote}</span>
     <div style="margin-left:auto"><input type="text" placeholder="Search SKU or item name…" value="${_pcSearch.replace(/"/g,'&quot;')}" oninput="_pcSearch=this.value;_renderPalletCfg()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--bd);font-size:11px;font-family:var(--fd);width:200px;outline:none"></div>
   </div>
-  ${mpSkus.size===0?'<div class="note note-or" style="margin-bottom:10px">No Material Plan data found for <strong>'+_pcVt+'</strong> in <strong>'+_pcCountry+'</strong>. Upload a Material Plan to see venue-specific nomenclatures.</div>':''}
+  ${mpSkus.size===0?'<div class="note note-or" style="margin-bottom:10px">No Material Plan data found for <strong>'+_pcVt+'</strong>'+(isStaIbc?'':' in <strong>'+_pcCountry+'</strong>')+'. Upload a Material Plan to see venue-specific nomenclatures.</div>':''}
   <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--bl);border-radius:8px">
   <table class="dtb" style="font-size:10px"><thead><tr>
   <th>SKU</th><th>Item</th><th>Source</th>
@@ -4164,21 +4170,24 @@ function _pcToggle(sku){
 }
 function _pcSetAll(mode){
   const cfg=LM_palletCfg[_pcVt];if(!cfg)return;
-  const effBase=LM_COUNTRY_DEFAULTS[_pcCountry]||'dis';
+  const isStaIbc=_pcVt==='Stadium'||_pcVt==='International Broadcast Centre';
+  const effBase=isStaIbc?cfg.mode:(LM_COUNTRY_DEFAULTS[_pcCountry]||'dis');
   const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0));
-  // Build Material Plan SKU set for current venue type + country
-  const mpSkus=new Set();
-  for(const r of RW){const v=r["Venue"];if(!v)continue;const sku=r["Nomenclature"]||"";if(!sku)continue;
-    const vt=LM_vtMap[v]||LM_VENUE_TYPE_MAP[v]||'';if(vt!==_pcVt)continue;
-    const cl=r["Venue cluster"]||'';if(LM_venueCountry(cl)!==_pcCountry)continue;
-    if(NOM[sku]&&(NOM[sku].pq>0||NOM[sku].pqA>0))mpSkus.add(sku)}
+  // Use pre-built map
+  const vtEntry=LM_vtSkuMap[_pcVt]||{};
+  const mpSkus=isStaIbc?(vtEntry['ALL']||new Set()):(vtEntry[_pcCountry]||new Set());
   let filtered=allSkus.filter(([k])=>mpSkus.has(k));
   if(_pcSrc)filtered=filtered.filter(([k,n])=>(n.src||'')===_pcSrc);
-  for(const[sku]of filtered){
-    const curDis=effBase==='dis'?!cfg.overrides.has(sku):cfg.overrides.has(sku);
-    const wantDis=mode==='dis';
-    if(curDis!==wantDis){
-      if(cfg.overrides.has(sku))cfg.overrides.delete(sku);else cfg.overrides.add(sku);
+  if(!_pcSrc&&isStaIbc){
+    // Stadium/IBC full set — change config mode and clear overrides
+    cfg.mode=mode==='asm'?'asm':'dis';cfg.overrides=new Set();
+  } else {
+    for(const[sku]of filtered){
+      const curDis=effBase==='dis'?!cfg.overrides.has(sku):cfg.overrides.has(sku);
+      const wantDis=mode==='dis';
+      if(curDis!==wantDis){
+        if(cfg.overrides.has(sku))cfg.overrides.delete(sku);else cfg.overrides.add(sku);
+      }
     }
   }
   _renderPalletCfg();LM_savePalletCfg();bV();numberAll();rVL();
@@ -5546,7 +5555,7 @@ function doSystemReset(){
   document.getElementById("LP").classList.remove("vis");
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};
   STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();
@@ -5704,7 +5713,7 @@ function doResetLM(){
   if(SB){
     SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
   document.getElementById("D").classList.add("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.remove("vis");
