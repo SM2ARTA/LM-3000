@@ -2398,7 +2398,7 @@ function V26_export(){
 
 
 let NOM={},RW=[],VN=[],sel="",selCluster="",cv="dashboard",uf=[],VS={},CLUSTERS={};
-let vCat="stadiums";// "stadiums","us","can","mex"
+let vCat="us";// "us","can","mex"
 let expCl={};// cluster name -> true if expanded
 let ROLE="";// "admin" or "viewer"
 let curMod="v26";// "v26" = Vision 2026, "lm" = Last Mile, "lp" = Load Plan
@@ -4047,7 +4047,7 @@ async function LM_loadPalletCfg(){
 }
 
 // ── Pallet Config Modal UI ──
-let _pcVt='Stadium';let _pcSrc='';let _pcCountry='USA';
+let _pcVt='Stadium';let _pcSrc='';let _pcCountry='USA';let _pcSearch='';
 function showPalletCfg(){
   _pcVt=_pcVt||LM_VENUE_TYPE_LIST[LM_VENUE_TYPE_LIST.indexOf('Stadium')]||LM_VENUE_TYPE_LIST[0];
   _renderPalletCfg();
@@ -4062,7 +4062,35 @@ function _renderPalletCfg(){
   const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0)).sort((a,b)=>a[0]<b[0]?-1:1);
   // Get unique sources
   const sources=[...new Set(allSkus.map(([k,n])=>n.src||'').filter(Boolean))].sort();
-  const filtered=_pcSrc?allSkus.filter(([k,n])=>(n.src||'')===_pcSrc):allSkus;
+
+  // ── Build set of SKUs present in Material Plan for this venue type + country ──
+  const mpSkus=new Set();
+  const mpSources=new Set();
+  for(const r of RW){
+    const v=r["Venue"];if(!v)continue;
+    const sku=r["Nomenclature"]||"";if(!sku)continue;
+    const vt=LM_vtMap[v]||LM_VENUE_TYPE_MAP[v]||'';
+    if(vt!==_pcVt)continue;
+    // Country filter (not for Stadium/IBC which are same across countries)
+    if(!isStaIbc){
+      const cl=r["Venue cluster"]||'';
+      const country=LM_venueCountry(cl);
+      if(country!==_pcCountry)continue;
+    }
+    if(NOM[sku]&&(NOM[sku].pq>0||NOM[sku].pqA>0)){mpSkus.add(sku);mpSources.add(NOM[sku].src||'')}
+  }
+  // Filter: only SKUs in Material Plan for this venue type + country
+  let filtered=allSkus.filter(([k])=>mpSkus.has(k));
+  // Source filter
+  if(_pcSrc)filtered=filtered.filter(([k,n])=>(n.src||'')===_pcSrc);
+  // Search filter
+  if(_pcSearch){
+    const sq=_pcSearch.toLowerCase();
+    filtered=filtered.filter(([k,n])=>k.toLowerCase().includes(sq)||(n.nm||'').toLowerCase().includes(sq));
+  }
+  // Sources available for this venue type
+  const vtSources=[...mpSources].filter(Boolean).sort();
+
   // Count: isDis based on effective base + overrides
   const _isDis=sku=>{const ov=cfg.overrides.has(sku);return effBase==='dis'?!ov:ov};
   const disCount=filtered.filter(([k])=>_isDis(k)).length;
@@ -4079,18 +4107,18 @@ function _renderPalletCfg(){
   <div class="mdb" style="padding:12px 20px">
   <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end">
     <div style="flex:1;min-width:200px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Venue Type</label>
-    <select onchange="_pcVt=this.value;_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600">
+    <select onchange="_pcVt=this.value;_pcSrc='';_pcSearch='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600">
     ${LM_VENUE_TYPE_LIST.map(vt=>{const c=LM_palletCfg[vt]||{mode:'asm'};const isSI=vt==='Stadium'||vt==='International Broadcast Centre';return`<option value="${vt}"${vt===_pcVt?' selected':''}>${vt}${isSI?' ★':''}${(LM_palletCfg[vt]?.overrides?.size||0)>0?' (+'+LM_palletCfg[vt].overrides.size+')':''}</option>`}).join('')}
     </select></div>
     <div style="min-width:100px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Preview Country</label>
-    <select onchange="_pcCountry=this.value;_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600"${isStaIbc?' disabled':''}>
+    <select onchange="_pcCountry=this.value;_pcSrc='';_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);font-weight:600"${isStaIbc?' disabled':''}>
     <option value="USA"${_pcCountry==='USA'?' selected':''}>🇺🇸 USA</option>
     <option value="CAN"${_pcCountry==='CAN'?' selected':''}>🇨🇦 CAN</option>
     <option value="MEX"${_pcCountry==='MEX'?' selected':''}>🇲🇽 MEX</option>
     </select></div>
     <div style="min-width:140px"><label style="font-size:10px;color:var(--ts);font-weight:600;display:block;margin-bottom:3px">Filter by Source</label>
     <select onchange="_pcSrc=this.value;_renderPalletCfg()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd)">
-    <option value="">All Sources</option>${sources.map(s=>`<option value="${s}"${s===_pcSrc?' selected':''}>${s}</option>`).join('')}
+    <option value="">All Sources</option>${vtSources.map(s=>`<option value="${s}"${s===_pcSrc?' selected':''}>${s}</option>`).join('')}
     </select></div>
     ${isV?'':`<div style="display:flex;gap:6px">
     <button class="rbtn" onclick="_pcSetAll('asm')" style="font-size:10px;padding:4px 10px;background:var(--gs);color:var(--gn);border-color:#B8DFCA">All → Assembled</button>
@@ -4105,7 +4133,9 @@ function _renderPalletCfg(){
     ${overrideCount>0?`<span class="bg bg-pu">${overrideCount} override${overrideCount>1?'s':''}</span>`:''}
     <span class="bg bg-gy">${filtered.length} SKUs</span>
     <span style="font-size:10px;color:var(--ts)">${countryNote}</span>
+    <div style="margin-left:auto"><input type="text" placeholder="Search SKU or item name…" value="${_pcSearch.replace(/"/g,'&quot;')}" oninput="_pcSearch=this.value;_renderPalletCfg()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--bd);font-size:11px;font-family:var(--fd);width:200px;outline:none"></div>
   </div>
+  ${mpSkus.size===0?'<div class="note note-or" style="margin-bottom:10px">No Material Plan data found for <strong>'+_pcVt+'</strong>'+(isStaIbc?'':' in <strong>'+_pcCountry+'</strong>')+'. Upload a Material Plan to see venue-specific nomenclatures.</div>':''}
   <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--bl);border-radius:8px">
   <table class="dtb" style="font-size:10px"><thead><tr>
   <th>SKU</th><th>Item</th><th>Source</th>
@@ -4148,12 +4178,20 @@ function _pcSetAll(mode){
   const isStaIbc=_pcVt==='Stadium'||_pcVt==='International Broadcast Centre';
   const effBase=isStaIbc?cfg.mode:(LM_COUNTRY_DEFAULTS[_pcCountry]||'dis');
   const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0));
-  const filtered=_pcSrc?allSkus.filter(([k,n])=>(n.src||'')===_pcSrc):allSkus;
-  if(!_pcSrc&&isStaIbc){
-    // Stadium/IBC full set — change config mode and clear overrides
+  // Build Material Plan SKU set for current venue type + country
+  const mpSkus=new Set();
+  for(const r of RW){const v=r["Venue"];if(!v)continue;const sku=r["Nomenclature"]||"";if(!sku)continue;
+    const vt=LM_vtMap[v]||LM_VENUE_TYPE_MAP[v]||'';if(vt!==_pcVt)continue;
+    if(!isStaIbc){const cl=r["Venue cluster"]||'';if(LM_venueCountry(cl)!==_pcCountry)continue}
+    if(NOM[sku]&&(NOM[sku].pq>0||NOM[sku].pqA>0))mpSkus.add(sku)}
+  let filtered=allSkus.filter(([k])=>mpSkus.has(k));
+  if(_pcSrc)filtered=filtered.filter(([k,n])=>(n.src||'')===_pcSrc);
+  if(!_pcSrc&&isStaIbc&&mpSkus.size===0){
+    // Stadium/IBC full set — change config mode and clear overrides (fallback if no MP data)
+    cfg.mode=mode==='asm'?'asm':'dis';cfg.overrides=new Set();
+  } else if(!_pcSrc&&isStaIbc&&filtered.length===allSkus.filter(([k])=>mpSkus.has(k)).length){
     cfg.mode=mode==='asm'?'asm':'dis';cfg.overrides=new Set();
   } else {
-    // Filtered, or non-STA/IBC (overrides only, base comes from country)
     for(const[sku]of filtered){
       const curDis=effBase==='dis'?!cfg.overrides.has(sku):cfg.overrides.has(sku);
       const wantDis=mode==='dis';
@@ -4189,21 +4227,19 @@ function clDisp(raw){
   return s;
 }
 function catFilter(v){
-  if(vCat==='stadiums')return isStadium(v.name);
-  if(vCat==='us')return !isStadium(v.name)&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster);
+  if(vCat==='us')return !vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster);
   if(vCat==='can')return vcIsCAN(v.cluster);
   if(vCat==='mex')return vcIsMEX(v.cluster);
   return false;
 }
 function rVTabs(){
-  const nS=VN.filter(v=>isStadium(v.name)).length;
-  const nUS=VN.filter(v=>!isStadium(v.name)&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).length;
+  const nUS=VN.filter(v=>!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).length;
   const nCAN=VN.filter(v=>vcIsCAN(v.cluster)).length;
   const nMEX=VN.filter(v=>vcIsMEX(v.cluster)).length;
   document.getElementById("vtabs").innerHTML=
-    ['stadiums','us','can','mex'].map(c=>{
-      const n=c==='stadiums'?nS:c==='us'?nUS:c==='can'?nCAN:nMEX;
-      const l=c==='stadiums'?'Stadiums':c==='us'?'USA':c.toUpperCase();
+    ['us','can','mex'].map(c=>{
+      const n=c==='us'?nUS:c==='can'?nCAN:nMEX;
+      const l=c==='us'?'USA':c.toUpperCase();
       return`<button class="tbtn ${vCat===c?'on':''}" onclick="vCat='${c}';rVL()" style="flex:1;font-size:9px;padding:4px 2px">${l} (${n})</button>`;
     }).join('');
 }
@@ -4213,52 +4249,73 @@ function rVL(){
   let ls=VN.filter(v=>catFilter(v));
   if(q)ls=ls.filter(v=>v.name.toLowerCase().includes(q)||((v.cluster||'').toLowerCase().includes(q)));
 
-  if(vCat==='stadiums'){
-    const allItem=`<div class="vi ${!sel?'on':''}" onclick="selAll()" style="border-bottom:1px solid var(--bl)"><div class="vn" style="font-weight:700">📊 All Venues</div><div class="vm">Dashboard overview</div></div>`;
-    document.getElementById("vl").innerHTML=allItem+ls.map(v=>`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm">${v.plt} plt · ${v.ln} ln</div></div>`).join("");
-  } else {
-    const groups={};ls.forEach(v=>{const cl=v.cluster||'Other';if(!groups[cl])groups[cl]=[];groups[cl].push(v)});
-    // Sort venues within each cluster by earliest bump-in date
-    for(const cl in groups){groups[cl].sort((a,b)=>{const ad=a.earlyBI?a.earlyBI.getTime():Infinity;const bd=b.earlyBI?b.earlyBI.getTime():Infinity;return ad-bd})}
-    const clKeys=Object.keys(groups).sort((a,b)=>{const ea=CLUSTERS[a]?.earlyBI?.getTime()||Infinity;const eb=CLUSTERS[b]?.earlyBI?.getTime()||Infinity;return ea-eb});
-    const allExp=clKeys.every(cl=>expCl[cl]);
-    const isCanMex=vCat==='can'||vCat==='mex';
-    const regionKey='__region_'+vCat;
-    const regionLabel=vCat==='can'?'Canada Overview':'Mexico Overview';
-    const regionPlt=ls.reduce((s,v)=>s+v.ep,0);
-    const regionPcs=ls.reduce((s,v)=>s+v.it,0);
-    let html='';
-    if(isCanMex){
-      html+=`<div class="vi ${sel===regionKey?'on':''}" onclick="selRegion('${vCat}')" style="border-bottom:1px solid var(--bl)"><div class="vn" style="font-weight:700">📊 ${regionLabel}</div><div class="vm">${ls.length} venues · ${Math.round(regionPlt*10)/10} plt · ${regionPcs.toLocaleString()} pcs</div></div>`;
-    }
-    html+=`<div style="padding:4px 14px;display:flex;gap:6px"><button class="tbtn" onclick="expAll()" style="font-size:9px;padding:2px 8px">Expand All</button><button class="tbtn" onclick="expCl={};rVL()" style="font-size:9px;padding:2px 8px">Collapse All</button></div>`;
-    for(const cl of clKeys){
-      const ci=CLUSTERS[cl];const ebi=ci?.earlyBI?fS(ci.earlyBI):'';
-      const isSel=selCluster===cl||sel===('__cluster_'+cl);
-      const isExp=!!expCl[cl];
-      const isUS=vCat==='us';
-      const vCount=groups[cl].length;
-      // Cluster header
-      html+=`<div style="display:flex;align-items:center;border-bottom:1px solid var(--bl);${isSel?'background:var(--ac);color:#fff':'background:#FAFBFC;color:var(--ac)'};position:sticky;top:0;z-index:1">`;
-      // Expand/collapse toggle
-      html+=`<div onclick="expCl['${cl.replace(/'/g,"\\'")}']=!expCl['${cl.replace(/'/g,"\\'")}']; rVL()" style="cursor:pointer;padding:6px 4px 6px 14px;font-size:12px">${isExp?'▼':'▶'}</div>`;
-      // Cluster name (clickable for US as consolidated plan, clickable for CAN/MEX as overview)
-      if(isUS){
-        html+=`<div onclick="selCl('${cl.replace(/'/g,"\\'")}')" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">${clDisp(cl)} <span style="font-weight:400;opacity:.7">(${vCount})</span></div>`;
-      } else {
-        html+=`<div onclick="selClOv('${cl.replace(/'/g,"\\'")}')" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">${clDisp(cl)} <span style="font-weight:400;opacity:.7">(${vCount})</span></div>`;
-      }
-      html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${isSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round((ci?.plt||0)*10)/10} plt${ebi?' · '+ebi:''}</div></div>`;
-      // Venue list (if expanded)
-      if(isExp){
-        for(const v of groups[cl]){
-          const vbi=v.earlyBI?fS(v.earlyBI):'';
-          html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${vbi?' · BI: '+vbi:''}</div></div>`;
-        }
-      }
-    }
-    document.getElementById("vl").innerHTML=html;
+  // Split stadiums and non-stadiums
+  const staVenues=ls.filter(v=>isStadium(v.name));
+  const nonSta=ls.filter(v=>!isStadium(v.name));
+
+  // Group non-stadium venues by cluster
+  const groups={};nonSta.forEach(v=>{const cl=v.cluster||'Other';if(!groups[cl])groups[cl]=[];groups[cl].push(v)});
+  for(const cl in groups){groups[cl].sort((a,b)=>{const ad=a.earlyBI?a.earlyBI.getTime():Infinity;const bd=b.earlyBI?b.earlyBI.getTime():Infinity;return ad-bd})}
+  const clKeys=Object.keys(groups).sort((a,b)=>{const ea=CLUSTERS[a]?.earlyBI?.getTime()||Infinity;const eb=CLUSTERS[b]?.earlyBI?.getTime()||Infinity;return ea-eb});
+  const isCanMex=vCat==='can'||vCat==='mex';
+  const isUS=vCat==='us';
+  const regionKey='__region_'+vCat;
+  const regionLabel=vCat==='us'?'USA Overview':vCat==='can'?'Canada Overview':'Mexico Overview';
+  const regionPlt=ls.reduce((s,v)=>s+v.ep,0);
+  const regionPcs=ls.reduce((s,v)=>s+v.it,0);
+  let html='';
+
+  // Region overview (for CAN/MEX, or for all — now also useful for USA)
+  if(isCanMex){
+    html+=`<div class="vi ${sel===regionKey?'on':''}" onclick="selRegion('${vCat}')" style="border-bottom:1px solid var(--bl)"><div class="vn" style="font-weight:700">📊 ${regionLabel}</div><div class="vm">${ls.length} venues · ${Math.round(regionPlt*10)/10} plt · ${regionPcs.toLocaleString()} pcs</div></div>`;
   }
+  // For US, keep the "All Venues" dashboard link
+  if(isUS){
+    html+=`<div class="vi ${!sel?'on':''}" onclick="selAll()" style="border-bottom:1px solid var(--bl)"><div class="vn" style="font-weight:700">📊 All Venues</div><div class="vm">Dashboard overview</div></div>`;
+  }
+
+  html+=`<div style="padding:4px 14px;display:flex;gap:6px"><button class="tbtn" onclick="expAll()" style="font-size:9px;padding:2px 8px">Expand All</button><button class="tbtn" onclick="expCl={};rVL()" style="font-size:9px;padding:2px 8px">Collapse All</button></div>`;
+
+  // Stadiums group (if any stadiums in this country)
+  if(staVenues.length>0){
+    const staKey='__sta_'+vCat;
+    const staExp=!!expCl[staKey];
+    const staPlt=staVenues.reduce((s,v)=>s+v.ep,0);
+    const staSel=sel===staKey;
+    html+=`<div style="display:flex;align-items:center;border-bottom:1px solid var(--bl);${staSel?'background:var(--ac);color:#fff':'background:#FEF8F4;color:var(--or)'};position:sticky;top:0;z-index:1">`;
+    html+=`<div onclick="expCl['${staKey}']=!expCl['${staKey}']; rVL()" style="cursor:pointer;padding:6px 4px 6px 14px;font-size:12px">${staExp?'▼':'▶'}</div>`;
+    html+=`<div onclick="expCl['${staKey}']=!expCl['${staKey}']; rVL()" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">🏟️ Stadiums <span style="font-weight:400;opacity:.7">(${staVenues.length})</span></div>`;
+    html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${staSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round(staPlt*10)/10} plt</div></div>`;
+    if(staExp){
+      staVenues.sort((a,b)=>b.ep-a.ep);
+      for(const v of staVenues){
+        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln</div></div>`;
+      }
+    }
+  }
+
+  // Cluster groups (non-stadium venues)
+  for(const cl of clKeys){
+    const ci=CLUSTERS[cl];const ebi=ci?.earlyBI?fS(ci.earlyBI):'';
+    const isSel=selCluster===cl||sel===('__cluster_'+cl);
+    const isExp=!!expCl[cl];
+    const vCount=groups[cl].length;
+    html+=`<div style="display:flex;align-items:center;border-bottom:1px solid var(--bl);${isSel?'background:var(--ac);color:#fff':'background:#FAFBFC;color:var(--ac)'};position:sticky;top:0;z-index:1">`;
+    html+=`<div onclick="expCl['${cl.replace(/'/g,"\\'")}']=!expCl['${cl.replace(/'/g,"\\'")}']; rVL()" style="cursor:pointer;padding:6px 4px 6px 14px;font-size:12px">${isExp?'▼':'▶'}</div>`;
+    if(isUS){
+      html+=`<div onclick="selCl('${cl.replace(/'/g,"\\'")}')" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">${clDisp(cl)} <span style="font-weight:400;opacity:.7">(${vCount})</span></div>`;
+    } else {
+      html+=`<div onclick="selClOv('${cl.replace(/'/g,"\\'")}')" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">${clDisp(cl)} <span style="font-weight:400;opacity:.7">(${vCount})</span></div>`;
+    }
+    html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${isSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round((ci?.plt||0)*10)/10} plt${ebi?' · '+ebi:''}</div></div>`;
+    if(isExp){
+      for(const v of groups[cl]){
+        const vbi=v.earlyBI?fS(v.earlyBI):'';
+        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${vbi?' · BI: '+vbi:''}</div></div>`;
+      }
+    }
+  }
+  document.getElementById("vl").innerHTML=html;
   rTotals();
 }
 function rTotals(){
