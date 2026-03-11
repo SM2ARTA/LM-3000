@@ -2763,8 +2763,8 @@ function getDistCity(label){
   return null;
 }
 const DIST_LOCAL_RATE=950;// USD local distribution within city
-const DIST_LOCAL_LM=new Set(['Toronto','Vancouver','Guadalajara','Mexico City','Monterrey','New York / New Jersey Stadium','Kansas City Stadium','Houston Stadium','Dallas Stadium']);
-const DIST_LOCAL_CLUSTERS=new Set(['Dallas']);// cluster city names that should use local rate
+const DIST_LOCAL_LM=new Set(['Toronto','Vancouver','Guadalajara','Mexico City','Monterrey','New York / New Jersey Stadium','Kansas City Stadium','Houston Stadium']);
+const DIST_LOCAL_CLUSTERS=new Set([]);// cluster city names that should use local rate
 function getDistRate(dest,tCap,isLM){
   // LM: CAN/MEX venues + specific stadiums/clusters use local rate
   if(isLM){
