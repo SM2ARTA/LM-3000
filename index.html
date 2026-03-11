@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>The Master of the Load 3000</title>
+<title>The Master of the Load 3000 v10.1</title>
 <link rel="icon" type="image/svg+xml" href="Favicon.svg">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script async src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -456,13 +456,7 @@
 <div id="D" style="position:relative"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLM()" title="Reset Last Mile">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="stockReportUpload()" id="stockBtn" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">📦 Stock Report</button><input type="file" accept=".xlsx,.xls" id="stockFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><button class="rbtn" onclick="showPalletCfg()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📐 Pallets</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div id="totbar" style="display:none;padding:6px 20px;background:#F8F9FB;border-bottom:1px solid var(--bd);font-size:11px;color:var(--ts);gap:8px;flex-wrap:wrap;align-items:center"><div id="tabs" style="display:flex;gap:2px"></div></div>
 <div class="cnt"><aside class="sb">
-<div class="cns"><div class="cnst" id="cnsTitle">Venue Constraints</div>
-<div class="cgrid">
-  <div class="cf"><label>Truck capacity (plt)</label><input type="number" id="i-tc" value="26"></div>
-  <div class="cf"><label>Max trucks / day</label><input type="number" id="i-mt" value="2"></div>
-  <div class="cf"><label>Lead time (days)</label><input type="number" id="i-lt" value="0" min="0"></div>
-  <div class="cf"><label>Bump-in start</label><input type="date" id="i-bi" value="2026-05-04"></div>
-</div></div>
+<div class="cns" id="cnsPanel"></div>
 <div class="sbox"><input type="text" id="vs" placeholder="Search venues..."></div>
 <div style="display:flex;gap:2px;padding:4px 14px" id="vtabs"></div>
 <div class="vl" id="vl"></div></aside><main class="mn" id="mn"></main></div>
@@ -2626,11 +2620,6 @@ async function loadSharedData(){
 function applyRole(){
   const isV=ROLE==="viewer";
   document.querySelectorAll(".admin-only").forEach(el=>{el.style.display=isV?"none":""});
-  // Constraints: disable inputs for viewer
-  ["i-tc","i-mt","i-lt","i-bi"].forEach(id=>{const el=document.getElementById(id);if(el){el.disabled=isV;if(isV)el.style.opacity="0.6";else el.style.opacity=""}});
-  // Update constraints title
-  const ct=document.getElementById("cnsTitle");
-  if(ct)ct.innerHTML=isV?'Venue Constraints <span style="font-size:9px;color:var(--tt)">🔒 View only</span>':'Venue Constraints';
   // Hide reset for viewers
   document.querySelectorAll('.sys-reset').forEach(el=>{el.style.display=isV?'none':''});
   // Show/hide Update Files buttons for admins
@@ -2663,7 +2652,9 @@ function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 // Always wipe VS on load — all defaults are now hard-coded in LM_DEFAULT_* maps
 // VS only stores admin overrides that DIFFER from defaults (written by saveCurrentConstraints)
 function LM_cleanVS(){
+  const oldKeys=Object.keys(VS).length;
   VS={};
+  console.log('[ML3000 v10.1] LM_cleanVS: wiped '+oldKeys+' VS entries. Defaults: TC=',JSON.stringify(LM_DEFAULT_TC),' MT=',JSON.stringify(LM_DEFAULT_MT));
 }
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
@@ -4601,9 +4592,69 @@ function showHelp(){
   document.getElementById("mr").innerHTML=h;
 }
 
-function syncI(){if(!sel)return;const s=VS[sel]||{};
-document.getElementById("i-tc").value=gTC(sel);document.getElementById("i-mt").value=gMT(sel);
-document.getElementById("i-lt").value=gLT(sel);document.getElementById("i-bi").value=gBI(sel)}
+function rConstraints(){
+  const el=document.getElementById('cnsPanel');if(!el)return;
+  const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
+  const isV=ROLE==='viewer';
+  if(!key||key.startsWith('__')){
+    el.innerHTML=`<div class="cnst">Venue Constraints</div><div style="font-size:11px;color:var(--tt);padding:0 2px">Select a venue to configure</div>`;
+    return;
+  }
+  const tc=gTC(key),mt=gMT(key),lt=gLT(key),bi=gBI(key);
+  console.log('[ML3000 v10.1] rConstraints',key,': tc='+tc,'mt='+mt,'lt='+lt,'bi='+bi,'VS[key]=',JSON.stringify(VS[key]||null));
+  const defTC=LM_DEFAULT_TC[key]||26;
+  const defMT=LM_DEFAULT_MT[key]||2;
+  const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;
+  const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
+  const hasOvr=VS[key]&&Object.keys(VS[key]).length>0;
+  const dn=clDisp(key)||key;
+  const _field=(id,label,val,def,type,min)=>{
+    const isOvr=VS[key]&&VS[key][id.replace('i-','')]!==undefined;
+    const attrs=type==='date'?`type="date"`:`type="number" min="${min||0}"`;
+    return`<div class="cf"><label style="display:flex;justify-content:space-between;align-items:center">${label}<span style="font-size:8px;color:${isOvr?'var(--pu)':'var(--gn)'}">def:${type==='date'?def.slice(5):def}</span></label><input ${attrs} id="${id}" value="${val}" style="border-color:${isOvr?'var(--pu)':'var(--bd)'}${isV?';opacity:.6':''}"${isV?' disabled':''}></div>`;
+  };
+  el.innerHTML=`<div class="cnst" style="display:flex;justify-content:space-between;align-items:center"><span>${dn.length>18?dn.slice(0,16)+'…':dn}</span>${(hasOvr&&!isV)?`<button onclick="_resetVenueConstraints()" style="font-size:8px;background:none;border:1px solid var(--bd);border-radius:4px;padding:1px 5px;cursor:pointer;color:var(--tt);font-family:var(--fd)">↻ Reset</button>`:''}</div>
+  <div class="cgrid">
+    ${_field('i-tc','Truck cap (plt)',tc,defTC,'number',1)}
+    ${_field('i-mt','Max trucks/day',mt,defMT,'number',1)}
+    ${_field('i-lt','Lead time (d)',lt,defLT,'number',0)}
+    ${_field('i-bi','Bump-in',bi,defBI,'date')}
+  </div>`;
+  if(!isV){
+    ['i-tc','i-mt','i-lt','i-bi'].forEach(id=>{
+      const inp=document.getElementById(id);
+      if(inp)inp.addEventListener('change',_onConstraintChange);
+    });
+  }
+}
+function _resetVenueConstraints(){
+  const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
+  if(!key||ROLE==='viewer')return;
+  delete VS[key];
+  delete PLAN_CACHE[key];
+  numberAll();saveSharedData();rConstraints();rVL();rMain();
+}
+function _onConstraintChange(){
+  if(!sel||ROLE==='viewer')return;
+  const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
+  if(!key||key.startsWith('__'))return;
+  const tc=parseInt(document.getElementById('i-tc')?.value)||26;
+  const mt=parseInt(document.getElementById('i-mt')?.value)||2;
+  const ltVal=parseInt(document.getElementById('i-lt')?.value);const lt=isNaN(ltVal)?0:Math.max(0,ltVal);
+  const bi=document.getElementById('i-bi')?.value||'';
+  const defTC=LM_DEFAULT_TC[key]||26;const defMT=LM_DEFAULT_MT[key]||2;
+  const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
+  if(!VS[key])VS[key]={};
+  if(tc!==defTC)VS[key].tc=tc;else delete VS[key].tc;
+  if(mt!==defMT)VS[key].mt=mt;else delete VS[key].mt;
+  if(lt!==defLT)VS[key].lt=lt;else delete VS[key].lt;
+  if(bi&&bi!==defBI)VS[key].bi=bi;else delete VS[key].bi;
+  if(VS[key]&&Object.keys(VS[key]).length===0)delete VS[key];
+  const cK=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
+  delete PLAN_CACHE[cK];
+  numberAll();
+  saveSharedData();rVL();rMain();
+}
 
 function rMain(){const el=document.getElementById("mn");
 
@@ -4822,7 +4873,7 @@ if(cv==="dashboard"){
   } else {
     _dashFilter={type:'all',labels:null};
   }
-  el.innerHTML=h;rTotals();return;
+  rConstraints();el.innerHTML=h;rTotals();return;
 
 }
 
@@ -4833,7 +4884,7 @@ if(!sel||(sel&&(sel.startsWith('__region_')||sel.startsWith('__cluster_')))){
     if(VN.length>0){sel=VN[0].name;rVL()}
     else{el.innerHTML='<div class="emp">No venues available</div>';rTotals();return}
   } else {
-    el.innerHTML='<div class="emp">Select a venue or view Dashboard</div>';rTotals();return;
+    el.innerHTML='<div class="emp">Select a venue or view Dashboard</div>';rConstraints();rTotals();return;
   }
 }
 
@@ -4842,7 +4893,7 @@ const isClusterSel=selCluster&&CLUSTERS[selCluster];
 const clusterVenues=isClusterSel?CLUSTERS[selCluster].venues:null;
 const displayName=isClusterSel?clDisp(selCluster):sel;
 
-syncI();
+rConstraints();
 const cacheKey=isClusterSel?selCluster:sel;
 const P=PLAN_CACHE[cacheKey]||(()=>{const _p=isClusterSel?build(sel,clusterVenues):build(sel);PLAN_CACHE[cacheKey]=_p;return _p})();
 LP=P;
@@ -4997,27 +5048,7 @@ el.innerHTML=h;rTotals()}
 
 function closeMobSb(){const sb=document.querySelector('.sb');if(sb)sb.classList.remove('mob-open');const btn=document.querySelector('.sb-toggle');if(btn)btn.textContent='☰ Venues'}
 // Save current venue constraints from input fields (call before switching venues)
-function saveCurrentConstraints(){
-  if(!sel||ROLE==="viewer")return;
-  const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
-  if(!key||key.startsWith('__'))return;// skip region/cluster overview pseudo-selections
-  const tc=parseInt(document.getElementById("i-tc").value);
-  const mt=parseInt(document.getElementById("i-mt").value);
-  const lt=parseInt(document.getElementById("i-lt").value);
-  const bi=document.getElementById("i-bi").value;
-  if(!VS[key])VS[key]={};
-  // Only persist values that differ from hard-coded defaults (so defaults can be updated)
-  const defTC=LM_DEFAULT_TC[key]||26;
-  const defMT=LM_DEFAULT_MT[key]||2;
-  const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;
-  const defBI=LM_DEFAULT_BI[key]||"2026-05-04";
-  if(!isNaN(tc)&&tc>0&&tc!==defTC)VS[key].tc=tc; else delete VS[key].tc;
-  if(!isNaN(mt)&&mt>0&&mt!==defMT)VS[key].mt=mt; else delete VS[key].mt;
-  if(!isNaN(lt)&&lt>=0&&lt!==defLT)VS[key].lt=lt; else delete VS[key].lt;
-  if(bi&&bi!==defBI)VS[key].bi=bi; else delete VS[key].bi;
-  // Clean up empty entries
-  if(VS[key]&&Object.keys(VS[key]).length===0)delete VS[key];
-}
+function saveCurrentConstraints(){/* no-op: constraints saved immediately via _onConstraintChange */}
 function selV(n){saveCurrentConstraints();saveSharedData();sel=n;selCluster="";closeMobSb();rVL();rMain()}
 function selAll(){saveCurrentConstraints();saveSharedData();sel="";selCluster="";cv="dashboard";closeMobSb();rT();rVL();rMain()}
 function selRegion(region){saveCurrentConstraints();saveSharedData();sel="__region_"+region;selCluster="";cv="dashboard";closeMobSb();rT();rVL();rMain()}
@@ -5025,23 +5056,6 @@ function selCl(cl){saveCurrentConstraints();saveSharedData();selCluster=cl;sel=c
 function selClOv(cl){saveCurrentConstraints();saveSharedData();sel="__cluster_"+cl;selCluster="";cv="dashboard";expCl[cl]=true;closeMobSb();rT();rVL();rMain()}
 function expAll(){for(const cl in CLUSTERS)expCl[cl]=true;rVL()}
 function sV(v){cv=v;rT();rMain()}
-function saveC(){if(!sel||ROLE==="viewer")return;
-const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
-const tc=parseInt(document.getElementById("i-tc").value)||26;
-const mt=parseInt(document.getElementById("i-mt").value)||2;
-const ltVal=parseInt(document.getElementById("i-lt").value);const lt=isNaN(ltVal)?0:Math.max(0,ltVal);
-const bi=document.getElementById("i-bi").value;
-const defTC=LM_DEFAULT_TC[key]||26;const defMT=LM_DEFAULT_MT[key]||2;
-const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||"2026-05-04";
-if(tc!==defTC)vS(key,'tc',tc);else{if(VS[key])delete VS[key].tc}
-if(mt!==defMT)vS(key,'mt',mt);else{if(VS[key])delete VS[key].mt}
-if(lt!==defLT)vS(key,'lt',lt);else{if(VS[key])delete VS[key].lt}
-if(bi&&bi!==defBI)vS(key,'bi',bi);else{if(VS[key])delete VS[key].bi}
-// Invalidate cache for this venue/cluster and re-number
-const cK=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
-delete PLAN_CACHE[cK];
-numberAll();
-saveSharedData();rVL();rMain()}
 
 function exportXL(){
   const wb=XLSX.utils.book_new();
@@ -5329,15 +5343,6 @@ async function goGenerate(){
   }
 }
 document.getElementById("gb").addEventListener("click",goGenerate);
-// change = full save + rebuild trucks
-["i-tc","i-mt","i-lt","i-bi"].forEach(id=>document.getElementById(id).addEventListener("change",saveC));
-// input = lightweight save (store values without rebuild, debounced persist to Supabase)
-let _vcSaveTimer=null;
-["i-tc","i-mt","i-lt","i-bi"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{
-  saveCurrentConstraints();
-  clearTimeout(_vcSaveTimer);
-  _vcSaveTimer=setTimeout(()=>{saveSharedData()},2000);
-}));
 document.getElementById("vs").addEventListener("input",rVL);
 document.addEventListener("keydown",e=>{if(e.key==="Escape")clM()});
 document.getElementById("lu").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
