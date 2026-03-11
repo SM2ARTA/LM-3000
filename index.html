@@ -855,7 +855,9 @@ async function LP_saveToSupabase(){
       dispatched:[...LP_dispatched],
       contDateOverrides:LP_contDateOverrides,
       lsrNumbers:LP_lsrNumbers,
-      palletOverrides:LP_palletOverrides
+      palletOverrides:LP_palletOverrides,
+      stockSkus:[...STOCK_SKUS],
+      stockReportName:STOCK_REPORT_NAME
     };
     await SB.from('shared_state').upsert({id:'lp-state',value:JSON.stringify(payload),updated_at:now});
   }catch(e){console.warn('LP save error:',e)}
@@ -882,6 +884,12 @@ async function LP_loadFromSupabase(){
     LP_contDateOverrides=p.contDateOverrides||{};
     LP_lsrNumbers=p.lsrNumbers||{};
     LP_palletOverrides=p.palletOverrides||{};
+    // Restore stock data if present in LP state (backup of fm-stock)
+    if(p.stockSkus&&p.stockSkus.length&&STOCK_SKUS.size===0){
+      STOCK_SKUS=new Set(p.stockSkus);
+      STOCK_REPORT_NAME=p.stockReportName||STOCK_REPORT_NAME||'';
+      stockUpdateBadge();
+    }
     LP_applyContDateOverrides();
     LP_applyPalletOverrides();
     LP_snapshotSettings();
@@ -2707,6 +2715,7 @@ async function saveSharedData(fullSave){
     await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:now});
     await SB.from('shared_state').upsert({id:'fm-excl',value:JSON.stringify([...LM_excluded]),updated_at:now});
     await SB.from('shared_state').upsert({id:'fm-excl-ovr',value:JSON.stringify(LM_excludeUserOvr),updated_at:now});
+    await SB.from('shared_state').upsert({id:'fm-stock',value:JSON.stringify({skus:[...STOCK_SKUS],name:STOCK_REPORT_NAME}),updated_at:now});
     // Only save heavy data (NOM, RW) on full save (initial generation / file upload)
     if(fullSave){
       await SB.from('shared_state').upsert({id:'fm-nom',value:JSON.stringify(NOM),updated_at:now});
@@ -6038,6 +6047,7 @@ function stockReportParse(file){
       STOCK_SKUS=skus;
       STOCK_REPORT_NAME=file.name;
       stockReportSave();
+      if(LP_STATE.planGenerated)LP_saveToSupabase();// persist stock in LP state too
       clM();
       stockUpdateBadge();
       // Re-render active views
@@ -6054,6 +6064,7 @@ function stockReportReset(){
   STOCK_SKUS=new Set();
   STOCK_REPORT_NAME='';
   stockReportSave();
+  if(LP_STATE.planGenerated)LP_saveToSupabase();
   clM();
   stockUpdateBadge();
   if(typeof rMain==='function')rMain();
@@ -6083,14 +6094,29 @@ async function stockReportSave(){
 async function stockReportLoad(){
   if(!SB)return;
   try{
-    const {data}=await SB.from('shared_state').select('value').eq('id','fm-stock').single();
-    if(data){
+    const {data,error}=await SB.from('shared_state').select('value').eq('id','fm-stock').single();
+    if(!error&&data){
       const parsed=JSON.parse(data.value);
-      STOCK_SKUS=new Set(parsed.skus||[]);
-      STOCK_REPORT_NAME=parsed.name||'';
-      stockUpdateBadge();
+      if(parsed.skus&&parsed.skus.length){
+        STOCK_SKUS=new Set(parsed.skus);
+        STOCK_REPORT_NAME=parsed.name||'';
+        stockUpdateBadge();
+        return;
+      }
     }
-  }catch(e){/* no stock data yet */}
+  }catch(e){console.warn('Stock load from fm-stock failed:',e)}
+  // Fallback: try loading from LP state if fm-stock failed
+  try{
+    const {data}=await SB.from('shared_state').select('value').eq('id','lp-state').single();
+    if(data){
+      const p=JSON.parse(data.value);
+      if(p.stockSkus&&p.stockSkus.length){
+        STOCK_SKUS=new Set(p.stockSkus);
+        STOCK_REPORT_NAME=p.stockReportName||'';
+        stockUpdateBadge();
+      }
+    }
+  }catch(e){/* no LP data either */}
 }
 
 // Wire up file input
