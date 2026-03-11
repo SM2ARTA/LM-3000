@@ -2500,6 +2500,7 @@ function enterApp(){
       if(!nomE&&!rwE&&nomD&&rwD){
         NOM=JSON.parse(nomD.value);RW=JSON.parse(rwD.value);
         try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
+        LM_cleanVS();
         try{const {data:exD}=await SB.from("shared_state").select("value").eq("id","fm-excl").single();if(exD)LM_excluded=new Set(JSON.parse(exD.value))}catch(e){}
         if(Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
       }
@@ -2593,6 +2594,7 @@ async function loadSharedData(){
     NOM=JSON.parse(nomD.value);
     RW=JSON.parse(rwD.value);
     try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
+    LM_cleanVS();
     try{await stockReportLoad()}catch(e){}
     try{await LM_loadDateOverrides()}catch(e){}
     try{await MI_load()}catch(e){}
@@ -2656,6 +2658,20 @@ function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt
 // Default bump-in dates per stadium (from Stadium Bump-in Schedule)
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-17","Boston Stadium":"2026-05-17","Dallas Stadium":"2026-05-16","Guadalajara Stadium":"2026-05-14","Houston Stadium":"2026-05-16","International Broadcast Centre":"2026-04-28","International Broadcast Coordination Centre":"2026-04-28","Kansas City Stadium":"2026-05-19","Los Angeles Stadium":"2026-05-15","Los Angeles - Rose Bowl Stadium":"2026-05-15","Mexico City Stadium":"2026-05-14","Miami Stadium":"2026-05-17","Monterrey Stadium":"2026-05-16","New York / New Jersey Stadium":"2026-05-16","Philadelphia Stadium":"2026-05-16","San Francisco Bay Area Stadium":"2026-05-16","Seattle Stadium":"2026-05-18","Toronto Stadium":"2026-05-15","Vancouver Stadium":"2026-05-16"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
+
+// Strip VS entries that match hard-coded defaults (migration for stale Supabase data)
+function LM_cleanVS(){
+  for(const key in VS){
+    const s=VS[key];if(!s)continue;
+    const defTC=LM_DEFAULT_TC[key]||26;const defMT=LM_DEFAULT_MT[key]||2;
+    const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||"2026-05-04";
+    if(s.tc===defTC)delete s.tc;
+    if(s.mt===defMT)delete s.mt;
+    if(s.lt===defLT)delete s.lt;
+    if(s.bi===defBI)delete s.bi;
+    if(Object.keys(s).length===0)delete VS[key];
+  }
+}
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
 
@@ -4998,10 +5014,17 @@ function saveCurrentConstraints(){
   const lt=parseInt(document.getElementById("i-lt").value);
   const bi=document.getElementById("i-bi").value;
   if(!VS[key])VS[key]={};
-  if(!isNaN(tc)&&tc>0)VS[key].tc=tc;
-  if(!isNaN(mt)&&mt>0)VS[key].mt=mt;
-  if(!isNaN(lt)&&lt>=0)VS[key].lt=lt;
-  if(bi)VS[key].bi=bi;
+  // Only persist values that differ from hard-coded defaults (so defaults can be updated)
+  const defTC=LM_DEFAULT_TC[key]||26;
+  const defMT=LM_DEFAULT_MT[key]||2;
+  const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;
+  const defBI=LM_DEFAULT_BI[key]||"2026-05-04";
+  if(!isNaN(tc)&&tc>0&&tc!==defTC)VS[key].tc=tc; else delete VS[key].tc;
+  if(!isNaN(mt)&&mt>0&&mt!==defMT)VS[key].mt=mt; else delete VS[key].mt;
+  if(!isNaN(lt)&&lt>=0&&lt!==defLT)VS[key].lt=lt; else delete VS[key].lt;
+  if(bi&&bi!==defBI)VS[key].bi=bi; else delete VS[key].bi;
+  // Clean up empty entries
+  if(VS[key]&&Object.keys(VS[key]).length===0)delete VS[key];
 }
 function selV(n){saveCurrentConstraints();saveSharedData();sel=n;selCluster="";closeMobSb();rVL();rMain()}
 function selAll(){saveCurrentConstraints();saveSharedData();sel="";selCluster="";cv="dashboard";closeMobSb();rT();rVL();rMain()}
@@ -5011,10 +5034,17 @@ function selClOv(cl){saveCurrentConstraints();saveSharedData();sel="__cluster_"+
 function expAll(){for(const cl in CLUSTERS)expCl[cl]=true;rVL()}
 function sV(v){cv=v;rT();rMain()}
 function saveC(){if(!sel||ROLE==="viewer")return;
-vS(sel,'tc',parseInt(document.getElementById("i-tc").value)||26);
-vS(sel,'mt',parseInt(document.getElementById("i-mt").value)||2);
-const ltVal=parseInt(document.getElementById("i-lt").value);vS(sel,'lt',isNaN(ltVal)?1:Math.max(0,ltVal));
-const bi=document.getElementById("i-bi").value;if(bi)vS(sel,'bi',bi);else if(VS[sel])delete VS[sel].bi;
+const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
+const tc=parseInt(document.getElementById("i-tc").value)||26;
+const mt=parseInt(document.getElementById("i-mt").value)||2;
+const ltVal=parseInt(document.getElementById("i-lt").value);const lt=isNaN(ltVal)?0:Math.max(0,ltVal);
+const bi=document.getElementById("i-bi").value;
+const defTC=LM_DEFAULT_TC[key]||26;const defMT=LM_DEFAULT_MT[key]||2;
+const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||"2026-05-04";
+if(tc!==defTC)vS(key,'tc',tc);else{if(VS[key])delete VS[key].tc}
+if(mt!==defMT)vS(key,'mt',mt);else{if(VS[key])delete VS[key].mt}
+if(lt!==defLT)vS(key,'lt',lt);else{if(VS[key])delete VS[key].lt}
+if(bi&&bi!==defBI)vS(key,'bi',bi);else{if(VS[key])delete VS[key].bi}
 // Invalidate cache for this venue/cluster and re-number
 const cK=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
 delete PLAN_CACHE[cK];
