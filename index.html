@@ -1323,7 +1323,7 @@ function LP_renderPlan(el){
           <div style="display:flex;align-items:center;gap:8px">
             <span>${isDisp?'🔒':'🚛'}</span>
             <span class="lp-truck-id">LP-${t.id}</span>
-            ${lsr?`<span class="mono" style="font-size:9px;color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px">${lsr}</span>`:''}
+            ${lsr?`<span class="mono lsr-badge" style="font-size:9px;color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px">${lsr}</span>`:''}
             <span class="lp-dest-badge" style="background:${dc.bg};color:${dc.color};border:1px solid ${dc.border}">${clDisp(t.dest)}</span>
           </div>
           <div class="lp-truck-cap">${t.totalPlt.toFixed(1)} <span>/ ${maxPlt} plt</span></div>
@@ -1339,9 +1339,11 @@ function LP_renderPlan(el){
           <span onclick="event.stopPropagation()" style="flex:1">${isDisp?'✅ Dispatched':'Mark dispatched'}</span>
           <input type="date" value="${t.date}" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate(${t.id},this.value)">
         </div>`}
-        <div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:5px;margin-top:4px">
           <span style="font-size:10px;color:var(--tt);white-space:nowrap">LSR</span>
-          ${ROLE==="viewer"?`<span class="mono" style="font-size:10px;color:var(--tp)">${LP_lsrNumbers[t.id]||'—'}</span>`:`<input type="text" value="${(LP_lsrNumbers[t.id]||'').replace(/"/g,'&quot;')}" placeholder="LSR625-001" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 6px;border:1px solid var(--bd);border-radius:4px;color:var(--tp);width:110px;outline:none" onchange="event.stopPropagation();LP_setLsr(${t.id},this.value)">`}
+          <span id="lsr-val-${t.id}" class="mono" style="font-size:10px;color:${lsr?'var(--tp)':'var(--tt)'}">${lsr||'—'}</span>
+          <input id="lsr-inp-${t.id}" type="text" value="${lsr.replace(/"/g,'&quot;')}" placeholder="LSR625-001" onclick="event.stopPropagation()" onkeydown="event.stopPropagation();if(event.key==='Enter')LP_lsrSave(${t.id});if(event.key==='Escape'){this.style.display='none';document.getElementById('lsr-val-${t.id}').style.display='';document.getElementById('lsr-edit-${t.id}').style.display='';document.getElementById('lsr-save-${t.id}').style.display='none'}" style="display:none;font-size:10px;font-family:var(--fm);padding:2px 6px;border:1px solid var(--ac);border-radius:4px;color:var(--tp);width:105px;outline:none">
+          ${ROLE!=="viewer"?`<button id="lsr-edit-${t.id}" onclick="event.stopPropagation();LP_lsrEdit(${t.id})" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--ts)" title="Edit LSR">✏️</button><button id="lsr-save-${t.id}" onclick="event.stopPropagation();LP_lsrSave(${t.id})" style="display:none;background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--gn)" title="Save LSR">💾</button>`:''}
         </div>
       </div>`;
     }
@@ -1372,11 +1374,45 @@ function LP_changeDate(truckId,newDate){
   LP_render();
 }
 
-function LP_setLsr(truckId,val){
+function LP_lsrEdit(truckId){
   if(ROLE==="viewer")return;
-  const v=val.trim();
+  document.getElementById('lsr-val-'+truckId).style.display='none';
+  document.getElementById('lsr-edit-'+truckId).style.display='none';
+  const inp=document.getElementById('lsr-inp-'+truckId);
+  inp.style.display='';
+  inp.focus();inp.select();
+  document.getElementById('lsr-save-'+truckId).style.display='';
+}
+function LP_lsrSave(truckId){
+  if(ROLE==="viewer")return;
+  const inp=document.getElementById('lsr-inp-'+truckId);
+  const v=(inp.value||'').trim();
   if(v)LP_lsrNumbers[truckId]=v;else delete LP_lsrNumbers[truckId];
   LP_saveToSupabase();
+  // Update display inline without full re-render
+  const valEl=document.getElementById('lsr-val-'+truckId);
+  valEl.textContent=v||'—';
+  valEl.style.color=v?'var(--tp)':'var(--tt)';
+  valEl.style.display='';
+  inp.style.display='none';
+  document.getElementById('lsr-save-'+truckId).style.display='none';
+  document.getElementById('lsr-edit-'+truckId).style.display='';
+  // Update badge in header
+  const card=inp.closest('.lp-truck');
+  if(card){
+    const oldBadge=card.querySelector('.lsr-badge');
+    if(oldBadge)oldBadge.remove();
+    if(v){
+      const idSpan=card.querySelector('.lp-truck-id');
+      if(idSpan){
+        const badge=document.createElement('span');
+        badge.className='mono lsr-badge';
+        badge.style.cssText='font-size:9px;color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px;margin-left:4px';
+        badge.textContent=v;
+        idSpan.after(badge);
+      }
+    }
+  }
 }
 
 function LP_showTruckModal(truckId){
@@ -2698,7 +2734,8 @@ function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==
 
 // ── Distribution Rates (FTL from Dallas, USD) ──
 // From RIC Rates sheet: Dallas → destination
-const DIST_RATE_53={Toronto:5570,Vancouver:10120,Guadalajara:5400,'Mexico City':9375,Monterrey:3195,Atlanta:2730,Boston:6170,Dallas:0,Houston:1215,'Kansas City':1775,'Los Angeles':3705,Miami:4935,'New York':6080,Philadelphia:4665,'San Francisco':5340,Seattle:6825};
+const DIST_RATE_53={Toronto:7345,Vancouver:11896,Guadalajara:8989,'Mexico City':8224,Monterrey:5628,Atlanta:2730,Boston:6170,Dallas:0,Houston:1788,'Kansas City':2348,'Los Angeles':3705,Miami:4935,'New York':6655,Philadelphia:4665,'San Francisco':5340,Seattle:6825};
+const DIST_RATE_53_LM={Toronto:7345,Vancouver:11896,Guadalajara:8989,'Mexico City':8224,Monterrey:5628,Atlanta:3303,Boston:6475,Dallas:1573,Houston:1788,'Kansas City':2348,'Los Angeles':4279,Miami:5509,'New York':6655,Philadelphia:5239,'San Francisco':5914,Seattle:7400};
 const DIST_RATE_24={Toronto:5735,Vancouver:10225,Guadalajara:5735,'Mexico City':4970,Monterrey:3530,Atlanta:2650,Boston:5965,Dallas:0,Houston:815,'Kansas City':1710,'Los Angeles':4870,Miami:4450,'New York':5275,Philadelphia:4945,'San Francisco':5850,Seattle:7440};
 // Map destination/cluster/venue labels to rate cities
 const DIST_CITY_MAP=[
@@ -2741,6 +2778,7 @@ function getDistRate(dest,tCap,isLM){
   }
   const city=getDistCity(dest);
   if(!city)return 0;
+  if(isLM)return(tCap&&tCap<=12)?DIST_RATE_24[city]||0:DIST_RATE_53_LM[city]||0;
   return(tCap&&tCap<=12)?DIST_RATE_24[city]||0:DIST_RATE_53[city]||0;
 }
 // Rate overrides: truckId -> USD amount (persisted)
