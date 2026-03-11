@@ -761,6 +761,7 @@ let LP_TAB='plan';
 let LP_dispatched=new Set();// truck IDs marked as dispatched
 let LP_contDateOverrides={};// container name -> new arrival date (YYYY-MM-DD)
 let LP_lsrNumbers={};// truckId -> LSR number string (e.g. "LSR625-001")
+let LP_palletOverrides={};// sku -> {palletQty, palletSpc} — manual overrides for pallet dimensions
 
 function LP_applyContDateOverrides(){
   const ta=LP_STATE.turnaround||6;
@@ -790,6 +791,40 @@ function LP_setContDate(container,newDate){
   LP_saveToSupabase();
 }
 
+// ── LP Pallet Dimension Overrides ──
+function LP_applyPalletOverrides(){
+  for(const sku in LP_palletOverrides){
+    const n=LP_STATE.nomenclature[sku];
+    if(!n)continue;
+    const ov=LP_palletOverrides[sku];
+    if(!n._origPalletQty&&n._origPalletQty!==0)n._origPalletQty=n.palletQty;
+    if(!n._origPalletSpc&&n._origPalletSpc!==0)n._origPalletSpc=n.palletSpc;
+    if(ov.palletQty!==undefined)n.palletQty=ov.palletQty;
+    if(ov.palletSpc!==undefined)n.palletSpc=ov.palletSpc;
+  }
+  // Restore originals for SKUs no longer overridden
+  for(const sku in LP_STATE.nomenclature){
+    const n=LP_STATE.nomenclature[sku];
+    if(!LP_palletOverrides[sku]&&n._origPalletQty!==undefined){
+      n.palletQty=n._origPalletQty;n.palletSpc=n._origPalletSpc;
+      delete n._origPalletQty;delete n._origPalletSpc;
+    }
+  }
+}
+function LP_setPalletOvr(sku,field,val){
+  if(ROLE==='viewer')return;
+  const num=parseFloat(val);
+  if(!num||num<=0){
+    if(LP_palletOverrides[sku]){delete LP_palletOverrides[sku][field];if(!Object.keys(LP_palletOverrides[sku]).length)delete LP_palletOverrides[sku]}
+  } else {
+    if(!LP_palletOverrides[sku])LP_palletOverrides[sku]={};
+    LP_palletOverrides[sku][field]=num;
+  }
+  LP_applyPalletOverrides();
+  LP_render();
+  LP_saveToSupabase();
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    LOAD PLAN PRO — Phase 3 UI (all LP_ prefixed)
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -813,7 +848,8 @@ async function LP_saveToSupabase(){
       generatedPlan:LP_STATE.generatedPlan,
       dispatched:[...LP_dispatched],
       contDateOverrides:LP_contDateOverrides,
-      lsrNumbers:LP_lsrNumbers
+      lsrNumbers:LP_lsrNumbers,
+      palletOverrides:LP_palletOverrides
     };
     await SB.from('shared_state').upsert({id:'lp-state',value:JSON.stringify(payload),updated_at:now});
   }catch(e){console.warn('LP save error:',e)}
@@ -839,7 +875,9 @@ async function LP_loadFromSupabase(){
     LP_dispatched=new Set(p.dispatched||[]);
     LP_contDateOverrides=p.contDateOverrides||{};
     LP_lsrNumbers=p.lsrNumbers||{};
+    LP_palletOverrides=p.palletOverrides||{};
     LP_applyContDateOverrides();
+    LP_applyPalletOverrides();
     LP_snapshotSettings();
     return true;
   }catch(e){console.warn('LP load error:',e);return false}
@@ -1175,24 +1213,33 @@ function LP_renderDemand(el){
   const totalDests=new Set(filtered.map(d=>d.destination));
   const grandPlt=skus.reduce((s,x)=>s+x.totalPlt,0);
   const grandQty=skus.reduce((s,x)=>s+x.totalQty,0);
+  const pltOvrCount=Object.keys(LP_palletOverrides).length;
 
   let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h2 style="font-size:18px;font-weight:700">📋 Demand Summary</h2>
-    <div style="display:flex;gap:8px"><span class="bg bg-bl">${skus.length} SKUs · ${totalDests.size} dests</span><span class="bg bg-gy">${grandQty.toLocaleString()} pcs · ${grandPlt.toFixed(1)} plt</span></div>
+    <div style="display:flex;gap:8px;align-items:center"><span class="bg bg-bl">${skus.length} SKUs · ${totalDests.size} dests</span><span class="bg bg-gy">${grandQty.toLocaleString()} pcs · ${grandPlt.toFixed(1)} plt</span>${pltOvrCount?`<span class="bg bg-pu">★ ${pltOvrCount} pallet override${pltOvrCount>1?'s':''}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LP_palletOverrides={};LP_applyPalletOverrides();LP_render();LP_saveToSupabase()" style="font-size:9px;padding:2px 6px" title="Clear all pallet overrides">↻ Reset</button>`:''}':''}</div>
   </div>
+  ${pltOvrCount?'<div class="note note-pu" style="margin-bottom:10px">Pallet qty overrides active (★). <strong>Regenerate</strong> the plan to apply new pallet dimensions to undispatched trucks.</div>':''}
   <input type="text" class="lp-search" placeholder="Search by SKU or name..." id="lpDemSearch" oninput="LP_filterDemand()">
   <div class="csf" id="lpDemBody"><table class="dtb"><thead><tr>
-    <th>SKU</th><th>Name</th><th>Total Qty</th><th>Pallets</th><th>Destinations</th>
+    <th>SKU</th><th>Name</th><th>Total Qty</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
   </tr></thead><tbody>`;
   for(const s of skus){
+    const n=LP_STATE.nomenclature[s.sku]||{};
+    const pq=n.palletQty||0;const ps=n.palletSpc||0;
+    const isOvr=!!LP_palletOverrides[s.sku];
+    const origPq=n._origPalletQty!==undefined?n._origPalletQty:pq;
+    const origPs=n._origPalletSpc!==undefined?n._origPalletSpc:ps;
     const destBadges=Object.entries(s.dests).map(([d,q])=>{
       const c=LP_destColor(d);
       return `<span class="lp-dest-badge" style="background:${c.bg};color:${c.color};border:1px solid ${c.border}">${clDisp(d)} <span style="font-weight:700">${q.toLocaleString()}</span></span>`;
     }).join(' ');
-    html+=`<tr>
-      <td class="mono">${s.sku}</td>
+    html+=`<tr data-search="${s.sku} ${s.name}">
+      <td class="mono">${s.sku}${isOvr?'<span style="color:var(--pu);font-size:9px" title="Pallet override active"> ★</span>':''}</td>
       <td class="tcl">${s.name||'—'}</td>
       <td class="mono fw7">${s.totalQty.toLocaleString()}</td>
+      <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<span id="lpPq-v-${s.sku}" ${isOvr?'title="Original: '+origPq+'"':''}>${pq||'—'}</span> <button onclick="LP_editPallet('${s.sku}')" id="lpPq-e-${s.sku}" style="background:none;border:none;cursor:pointer;font-size:10px;padding:0 1px;color:var(--ts)" title="Edit pallet qty">✏️</button><input id="lpPq-i-${s.sku}" type="number" value="${pq}" min="1" step="1" style="display:none;width:55px;font-size:10px;font-family:var(--fm);padding:1px 4px;border:1px solid var(--ac);border-radius:3px" onkeydown="if(event.key==='Enter')LP_savePallet('${s.sku}');if(event.key==='Escape')LP_render()"><button id="lpPq-s-${s.sku}" onclick="LP_savePallet('${s.sku}')" style="display:none;background:none;border:none;cursor:pointer;font-size:10px;padding:0 1px;color:var(--gn)">💾</button>`:`${pq||'—'}`}</td>
+      <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ps||'—'}</td>
       <td class="mono">${s.totalPlt>0?s.totalPlt.toFixed(1):'—'}</td>
       <td style="white-space:normal">${destBadges}</td>
     </tr>`;
@@ -1202,6 +1249,27 @@ function LP_renderDemand(el){
 }
 
 function LP_filterDemand(){filterBySearch('lpDemSearch','#lpDemBody','.dtb tbody tr')}
+function LP_editPallet(sku){
+  if(ROLE==='viewer')return;
+  document.getElementById('lpPq-v-'+sku).style.display='none';
+  document.getElementById('lpPq-e-'+sku).style.display='none';
+  const inp=document.getElementById('lpPq-i-'+sku);
+  inp.style.display='';inp.focus();inp.select();
+  document.getElementById('lpPq-s-'+sku).style.display='';
+}
+function LP_savePallet(sku){
+  if(ROLE==='viewer')return;
+  const inp=document.getElementById('lpPq-i-'+sku);
+  const newPq=parseFloat(inp.value);
+  const n=LP_STATE.nomenclature[sku]||{};
+  const origPq=n._origPalletQty!==undefined?n._origPalletQty:(n.palletQty||0);
+  if(newPq>0&&newPq!==origPq){
+    LP_setPalletOvr(sku,'palletQty',newPq);
+  } else {
+    // Restore original — remove override
+    if(LP_palletOverrides[sku]){delete LP_palletOverrides[sku];LP_applyPalletOverrides();LP_render();LP_saveToSupabase()}
+  }
+}
 
 /* ─────────────────────────────────────────────
    PLAN TAB — Truck cards + detail tables
@@ -5631,7 +5699,7 @@ function doSystemReset(){
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};
   STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();LP_lsrNumbers={};
+  LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};
   // Restore upload screen
   document.getElementById("US").querySelector(".uc").innerHTML=`<div class="sm-logo sm-logo-lg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><h1 style="font-size:26px;font-weight:700">The Master of the Load 3000</h1><label class="dz" id="dz" for="fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files to browse</div></label><input type="file" accept=".xlsx,.xls" multiple id="fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><div class="fcs" id="fcs"></div><div id="eb" class="erbox" style="display:none"></div><button class="gbtn off" id="gb">Generate</button>`;
   document.getElementById("US").style.display="flex";
@@ -5822,7 +5890,7 @@ function doResetLP(){
     SB.from('shared_state').delete().in('id',['lp-state']).then(()=>{}).catch(()=>{});
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();LP_lsrNumbers={};
+  LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};
   lpUf=[];lpRenderUpload();
   document.getElementById("D").classList.remove("vis");
   document.getElementById("V26").classList.remove("vis");
@@ -5902,7 +5970,7 @@ async function goGenerateLP(){
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate}
     );
     LP_STATE.planGenerated=true;
-    LP_dispatched=new Set();LP_lsrNumbers={};
+    LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};
     LP_snapshotSettings();
     await LP_saveToSupabase();
     document.getElementById('pov').style.display='none';
