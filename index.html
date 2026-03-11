@@ -1608,8 +1608,8 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
     // Right side
     if(i===0){
       mg('J'+rn+':O'+rn);
-      cell(rn,10,infoRight[i][0],fSection,alC,fillDk2,brdThin);
-      for(let c=10;c<=COLS;c++)ws.getRow(rn).getCell(c).fill=fillDk2;
+      cell(rn,10,infoRight[i][0],fSection,alC,fillDark,brdThin);
+      for(let c=10;c<=COLS;c++)ws.getRow(rn).getCell(c).fill=fillDark;
     } else {
       mg('J'+rn+':K'+rn);
       cell(rn,10,infoRight[i][0],fLabel,alL,fillL2,brdThin);
@@ -1626,10 +1626,10 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   fillRange(11,1,COLS,fillDark,brdMed);
   mg('A11:D11');mg('E11:I11');mg('J11:O11');
   cell(11,1,'SHIPPER',fSection,alL,fillDark,brdMed);
-  cell(11,5,'CONSIGNEE',fSection,alL,fillMed,brdMed);
-  cell(11,10,'CUSTOMS BROKER',fSection,alL,fillMed,brdMed);
-  for(let c=5;c<=9;c++)ws.getRow(11).getCell(c).fill=fillMed;
-  for(let c=10;c<=COLS;c++)ws.getRow(11).getCell(c).fill=fillMed;
+  cell(11,5,'CONSIGNEE',fSection,alL,fillDark,brdMed);
+  cell(11,10,'CUSTOMS BROKER',fSection,alL,fillDark,brdMed);
+  for(let c=5;c<=9;c++)ws.getRow(11).getCell(c).fill=fillDark;
+  for(let c=10;c<=COLS;c++)ws.getRow(11).getCell(c).fill=fillDark;
 
   // ROWS 12-17: Party data (NO merges — just fill every cell, text overflows naturally)
   const shipper=['FWC2026 US, Inc','396 Alhambra Circle, Ste# 400','Coral Gables, FL 33134','USA','',''];
