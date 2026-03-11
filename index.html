@@ -1257,7 +1257,7 @@ function LP_renderPlan(el){
     {label:'📈 Peak/Day',value:lpPeakDay,color:'var(--rd)'},
     {label:'📊 Avg Util',value:lpAvgUtil+'%',color:lpAvgUtil>80?'var(--gn)':'var(--or)'}
   ];
-  if(lpDistCost>0)lpKpis.push({label:'💰 Dist. Cost',value:'$'+Math.round(lpDistCost).toLocaleString(),color:'var(--pu)',sub:'FTL from Dallas'});
+  lpKpis.push({label:'💰 Dist. Cost',value:'$'+Math.round(lpDistCost).toLocaleString(),color:'var(--pu)',sub:lpTotalTrucks+' trucks'});
   let html=kpiRow(lpKpis,'fin');
 
   // Constraints panel
@@ -2028,7 +2028,7 @@ function V26_render(){
     const tc=isLM?(LM_DEFAULT_TC[t.dest]||12):26;
     return s+getEffRate(t.id,t.dest,tc,isLM);
   },0);
-  if(fDistCost>0)v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:'FTL + local'});
+  v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:fActiveTrucks.length+' trucks'});
   if(fCortN>0)v26KpiItems.push({label:'🏷 CORT',value:fCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
   v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fDests.size});
   // Stock arrival % — unique SKUs from material plan (excl CT/STP) vs stock report
@@ -2076,7 +2076,7 @@ function V26_render(){
     const cCnt=(cat.cort||[]).filter(c=>!c.excluded).length;
     html+=`<button class="tbtn${isOn?' on':''}" onclick="window._v26Filter='${key}';V26_render()" style="font-size:11px">${cat.label} <span style="font-size:9px;opacity:.6">(${tCnt}${cCnt>0?'+'+cCnt+'C':''})</span></button>`;
   }
-  html+=`</div>`;
+  html+=`<button class="rbtn" onclick="showNetworkMap()" style="font-size:9px;padding:4px 8px;background:var(--ps);color:var(--pu);border-color:#D4C5FE;margin-left:auto">🗺 Network</button></div>`;
 
   // Filtered peak for timeline
   const fPeakDate=fDates.length?fDates.reduce((pk,d)=>{const ac=(fByDate[d]||[]).filter(t=>!t.excluded).length;const pkc=(fByDate[pk]||[]).filter(t=>!t.excluded).length;return ac>pkc?d:pk},fDates[0]):'';
@@ -5162,6 +5162,154 @@ function selCl(cl){saveCurrentConstraints();saveSharedData();selCluster=cl;sel=c
 function selClOv(cl){saveCurrentConstraints();saveSharedData();sel="__cluster_"+cl;selCluster="";cv="dashboard";expCl[cl]=true;closeMobSb();rT();rVL();rMain()}
 function expAll(){for(const cl in CLUSTERS)expCl[cl]=true;rVL()}
 function sV(v){cv=v;rT();rMain()}
+
+// ── Supply Chain Network Map ──
+function showNetworkMap(){
+  const W=960,H=620,PAD=30;
+  // Mercator-ish projection for North America (lon -130 to -65, lat 17 to 52)
+  const lonMin=-128,lonMax=-65,latMin=17,latMax=52;
+  const px=lon=>PAD+(lon-lonMin)/(lonMax-lonMin)*(W-2*PAD);
+  const py=lat=>PAD+(latMax-lat)/(latMax-latMin)*(H-2*PAD);
+
+  // ── Nodes ──
+  const hub={id:'Dallas WHS',lat:32.78,lon:-96.80,type:'hub'};
+  const lpDests=[
+    {id:'Houston',lat:29.76,lon:-95.37},{id:'Kansas City',lat:39.10,lon:-94.58},
+    {id:'New York/NJ',lat:40.75,lon:-74.00},{id:'Toronto',lat:43.65,lon:-79.38},
+    {id:'Vancouver',lat:49.28,lon:-123.12},{id:'Guadalajara',lat:20.67,lon:-103.35},
+    {id:'Mexico City',lat:19.43,lon:-99.13},{id:'Monterrey',lat:25.67,lon:-100.32},
+  ];
+  const lmStadiums=[
+    {id:'Atlanta',lat:33.75,lon:-84.39},{id:'Boston',lat:42.36,lon:-71.06},
+    {id:'Los Angeles',lat:34.05,lon:-118.24},{id:'Miami',lat:25.76,lon:-80.19},
+    {id:'Philadelphia',lat:39.95,lon:-75.17},{id:'San Francisco',lat:37.77,lon:-122.42},
+    {id:'Seattle',lat:47.61,lon:-122.33},{id:'Dallas STA',lat:32.65,lon:-97.11},{id:'IBC',lat:32.95,lon:-96.55},
+  ];
+  const cortClusters=[
+    {id:'Charlotte',lat:35.23,lon:-80.84},{id:'Columbus',lat:39.96,lon:-82.99},
+    {id:'Knoxville',lat:35.96,lon:-83.92},{id:'Nashville',lat:36.16,lon:-86.78},
+    {id:'Orlando',lat:28.54,lon:-81.38},{id:'Tampa',lat:27.95,lon:-82.46},
+    {id:'Phoenix',lat:33.45,lon:-112.07},{id:'Portland',lat:45.52,lon:-122.68},
+    {id:'Roanoke',lat:37.27,lon:-79.94},{id:'Salt Lake',lat:40.76,lon:-111.89},
+    {id:'San Diego',lat:32.72,lon:-117.16},{id:'Austin',lat:30.27,lon:-97.74},
+    {id:'Washington DC',lat:38.91,lon:-77.04},
+  ];
+
+  // ── Build SVG ──
+  let svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#111318;border-radius:12px">`;
+  // Background grid
+  for(let lon=-125;lon<=-70;lon+=5)svg+=`<line x1="${px(lon)}" y1="${PAD}" x2="${px(lon)}" y2="${H-PAD}" stroke="#1a1a2e" stroke-width="0.5"/>`;
+  for(let lat=20;lat<=50;lat+=5)svg+=`<line x1="${PAD}" y1="${py(lat)}" x2="${W-PAD}" y2="${py(lat)}" stroke="#1a1a2e" stroke-width="0.5"/>`;
+
+  // Simplified coastline hints (very rough polygons)
+  const coast='M'+[[-125,48],[-123,49],[-124,46],[-124,43],[-121,37],[-118,34],[-117,33],[-117,32],[-115,31],[-112,31],[-108,31],[-104,29],[-100,26],[-97,26],[-97,28],[-95,29],[-93,30],[-90,29],[-88,30],[-85,30],[-83,29],[-81,25],[-80,25],[-81,31],[-78,34],[-76,37],[-74,40],[-71,41],[-70,42],[-67,45],[-67,47],[-70,46],[-75,45],[-79,43],[-83,42],[-84,46],[-83,46],[-80,44],[-79,44],[-80,43],[-82,42],[-87,42],[-87,45],[-89,47],[-92,49],[-95,49],[-100,49],[-110,49],[-120,49],[-123,49]].map(([lon,lat])=>`${px(lon)},${py(lat)}`).join(' L');
+  svg+=`<path d="${coast}" fill="none" stroke="#2a2a3e" stroke-width="1.2"/>`;
+
+  // Mexico coast hint
+  const mex='M'+[[-117,32],[-115,31],[-112,31],[-108,31],[-106,24],[-104,23],[-103,20],[-97,17],[-96,18],[-94,18],[-91,19],[-87,21],[-87,22],[-90,22],[-97,26],[-100,26],[-104,29]].map(([lon,lat])=>`${px(lon)},${py(lat)}`).join(' L');
+  svg+=`<path d="${mex}" fill="none" stroke="#2a2a3e" stroke-width="1"/>`;
+
+  const hx=px(hub.lon),hy=py(hub.lat);
+
+  // ── Edges ──
+  // LP lines (blue, thick)
+  for(const n of lpDests){
+    svg+=`<line x1="${hx}" y1="${hy}" x2="${px(n.lon)}" y2="${py(n.lat)}" stroke="#3B82F6" stroke-width="2.5" opacity="0.6"/>`;
+  }
+  // LM Stadium lines (green)
+  for(const n of lmStadiums){
+    svg+=`<line x1="${hx}" y1="${hy}" x2="${px(n.lon)}" y2="${py(n.lat)}" stroke="#50B86C" stroke-width="1.5" opacity="0.5"/>`;
+  }
+  // CORT cluster lines (orange, thin)
+  for(const n of cortClusters){
+    svg+=`<line x1="${hx}" y1="${hy}" x2="${px(n.lon)}" y2="${py(n.lat)}" stroke="#E8A838" stroke-width="1" opacity="0.4"/>`;
+  }
+  // Local distribution from LP satellites (dashed purple)
+  const localLinks=[
+    ['Houston',29.76,-95.37,'Houston Stadium',29.72,-95.41],
+    ['Kansas City',39.10,-94.58,'KC Stadium',39.05,-94.48],
+    ['New York/NJ',40.75,-74.00,'NJ Stadium',40.81,-74.07],
+    ['Toronto',43.65,-79.38,'TOR venues',43.70,-79.50],
+    ['Vancouver',49.28,-123.12,'VAN venues',49.22,-123.00],
+    ['Guadalajara',20.67,-103.35,'GDL venues',20.72,-103.20],
+    ['Mexico City',19.43,-99.13,'CDMX venues',19.50,-99.00],
+    ['Monterrey',25.67,-100.32,'MTY venues',25.73,-100.20],
+  ];
+  for(const lk of localLinks){
+    svg+=`<line x1="${px(lk[2])}" y1="${py(lk[1])}" x2="${px(lk[5])}" y2="${py(lk[4])}" stroke="#9B59B6" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6"/>`;
+  }
+
+  // ── Nodes ──
+  // CORT clusters (small orange)
+  for(const n of cortClusters){
+    const x=px(n.lon),y=py(n.lat);
+    svg+=`<circle cx="${x}" cy="${y}" r="4" fill="#E8A838" stroke="#111318" stroke-width="1"/>`;
+    svg+=`<text x="${x}" y="${y-7}" text-anchor="middle" fill="#E8A838" font-size="7" font-family="system-ui" opacity="0.8">${n.id}</text>`;
+  }
+  // LM Stadiums (green)
+  for(const n of lmStadiums){
+    const x=px(n.lon),y=py(n.lat);
+    svg+=`<circle cx="${x}" cy="${y}" r="5.5" fill="#50B86C" stroke="#111318" stroke-width="1.5"/>`;
+    svg+=`<text x="${x}" y="${y-9}" text-anchor="middle" fill="#50B86C" font-size="8" font-weight="600" font-family="system-ui">${n.id}</text>`;
+  }
+  // LP destinations (blue, larger)
+  for(const n of lpDests){
+    const x=px(n.lon),y=py(n.lat);
+    svg+=`<rect x="${x-6}" y="${y-6}" width="12" height="12" rx="3" fill="#3B82F6" stroke="#111318" stroke-width="1.5"/>`;
+    svg+=`<text x="${x}" y="${y-10}" text-anchor="middle" fill="#3B82F6" font-size="9" font-weight="700" font-family="system-ui">${n.id}</text>`;
+  }
+  // Local delivery targets (small purple)
+  for(const lk of localLinks){
+    const x=px(lk[5]),y=py(lk[4]);
+    svg+=`<circle cx="${x}" cy="${y}" r="3" fill="#9B59B6" stroke="#111318" stroke-width="1"/>`;
+  }
+  // Hub (large red star)
+  const starR=12;
+  svg+=`<circle cx="${hx}" cy="${hy}" r="${starR+3}" fill="#CF5D5D" opacity="0.2"/>`;
+  svg+=`<circle cx="${hx}" cy="${hy}" r="${starR}" fill="#CF5D5D" stroke="#fff" stroke-width="2"/>`;
+  svg+=`<text x="${hx}" y="${hy+3.5}" text-anchor="middle" fill="#fff" font-size="8" font-weight="800" font-family="system-ui">★</text>`;
+  svg+=`<text x="${hx}" y="${hy-17}" text-anchor="middle" fill="#CF5D5D" font-size="11" font-weight="800" font-family="system-ui">DALLAS WHS</text>`;
+
+  // ── Legend ──
+  const lx=W-200,ly=H-105;
+  svg+=`<rect x="${lx-10}" y="${ly-5}" width="195" height="100" rx="8" fill="#111318" stroke="#2a2a3e" stroke-width="1"/>`;
+  svg+=`<text x="${lx}" y="${ly+12}" fill="#fff" font-size="10" font-weight="700" font-family="system-ui">Supply Chain Network</text>`;
+  [[18,'#CF5D5D','●','Dallas Warehouse (Hub)'],[30,'#3B82F6','■','LP Satellite Warehouses (8)'],[42,'#50B86C','●','LM Direct Stadiums (9 + IBC)'],[54,'#E8A838','●','CORT Clusters (~13)'],[66,'#9B59B6','- -','Local Distribution (8)']].forEach(([dy,col,sym,lbl])=>{
+    svg+=`<text x="${lx}" y="${ly+dy}" fill="${col}" font-size="9" font-family="system-ui" font-weight="600">${sym}</text>`;
+    svg+=`<text x="${lx+18}" y="${ly+dy}" fill="#aaa" font-size="8.5" font-family="system-ui">${lbl}</text>`;
+  });
+
+  // Title
+  svg+=`<text x="${W/2}" y="20" text-anchor="middle" fill="#fff" font-size="14" font-weight="800" font-family="system-ui">FWC26 Distribution Network — The Master of the Load 3000</text>`;
+
+  svg+=`</svg>`;
+
+  // Modal
+  const h=`<div class="mo" onclick="if(event.target===this)document.getElementById('mr').innerHTML=''"><div class="mdi" style="max-width:1050px;background:#111318">
+    <div class="mdh" style="border-color:#2a2a3e"><div><h3 style="color:#fff">🗺 Supply Chain Network Map</h3><div class="mds" style="color:#888">FWC26 distribution from Dallas Warehouse</div></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="rbtn" onclick="_downloadNetworkSVG()" style="font-size:10px;padding:4px 10px;background:#1a1a2e;color:#3B82F6;border-color:#3B82F6">⬇ SVG</button>
+      <button class="rbtn" onclick="_downloadNetworkPNG()" style="font-size:10px;padding:4px 10px;background:#1a1a2e;color:#50B86C;border-color:#50B86C">⬇ PNG</button>
+      <button class="mdc" onclick="document.getElementById('mr').innerHTML=''" style="color:#fff">✕</button>
+    </div></div>
+    <div class="mdb" style="padding:12px;background:#111318" id="networkMapContainer">${svg}</div>
+  </div></div>`;
+  document.getElementById('mr').innerHTML=h;
+  window._networkSVG=svg;
+}
+function _downloadNetworkSVG(){
+  const blob=new Blob([window._networkSVG||''],{type:'image/svg+xml'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='FWC26_Network_Map.svg';a.click();
+}
+function _downloadNetworkPNG(){
+  const svgEl=document.querySelector('#networkMapContainer svg');if(!svgEl)return;
+  const svgData=new XMLSerializer().serializeToString(svgEl);
+  const canvas=document.createElement('canvas');canvas.width=1920;canvas.height=1240;
+  const ctx=canvas.getContext('2d');
+  const img=new Image();
+  img.onload=()=>{ctx.drawImage(img,0,0,1920,1240);canvas.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='FWC26_Network_Map.png';a.click()},'image/png')};
+  img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svgData)));
+}
 
 function exportXL(){
   const wb=XLSX.utils.book_new();
