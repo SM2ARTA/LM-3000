@@ -760,6 +760,7 @@ let LP_STATE={
 let LP_TAB='plan';
 let LP_dispatched=new Set();// truck IDs marked as dispatched
 let LP_contDateOverrides={};// container name -> new arrival date (YYYY-MM-DD)
+let LP_lsrNumbers={};// truckId -> LSR number string (e.g. "LSR625-001")
 
 function LP_applyContDateOverrides(){
   const ta=LP_STATE.turnaround||6;
@@ -811,7 +812,8 @@ async function LP_saveToSupabase(){
       planGenerated:LP_STATE.planGenerated,
       generatedPlan:LP_STATE.generatedPlan,
       dispatched:[...LP_dispatched],
-      contDateOverrides:LP_contDateOverrides
+      contDateOverrides:LP_contDateOverrides,
+      lsrNumbers:LP_lsrNumbers
     };
     await SB.from('shared_state').upsert({id:'lp-state',value:JSON.stringify(payload),updated_at:now});
   }catch(e){console.warn('LP save error:',e)}
@@ -836,6 +838,7 @@ async function LP_loadFromSupabase(){
     LP_STATE.generatedPlan=p.generatedPlan;
     LP_dispatched=new Set(p.dispatched||[]);
     LP_contDateOverrides=p.contDateOverrides||{};
+    LP_lsrNumbers=p.lsrNumbers||{};
     LP_applyContDateOverrides();
     LP_snapshotSettings();
     return true;
@@ -1314,11 +1317,13 @@ function LP_renderPlan(el){
       const dispClass=isDisp?' dispatched':'';
       const lockIcon=isDisp?'🔒 ':'';
 
-      html+=`<div class="lp-truck${dispClass}" data-search="${t.id} ${t.dest} ${clDisp(t.dest)} ${aggSkus.map(s=>s.sku+' '+s.name).join(' ')}" onclick="LP_showTruckModal(${t.id})">
+      const lsr=LP_lsrNumbers[t.id]||'';
+      html+=`<div class="lp-truck${dispClass}" data-search="${t.id} ${t.dest} ${clDisp(t.dest)} ${lsr} ${aggSkus.map(s=>s.sku+' '+s.name).join(' ')}" onclick="LP_showTruckModal(${t.id})">
         <div class="lp-truck-hd">
           <div style="display:flex;align-items:center;gap:8px">
             <span>${isDisp?'🔒':'🚛'}</span>
             <span class="lp-truck-id">LP-${t.id}</span>
+            ${lsr?`<span class="mono" style="font-size:9px;color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px">${lsr}</span>`:''}
             <span class="lp-dest-badge" style="background:${dc.bg};color:${dc.color};border:1px solid ${dc.border}">${clDisp(t.dest)}</span>
           </div>
           <div class="lp-truck-cap">${t.totalPlt.toFixed(1)} <span>/ ${maxPlt} plt</span></div>
@@ -1334,6 +1339,10 @@ function LP_renderPlan(el){
           <span onclick="event.stopPropagation()" style="flex:1">${isDisp?'✅ Dispatched':'Mark dispatched'}</span>
           <input type="date" value="${t.date}" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate(${t.id},this.value)">
         </div>`}
+        <div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <span style="font-size:10px;color:var(--tt);white-space:nowrap">LSR</span>
+          ${ROLE==="viewer"?`<span class="mono" style="font-size:10px;color:var(--tp)">${LP_lsrNumbers[t.id]||'—'}</span>`:`<input type="text" value="${(LP_lsrNumbers[t.id]||'').replace(/"/g,'&quot;')}" placeholder="LSR625-001" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 6px;border:1px solid var(--bd);border-radius:4px;color:var(--tp);width:110px;outline:none" onchange="event.stopPropagation();LP_setLsr(${t.id},this.value)">`}
+        </div>
       </div>`;
     }
     html+=`</div>`;
@@ -1361,6 +1370,13 @@ function LP_changeDate(truckId,newDate){
   LP_dispatched.add(truckId);
   LP_saveToSupabase();
   LP_render();
+}
+
+function LP_setLsr(truckId,val){
+  if(ROLE==="viewer")return;
+  const v=val.trim();
+  if(v)LP_lsrNumbers[truckId]=v;else delete LP_lsrNumbers[truckId];
+  LP_saveToSupabase();
 }
 
 function LP_showTruckModal(truckId){
@@ -1433,8 +1449,9 @@ function LP_showTruckModal(truckId){
   });
 
   const mrEl=document.getElementById('mr');
+  const _lsr=LP_lsrNumbers[truckId]||'';
   let mh=modalHeader(
-    `${isDisp?'🔒':'🚛'} LP-${truckId}${isDisp?' <span style="color:var(--gn);font-size:12px">Dispatched</span>':''}`,
+    `${isDisp?'🔒':'🚛'} LP-${truckId}${_lsr?' <span class="mono" style="color:var(--pu);font-size:12px;background:var(--ps);padding:1px 6px;border-radius:3px;margin-left:6px">'+_lsr+'</span>':''}${isDisp?' <span style="color:var(--gn);font-size:12px">Dispatched</span>':''}`,
     `${first.date} · <span style="color:${dc.color}">${clDisp(first.destination)}</span>`,
     `<button class="rbtn" onclick="LP_exportSingleTruck(${truckId})" style="background:var(--as);color:var(--ac);border-color:var(--ab);font-size:11px">⬇ Excel</button><button class="rbtn" onclick="LP_exportCI(${truckId})" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-size:11px">📄 CI</button>`
   );
@@ -5576,7 +5593,7 @@ function doSystemReset(){
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};
   STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();
+  LP_dispatched=new Set();LP_lsrNumbers={};
   // Restore upload screen
   document.getElementById("US").querySelector(".uc").innerHTML=`<div class="sm-logo sm-logo-lg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><h1 style="font-size:26px;font-weight:700">The Master of the Load 3000</h1><label class="dz" id="dz" for="fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files to browse</div></label><input type="file" accept=".xlsx,.xls" multiple id="fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><div class="fcs" id="fcs"></div><div id="eb" class="erbox" style="display:none"></div><button class="gbtn off" id="gb">Generate</button>`;
   document.getElementById("US").style.display="flex";
@@ -5767,7 +5784,7 @@ function doResetLP(){
     SB.from('shared_state').delete().in('id',['lp-state']).then(()=>{}).catch(()=>{});
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();
+  LP_dispatched=new Set();LP_lsrNumbers={};
   lpUf=[];lpRenderUpload();
   document.getElementById("D").classList.remove("vis");
   document.getElementById("V26").classList.remove("vis");
@@ -5847,7 +5864,7 @@ async function goGenerateLP(){
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate}
     );
     LP_STATE.planGenerated=true;
-    LP_dispatched=new Set();
+    LP_dispatched=new Set();LP_lsrNumbers={};
     LP_snapshotSettings();
     await LP_saveToSupabase();
     document.getElementById('pov').style.display='none';
