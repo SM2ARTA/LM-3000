@@ -2237,7 +2237,7 @@ function V26_gatherTrucks(){
         const plt=nonCort.reduce((s,it)=>s+(it.loadPlt||0),0);
         const qty=nonCort.reduce((s,it)=>s+(it.loadQty||0),0);
         const day=P.days.find(d=>d.trucks.includes(t));
-        const dateStr=day?day.dKey:'';
+        const dateStr=t.dd||day?.dKey||'';
         const m={};
         for(const it of nonCort){
           if(!m[it.sku])m[it.sku]={sku:it.sku,name:it.nm||NOM[it.sku]?.nm||it.sku,qty:0,pallets:0};
@@ -4397,13 +4397,23 @@ function bV(){const a={};const clMap={};// venue -> cluster
 const vcMap={};// venue -> venue code (parsed from Material Plan "Venue code" column)
 const vtMapLocal={};// venue -> venue type
 const _vtSkuMap={};// venueType -> country -> Set(sku)
+// Pre-compute demand adjustment scale factors
+const _adjScale={};
+if(Object.keys(LM_demandAdj).length>0){
+  const origTotals={};
+  for(const r of RW){const v=r["Venue"];if(!v)continue;const raw=parseInt(r["Required"])||0;if(raw<=0)continue;const s=r["Nomenclature"]||"?";if(!NOM[s])continue;const k=v+'|'+s;origTotals[k]=(origTotals[k]||0)+raw}
+  for(const k in LM_demandAdj){if(origTotals[k]&&origTotals[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/origTotals[k]}
+}
 for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(r["Venue cluster"])clMap[v]=r["Venue cluster"];
   const vc=String(r["Venue code"]||"").trim().toUpperCase();
   if(vc&&!vcMap[v])vcMap[v]=vc;
-  // Parse venue type: hard-coded map first, then data column, then leave empty
   if(!vtMapLocal[v]){const vt=LM_VENUE_TYPE_MAP[v]||String(r["Venue type"]||"").trim();vtMapLocal[v]=vt}
-  const _rawQ=parseInt(r["Required"])||0;if(_rawQ<=0)continue;
+  let _rawQ=parseInt(r["Required"])||0;if(_rawQ<=0)continue;
+  // Apply demand adjustment
+  const _adjK=v+'|'+(r["Nomenclature"]||"?");
+  if(_adjScale[_adjK]!==undefined)_rawQ=Math.round(_rawQ*_adjScale[_adjK]);
+  if(_rawQ<=0)continue;
   const bi=pD(r["Estimated bump-in date"]);
   if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
   const s=r["Nomenclature"]||"?";
@@ -4964,6 +4974,7 @@ function LM_changeDate(truckIdx,newDate){
   t.dd=newDate;
   LM_dateOverrides[fp]=newDate;
   LM_dispatched.add(fp);
+  LM_applyDateOverrides();// update all PLAN_CACHE entries
   LM_saveDateOverrides();
   rMain();
 }
@@ -5109,23 +5120,21 @@ function showDayDetail(dateKey){
 
   for(const[label,P]of Object.entries(PLAN_CACHE)){
     if(!isLabelRelevant(label))continue;
-    // Find days with matching dispatch date
-    P.days.forEach(day=>{
-      if(day.dKey!==dateKey)return;
-      day.trucks.forEach(t=>{
-        if(seenTruckIds.has(t.id))return;seenTruckIds.add(t.id);
-        const nonCort=t.items.filter(it=>!isCort(it.sku));
-        const plt=nonCort.reduce((s,it)=>s+(it.loadPlt||0),0);
-        const qty=nonCort.reduce((s,it)=>s+(it.loadQty||0),0);
-        const dest=t.destDisplay||clDisp(t.destLabel||label);
-        const isExcl=LM_excluded.has(t.id);
-        // Include all trucks (even excluded, even no-BI) — skip only completely empty ones
-        if(!nonCort.length&&!isExcl)return;
-        dayTrucks.push({
-          id:t.id||'?',dest,pallets:Math.round(plt*100)/100,pcs:qty,
-          skus:nonCort.length,tCap:P.tCap,isOverflow:t.isOverflow||false,excluded:isExcl,isNoBi:t.isNoBi||false,
-          items:nonCort.map(it=>({sku:it.sku,nm:it.nm,qty:it.loadQty||0,plt:it.loadPlt}))
-        });
+    // Find trucks with matching effective dispatch date (t.dd includes manual overrides)
+    P.allT.forEach(t=>{
+      const effDate=t.dd||P.days.find(d=>d.trucks.includes(t))?.dKey||'';
+      if(effDate!==dateKey)return;
+      if(seenTruckIds.has(t.id))return;seenTruckIds.add(t.id);
+      const nonCort=t.items.filter(it=>!isCort(it.sku));
+      const plt=nonCort.reduce((s,it)=>s+(it.loadPlt||0),0);
+      const qty=nonCort.reduce((s,it)=>s+(it.loadQty||0),0);
+      const dest=t.destDisplay||clDisp(t.destLabel||label);
+      const isExcl=LM_excluded.has(t.id);
+      if(!nonCort.length&&!isExcl)return;
+      dayTrucks.push({
+        id:t.id||'?',dest,pallets:Math.round(plt*100)/100,pcs:qty,
+        skus:nonCort.length,tCap:P.tCap,isOverflow:t.isOverflow||false,excluded:isExcl,isNoBi:t.isNoBi||false,
+        items:nonCort.map(it=>({sku:it.sku,nm:it.nm,qty:it.loadQty||0,plt:it.loadPlt}))
       });
     });
     // CORT deliveries on this date — skip cluster keys (CORT_CACHE is the authority)
@@ -5583,19 +5592,34 @@ if(cv==="dashboard"){
     const activeTrucks=P.allT.filter(t=>!LM_excluded.has(t.id));
     const newTrucks=activeTrucks.filter(t=>!seenTruckIdsCalMap.has(t.id));
     newTrucks.forEach(t=>seenTruckIdsCalMap.add(t.id));
-    P.days.forEach(d=>{
-      const dk2=d.dKey;
-      const activeNew=d.trucks.filter(t=>!LM_excluded.has(t.id)&&newTrucks.includes(t));
-      const allNew=d.trucks.filter(t=>newTrucks.includes(t)||(!seenTruckIdsCalMap.has(t.id)&&LM_excluded.has(t.id)));
-      if(!allNew.length&&!activeNew.length)return;
+    // Use each truck's effective date (t.dd respects manual overrides) instead of day.dKey
+    for(const t of newTrucks){
+      const dk2=t.dd||P.days.find(d=>d.trucks.includes(t))?.dKey||'';
+      if(!dk2)continue;
       if(!calMap[dk2])calMap[dk2]={trucks:0,pallets:0,cort:0,cortPcs:0,venues:[],pcs:0,biDate:null,isNoBi:false,truckIds:[],tCap:P.tCap||26};
-      calMap[dk2].trucks+=activeNew.length;
-      calMap[dk2].pallets+=activeNew.reduce((s,t)=>s+t.pallets,0);
-      calMap[dk2].pcs+=activeNew.reduce((s,t)=>s+(t.items?t.items.reduce((ss,it)=>ss+(it.loadQty||0),0):(t.pcs||0)),0);
-      if(d.biDate&&!calMap[dk2].biDate)calMap[dk2].biDate=d.biDate;
-      if(d.isNoBi)calMap[dk2].isNoBi=true;
-      allNew.forEach(t=>{if(t.id)calMap[dk2].truckIds.push(t.id)});
-      if(allNew.length>0)calMap[dk2].venues.push({name:displayName,trucks:activeNew.length,plt:d.dayPlt});
+      calMap[dk2].trucks++;
+      calMap[dk2].pallets+=t.pallets||0;
+      calMap[dk2].pcs+=t.items?t.items.reduce((ss,it)=>ss+(it.loadQty||0),0):(t.pcs||0);
+      if(t.id)calMap[dk2].truckIds.push(t.id);
+      // Add venue entry if not already there for this date
+      const existing=calMap[dk2].venues.find(v=>v.name===displayName&&!v.isCort);
+      if(existing){existing.trucks++;existing.plt+=(t.pallets||0)}
+      else calMap[dk2].venues.push({name:displayName,trucks:1,plt:t.pallets||0});
+    }
+    // Also handle excluded trucks (for truckIds tracking)
+    P.allT.filter(t=>LM_excluded.has(t.id)&&!seenTruckIdsCalMap.has(t.id)).forEach(t=>{
+      seenTruckIdsCalMap.add(t.id);
+      const dk2=t.dd||P.days.find(d=>d.trucks.includes(t))?.dKey||'';
+      if(!dk2)return;
+      if(!calMap[dk2])calMap[dk2]={trucks:0,pallets:0,cort:0,cortPcs:0,venues:[],pcs:0,biDate:null,isNoBi:false,truckIds:[],tCap:P.tCap||26};
+      calMap[dk2].truckIds.push(t.id);
+    });
+    // Propagate biDate/isNoBi from days
+    P.days.forEach(d=>{
+      if(calMap[d.dKey]){
+        if(d.biDate&&!calMap[d.dKey].biDate)calMap[d.dKey].biDate=d.biDate;
+        if(d.isNoBi)calMap[d.dKey].isNoBi=true;
+      }
     });
     (cortDels||[]).forEach(cd=>{
       const dk2=cd.biK;
