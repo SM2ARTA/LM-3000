@@ -584,7 +584,8 @@ function _undoSnap(){
     lm_dateOvr:JSON.stringify(LM_dateOverrides||{}),
     lm_manual:JSON.stringify(MANUAL_ITEMS||{}),
     lm_distOvr:JSON.stringify(DIST_OVERRIDES||{}),
-    lm_demandAdj:JSON.stringify(LM_demandAdj||{})
+    lm_demandAdj:JSON.stringify(LM_demandAdj||{}),
+    lm_nomOvr:JSON.stringify(LM_nomOverrides||{})
   };
 }
 function UNDO_capture(){
@@ -629,10 +630,11 @@ function UNDO_restore(){
     MANUAL_ITEMS=JSON.parse(snap.lm_manual);
     DIST_OVERRIDES=JSON.parse(snap.lm_distOvr);
     LM_demandAdj=JSON.parse(snap.lm_demandAdj||'{}');
+    LM_nomOverrides=JSON.parse(snap.lm_nomOvr||'{}');
     // Update last known to restored state
     _undoLastSnap=_undoSnap();
     // Rebuild LM if data present
-    if(Object.keys(NOM).length&&RW.length){bV();numberAll()}
+    if(Object.keys(NOM).length&&RW.length){LM_applyNomOverrides();bV();numberAll()}
     // Save restored state
     LP_saveToSupabase();
     saveSharedData();
@@ -640,6 +642,7 @@ function UNDO_restore(){
     MI_save();
     DIST_saveOverrides();
     LM_saveDemandAdj();
+    LM_saveNomOverrides();
     // Re-render
     if(typeof LP_render==='function'&&LP_STATE.planGenerated)LP_render();
     if(typeof rMain==='function')try{rMain()}catch(e){}
@@ -3067,10 +3070,11 @@ function enterApp(){
       MI_load().catch(()=>{}),
       LM_loadPalletCfg().catch(()=>{}),
       DIST_loadOverrides().catch(()=>{}),
-      LM_loadDemandAdj().catch(()=>{})
+      LM_loadDemandAdj().catch(()=>{}),
+      LM_loadNomOverrides().catch(()=>{})
     ]);
     // Now build venues and trucks AFTER all config is loaded
-    if(hasLmData&&Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
+    if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_applyNomOverrides();bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
     // Load LP data
     try{lpOk=await LP_loadFromSupabase()}catch(e){}
     
@@ -3175,11 +3179,12 @@ async function loadSharedData(){
       MI_load().catch(()=>{}),
       LM_loadPalletCfg().catch(()=>{}),
       DIST_loadOverrides().catch(()=>{}),
-      LM_loadDemandAdj().catch(()=>{})
+      LM_loadDemandAdj().catch(()=>{}),
+      LM_loadNomOverrides().catch(()=>{})
     ]);
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
-    bV();if(!VN.length)throw new Error("No venues.");
+    LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
     numberAll();
     sel="";cv="dashboard";
     document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
@@ -3230,7 +3235,7 @@ function gMT(v){return Math.max(1,vG(v).mt||LM_DEFAULT_MT[v]||2)}
 const LM_DEFAULT_LT={"Atlanta / CORT":1,"Austin / CORT":0,"Boston / CORT":3,"Charlotte / CORT":2,"Columbus / CORT":2,"Dallas / CORT":0,"Houston / CORT":0,"Houston / RIC":0,"Kansas City / CORT":1,"Kansas City / RIC":1,"Knoxville / CORT":2,"Los Angeles / CORT":2,"Nashville / CORT":1,"New York / CORT":3,"New York New Jersey / RIC":3,"Philadelphia / CORT":3,"Phoenix / CORT":2,"Portland / CORT":3,"Roanoke / CORT":2,"Salt Lake City / CORT":2,"San Diego / CORT":2,"San Francisco / CORT":3,"Seattle / CORT":3,"South Florida / CORT":2,"Tampa / CORT":2,"TSE Atlanta / CORT":1,"TSE Boston / CORT":3,"TSE Los Angeles / CORT":2,"TSE Orlando / CORT":2,"TSE San Francisco / CORT":3,"TSE Seattle / CORT":3,"TSE Washington / CORT":2,"USA / CORT":0,"USA / RGS":0,"USA CENT / CORT":1,"USA EAST / CORT":3,"Washington DC / CORT":2,"Atlanta Stadium":1,"Boston Stadium":3,"Dallas Stadium":0,"Houston Stadium":0,"Kansas City Stadium":0,"Los Angeles Stadium":2,"Los Angeles - Rose Bowl Stadium":2,"Miami Stadium":2,"New York / New Jersey Stadium":0,"Philadelphia Stadium":3,"San Francisco Bay Area Stadium":3,"Seattle Stadium":3,"International Broadcast Centre":0,"International Broadcast Coordination Centre":0};
 function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt):(LM_DEFAULT_LT[v]!==undefined?LM_DEFAULT_LT[v]:0)}
 // Default bump-in dates per stadium (from Stadium Bump-in Schedule)
-const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-16","Boston Stadium":"2026-05-14","Dallas Stadium":"2026-05-08","Guadalajara Stadium":"2026-04-21","Houston Stadium":"2026-05-15","International Broadcast Centre":"2026-04-27","International Broadcast Coordination Centre":"2026-04-27","Kansas City Stadium":"2026-05-17","Los Angeles Stadium":"2026-05-13","Los Angeles - Rose Bowl Stadium":"2026-05-13","Mexico City Stadium":"2026-05-12","Miami Stadium":"2026-05-22","Monterrey Stadium":"2026-05-15","New York / New Jersey Stadium":"2026-04-27","Philadelphia Stadium":"2026-05-15","San Francisco Bay Area Stadium":"2026-05-14","Seattle Stadium":"2026-05-16","Toronto Stadium":"2026-04-01","Vancouver Stadium":"2026-05-14"};
+const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-16","Boston Stadium":"2026-05-14","Dallas Stadium":"2026-05-08","Guadalajara Stadium":"2026-04-21","Houston Stadium":"2026-05-15","International Broadcast Centre":"2026-04-27","International Broadcast Coordination Centre":"2026-04-27","Kansas City Stadium":"2026-05-17","Los Angeles Stadium":"2026-04-20","Los Angeles - Rose Bowl Stadium":"2026-05-13","Mexico City Stadium":"2026-05-12","Miami Stadium":"2026-05-22","Monterrey Stadium":"2026-05-15","New York / New Jersey Stadium":"2026-04-27","Philadelphia Stadium":"2026-05-15","San Francisco Bay Area Stadium":"2026-04-22","Seattle Stadium":"2026-05-16","Toronto Stadium":"2026-04-01","Vancouver Stadium":"2026-05-14"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 
 // Always wipe VS on load — all defaults are now hard-coded in LM_DEFAULT_* maps
@@ -4743,6 +4748,7 @@ function _renderPalletCfg(){
     <span class="bg bg-gn">${asmCount} Asm</span>
     <span class="bg bg-or">${disCount} Dis</span>
     ${overrideCount>0?`<span class="bg bg-pu">${overrideCount} override${overrideCount>1?'s':''}</span>`:''}
+    ${Object.keys(LM_nomOverrides).length>0?`<span class="bg bg-pu">★ ${Object.keys(LM_nomOverrides).length} pallet dim override${Object.keys(LM_nomOverrides).length>1?'s':''}</span>${!isV?`<button class="rbtn" onclick="LM_nomOverrides={};for(const s in NOM){if(NOM[s]._origPq!==undefined){NOM[s].pq=NOM[s]._origPq;NOM[s].ps=NOM[s]._origPs;NOM[s].pqA=NOM[s]._origPqA;NOM[s].psA=NOM[s]._origPsA;delete NOM[s]._origPq;delete NOM[s]._origPs;delete NOM[s]._origPqA;delete NOM[s]._origPsA}};_renderPalletCfg();LM_saveNomOverrides();bV();numberAll();rVL()" style="font-size:9px;padding:2px 6px">↻ Reset Dims</button>`:''}`:''}
     <span class="bg bg-gy">${filtered.length} SKUs</span>
     <span style="font-size:10px;color:var(--ts)">${countryNote}</span>
     <div style="margin-left:auto"><input type="text" placeholder="Search SKU or item name…" value="${_pcSearch.replace(/"/g,'&quot;')}" oninput="_pcSearch=this.value;_renderPalletCfg()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--bd);font-size:11px;font-family:var(--fd);width:200px;outline:none"></div>
@@ -4764,13 +4770,18 @@ function _renderPalletCfg(){
     const eff=LM_getEffPallet(sku,_pcVt,_pcCountry);
     const effPq=eff.pq;const effPs=eff.ps;
     const ovrMark=isOvr?' ★':'';
+    const nOvr=LM_nomOverrides[sku]||{};
+    const hasPqOvr=nOvr.pq!==undefined||nOvr.ps!==undefined;
+    const hasAOvr=nOvr.pqA!==undefined||nOvr.psA!==undefined;
+    const origPq=nm._origPq??nm.pq;const origPs=nm._origPs??nm.ps;
+    const origPqA=nm._origPqA??nm.pqA;const origPsA=nm._origPsA??nm.psA;
     h+=`<tr style="${isDis?'background:#FEF8F4':''}${isOvr?';border-left:3px solid var(--pu)':''}">
     <td class="mono">${sku}</td><td class="tcl" style="max-width:200px">${nm.nm||sku}</td>
     <td style="color:var(--tt)">${nm.src||'—'}</td>
-    <td style="text-align:center;${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.pq||'—'}</td>
-    <td style="text-align:center;${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.ps||'—'}</td>
-    <td style="text-align:center;${!isDis&&hasAsm?'font-weight:700;color:var(--gn)':'color:var(--tt)'}">${nm.pqA||'—'}</td>
-    <td style="text-align:center;${!isDis&&hasAsm?'font-weight:700;color:var(--gn)':'color:var(--tt)'}">${nm.psA||'—'}</td>
+    <td style="text-align:center">${isV?`<span style="${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.pq||'—'}</span>`:`<input type="number" value="${nm.pq||0}" min="0" onchange="LM_setNomOvr('${sku}','pq',+this.value)" style="width:55px;padding:2px;border:1px solid ${hasPqOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasPqOvr?'background:var(--ps);font-weight:700':''}" title="${hasPqOvr?'Original: '+origPq:''}">`}</td>
+    <td style="text-align:center">${isV?`<span style="${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.ps||'—'}</span>`:`<input type="number" value="${nm.ps||0}" min="0" onchange="LM_setNomOvr('${sku}','ps',+this.value)" style="width:45px;padding:2px;border:1px solid ${hasPqOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasPqOvr?'background:var(--ps);font-weight:700':''}" title="${hasPqOvr?'Original: '+origPs:''}">`}</td>
+    <td style="text-align:center">${isV?`<span style="${!isDis&&hasAsm?'font-weight:700;color:var(--gn)':'color:var(--tt)'}">${nm.pqA||'—'}</span>`:`<input type="number" value="${nm.pqA||0}" min="0" onchange="LM_setNomOvr('${sku}','pqA',+this.value)" style="width:55px;padding:2px;border:1px solid ${hasAOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasAOvr?'background:var(--ps);font-weight:700':''}" title="${hasAOvr?'Original: '+origPqA:''}">`}</td>
+    <td style="text-align:center">${isV?`<span style="${!isDis&&hasAsm?'font-weight:700;color:var(--gn)':'color:var(--tt)'}">${nm.psA||'—'}</span>`:`<input type="number" value="${nm.psA||0}" min="0" onchange="LM_setNomOvr('${sku}','psA',+this.value)" style="width:45px;padding:2px;border:1px solid ${hasAOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasAOvr?'background:var(--ps);font-weight:700':''}" title="${hasAOvr?'Original: '+origPsA:''}">`}</td>
     <td style="text-align:center">${isV?(isDis?`<span class="bg bgs bg-or">D${ovrMark}</span>`:`<span class="bg bgs bg-gn">A${ovrMark}</span>`):`<button onclick="_pcToggle('${sku}')" class="bg bgs ${isDis?'bg-or':'bg-gn'}" style="cursor:pointer;border:none;font-family:var(--fd)">${isDis?'D → A':'A → D'}${ovrMark}</button>`}</td>
     <td class="mono fw7" style="text-align:center">${effPq||'—'}</td>
     <td class="mono fw7" style="text-align:center">${effPs||'—'}</td></tr>`;
@@ -4953,6 +4964,7 @@ let LM_dispatched=new Set();// truck fingerprints marked as dispatched
 let LM_dateOverrides={};// {fingerprint: newDate} — manual date changes
 let LM_hideStaples=false;// hide STP-sourced items in truck modals
 let LM_demandAdj={};// venue|sku -> adjusted total qty (overrides RW "Required" for that combo)
+let LM_nomOverrides={};// sku -> {pq?,ps?,pqA?,psA?} — pallet dimension overrides on NOM
 let _dashCalMap={};// stored from rMain dashboard for day-detail popup
 let _dashFilter=null;// {type:'all'|'region'|'clusterOv'|'filtered', labels:Set, regionCat:'', clusterName:'', venueLabel:''}
 // Stable truck fingerprint — survives renumbering since it's based on content not ID
@@ -5015,6 +5027,46 @@ async function LM_saveDemandAdj(){
 async function LM_loadDemandAdj(){
   if(!SB)return;
   try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-lm-demand-adj').single();if(data)LM_demandAdj=JSON.parse(data.value)||{}}catch(e){}
+}
+// ── LM Nomenclature Pallet Overrides (global, across all venue types) ──
+function LM_applyNomOverrides(){
+  for(const sku in LM_nomOverrides){
+    const n=NOM[sku];if(!n)continue;
+    const ov=LM_nomOverrides[sku];
+    if(!n._origPq&&n._origPq!==0)n._origPq=n.pq;
+    if(!n._origPs&&n._origPs!==0)n._origPs=n.ps;
+    if(!n._origPqA&&n._origPqA!==0)n._origPqA=n.pqA;
+    if(!n._origPsA&&n._origPsA!==0)n._origPsA=n.psA;
+    if(ov.pq!==undefined)n.pq=ov.pq;
+    if(ov.ps!==undefined)n.ps=ov.ps;
+    if(ov.pqA!==undefined)n.pqA=ov.pqA;
+    if(ov.psA!==undefined)n.psA=ov.psA;
+  }
+}
+function LM_setNomOvr(sku,field,val){
+  if(ROLE==='viewer')return;
+  const n=NOM[sku];if(!n)return;
+  const orig=field==='pq'?(n._origPq??n.pq):field==='ps'?(n._origPs??n.ps):field==='pqA'?(n._origPqA??n.pqA):(n._origPsA??n.psA);
+  if(val===orig||(!val&&!orig)){
+    // Revert to original
+    if(LM_nomOverrides[sku]){delete LM_nomOverrides[sku][field];if(!Object.keys(LM_nomOverrides[sku]).length)delete LM_nomOverrides[sku]}
+  } else {
+    if(!LM_nomOverrides[sku])LM_nomOverrides[sku]={};
+    LM_nomOverrides[sku][field]=val;
+  }
+  LM_applyNomOverrides();
+  _renderPalletCfg();
+  LM_saveNomOverrides();
+  bV();numberAll();rVL();
+}
+async function LM_saveNomOverrides(){
+  if(ROLE==='viewer'||!SB)return;
+  UNDO_capture();
+  try{await SB.from('shared_state').upsert({id:'fm-lm-nom-ovr',value:JSON.stringify(LM_nomOverrides),updated_at:new Date().toISOString()})}catch(e){console.warn('LM nom ovr save:',e)}
+}
+async function LM_loadNomOverrides(){
+  if(!SB)return;
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-lm-nom-ovr').single();if(data)LM_nomOverrides=JSON.parse(data.value)||{}}catch(e){}
 }
 function LM_applyDateOverrides(){
   if(!Object.keys(LM_dateOverrides).length)return;
@@ -5558,8 +5610,8 @@ function LM_setDemand(venue,sku,newQty,origQty){
   const k=venue+'|'+sku;
   if(newQty===origQty){delete LM_demandAdj[k]}
   else{LM_demandAdj[k]=newQty}
-  // Rebuild this venue's trucks (clear cache, renumber)
-  PLAN_CACHE={};numberAll();
+  // Rebuild venue stats and trucks (clear cache, renumber)
+  bV();PLAN_CACHE={};numberAll();
   LM_saveDemandAdj();
   // Re-render but stay on demand tab
   rMain();rVL();
@@ -6324,7 +6376,7 @@ function doSystemReset(){
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};
-  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
+  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_arrivedConts=new Set();
   // Restore upload screen
@@ -6397,7 +6449,7 @@ async function goGenerate(){
     NOM=pNm(nE.wb);RW=pPl(pE.wb);
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
-    bV();if(!VN.length)throw new Error("No venues.");
+    LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
     numberAll();sel="";cv="dashboard";
     document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
 
@@ -6479,9 +6531,9 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};
   document.getElementById("D").classList.add("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.remove("vis");
@@ -6795,7 +6847,7 @@ async function goGenerateLM(){
     NOM=pNm(nE.wb);RW=pPl(pE.wb);
     if(!Object.keys(NOM).length)throw new Error('No nomenclature data.');
     if(!RW.length)throw new Error('No plan data.');
-    bV();if(!VN.length)throw new Error('No venues.');
+    LM_applyNomOverrides();bV();if(!VN.length)throw new Error('No venues.');
     numberAll();sel='';cv='dashboard';
     document.getElementById('hm').textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
     document.getElementById('pov').style.display='none';
