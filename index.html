@@ -4778,10 +4778,10 @@ function _renderPalletCfg(){
     h+=`<tr style="${isDis?'background:#FEF8F4':''}${isOvr?';border-left:3px solid var(--pu)':''}">
     <td class="mono">${sku}</td><td class="tcl" style="max-width:200px">${nm.nm||sku}</td>
     <td style="color:var(--tt)">${nm.src||'—'}</td>
-    <td style="text-align:center">${isV?`<span style="${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.pq||'—'}</span>`:`<input type="number" value="${nm.pq||0}" min="0" onkeydown="if(event.key==='Enter')this.blur()" onchange="LM_setNomOvr('${sku}','pq',+this.value)" style="width:55px;padding:2px;border:1px solid ${hasPqOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasPqOvr?'background:var(--ps);font-weight:700':''}" title="${hasPqOvr?'Original: '+origPq:''}">`}</td>
-    <td style="text-align:center">${isV?`<span style="${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.ps||'—'}</span>`:`<input type="number" value="${nm.ps||0}" min="0" onkeydown="if(event.key==='Enter')this.blur()" onchange="LM_setNomOvr('${sku}','ps',+this.value)" style="width:45px;padding:2px;border:1px solid ${hasPqOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasPqOvr?'background:var(--ps);font-weight:700':''}" title="${hasPqOvr?'Original: '+origPs:''}">`}</td>
-    <td style="text-align:center">${isV?`<span style="${!isDis&&hasAsm?'font-weight:700;color:var(--gn)':'color:var(--tt)'}">${nm.pqA||'—'}</span>`:`<input type="number" value="${nm.pqA||0}" min="0" onkeydown="if(event.key==='Enter')this.blur()" onchange="LM_setNomOvr('${sku}','pqA',+this.value)" style="width:55px;padding:2px;border:1px solid ${hasAOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasAOvr?'background:var(--ps);font-weight:700':''}" title="${hasAOvr?'Original: '+origPqA:''}">`}</td>
-    <td style="text-align:center">${isV?`<span style="${!isDis&&hasAsm?'font-weight:700;color:var(--gn)':'color:var(--tt)'}">${nm.psA||'—'}</span>`:`<input type="number" value="${nm.psA||0}" min="0" onkeydown="if(event.key==='Enter')this.blur()" onchange="LM_setNomOvr('${sku}','psA',+this.value)" style="width:45px;padding:2px;border:1px solid ${hasAOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasAOvr?'background:var(--ps);font-weight:700':''}" title="${hasAOvr?'Original: '+origPsA:''}">`}</td>
+    <td style="text-align:center">${isV?`<span style="${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.pq||'—'}</span>`:`<input type="number" value="${nm.pq||0}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setNomOvr('${sku}','pq',+this.value)" style="width:55px;padding:2px;border:1px solid ${hasPqOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasPqOvr?'background:var(--ps);font-weight:700':''}" title="${hasPqOvr?'Original: '+origPq:''}">`}</td>
+    <td style="text-align:center">${isV?`<span style="${isDis?'font-weight:700;color:var(--or)':'color:var(--tt)'}">${nm.ps||'—'}</span>`:`<input type="number" value="${nm.ps||0}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setNomOvr('${sku}','ps',+this.value)" style="width:45px;padding:2px;border:1px solid ${hasPqOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasPqOvr?'background:var(--ps);font-weight:700':''}" title="${hasPqOvr?'Original: '+origPs:''}">`}</td>
+    <td style="text-align:center">${isV?`<span style="${!isDis&&hasAsm?'font-weight:700;color:var(--gn)':'color:var(--tt)'}">${nm.pqA||'—'}</span>`:`<input type="number" value="${nm.pqA||0}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setNomOvr('${sku}','pqA',+this.value)" style="width:55px;padding:2px;border:1px solid ${hasAOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasAOvr?'background:var(--ps);font-weight:700':''}" title="${hasAOvr?'Original: '+origPqA:''}">`}</td>
+    <td style="text-align:center">${isV?`<span style="${!isDis&&hasAsm?'font-weight:700;color:var(--gn)':'color:var(--tt)'}">${nm.psA||'—'}</span>`:`<input type="number" value="${nm.psA||0}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setNomOvr('${sku}','psA',+this.value)" style="width:45px;padding:2px;border:1px solid ${hasAOvr?'var(--pu)':'var(--bd)'};border-radius:3px;font-size:10px;text-align:center;font-family:var(--fd);${hasAOvr?'background:var(--ps);font-weight:700':''}" title="${hasAOvr?'Original: '+origPsA:''}">`}</td>
     <td style="text-align:center">${isV?(isDis?`<span class="bg bgs bg-or">D${ovrMark}</span>`:`<span class="bg bgs bg-gn">A${ovrMark}</span>`):`<button onclick="_pcToggle('${sku}')" class="bg bgs ${isDis?'bg-or':'bg-gn'}" style="cursor:pointer;border:none;font-family:var(--fd)">${isDis?'D → A':'A → D'}${ovrMark}</button>`}</td>
     <td class="mono fw7" style="text-align:center">${effPq||'—'}</td>
     <td class="mono fw7" style="text-align:center">${effPs||'—'}</td></tr>`;
@@ -5048,16 +5048,16 @@ function LM_setNomOvr(sku,field,val){
   const n=NOM[sku];if(!n)return;
   const orig=field==='pq'?(n._origPq??n.pq):field==='ps'?(n._origPs??n.ps):field==='pqA'?(n._origPqA??n.pqA):(n._origPsA??n.psA);
   if(val===orig||(!val&&!orig)){
-    // Revert to original
     if(LM_nomOverrides[sku]){delete LM_nomOverrides[sku][field];if(!Object.keys(LM_nomOverrides[sku]).length)delete LM_nomOverrides[sku]}
   } else {
     if(!LM_nomOverrides[sku])LM_nomOverrides[sku]={};
     LM_nomOverrides[sku][field]=val;
   }
   LM_applyNomOverrides();
-  _renderPalletCfg();
   LM_saveNomOverrides();
   bV();numberAll();rVL();
+  // Defer modal re-render so current blur/change event completes before DOM is destroyed
+  setTimeout(()=>_renderPalletCfg(),50);
 }
 async function LM_saveNomOverrides(){
   if(ROLE==='viewer'||!SB)return;
@@ -5581,7 +5581,7 @@ function LM_renderDemand(el){
         <td class="tcl">${s.name}</td>
         <td style="font-size:10px;color:var(--tt)">${s.src}</td>
         <td class="mono">${s.origQty.toLocaleString()}</td>
-        <td>${ROLE!=='viewer'?`<input type="number" value="${s.adjQty}" min="0" onkeydown="if(event.key==='Enter')this.blur()" onchange="LM_setDemand('${vEsc}','${s.sku}',+this.value,${s.origQty})" style="width:80px;padding:2px 4px;border:1px solid ${s.isAdj?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fd);${s.isAdj?'background:var(--ps);font-weight:700':''}">`:s.adjQty.toLocaleString()}</td>
+        <td>${ROLE!=='viewer'?`<input type="number" value="${s.adjQty}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setDemand('${vEsc}','${s.sku}',+this.value,${s.origQty})" style="width:80px;padding:2px 4px;border:1px solid ${s.isAdj?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fd);${s.isAdj?'background:var(--ps);font-weight:700':''}">`:s.adjQty.toLocaleString()}</td>
         <td style="color:${deltaColor};font-weight:${delta!==0?'700':'400'};font-size:10px">${deltaStr}</td>
       </tr>`;
     }
@@ -5613,9 +5613,8 @@ function LM_setDemand(venue,sku,newQty,origQty){
   // Rebuild venue stats and trucks (clear cache, renumber)
   bV();PLAN_CACHE={};numberAll();
   LM_saveDemandAdj();
-  // Re-render but stay on demand tab
-  rMain();rVL();
-  if(typeof V26_render==='function')try{V26_render()}catch(e){}
+  // Defer re-render so current blur event completes before DOM is destroyed
+  setTimeout(()=>{rMain();rVL();if(typeof V26_render==='function')try{V26_render()}catch(e){}},50);
 }
 
 function rMain(){const el=document.getElementById("mn");
