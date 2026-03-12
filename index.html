@@ -768,11 +768,15 @@ function LP_recalcReadyDates(){
   const ta=LP_STATE.turnaround||6;
   for(const a of LP_STATE.arrivals){
     // Use overridden arrival date if present, otherwise original
-    const arrDate=a._origArrDate?a._origArrDate:a.arrivalDate;
-    const effArr=LP_contDateOverrides[a.container||'']||arrDate;
+    const origArrDate=a._origArrDate?a._origArrDate:a.arrivalDate;
+    const rawCont=a.container||'';
+    const isNoCont=!rawCont||rawCont==='—'||rawCont.toUpperCase()==='NO CONTAINER';
+    // Check override: container key first, then no-container composite key (—|origDate)
+    const ovrKey=isNoCont?('—|'+origArrDate):rawCont;
+    const effArr=LP_contDateOverrides[ovrKey]||LP_contDateOverrides[rawCont]||origArrDate;
     a.arrivalDate=effArr;
-    if(LP_contDateOverrides[a.container||'']){
-      if(!a._origArrDate)a._origArrDate=arrDate;
+    if(effArr!==origArrDate){
+      if(!a._origArrDate)a._origArrDate=origArrDate;
     }
     a.readyDate=LP_nextWorkday(LP_addDays(effArr,ta));
   }
@@ -1066,11 +1070,16 @@ function LP_renderArrivals(el){
   const arr=LP_STATE.arrivals;
   if(!arr.length){el.innerHTML='<div class="lp-empty">No arrivals data loaded.</div>';return}
 
-  // Group by container
+  // Group by container (split no-container by original arrival date)
   const byCont={};
   for(const a of arr){
-    const k=a.container||'—';
-    if(!byCont[k])byCont[k]={name:k,items:[],totalQty:0,totalPlt:0,dates:new Set(),origDates:new Set(),readyDates:new Set()};
+    const rawCont=a.container||'';
+    const isNoCont=!rawCont||rawCont==='—'||rawCont.toUpperCase()==='NO CONTAINER';
+    const origDate=a._origArrDate||a.arrivalDate||'';
+    // No-container items: group by date so each date group can be overridden independently
+    const k=isNoCont?'—|'+origDate:rawCont;
+    const dispName=isNoCont?'Local Delivery · '+origDate:rawCont;
+    if(!byCont[k])byCont[k]={name:dispName,key:k,isNoCont,items:[],totalQty:0,totalPlt:0,dates:new Set(),origDates:new Set(),readyDates:new Set()};
     byCont[k].items.push(a);
     byCont[k].totalQty+=a.qty||0;
     byCont[k].totalPlt+=a.availPallets||0;
@@ -1081,29 +1090,31 @@ function LP_renderArrivals(el){
   }
   const conts=Object.values(byCont).sort((a,b)=>{
     // Sort no-container to end
-    const noA=a.name==='—'||a.name==='NO CONTAINER';
-    const noB=b.name==='—'||b.name==='NO CONTAINER';
-    if(noA&&!noB)return 1;
-    if(!noA&&noB)return -1;
+    if(a.isNoCont&&!b.isNoCont)return 1;
+    if(!a.isNoCont&&b.isNoCont)return -1;
     const da=[...a.dates].sort()[0]||'9999';
     const db=[...b.dates].sort()[0]||'9999';
     return da.localeCompare(db);
   });
 
   const PALETTE=['#CF5D5D','#4A90D9','#50B86C','#E8A838','#9B59B6','#1ABC9C','#E67E22','#3498DB','#E91E63','#00BCD4'];
-  const contKeys=conts.map(c=>c.name);
+  const contKeys=conts.map(c=>c.key||c.name);
   const cc=k=>PALETTE[contKeys.indexOf(k)%PALETTE.length];
 
   const totalQty=arr.reduce((s,a)=>s+(a.qty||0),0);
   const totalPlt=arr.reduce((s,a)=>s+(a.availPallets||0),0);
   const byDate=new Set(arr.map(a=>a.arrivalDate).filter(Boolean));
+  const contCount=conts.filter(c=>!c.isNoCont).length;
+  const localCount=conts.filter(c=>c.isNoCont).length;
+  const localQty=conts.filter(c=>c.isNoCont).reduce((s,c)=>s+c.totalQty,0);
 
   const ovrCount=Object.keys(LP_contDateOverrides).length;
   const earliestReady=[...new Set(arr.map(a=>a.readyDate).filter(Boolean))].sort()[0]||'—';
   // KPI strip
   let html=`<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
     ${[
-      [conts.length,'Containers','var(--ac)'],
+      [contCount,'Containers','var(--ac)'],
+      [localCount,'Local Deliveries','var(--or)'],
       [byDate.size,'Arrival Dates','var(--ac)'],
       [totalPlt.toFixed(0),'Pallets','var(--rd)'],
       [totalQty.toLocaleString(),'Pieces','var(--rd)'],
@@ -1120,21 +1131,22 @@ function LP_renderArrivals(el){
   // Container cards grid — dense TV layout
   html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">`;
   for(const cont of conts){
-    const color=cc(cont.name);
+    const color=cc(cont.key||cont.name);
     const arrDates=[...cont.dates].sort().join(' · ')||'No date';
-    const id='lp-cont-'+cont.name.replace(/[^a-z0-9]/gi,'_');
+    const id='lp-cont-'+(cont.key||cont.name).replace(/[^a-z0-9]/gi,'_');
     const fillPct=Math.min(100,Math.round(cont.totalPlt/maxPlt*100));
-    const noContainer=cont.name==='—'||cont.name==='NO CONTAINER';
-    const _hasOvr=!noContainer&&LP_contDateOverrides[cont.name];
-    const _ovrDate=_hasOvr?LP_contDateOverrides[cont.name]:'';
+    const noContainer=cont.isNoCont;
+    const _contKey=cont.key||cont.name;
+    const _hasOvr=LP_contDateOverrides[_contKey];
+    const _ovrDate=_hasOvr?LP_contDateOverrides[_contKey]:'';
     const _origDate=[...cont.origDates].sort()[0]||'';
     const _origDatesStr=[...cont.origDates].sort().join(' · ')||'No date';
-    const _cEsc=cont.name.replace(/'/g,"\\'");
+    const _cEsc=_contKey.replace(/'/g,"\\'");
     html+=`<div style="background:var(--sf);border:1.5px solid ${_hasOvr?'var(--pu)':color+'44'};border-radius:10px;overflow:hidden${_hasOvr?';box-shadow:0 0 0 1px var(--pu)':''}">
       <div onclick="lpContToggle('${id}')" style="cursor:pointer;padding:9px 11px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
           <div style="display:flex;align-items:center;gap:6px;min-width:0">
-            <svg width="22" height="16" viewBox="0 0 28 20" style="flex-shrink:0">
+            ${noContainer?`<span style="font-size:14px;flex-shrink:0">🚚</span>`:`<svg width="22" height="16" viewBox="0 0 28 20" style="flex-shrink:0">
               <rect x="1" y="2" width="26" height="13" rx="2" fill="#1a1a2e" stroke="${color}" stroke-width="1.8"/>
               <rect x="2" y="2" width="24" height="5" rx="1" fill="${color}" opacity="0.35"/>
               ${[1,2,3].map(i=>`<line x1="${4+i*6}" y1="4" x2="${4+i*6}" y2="14" stroke="${color}" stroke-width="0.6" opacity="0.35"/>`).join('')}
@@ -1142,14 +1154,14 @@ function LP_renderArrivals(el){
               <rect x="3" y="15" width="22" height="2" rx="1" fill="#2a2a3e"/>
               <circle cx="7" cy="18" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
               <circle cx="21" cy="18" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
-            </svg>
-            <span style="font-size:12px;font-weight:800;color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${noContainer?'No Container':cont.name}</span>
+            </svg>`}
+            <span style="font-size:12px;font-weight:800;color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cont.name}</span>
           </div>
           <span id="${id}-chev" style="color:var(--tt);font-size:10px;flex-shrink:0;margin-left:4px;transition:transform .2s">▼</span>
         </div>
         <div style="font-size:10px;color:${_hasOvr?'var(--pu)':'var(--tt)'};margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${_hasOvr?'700':'400'}">📅 ${_hasOvr?_ovrDate+' <span style="color:var(--tt);font-weight:400;text-decoration:line-through">'+_origDatesStr+'</span>':arrDates}</div>
         <div style="font-size:9px;color:var(--gn);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✅ Ready: ${[...cont.readyDates].sort().join(' · ')||'—'} <span style="color:var(--tt)">(+${LP_STATE.turnaround}d)</span></div>
-        ${(!noContainer&&ROLE!=='viewer')?`<div onclick="event.stopPropagation()" style="margin-bottom:6px;display:flex;align-items:center;gap:4px"><input type="date" value="${_ovrDate||_origDate}" onchange="LP_setContDate('${_cEsc}',this.value)" style="width:100%;padding:2px 5px;border-radius:4px;border:1px solid ${_hasOvr?'var(--pu)':'var(--bd)'};font-size:10px;font-family:var(--fd);${_hasOvr?'background:var(--ps);font-weight:700':''}">${_hasOvr?`<button onclick="LP_setContDate('${_cEsc}','')" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0" title="Reset to original">✕</button>`:''}</div>`:''}
+        ${ROLE!=='viewer'?`<div onclick="event.stopPropagation()" style="margin-bottom:6px;display:flex;align-items:center;gap:4px"><input type="date" value="${_ovrDate||_origDate}" onchange="LP_setContDate('${_cEsc}',this.value)" style="width:100%;padding:2px 5px;border-radius:4px;border:1px solid ${_hasOvr?'var(--pu)':'var(--bd)'};font-size:10px;font-family:var(--fd);${_hasOvr?'background:var(--ps);font-weight:700':''}">${_hasOvr?`<button onclick="LP_setContDate('${_cEsc}','')" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0" title="Reset to original">✕</button>`:''}</div>`:''}
         <div style="display:flex;gap:5px;margin-bottom:6px">
           <div style="flex:1;background:var(--bg);border-radius:5px;padding:4px 5px;text-align:center">
             <div style="font-size:14px;font-weight:800;color:${color};line-height:1.1">${cont.totalPlt.toFixed(1)}</div>
@@ -2234,8 +2246,8 @@ function V26_render(){
   // Aggregate arrivals by container
   const nbArrByCont={};
   for(const a of nbArrivals){
-    const k=a.container||'No Container';
-    if(!nbArrByCont[k])nbArrByCont[k]={name:k,skus:0,qty:0,items:[]};
+    const k=a.container||'Local Delivery';
+    if(!nbArrByCont[k])nbArrByCont[k]={name:k,skus:0,qty:0,items:[],arrDate:a.arrivalDate||'',readyDate:a.readyDate||''};
     nbArrByCont[k].skus++;nbArrByCont[k].qty+=a.qty;nbArrByCont[k].items.push(a);
   }
   const nbArrConts=Object.values(nbArrByCont);
@@ -2274,6 +2286,12 @@ function V26_render(){
       </div>
     </div>`;
 
+  // Store for popup access
+  window._nbArrConts=nbArrConts;
+  window._nbLpTrucks=nbLpTrucks;
+  window._nbLmTrucks=nbLmTrucks;
+  window._nbCort=nbCort;
+
   if(!nbHasInbound&&!nbHasOutbound){
     html+=`<div style="text-align:center;padding:12px;color:var(--tt);font-size:12px">No arrivals or dispatches scheduled for ${_targetLabel}</div>`;
   } else {
@@ -2287,12 +2305,15 @@ function V26_render(){
     if(!nbHasInbound){
       html+=`<div style="font-size:11px;color:var(--tt);padding:8px 0">No arrivals</div>`;
     } else {
-      for(const cont of nbArrConts){
-        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:700;color:var(--tp)">${cont.name}</div>
-          <div style="font-size:10px;color:var(--ts)">${cont.skus} SKU${cont.skus>1?'s':''} · ${cont.qty.toLocaleString()} pcs</div>
-          <div style="font-size:9px;color:var(--tt);margin-top:2px">${cont.items.slice(0,5).map(a=>`${a.sku}: ${a.qty}`).join(' · ')}${cont.items.length>5?' …':''}
+      for(let ci=0;ci<nbArrConts.length;ci++){
+        const cont=nbArrConts[ci];
+        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showInbound(${ci})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:11px;font-weight:700;color:var(--tp)">${cont.name}</div>
+            <div style="font-size:9px;color:var(--tt)">${cont.arrDate}</div>
           </div>
+          <div style="font-size:10px;color:var(--ts)">${cont.skus} SKU${cont.skus>1?'s':''} · ${cont.qty.toLocaleString()} pcs</div>
+          <div style="font-size:9px;color:var(--gn);margin-top:1px">Ready: ${cont.readyDate} (+${LP_STATE.turnaround}d)</div>
         </div>`;
       }
     }
@@ -2306,23 +2327,35 @@ function V26_render(){
     if(!nbHasOutbound){
       html+=`<div style="font-size:11px;color:var(--tt);padding:8px 0">No dispatches</div>`;
     } else {
-      for(const t of nbLpTrucks){
+      for(let li=0;li<nbLpTrucks.length;li++){
+        const t=nbLpTrucks[li];
         const lsr=LP_lsrNumbers[t.id]||'';
-        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:700;color:var(--tp)">LP-${t.id} ${lsr?'<span class="mono" style="font-size:9px;color:var(--pu)">'+lsr+'</span>':''} → <span style="color:var(--ac)">${clDisp(t.dest)}</span></div>
+        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showLpTruck(${li})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:11px;font-weight:700;color:var(--tp)">LP-${t.id} ${lsr?'<span class="mono" style="font-size:9px;color:var(--pu)">'+lsr+'</span>':''} → <span style="color:var(--ac)">${clDisp(t.dest)}</span></div>
+            <div style="font-size:9px;color:var(--tt)">${_targetKey}</div>
+          </div>
           <div style="font-size:10px;color:var(--ts)">${t.items.length} SKU${t.items.length>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.plt.toFixed(1)} plt</div>
         </div>`;
       }
-      for(const t of nbLmTrucks){
-        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:700;color:var(--tp)">LM-${t.id} → <span style="color:var(--gn)">${clDisp(t.dest)}</span></div>
+      for(let mi=0;mi<nbLmTrucks.length;mi++){
+        const t=nbLmTrucks[mi];
+        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showLmTruck(${mi})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:11px;font-weight:700;color:var(--tp)">${t.id} → <span style="color:var(--gn)">${clDisp(t.dest)}</span></div>
+            <div style="font-size:9px;color:var(--tt)">${_targetKey}</div>
+          </div>
           <div style="font-size:10px;color:var(--ts)">${t.skus} SKU${t.skus>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.pallets.toFixed(1)} plt</div>
         </div>`;
       }
-      for(const c of nbCort){
-        html+=`<div style="background:#FFF8F8;border-radius:6px;padding:6px 8px;margin-bottom:4px;border:1px solid #F5C6C7">
-          <div style="font-size:11px;font-weight:700;color:#E31837">CORT → ${clDisp(c.dest)}</div>
-          <div style="font-size:10px;color:var(--ts)">${c.qty.toLocaleString()} pcs</div>
+      for(let ki=0;ki<nbCort.length;ki++){
+        const c=nbCort[ki];
+        html+=`<div style="background:#FFF8F8;border-radius:6px;padding:6px 8px;margin-bottom:4px;border:1px solid #F5C6C7;cursor:pointer;transition:box-shadow .15s" onclick="NB_showCort(${ki})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:11px;font-weight:700;color:#E31837">CORT → ${clDisp(c.dest)}</div>
+            <div style="font-size:9px;color:var(--tt)">${_targetKey}</div>
+          </div>
+          <div style="font-size:10px;color:var(--ts)">${c.qty.toLocaleString()} pcs · ${c.skus} SKU${c.skus>1?'s':''}</div>
         </div>`;
       }
     }
@@ -2516,6 +2549,51 @@ function V26_showCortDetail(id,date){
   mh+=`<div class="mdb"><div class="mst"><div>Pieces: <strong>${c.qty.toLocaleString()}</strong></div><div>SKUs: <strong>${c.items.length}</strong></div><div>Destination: <strong>${c.destDisplay}</strong></div></div>
     <div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   openModal(mh,'600px');
+}
+
+// ── Notification Board Popups ──
+function NB_showInbound(idx){
+  const cont=window._nbArrConts?.[idx];if(!cont)return;
+  let h=modalHeader(`📥 ${cont.name}`,`Arrival: ${cont.arrDate} · Ready: ${cont.readyDate} (+${LP_STATE.turnaround}d turnaround)`);
+  h+=`<div class="mdb"><div class="mst"><div>SKUs: <strong>${cont.skus}</strong></div><div>Pieces: <strong>${cont.qty.toLocaleString()}</strong></div></div>`;
+  h+=`<div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th></tr></thead><tbody>`;
+  for(const a of cont.items){
+    h+=`<tr><td class="mono">${a.sku}</td><td class="tcl">${a.name||'—'}</td><td class="mono fw7">${(a.qty||0).toLocaleString()}</td><td class="mono">${a.availPallets||'—'}</td></tr>`;
+  }
+  h+=`</tbody></table></div></div>`;
+  openModal(h,'700px');
+}
+function NB_showLpTruck(idx){
+  const t=window._nbLpTrucks?.[idx];if(!t)return;
+  const lsr=LP_lsrNumbers[t.id]||'';
+  let h=modalHeader(`📤 LP-${t.id}${lsr?' <span class="mono" style="color:var(--pu);font-size:12px;background:var(--ps);padding:1px 6px;border-radius:3px">'+lsr+'</span>':''}`,`${t.dest} · ${t.items.length} SKUs · ${t.qty.toLocaleString()} pcs · ${t.plt.toFixed(1)} plt`);
+  h+=`<div class="mdb"><div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th></tr></thead><tbody>`;
+  for(const r of t.items){
+    const nm=LP_STATE.nomenclature[r.sku]?.name||r.name||r.sku;
+    h+=`<tr><td class="mono">${r.sku}</td><td class="tcl">${nm}</td><td class="mono fw7">${(r.qty||0).toLocaleString()}</td><td class="mono">${(r.pallets||0).toFixed(1)}</td></tr>`;
+  }
+  h+=`</tbody></table></div></div>`;
+  openModal(h,'700px');
+}
+function NB_showLmTruck(idx){
+  const t=window._nbLmTrucks?.[idx];if(!t)return;
+  let h=modalHeader(`📤 ${t.id}`,`${clDisp(t.dest)} · ${t.skus} SKUs · ${t.qty.toLocaleString()} pcs · ${t.pallets.toFixed(1)} plt`);
+  h+=`<div class="mdb"><div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th></tr></thead><tbody>`;
+  for(const it of t.items){
+    h+=`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.name||'—'}</td><td class="mono fw7">${(it.qty||0).toLocaleString()}</td><td class="mono">${(it.pallets||0).toFixed(1)}</td></tr>`;
+  }
+  h+=`</tbody></table></div></div>`;
+  openModal(h,'700px');
+}
+function NB_showCort(idx){
+  const c=window._nbCort?.[idx];if(!c)return;
+  let h=modalHeader(`🏷 CORT → ${clDisp(c.dest)}`,`${c.qty.toLocaleString()} pcs · ${c.skus} SKUs`);
+  h+=`<div class="mdb"><div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th></tr></thead><tbody>`;
+  for(const it of c.items){
+    h+=`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.name||'—'}</td><td class="mono fw7">${(it.qty||0).toLocaleString()}</td></tr>`;
+  }
+  h+=`</tbody></table></div></div>`;
+  openModal(h,'600px');
 }
 
 function V26_showDay(dateKey){
