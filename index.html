@@ -1135,7 +1135,8 @@ function LP_renderArrivals(el){
   const maxPlt=Math.max(...conts.map(x=>x.totalPlt),1);
   // Container cards grid — dense TV layout
   window._lpConts=conts;// store for popup access
-  html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">`;
+  html+=`<input type="text" class="lp-search" placeholder="Search container number..." id="lpArrSearch" oninput="LP_filterArrivals()" style="margin-bottom:8px">`;
+  html+=`<div id="lpArrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">`;
   for(let ci=0;ci<conts.length;ci++){
     const cont=conts[ci];
     const color=cc(cont.key||cont.name);
@@ -1153,7 +1154,8 @@ function LP_renderArrivals(el){
     const _dispDate=noContainer?_origDate:'';
     const _boxShadow=_hasOvr?'0 0 0 1px var(--pu)':'none';
     const _isArrived=LP_arrivedConts.has(_contKey);
-    html+=`<div style="background:${_isArrived?'#F8FFF8':'var(--sf)'};border:1.5px solid ${_hasOvr?'var(--pu)':color+'44'};border-radius:10px;overflow:hidden;box-shadow:${_boxShadow};cursor:pointer;transition:all .2s;${_isArrived?'opacity:0.35;filter:grayscale(0.5)':''}" onclick="LP_showContModal(${ci})" onmouseover="this.style.boxShadow='0 2px 10px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='${_boxShadow}'">
+    const _searchTxt=`${cont.name} ${arrDates} ${cont.items.map(a=>a.sku).join(' ')}`.toLowerCase();
+    html+=`<div class="lp-arr-card" data-search="${_searchTxt}" style="background:${_isArrived?'#F8FFF8':'var(--sf)'};border:1.5px solid ${_hasOvr?'var(--pu)':color+'44'};border-radius:10px;overflow:hidden;box-shadow:${_boxShadow};cursor:pointer;transition:all .2s;${_isArrived?'opacity:0.35;filter:grayscale(0.5)':''}" onclick="LP_showContModal(${ci})" onmouseover="this.style.boxShadow='0 2px 10px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='${_boxShadow}'">
       <div style="padding:9px 11px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
           <div style="display:flex;align-items:center;gap:6px;min-width:0">
@@ -1253,7 +1255,15 @@ function LP_toggleArrived(contKey,checked){
   LP_render();
 }
 const PALETTE=['#CF5D5D','#4A90D9','#50B86C','#E8A838','#9B59B6','#1ABC9C','#E67E22','#3498DB','#E91E63','#00BCD4'];
-function LP_filterArrivals(){}
+function LP_filterArrivals(){
+  const q=(document.getElementById('lpArrSearch')?.value||'').toLowerCase().trim();
+  const cards=document.querySelectorAll('#lpArrGrid .lp-arr-card');
+  cards.forEach(c=>{
+    if(!q){c.style.display='';return}
+    const s=c.dataset.search||'';
+    c.style.display=s.includes(q)?'':'none';
+  });
+}
 
 /* ─────────────────────────────────────────────
    DEMAND TAB
