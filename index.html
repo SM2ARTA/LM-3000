@@ -5791,8 +5791,8 @@ if(cv==="dashboard"){
   const calDates=Object.keys(calMap).filter(d=>d.match(/^\d{4}-/)).sort();
   // totTrucks = sum of DDD column — single source of truth so KPI card always matches table
   totTrucks=calDates.reduce((s,dk)=>s+(calMap[dk].trucks||0),0);
-  totPlt=Math.round(calDates.reduce((s,dk)=>s+(calMap[dk].pallets||0),0)*10)/10;
-  // totPcs stays as demand from venue metadata (set above from v.it)
+  const loadedPlt=Math.round(calDates.reduce((s,dk)=>s+(calMap[dk].pallets||0),0)*10)/10;
+  // totPlt stays as demand from VN (consistent with sidebar labels)
   const peakTrucks=calDates.length?Math.max(...calDates.map(d=>calMap[d].trucks)):0;
   const totalDays=calDates.length;
   const filterLabel=isClusterOv?clDisp(clusterOvName)+' Overview':(isRegion?(regionCat==='can'?'Canada Overview':'Mexico Overview'):(isFiltered?(isClusterSel2?clDisp(selCluster):sel):'All Venues'));
