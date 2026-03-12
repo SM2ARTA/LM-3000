@@ -2364,7 +2364,18 @@ function V26_render(){
   const fActiveTrucks=filteredTrucks.filter(t=>!t.excluded);
   const fActiveCort=filteredCort.filter(c=>!c.excluded);
   const fTotalTrucks=fActiveTrucks.length;
-  const fLmPlt=Math.round(fActiveTrucks.filter(t=>t.source!=='Load Plan').reduce((s,t)=>s+t.pallets,0)*10)/10;
+  // LM pallets from demand (VN) for consistency with LM module KPIs
+  const fLmPlt=(()=>{
+    const lmFilter=curFilter;
+    if(lmFilter==='lp')return 0;// LP-only filter, no LM pallets
+    const vnPlt=VN.reduce((s,v)=>s+v.ep,0);
+    if(lmFilter==='all')return Math.round(vnPlt*10)/10;
+    // For country filters, sum matching VN venues
+    if(lmFilter==='usa')return Math.round(VN.filter(v=>!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).reduce((s,v)=>s+v.ep,0)*10)/10;
+    if(lmFilter==='can')return Math.round(VN.filter(v=>vcIsCAN(v.cluster)).reduce((s,v)=>s+v.ep,0)*10)/10;
+    if(lmFilter==='mex')return Math.round(VN.filter(v=>vcIsMEX(v.cluster)).reduce((s,v)=>s+v.ep,0)*10)/10;
+    return Math.round(fActiveTrucks.filter(t=>t.source!=='Load Plan').reduce((s,t)=>s+t.pallets,0)*10)/10;
+  })();
   const fLpPlt=Math.round(fActiveTrucks.filter(t=>t.source==='Load Plan').reduce((s,t)=>s+t.pallets,0)*10)/10;
   const fTotalQty=fActiveTrucks.reduce((s,t)=>s+t.qty,0);
   const fLpCount=fActiveTrucks.filter(t=>t.source==='Load Plan').length;
