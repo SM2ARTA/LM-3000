@@ -2937,24 +2937,27 @@ function enterApp(){
     // Load Last Mile data
     try{
       if(!SB)throw new Error("No DB");
-      const {data:nomD,error:nomE}=await SB.from('shared_state').select('value').eq('id','fm-nom').single();
-      const {data:rwD,error:rwE}=await SB.from('shared_state').select('value').eq('id','fm-rw').single();
-      if(!nomE&&!rwE&&nomD&&rwD){
-        NOM=JSON.parse(nomD.value);RW=JSON.parse(rwD.value);
-        try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
+      const get=async id=>{try{const{data}=await SB.from('shared_state').select('value').eq('id',id).single();return data?JSON.parse(data.value):null}catch(e){return null}};
+      const [nomV,rwV]=await Promise.all([get('fm-nom'),get('fm-rw')]);
+      if(nomV&&rwV){
+        NOM=nomV;RW=rwV;
+        const [vsV,exV,eoV]=await Promise.all([get('fm-vs'),get('fm-excl'),get('fm-excl-ovr')]);
+        if(vsV)VS=vsV;
+        if(exV)LM_excluded=new Set(exV);
+        if(eoV)LM_excludeUserOvr=eoV;
         LM_cleanVS();
         if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
-        try{const {data:exD}=await SB.from("shared_state").select("value").eq("id","fm-excl").single();if(exD)LM_excluded=new Set(JSON.parse(exD.value))}catch(e){}
-        try{const {data:eoD}=await SB.from("shared_state").select("value").eq("id","fm-excl-ovr").single();if(eoD)LM_excludeUserOvr=JSON.parse(eoD.value)||{}}catch(e){}
         hasLmData=true;
       }
     }catch(e){}
-    // Always load stock report and LM overrides (independent of LM data)
-    try{await stockReportLoad()}catch(e){}
-    try{await LM_loadDateOverrides()}catch(e){}
-    try{await MI_load()}catch(e){}
-    try{await LM_loadPalletCfg()}catch(e){}
-    try{await DIST_loadOverrides()}catch(e){}
+    // Load all config in parallel (independent of LM data)
+    await Promise.all([
+      stockReportLoad().catch(()=>{}),
+      LM_loadDateOverrides().catch(()=>{}),
+      MI_load().catch(()=>{}),
+      LM_loadPalletCfg().catch(()=>{}),
+      DIST_loadOverrides().catch(()=>{})
+    ]);
     // Now build venues and trucks AFTER all config is loaded
     if(hasLmData&&Object.keys(NOM).length&&RW.length){bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
     // Load LP data
@@ -3016,16 +3019,20 @@ async function saveSharedData(fullSave){
   const els=[document.getElementById('sbStatus'),document.getElementById('sbStatusLP'),document.getElementById('sbStatusV26')].filter(Boolean);
   try{
     const now=new Date().toISOString();
-    // Always save lightweight settings (small payloads)
-    await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:now});
-    await SB.from('shared_state').upsert({id:'fm-excl',value:JSON.stringify([...LM_excluded]),updated_at:now});
-    await SB.from('shared_state').upsert({id:'fm-excl-ovr',value:JSON.stringify(LM_excludeUserOvr),updated_at:now});
-    await SB.from('shared_state').upsert({id:'fm-stock',value:JSON.stringify({skus:[...STOCK_SKUS],name:STOCK_REPORT_NAME}),updated_at:now});
+    const u=(id,val)=>SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now});
+    // Save lightweight settings in parallel
+    const saves=[
+      u('fm-vs',VS),
+      u('fm-excl',[...LM_excluded]),
+      u('fm-excl-ovr',LM_excludeUserOvr),
+      u('fm-stock',{skus:[...STOCK_SKUS],name:STOCK_REPORT_NAME})
+    ];
     // Only save heavy data (NOM, RW) on full save (initial generation / file upload)
     if(fullSave){
-      await SB.from('shared_state').upsert({id:'fm-nom',value:JSON.stringify(NOM),updated_at:now});
-      await SB.from('shared_state').upsert({id:'fm-rw',value:JSON.stringify(RW),updated_at:now});
+      saves.push(u('fm-nom',NOM));
+      saves.push(u('fm-rw',RW));
     }
+    await Promise.all(saves);
     els.forEach(el=>{el.className='sb-status connected';el.innerHTML='<span class="dot"></span>Saved'});
     setTimeout(()=>{els.forEach(el=>{if(el.textContent==='Saved'){el.innerHTML='<span class="dot"></span>Connected'}})},2000);
   }catch(e){
@@ -3037,19 +3044,26 @@ async function loadSharedData(){
   document.getElementById("pov").style.display="flex";
   try{
     if(!SB)throw new Error("Supabase not configured. Update SUPABASE_URL and SUPABASE_ANON_KEY in the source.");
-    const {data:nomD,error:nomE}=await SB.from('shared_state').select('value').eq('id','fm-nom').single();
-    const {data:rwD,error:rwE}=await SB.from('shared_state').select('value').eq('id','fm-rw').single();
-    if(nomE||rwE||!nomD||!rwD)throw new Error("No plan published yet.");
-    NOM=JSON.parse(nomD.value);
-    RW=JSON.parse(rwD.value);
-    try{const {data:vsD}=await SB.from('shared_state').select('value').eq('id','fm-vs').single();if(vsD)VS=JSON.parse(vsD.value)}catch(e){}
+    const get=async id=>{const{data,error}=await SB.from('shared_state').select('value').eq('id',id).single();if(error||!data)return null;return JSON.parse(data.value)};
+    // Load heavy data in parallel
+    const [nomV,rwV]=await Promise.all([get('fm-nom'),get('fm-rw')]);
+    if(!nomV||!rwV)throw new Error("No plan published yet.");
+    NOM=nomV;RW=rwV;
+    // Load all config in parallel
+    const [vsV,exV,eoV]=await Promise.all([get('fm-vs'),get('fm-excl'),get('fm-excl-ovr')]);
+    if(vsV)VS=vsV;
+    if(exV)LM_excluded=new Set(exV);
+    if(eoV)LM_excludeUserOvr=eoV;
     LM_cleanVS();
     if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
-    try{await stockReportLoad()}catch(e){}
-    try{await LM_loadDateOverrides()}catch(e){}
-    try{await MI_load()}catch(e){}
-    try{await LM_loadPalletCfg()}catch(e){}
-    try{await DIST_loadOverrides()}catch(e){}
+    // Load remaining config in parallel
+    await Promise.all([
+      stockReportLoad().catch(()=>{}),
+      LM_loadDateOverrides().catch(()=>{}),
+      MI_load().catch(()=>{}),
+      LM_loadPalletCfg().catch(()=>{}),
+      DIST_loadOverrides().catch(()=>{})
+    ]);
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     bV();if(!VN.length)throw new Error("No venues.");
