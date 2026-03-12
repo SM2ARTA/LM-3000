@@ -1401,7 +1401,9 @@ function LP_renderPlan(el){
   const dispCount=LP_dispatched.size;
   const totalTruckCount=truckList.length;
   const dirty=LP_settingsChanged();
-  const regenLabel=dispCount>0?`♻ Re-Generate (${totalTruckCount-dispCount} of ${totalTruckCount} trucks)`:'♻ Re-Generate';
+  const regenLabel=dirty
+    ?(dispCount>0?`♻ Re-Generate (${totalTruckCount-dispCount} of ${totalTruckCount} trucks)`:'♻ Re-Generate')
+    :(dispCount>0?`✅ Up to date · ${dispCount} locked`:'✅ Up to date');
   const regenDisabled=dirty?'':'pointer-events:none;opacity:0.4;';
   const isViewer=ROLE==="viewer";
   html+=`<div class="lp-card" style="margin-bottom:14px${isViewer?';display:none':''}">
