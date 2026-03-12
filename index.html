@@ -764,24 +764,21 @@ let LP_contDateOverrides={};// container name -> new arrival date (YYYY-MM-DD)
 let LP_lsrNumbers={};// truckId -> LSR number string (e.g. "LSR625-001")
 let LP_palletOverrides={};// sku -> {palletQty, palletSpc} — manual overrides for pallet dimensions
 
-function LP_applyContDateOverrides(){
+function LP_recalcReadyDates(){
   const ta=LP_STATE.turnaround||6;
   for(const a of LP_STATE.arrivals){
-    const k=a.container||'';
-    if(!k)continue;
-    if(LP_contDateOverrides[k]){
-      if(!a._origArrDate)a._origArrDate=a.arrivalDate;// preserve original
-      a.arrivalDate=LP_contDateOverrides[k];
-      const rawReady=LP_addDays(a.arrivalDate,ta);
-      a.readyDate=LP_nextWorkday(rawReady);
-    } else if(a._origArrDate){
-      // Override removed — restore original
-      a.arrivalDate=a._origArrDate;
-      const rawReady=LP_addDays(a.arrivalDate,ta);
-      a.readyDate=LP_nextWorkday(rawReady);
-      delete a._origArrDate;
+    // Use overridden arrival date if present, otherwise original
+    const arrDate=a._origArrDate?a._origArrDate:a.arrivalDate;
+    const effArr=LP_contDateOverrides[a.container||'']||arrDate;
+    a.arrivalDate=effArr;
+    if(LP_contDateOverrides[a.container||'']){
+      if(!a._origArrDate)a._origArrDate=arrDate;
     }
+    a.readyDate=LP_nextWorkday(LP_addDays(effArr,ta));
   }
+}
+function LP_applyContDateOverrides(){
+  LP_recalcReadyDates();
 }
 function LP_setContDate(container,newDate){
   if(ROLE==='viewer')return;
@@ -971,6 +968,8 @@ function LP_reset(){systemReset()}
 function LP_regenerate(){
   if(ROLE==="viewer")return;// viewers cannot regenerate
   if(!LP_STATE.materialPlan.length||!LP_STATE.arrivals.length)return;
+  // Recalculate ready dates with current turnaround before regenerating
+  LP_recalcReadyDates();
   try{
     const oldPlan=LP_STATE.generatedPlan;
     
@@ -1071,13 +1070,14 @@ function LP_renderArrivals(el){
   const byCont={};
   for(const a of arr){
     const k=a.container||'—';
-    if(!byCont[k])byCont[k]={name:k,items:[],totalQty:0,totalPlt:0,dates:new Set(),origDates:new Set()};
+    if(!byCont[k])byCont[k]={name:k,items:[],totalQty:0,totalPlt:0,dates:new Set(),origDates:new Set(),readyDates:new Set()};
     byCont[k].items.push(a);
     byCont[k].totalQty+=a.qty||0;
     byCont[k].totalPlt+=a.availPallets||0;
     if(a.arrivalDate)byCont[k].dates.add(a.arrivalDate);
     if(a._origArrDate)byCont[k].origDates.add(a._origArrDate);
     else if(a.arrivalDate)byCont[k].origDates.add(a.arrivalDate);
+    if(a.readyDate)byCont[k].readyDates.add(a.readyDate);
   }
   const conts=Object.values(byCont).sort((a,b)=>{
     // Sort no-container to end
@@ -1099,6 +1099,7 @@ function LP_renderArrivals(el){
   const byDate=new Set(arr.map(a=>a.arrivalDate).filter(Boolean));
 
   const ovrCount=Object.keys(LP_contDateOverrides).length;
+  const earliestReady=[...new Set(arr.map(a=>a.readyDate).filter(Boolean))].sort()[0]||'—';
   // KPI strip
   let html=`<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
     ${[
@@ -1107,6 +1108,8 @@ function LP_renderArrivals(el){
       [totalPlt.toFixed(0),'Pallets','var(--rd)'],
       [totalQty.toLocaleString(),'Pieces','var(--rd)'],
       [arr.length,'SKU Lines','var(--gn)'],
+      [LP_STATE.turnaround+'d','WH Turnaround','var(--pu)'],
+      [earliestReady,'Earliest Ready','var(--gn)'],
       ...(ovrCount>0?[[ovrCount,'Date Overrides','var(--pu)']]:[])].map(([v,l,col])=>`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px 18px">
       <div style="font-size:22px;font-weight:800;color:${col}">${v}</div>
       <div style="font-size:10px;color:var(--tt);margin-top:1px">${l}</div>
@@ -1144,7 +1147,8 @@ function LP_renderArrivals(el){
           </div>
           <span id="${id}-chev" style="color:var(--tt);font-size:10px;flex-shrink:0;margin-left:4px;transition:transform .2s">▼</span>
         </div>
-        <div style="font-size:10px;color:${_hasOvr?'var(--pu)':'var(--tt)'};margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${_hasOvr?'700':'400'}">📅 ${_hasOvr?_ovrDate+' <span style="color:var(--tt);font-weight:400;text-decoration:line-through">'+_origDatesStr+'</span>':arrDates}</div>
+        <div style="font-size:10px;color:${_hasOvr?'var(--pu)':'var(--tt)'};margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${_hasOvr?'700':'400'}">📅 ${_hasOvr?_ovrDate+' <span style="color:var(--tt);font-weight:400;text-decoration:line-through">'+_origDatesStr+'</span>':arrDates}</div>
+        <div style="font-size:9px;color:var(--gn);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✅ Ready: ${[...cont.readyDates].sort().join(' · ')||'—'} <span style="color:var(--tt)">(+${LP_STATE.turnaround}d)</span></div>
         ${(!noContainer&&ROLE!=='viewer')?`<div onclick="event.stopPropagation()" style="margin-bottom:6px;display:flex;align-items:center;gap:4px"><input type="date" value="${_ovrDate||_origDate}" onchange="LP_setContDate('${_cEsc}',this.value)" style="width:100%;padding:2px 5px;border-radius:4px;border:1px solid ${_hasOvr?'var(--pu)':'var(--bd)'};font-size:10px;font-family:var(--fd);${_hasOvr?'background:var(--ps);font-weight:700':''}">${_hasOvr?`<button onclick="LP_setContDate('${_cEsc}','')" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0" title="Reset to original">✕</button>`:''}</div>`:''}
         <div style="display:flex;gap:5px;margin-bottom:6px">
           <div style="flex:1;background:var(--bg);border-radius:5px;padding:4px 5px;text-align:center">
@@ -1353,11 +1357,11 @@ function LP_renderPlan(el){
       <button class="rbtn" onclick="LP_regenerate()" style="font-size:10px;padding:4px 10px;background:var(--as);color:var(--ac);border-color:var(--ab);${regenDisabled}">${regenLabel}</button>
     </div>
     <div class="lp-grid4" style="margin-top:8px">
-      <div class="lp-field"><label>Truck Capacity (plt)</label><input type="number" value="${LP_STATE.maxPallets}" min="1" onchange="LP_STATE.maxPallets=+this.value;LP_render()"></div>
-      <div class="lp-field"><label>Max Trucks / Day</label><input type="number" value="${LP_STATE.maxTrucks}" min="1" onchange="LP_STATE.maxTrucks=+this.value;LP_render()"></div>
-      <div class="lp-field"><label>Max Dests / Day</label><input type="number" value="${LP_STATE.maxDests}" min="1" onchange="LP_STATE.maxDests=+this.value;LP_render()"></div>
-      <div class="lp-field"><label>WH Turnaround (days)</label><input type="number" value="${LP_STATE.turnaround}" min="0" onchange="LP_STATE.turnaround=+this.value;LP_render()"></div>
-      <div class="lp-field"><label>RIC Start Date</label><input type="date" value="${LP_STATE.ricStartDate}" onchange="LP_STATE.ricStartDate=this.value;LP_render()" style="font-family:var(--fd)"></div>
+      <div class="lp-field"><label>Truck Capacity (plt)</label><input type="number" value="${LP_STATE.maxPallets}" min="1" onchange="LP_STATE.maxPallets=+this.value;LP_saveToSupabase();LP_render()"></div>
+      <div class="lp-field"><label>Max Trucks / Day</label><input type="number" value="${LP_STATE.maxTrucks}" min="1" onchange="LP_STATE.maxTrucks=+this.value;LP_saveToSupabase();LP_render()"></div>
+      <div class="lp-field"><label>Max Dests / Day</label><input type="number" value="${LP_STATE.maxDests}" min="1" onchange="LP_STATE.maxDests=+this.value;LP_saveToSupabase();LP_render()"></div>
+      <div class="lp-field"><label>WH Turnaround (days)</label><input type="number" value="${LP_STATE.turnaround}" min="0" onchange="LP_STATE.turnaround=+this.value;LP_recalcReadyDates();LP_saveToSupabase();LP_render()"></div>
+      <div class="lp-field"><label>RIC Start Date</label><input type="date" value="${LP_STATE.ricStartDate}" onchange="LP_STATE.ricStartDate=this.value;LP_saveToSupabase();LP_render()" style="font-family:var(--fd)"></div>
     </div>
   </div>`;
 
