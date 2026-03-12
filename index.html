@@ -763,6 +763,7 @@ let LP_dispatched=new Set();// truck IDs marked as dispatched
 let LP_contDateOverrides={};// container name -> new arrival date (YYYY-MM-DD)
 let LP_lsrNumbers={};// truckId -> LSR number string (e.g. "LSR625-001")
 let LP_palletOverrides={};// sku -> {palletQty, palletSpc} — manual overrides for pallet dimensions
+let LP_arrivedConts=new Set();// container keys marked as arrived
 
 function LP_recalcReadyDates(){
   const ta=LP_STATE.turnaround||6;
@@ -857,6 +858,7 @@ async function LP_saveToSupabase(){
       contDateOverrides:LP_contDateOverrides,
       lsrNumbers:LP_lsrNumbers,
       palletOverrides:LP_palletOverrides,
+      arrivedConts:[...LP_arrivedConts],
       stockSkus:[...STOCK_SKUS],
       stockReportName:STOCK_REPORT_NAME
     };
@@ -885,6 +887,7 @@ async function LP_loadFromSupabase(){
     LP_contDateOverrides=p.contDateOverrides||{};
     LP_lsrNumbers=p.lsrNumbers||{};
     LP_palletOverrides=p.palletOverrides||{};
+    LP_arrivedConts=new Set(p.arrivedConts||[]);
     // Restore stock data if present in LP state (backup of fm-stock)
     if(p.stockSkus&&p.stockSkus.length&&STOCK_SKUS.size===0){
       STOCK_SKUS=new Set(p.stockSkus);
@@ -1089,6 +1092,9 @@ function LP_renderArrivals(el){
     if(a.readyDate)byCont[k].readyDates.add(a.readyDate);
   }
   const conts=Object.values(byCont).sort((a,b)=>{
+    const aArr=LP_arrivedConts.has(a.key||a.name)?1:0;
+    const bArr=LP_arrivedConts.has(b.key||b.name)?1:0;
+    if(aArr!==bArr)return aArr-bArr;
     const da=[...a.dates].sort()[0]||'9999';
     const db=[...b.dates].sort()[0]||'9999';
     return da.localeCompare(db);
@@ -1106,12 +1112,14 @@ function LP_renderArrivals(el){
   const localQty=conts.filter(c=>c.isNoCont).reduce((s,c)=>s+c.totalQty,0);
 
   const ovrCount=Object.keys(LP_contDateOverrides).length;
+  const arrivedCount=conts.filter(c=>LP_arrivedConts.has(c.key||c.name)).length;
   const earliestReady=[...new Set(arr.map(a=>a.readyDate).filter(Boolean))].sort()[0]||'—';
   // KPI strip
   let html=`<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
     ${[
       [contCount,'Containers','var(--ac)'],
       [localCount,'Local Deliveries','var(--or)'],
+      ...(arrivedCount>0?[[arrivedCount+'/'+conts.length,'Arrived','var(--gn)']]:[]),
       [byDate.size,'Arrival Dates','var(--ac)'],
       [totalPlt.toFixed(0),'Pallets','var(--rd)'],
       [totalQty.toLocaleString(),'Pieces','var(--rd)'],
@@ -1144,7 +1152,8 @@ function LP_renderArrivals(el){
     const _dispName=noContainer?'Local Delivery':(cont.name||'—');
     const _dispDate=noContainer?_origDate:'';
     const _boxShadow=_hasOvr?'0 0 0 1px var(--pu)':'none';
-    html+=`<div style="background:var(--sf);border:1.5px solid ${_hasOvr?'var(--pu)':color+'44'};border-radius:10px;overflow:hidden;box-shadow:${_boxShadow};cursor:pointer;transition:box-shadow .15s" onclick="LP_showContModal(${ci})" onmouseover="this.style.boxShadow='0 2px 10px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='${_boxShadow}'">
+    const _isArrived=LP_arrivedConts.has(_contKey);
+    html+=`<div style="background:${_isArrived?'#F8FFF8':'var(--sf)'};border:1.5px solid ${_hasOvr?'var(--pu)':color+'44'};border-radius:10px;overflow:hidden;box-shadow:${_boxShadow};cursor:pointer;transition:all .2s;${_isArrived?'opacity:0.35;filter:grayscale(0.5)':''}" onclick="LP_showContModal(${ci})" onmouseover="this.style.boxShadow='0 2px 10px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='${_boxShadow}'">
       <div style="padding:9px 11px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
           <div style="display:flex;align-items:center;gap:6px;min-width:0">
@@ -1181,8 +1190,12 @@ function LP_renderArrivals(el){
           </div>
         </div>
         <div style="height:4px;background:var(--bg);border-radius:2px;overflow:hidden">
-          <div style="height:100%;width:${fillPct}%;background:${color};border-radius:2px"></div>
+          <div style="height:100%;width:${fillPct}%;background:${_isArrived?'var(--gn)':color};border-radius:2px"></div>
         </div>
+        ${ROLE!=='viewer'?`<div onclick="event.stopPropagation()" style="margin-top:6px;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" ${_isArrived?'checked':''} onclick="event.stopPropagation();LP_toggleArrived('${_cEsc}',this.checked)" style="accent-color:var(--gn);width:12px;height:12px;cursor:pointer">
+          <span style="font-size:9px;color:${_isArrived?'var(--gn)':'var(--tt)'};font-weight:${_isArrived?'700':'400'}">${_isArrived?'✅ Arrived':'Mark arrived'}</span>
+        </div>`:(_isArrived?'<div style="margin-top:6px;font-size:9px;color:var(--gn);font-weight:700">✅ Arrived</div>':'')}
       </div>
     </div>`;
   }
@@ -1232,6 +1245,12 @@ function LP_showContModal(ci){
   }
   h+=`</tbody></table></div></div>`;
   openModal(h,'750px');
+}
+function LP_toggleArrived(contKey,checked){
+  if(ROLE==='viewer')return;
+  if(checked)LP_arrivedConts.add(contKey);else LP_arrivedConts.delete(contKey);
+  LP_saveToSupabase();
+  LP_render();
 }
 const PALETTE=['#CF5D5D','#4A90D9','#50B86C','#E8A838','#9B59B6','#1ABC9C','#E67E22','#3498DB','#E91E63','#00BCD4'];
 function LP_filterArrivals(){}
@@ -5939,7 +5958,7 @@ function doSystemReset(){
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};
   STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};
+  LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_arrivedConts=new Set();
   // Restore upload screen
   document.getElementById("US").querySelector(".uc").innerHTML=`<div class="sm-logo sm-logo-lg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><h1 style="font-size:26px;font-weight:700">The Master of the Load 3000</h1><label class="dz" id="dz" for="fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files to browse</div></label><input type="file" accept=".xlsx,.xls" multiple id="fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><div class="fcs" id="fcs"></div><div id="eb" class="erbox" style="display:none"></div><button class="gbtn off" id="gb">Generate</button>`;
   document.getElementById("US").style.display="flex";
@@ -6130,7 +6149,7 @@ function doResetLP(){
     SB.from('shared_state').delete().in('id',['lp-state']).then(()=>{}).catch(()=>{});
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};
+  LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_arrivedConts=new Set();
   lpUf=[];lpRenderUpload();
   document.getElementById("D").classList.remove("vis");
   document.getElementById("V26").classList.remove("vis");
@@ -6210,7 +6229,7 @@ async function goGenerateLP(){
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate}
     );
     LP_STATE.planGenerated=true;
-    LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};
+    LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_arrivedConts=new Set();
     LP_snapshotSettings();
     await LP_saveToSupabase();
     document.getElementById('pov').style.display='none';
