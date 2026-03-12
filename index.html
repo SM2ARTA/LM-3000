@@ -837,42 +837,80 @@ function LP_setPalletOvr(sku,field,val){
    LOAD PLAN PRO — Phase 3 UI (all LP_ prefixed)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// ── LP Supabase persistence ──
+// ── LP Supabase persistence (split into 6 smaller keys for robustness) ──
+// Keys: lp-config, lp-nom, lp-demand, lp-arrivals, lp-plan, lp-truck-state
+// Migration: reads legacy lp-state blob if new keys missing, then writes new keys
+const LP_KEYS={config:'lp-config',nom:'lp-nom',demand:'lp-demand',arr:'lp-arrivals',plan:'lp-plan',truck:'lp-truck-state'};
+
 async function LP_saveToSupabase(){
-  if(ROLE==="viewer")return;// viewers cannot save LP data
+  if(ROLE==="viewer")return;
   if(!SB)return;
   try{
     const now=new Date().toISOString();
-    const payload={
-      materialPlan:LP_STATE.materialPlan,
-      nomenclature:LP_STATE.nomenclature,
-      arrivals:LP_STATE.arrivals,
-      turnaround:LP_STATE.turnaround,
-      maxPallets:LP_STATE.maxPallets,
-      maxTrucks:LP_STATE.maxTrucks,
-      maxDests:LP_STATE.maxDests,
-      ricStartDate:LP_STATE.ricStartDate,
-      planGenerated:LP_STATE.planGenerated,
-      generatedPlan:LP_STATE.generatedPlan,
-      dispatched:[...LP_dispatched],
-      contDateOverrides:LP_contDateOverrides,
-      lsrNumbers:LP_lsrNumbers,
-      palletOverrides:LP_palletOverrides,
-      arrivedConts:[...LP_arrivedConts],
-      stockSkus:[...STOCK_SKUS],
-      stockReportName:STOCK_REPORT_NAME
-    };
-    await SB.from('shared_state').upsert({id:'lp-state',value:JSON.stringify(payload),updated_at:now});
+    const u=(id,val)=>SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now});
+    await Promise.all([
+      u(LP_KEYS.config,{
+        turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,
+        maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,
+        ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated
+      }),
+      u(LP_KEYS.nom,LP_STATE.nomenclature),
+      u(LP_KEYS.demand,LP_STATE.materialPlan),
+      u(LP_KEYS.arr,LP_STATE.arrivals),
+      u(LP_KEYS.plan,LP_STATE.generatedPlan),
+      u(LP_KEYS.truck,{
+        dispatched:[...LP_dispatched],contDateOverrides:LP_contDateOverrides,
+        lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,
+        arrivedConts:[...LP_arrivedConts],
+        stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME
+      })
+    ]);
   }catch(e){console.warn('LP save error:',e)}
 }
 
 async function LP_loadFromSupabase(){
   if(!SB)return false;
   try{
-    const {data,error}=await SB.from('shared_state').select('value').eq('id','lp-state').single();
-    if(error||!data)return false;
-    const p=JSON.parse(data.value);
-    if(!p.generatedPlan||!p.generatedPlan.length)return false;
+    // Try new split keys first
+    const get=async id=>{try{const{data}=await SB.from('shared_state').select('value').eq('id',id).single();return data?JSON.parse(data.value):null}catch(e){return null}};
+    const cfg=await get(LP_KEYS.config);
+    if(cfg&&cfg.planGenerated){
+      // New format found — load all keys
+      const [nom,demand,arr,plan,truck]=await Promise.all([
+        get(LP_KEYS.nom),get(LP_KEYS.demand),get(LP_KEYS.arr),get(LP_KEYS.plan),get(LP_KEYS.truck)
+      ]);
+      if(!plan||!plan.length)return false;
+      LP_STATE.turnaround=cfg.turnaround||6;
+      LP_STATE.maxPallets=cfg.maxPallets||LP_DEFAULT_MAX_PALLETS;
+      LP_STATE.maxTrucks=cfg.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
+      LP_STATE.maxDests=cfg.maxDests||LP_DEFAULT_MAX_DESTS;
+      LP_STATE.ricStartDate=cfg.ricStartDate||'2026-04-01';
+      LP_STATE.planGenerated=true;
+      LP_STATE.nomenclature=nom||{};
+      LP_STATE.materialPlan=demand||[];
+      LP_STATE.arrivals=arr||[];
+      LP_STATE.generatedPlan=plan;
+      LP_dispatched=new Set(truck?.dispatched||[]);
+      LP_contDateOverrides=truck?.contDateOverrides||{};
+      LP_lsrNumbers=truck?.lsrNumbers||{};
+      LP_palletOverrides=truck?.palletOverrides||{};
+      LP_arrivedConts=new Set(truck?.arrivedConts||[]);
+      if(truck?.stockSkus?.length&&STOCK_SKUS.size===0){
+        STOCK_SKUS=new Set(truck.stockSkus);
+        STOCK_REPORT_NAME=truck.stockReportName||'';
+        stockUpdateBadge();
+      }
+      LP_applyContDateOverrides();
+      LP_applyPalletOverrides();
+      LP_snapshotSettings();
+      return true;
+    }
+
+    // ── Fallback: migrate from legacy lp-state blob ──
+    const legacy=await get('lp-state');
+    if(!legacy||!legacy.generatedPlan||!legacy.generatedPlan.length)return false;
+    console.log('LP: migrating from legacy lp-state blob to split keys...');
+    const p=legacy;
     LP_STATE.materialPlan=p.materialPlan||[];
     LP_STATE.nomenclature=p.nomenclature||{};
     LP_STATE.arrivals=p.arrivals||[];
@@ -888,15 +926,21 @@ async function LP_loadFromSupabase(){
     LP_lsrNumbers=p.lsrNumbers||{};
     LP_palletOverrides=p.palletOverrides||{};
     LP_arrivedConts=new Set(p.arrivedConts||[]);
-    // Restore stock data if present in LP state (backup of fm-stock)
     if(p.stockSkus&&p.stockSkus.length&&STOCK_SKUS.size===0){
       STOCK_SKUS=new Set(p.stockSkus);
-      STOCK_REPORT_NAME=p.stockReportName||STOCK_REPORT_NAME||'';
+      STOCK_REPORT_NAME=p.stockReportName||'';
       stockUpdateBadge();
     }
     LP_applyContDateOverrides();
     LP_applyPalletOverrides();
     LP_snapshotSettings();
+    // Write to new split keys (migration)
+    if(ROLE==='admin'){
+      await LP_saveToSupabase();
+      // Clean up legacy blob
+      try{await SB.from('shared_state').delete().eq('id','lp-state')}catch(e){}
+      console.log('LP: migration complete, legacy blob removed.');
+    }
     return true;
   }catch(e){console.warn('LP load error:',e);return false}
 }
@@ -6158,7 +6202,7 @@ function resetLP(){
 function doResetLP(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['lp-state']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['lp-state','lp-config','lp-nom','lp-demand','lp-arrivals','lp-plan','lp-truck-state']).then(()=>{}).catch(()=>{});
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_arrivedConts=new Set();
@@ -6366,16 +6410,14 @@ async function stockReportLoad(){
       }
     }
   }catch(e){console.warn('Stock load from fm-stock failed:',e)}
-  // Fallback: try loading from LP state if fm-stock failed
+  // Fallback: try loading from LP truck state (new split key), then legacy lp-state
   try{
-    const {data}=await SB.from('shared_state').select('value').eq('id','lp-state').single();
-    if(data){
-      const p=JSON.parse(data.value);
-      if(p.stockSkus&&p.stockSkus.length){
-        STOCK_SKUS=new Set(p.stockSkus);
-        STOCK_REPORT_NAME=p.stockReportName||'';
-        stockUpdateBadge();
-      }
+    let found=false;
+    const {data:tsD}=await SB.from('shared_state').select('value').eq('id','lp-truck-state').single();
+    if(tsD){const p=JSON.parse(tsD.value);if(p.stockSkus&&p.stockSkus.length){STOCK_SKUS=new Set(p.stockSkus);STOCK_REPORT_NAME=p.stockReportName||'';stockUpdateBadge();found=true}}
+    if(!found){
+      const {data}=await SB.from('shared_state').select('value').eq('id','lp-state').single();
+      if(data){const p=JSON.parse(data.value);if(p.stockSkus&&p.stockSkus.length){STOCK_SKUS=new Set(p.stockSkus);STOCK_REPORT_NAME=p.stockReportName||'';stockUpdateBadge()}}
     }
   }catch(e){/* no LP data either */}
 }
