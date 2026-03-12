@@ -1100,9 +1100,10 @@ function LP_render(){
 }
 
 // ── Track last-generated settings to enable Re-Generate only on change ──
-let LP_lastGenSettings={maxPallets:0,maxTrucks:0,maxDests:0,turnaround:0,ricStartDate:'',contDateHash:''};
+let LP_lastGenSettings={maxPallets:0,maxTrucks:0,maxDests:0,turnaround:0,ricStartDate:'',contDateHash:'',arrDateHash:''};
 function _contDateHash(){return JSON.stringify(LP_contDateOverrides)}
 function _palletOvrHash(){return JSON.stringify(LP_palletOverrides)}
+function _arrDateHash(){return LP_STATE.arrivals.map(a=>a.sku+'|'+a.arrivalDate).join(',')}
 function LP_settingsChanged(){
   return LP_lastGenSettings.maxPallets!==LP_STATE.maxPallets||
     LP_lastGenSettings.maxTrucks!==LP_STATE.maxTrucks||
@@ -1110,10 +1111,11 @@ function LP_settingsChanged(){
     LP_lastGenSettings.turnaround!==LP_STATE.turnaround||
     LP_lastGenSettings.ricStartDate!==LP_STATE.ricStartDate||
     LP_lastGenSettings.contDateHash!==_contDateHash()||
-    LP_lastGenSettings.palletOvrHash!==_palletOvrHash();
+    LP_lastGenSettings.palletOvrHash!==_palletOvrHash()||
+    LP_lastGenSettings.arrDateHash!==_arrDateHash();
 }
 function LP_snapshotSettings(){
-  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash()};
+  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),arrDateHash:_arrDateHash()};
 }
 
 // ── Helpers ──
@@ -1380,30 +1382,67 @@ function LP_showContModal(ci){
   const arrDates=[...cont.dates].sort().join(' · ')||'No date';
   const readyDates=[...cont.readyDates].sort().join(' · ')||'—';
   const isLocal=cont.isNoCont;
-  const agg=_aggBySku(cont.items,'qty','availPallets');
+  const isV=ROLE==='viewer';
+
   let h=modalHeader(
     `${isLocal?'🚚':'📦'} ${cont.name}`,
     `Arrival: ${arrDates} · Ready: ${readyDates} (+${LP_STATE.turnaround}d)`
   );
   h+=`<div class="mdb">
     <div class="mst">
-      <div>SKUs: <strong>${agg.length}</strong></div>
+      <div>SKUs: <strong>${cont.items.length}</strong></div>
       <div>Pieces: <strong>${cont.totalQty.toLocaleString()}</strong></div>
       <div>Pallets: <strong>${cont.totalPlt.toFixed(1)}</strong></div>
     </div>
     <div class="csf"><table class="dtb"><thead><tr>
-      <th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th>
+      <th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th>${isLocal&&!isV?'<th>Arrival Date</th>':''}
     </tr></thead><tbody>`;
-  for(const a of agg){
-    h+=`<tr>
-      <td class="mono" style="color:${color};font-weight:600">${a.sku}</td>
-      <td class="tcl">${a.name||'—'}</td>
-      <td class="mono fw7">${a.qty.toLocaleString()}</td>
-      <td class="mono">${a.pallets?a.pallets.toFixed(1):'—'}</td>
-    </tr>`;
+
+  if(isLocal&&!isV){
+    // Show individual items with per-item date editing
+    // Find matching arrivals in LP_STATE.arrivals by index
+    for(const a of cont.items){
+      const idx=LP_STATE.arrivals.indexOf(a);
+      const origDate=a._origArrDate||a.arrivalDate||'';
+      h+=`<tr>
+        <td class="mono" style="color:${color};font-weight:600">${a.sku}</td>
+        <td class="tcl">${a.name||'—'}</td>
+        <td class="mono fw7">${(a.qty||0).toLocaleString()}</td>
+        <td class="mono">${a.availPallets?a.availPallets.toFixed(1):'—'}</td>
+        <td><input type="date" value="${a.arrivalDate||''}" onchange="LP_setItemDate(${idx},this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd)"></td>
+      </tr>`;
+    }
+  } else {
+    // Aggregated view for containers or viewer
+    const agg=_aggBySku(cont.items,'qty','availPallets');
+    for(const a of agg){
+      h+=`<tr>
+        <td class="mono" style="color:${color};font-weight:600">${a.sku}</td>
+        <td class="tcl">${a.name||'—'}</td>
+        <td class="mono fw7">${a.qty.toLocaleString()}</td>
+        <td class="mono">${a.pallets?a.pallets.toFixed(1):'—'}</td>
+      </tr>`;
+    }
   }
+
   h+=`</tbody></table></div></div>`;
-  openModal(h,'750px');
+  openModal(h,'800px');
+}
+
+// Change a single LP arrival item's date, regroup, and trigger re-render
+function LP_setItemDate(arrIdx,newDate){
+  if(ROLE==='viewer'||arrIdx<0||!LP_STATE.arrivals[arrIdx])return;
+  const a=LP_STATE.arrivals[arrIdx];
+  if(!a._origArrDate)a._origArrDate=a.arrivalDate;
+  a.arrivalDate=newDate;
+  // Recalculate ready date
+  const ta=LP_STATE.turnaround||6;
+  a.readyDate=LP_nextWorkday(LP_addDays(newDate,ta));
+  // Save and re-render arrivals tab + plan
+  LP_saveToSupabase();
+  LP_render();
+  // Close and reopen won't work well since indices change, just close
+  clM();
 }
 function LP_toggleArrived(contKey,checked){
   if(ROLE==='viewer')return;
