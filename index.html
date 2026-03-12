@@ -454,7 +454,7 @@
 <div style="margin-top:24px;font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | <span style="font-weight:600">SM²ARTA™</span> licensed to SM2ARTA LLC</div>
 </div></div>
 <div class="pov" id="pov" style="display:none"><div class="spn"></div><div style="margin-top:16px;font-weight:600;color:var(--ts)">Processing...</div></div>
-<div id="D" style="position:relative"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLM()" title="Reset Last Mile">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="stockReportUpload()" id="stockBtn" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">📦 Stock Report</button><input type="file" accept=".xlsx,.xls" id="stockFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><button class="rbtn" onclick="showPalletCfg()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📐 Pallets</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div id="D" style="position:relative"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLM()" title="Reset Last Mile">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="stockReportUpload()" id="stockBtn" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">📦 Stock Report</button><input type="file" accept=".xlsx,.xls" id="stockFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><button class="rbtn" onclick="showPalletCfg()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📐 Pallets</button><button class="rbtn" onclick="masterBackupExport()" style="background:#FEF3EB;color:#C4550A;border-color:#F5D6B8;font-size:10px;padding:4px 8px" title="Download full system backup as Excel">💾 Backup</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div id="totbar" style="display:none;padding:6px 20px;background:#F8F9FB;border-bottom:1px solid var(--bd);font-size:11px;color:var(--ts);gap:8px;flex-wrap:wrap;align-items:center"><div id="tabs" style="display:flex;gap:2px"></div></div>
 <div class="cnt"><aside class="sb">
 <div class="cns" id="cnsPanel"></div>
@@ -481,7 +481,7 @@
 </div>
 <div id="mr"></div>
 <div id="LP" style="position:relative">
-<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeLP"></span> <span id="sbStatusLP" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLP()" title="Reset Load Plan data">↻</span></div><div style="font-size:10px;color:var(--tt)" id="lpSubtitle">Load Plan Module</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn on" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeLP"></span> <span id="sbStatusLP" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLP()" title="Reset Load Plan data">↻</span></div><div style="font-size:10px;color:var(--tt)" id="lpSubtitle">Load Plan Module</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn on" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="masterBackupExport()" style="background:#FEF3EB;color:#C4550A;border-color:#F5D6B8;font-size:10px;padding:4px 8px" title="Download full system backup as Excel">💾 Backup</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div class="lp-body">
 <div class="lp-tabs" id="lpTabs">
 <button class="tbtn" onclick="LP_switchTab('arrivals')">📥 Arrivals</button>
@@ -504,7 +504,7 @@
 <footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
 <div id="V26">
-<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeV26"></span> <span id="sbStatusV26" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="systemReset()">↻</span></div><div style="font-size:10px;color:var(--tt)" id="v26Subtitle">Vision 2026</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn on" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="v26ExportBtn" onclick="V26_export()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeV26"></span> <span id="sbStatusV26" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="systemReset()">↻</span></div><div style="font-size:10px;color:var(--tt)" id="v26Subtitle">Vision 2026</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn on" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="v26ExportBtn" onclick="V26_export()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="masterBackupExport()" style="background:#FEF3EB;color:#C4550A;border-color:#F5D6B8;font-size:10px;padding:4px 8px" title="Download full system backup as Excel">💾 Backup</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div class="v26-body" id="v26Body"></div>
 <footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
@@ -2990,6 +2990,182 @@ function V26_export(){
   XLSX.utils.book_append_sheet(wb,ws5,'Nomenclature');
   
   XLSX.writeFile(wb,'Vision_2026_Export.xlsx');
+}
+
+// ── Master Backup Export — full system state to Excel ──
+function masterBackupExport(){
+  const wb=XLSX.utils.book_new();
+  const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+
+  // 1. Nomenclature
+  if(Object.keys(NOM).length){
+    const nomRows=Object.entries(NOM).sort((a,b)=>a[0].localeCompare(b[0])).map(([sku,n])=>({
+      SKU:sku,Name:n.nm||'',Source:n.src||'',UOM:n.uom||'pc',PPU:n.ppu||1,
+      'Dis Qty':n._origPq??n.pq,'Dis Spc':n._origPs??n.ps,
+      'Asm Qty':n._origPqA??n.pqA,'Asm Spc':n._origPsA??n.psA
+    }));
+    const ws=XLSX.utils.json_to_sheet(nomRows);
+    ws['!cols']=[{wch:20},{wch:36},{wch:10},{wch:6},{wch:5},{wch:8},{wch:8},{wch:8},{wch:8}];
+    XLSX.utils.book_append_sheet(wb,ws,'LM Nomenclature');
+  }
+
+  // 2. Material Plan (RW)
+  if(RW.length){
+    const ws=XLSX.utils.json_to_sheet(RW);
+    XLSX.utils.book_append_sheet(wb,ws,'LM Material Plan');
+  }
+
+  // 3. Venue Settings (VS)
+  if(Object.keys(VS).length){
+    const vsRows=Object.entries(VS).map(([k,v])=>({Venue:k,...v}));
+    const ws=XLSX.utils.json_to_sheet(vsRows);
+    XLSX.utils.book_append_sheet(wb,ws,'LM Venue Settings');
+  }
+
+  // 4. LM Trucks — from PLAN_CACHE
+  if(Object.keys(PLAN_CACHE).length){
+    const truckRows=[];
+    for(const[label,P]of Object.entries(PLAN_CACHE)){
+      P.allT.forEach(t=>{
+        const fp=LM_fp(t);
+        const nonCort=t.items.filter(it=>!isCort(it.sku));
+        nonCort.forEach(it=>{
+          truckRows.push({
+            'Truck ID':t.id,'Destination':t.destLabel||label,
+            'Dispatch Date':t.dd||'','Bump-in':t.biK||'',
+            SKU:it.sku,Name:it.nm||'',Qty:it.loadQty||0,Pallets:+(it.loadPlt||0).toFixed(2),
+            Dispatched:LM_dispatched.has(fp)?'Yes':'',
+            Excluded:LM_excluded.has(t.id)?'Yes':''
+          });
+        });
+      });
+    }
+    const ws=XLSX.utils.json_to_sheet(truckRows);
+    ws['!cols']=[{wch:10},{wch:28},{wch:12},{wch:12},{wch:20},{wch:36},{wch:8},{wch:8},{wch:10},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,ws,'LM Trucks');
+  }
+
+  // 5. LM Dispatch & Date Overrides
+  {
+    const rows=[];
+    LM_dispatched.forEach(fp=>rows.push({Fingerprint:fp,Type:'Dispatched',Value:LM_dateOverrides[fp]||''}));
+    Object.entries(LM_dateOverrides).forEach(([fp,d])=>{if(!LM_dispatched.has(fp))rows.push({Fingerprint:fp,Type:'Date Override',Value:d})});
+    if(rows.length){const ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'LM Dispatch State')}
+  }
+
+  // 6. LM Demand Adjustments
+  if(Object.keys(LM_demandAdj).length){
+    const rows=Object.entries(LM_demandAdj).map(([k,v])=>{const[venue,sku]=k.split('|');return{Venue:venue,SKU:sku,'Adjusted Qty':v}});
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'LM Demand Adj');
+  }
+
+  // 7. LM Nom Overrides
+  if(Object.keys(LM_nomOverrides).length){
+    const rows=Object.entries(LM_nomOverrides).map(([sku,ov])=>({SKU:sku,'Dis Qty':ov.pq??'','Dis Spc':ov.ps??'','Asm Qty':ov.pqA??'','Asm Spc':ov.psA??'','Orig Dis Qty':ov._origPq??'','Orig Dis Spc':ov._origPs??'','Orig Asm Qty':ov._origPqA??'','Orig Asm Spc':ov._origPsA??''}));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'LM Pallet Dim Overrides');
+  }
+
+  // 8. Pallet Config (asm/dis mode per venue type)
+  if(Object.keys(LM_palletCfg).length){
+    const rows=Object.entries(LM_palletCfg).map(([vt,cfg])=>({
+      'Venue Type':vt,Mode:cfg.mode,'Overrides Count':cfg.overrides.size,
+      'Override SKUs':[...cfg.overrides].join(', ')
+    }));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'LM Pallet Config');
+  }
+
+  // 9. LP Nomenclature
+  if(Object.keys(LP_STATE.nomenclature).length){
+    const rows=Object.entries(LP_STATE.nomenclature).sort((a,b)=>a[0].localeCompare(b[0])).map(([sku,n])=>({
+      SKU:sku,Name:n.name||'',Source:n.source||'','Pallet Qty':n.palletQty||'','Pallet Spc':n.palletSpc||'',
+      'HS Code':n.hsCode||'',Country:n.country||'','Unit Price':n.unitPrice||''
+    }));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'LP Nomenclature');
+  }
+
+  // 10. LP Material Plan (demand)
+  if(LP_STATE.materialPlan.length){
+    const ws=XLSX.utils.json_to_sheet(LP_STATE.materialPlan);
+    XLSX.utils.book_append_sheet(wb,ws,'LP Material Plan');
+  }
+
+  // 11. LP Arrivals
+  if(LP_STATE.arrivals.length){
+    const rows=LP_STATE.arrivals.map(a=>({
+      SKU:a.sku,Name:a.name||'',Container:a.container||'','Arrival Date':a.arrivalDate||'',
+      'Ready Date':a.readyDate||'',Qty:a.qty||0,Pallets:a.availPallets||0,
+      'Orig Arrival':a._origArrDate||''
+    }));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:20},{wch:36},{wch:18},{wch:12},{wch:12},{wch:8},{wch:8},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,'LP Arrivals');
+  }
+
+  // 12. LP Generated Plan
+  if(LP_STATE.generatedPlan.length){
+    const rows=LP_STATE.generatedPlan.map(r=>({
+      'Truck ID':r.truckId,Date:r.date,Destination:r.destination,
+      SKU:r.sku,Name:r.name||'',Qty:r.qty||0,Pallets:+(r.pallets||0).toFixed(2),
+      Dispatched:LP_dispatched.has(r.truckId)?'Yes':'',
+      LSR:LP_lsrNumbers[r.truckId]||''
+    }));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:8},{wch:12},{wch:24},{wch:20},{wch:36},{wch:8},{wch:8},{wch:10},{wch:16}];
+    XLSX.utils.book_append_sheet(wb,ws,'LP Generated Plan');
+  }
+
+  // 13. LP Config & Overrides
+  {
+    const rows=[
+      {Setting:'Turnaround',Value:LP_STATE.turnaround},
+      {Setting:'Max Pallets',Value:LP_STATE.maxPallets},
+      {Setting:'Max Trucks/Day',Value:LP_STATE.maxTrucks},
+      {Setting:'Max Dests/Day',Value:LP_STATE.maxDests},
+      {Setting:'RIC Start Date',Value:LP_STATE.ricStartDate},
+      {Setting:'Dispatched Trucks',Value:[...LP_dispatched].join(', ')},
+      {Setting:'Arrived Containers',Value:[...LP_arrivedConts].join(', ')},
+    ];
+    // Container date overrides
+    Object.entries(LP_contDateOverrides).forEach(([k,v])=>rows.push({Setting:'Container Date Override: '+k,Value:v}));
+    // Pallet overrides
+    Object.entries(LP_palletOverrides).forEach(([sku,ov])=>rows.push({Setting:'Pallet Override: '+sku,Value:JSON.stringify(ov)}));
+    // LSR numbers
+    Object.entries(LP_lsrNumbers).forEach(([id,lsr])=>rows.push({Setting:'LSR: LP-'+id,Value:lsr}));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:40},{wch:60}];
+    XLSX.utils.book_append_sheet(wb,ws,'LP Config');
+  }
+
+  // 14. Stock Report
+  if(STOCK_SKUS.size>0){
+    const rows=[...STOCK_SKUS].sort().map(sku=>({SKU:sku,Name:NOM[sku]?.nm||LP_STATE.nomenclature[sku]?.name||''}));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:20},{wch:36}];
+    XLSX.utils.book_append_sheet(wb,ws,'Stock Report');
+  }
+
+  // 15. Manual Items
+  if(Object.keys(MANUAL_ITEMS).length){
+    const rows=[];
+    Object.entries(MANUAL_ITEMS).forEach(([key,items])=>{
+      items.forEach(mi=>rows.push({Key:key,SKU:mi.sku,Name:mi.name||'',Qty:mi.qty||0,Pallets:mi.pallets||0}));
+    });
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'Manual Items');
+  }
+
+  // 16. Distribution Rate Overrides
+  if(Object.keys(DIST_OVERRIDES).length){
+    const rows=Object.entries(DIST_OVERRIDES).map(([k,v])=>({Key:k,Rate:v}));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'Rate Overrides');
+  }
+
+  XLSX.writeFile(wb,`ML3K_Backup_${ts}.xlsx`);
 }
 
 
