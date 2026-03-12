@@ -4740,7 +4740,7 @@ function _renderPalletCfg(){
     ${isV?'':`<div style="display:flex;gap:6px">
     <button class="rbtn" onclick="_pcSetAll('asm')" style="font-size:10px;padding:4px 10px;background:var(--gs);color:var(--gn);border-color:#B8DFCA">All → Assembled</button>
     <button class="rbtn" onclick="_pcSetAll('dis')" style="font-size:10px;padding:4px 10px;background:var(--os);color:var(--or);border-color:#F5D6B8">All → Disassembled</button>
-    <button class="rbtn" onclick="LM_initPalletCfg();_renderPalletCfg();LM_savePalletCfg();bV();numberAll();rVL()" style="font-size:10px;padding:4px 10px" title="Reset all venue types to defaults">↻ Reset Defaults</button>
+    <button class="rbtn" onclick="LM_initPalletCfg();_renderPalletCfg();LM_savePalletCfg();bV();numberAll();rVL();rMain()" style="font-size:10px;padding:4px 10px" title="Reset all venue types to defaults">↻ Reset Defaults</button>
     </div>`}
   </div>
   <div style="display:flex;gap:10px;margin-bottom:10px;font-size:11px;flex-wrap:wrap;align-items:center">
@@ -4748,7 +4748,7 @@ function _renderPalletCfg(){
     <span class="bg bg-gn">${asmCount} Asm</span>
     <span class="bg bg-or">${disCount} Dis</span>
     ${overrideCount>0?`<span class="bg bg-pu">${overrideCount} override${overrideCount>1?'s':''}</span>`:''}
-    ${Object.keys(LM_nomOverrides).length>0?`<span class="bg bg-pu">★ ${Object.keys(LM_nomOverrides).filter(k=>Object.keys(LM_nomOverrides[k]).some(f=>!f.startsWith('_'))).length} pallet dim override${Object.keys(LM_nomOverrides).length>1?'s':''}</span>${!isV?`<button class="rbtn" onclick="for(const s in LM_nomOverrides){const n=NOM[s];if(!n)continue;const ov=LM_nomOverrides[s];if(ov._origPq!==undefined)n.pq=ov._origPq;if(ov._origPs!==undefined)n.ps=ov._origPs;if(ov._origPqA!==undefined)n.pqA=ov._origPqA;if(ov._origPsA!==undefined)n.psA=ov._origPsA;delete n._origPq;delete n._origPs;delete n._origPqA;delete n._origPsA};LM_nomOverrides={};_renderPalletCfg();LM_saveNomOverrides();bV();numberAll();rVL()" style="font-size:9px;padding:2px 6px">↻ Reset Dims</button>`:''}`:''}
+    ${Object.keys(LM_nomOverrides).length>0?`<span class="bg bg-pu">★ ${Object.keys(LM_nomOverrides).filter(k=>Object.keys(LM_nomOverrides[k]).some(f=>!f.startsWith('_'))).length} pallet dim override${Object.keys(LM_nomOverrides).length>1?'s':''}</span>${!isV?`<button class="rbtn" onclick="for(const s in LM_nomOverrides){const n=NOM[s];if(!n)continue;const ov=LM_nomOverrides[s];if(ov._origPq!==undefined)n.pq=ov._origPq;if(ov._origPs!==undefined)n.ps=ov._origPs;if(ov._origPqA!==undefined)n.pqA=ov._origPqA;if(ov._origPsA!==undefined)n.psA=ov._origPsA;delete n._origPq;delete n._origPs;delete n._origPqA;delete n._origPsA};LM_nomOverrides={};_renderPalletCfg();LM_saveNomOverrides();bV();numberAll();rVL();rMain()" style="font-size:9px;padding:2px 6px">↻ Reset Dims</button>`:''}`:''}
     <span class="bg bg-gy">${filtered.length} SKUs</span>
     <span style="font-size:10px;color:var(--ts)">${countryNote}</span>
     <div style="margin-left:auto"><input type="text" placeholder="Search SKU or item name…" value="${_pcSearch.replace(/"/g,'&quot;')}" oninput="_pcSearch=this.value;_renderPalletCfg()" style="padding:5px 10px;border-radius:6px;border:1px solid var(--bd);font-size:11px;font-family:var(--fd);width:200px;outline:none"></div>
@@ -4794,7 +4794,7 @@ function _pcToggle(sku){
   // Toggle: if it's an override, remove it (revert to default); if not, add it (make it an exception)
   if(cfg.overrides.has(sku))cfg.overrides.delete(sku);else cfg.overrides.add(sku);
   _renderPalletCfg();LM_savePalletCfg();
-  bV();numberAll();rVL();
+  bV();numberAll();rVL();rMain();
 }
 function _pcSetAll(mode){
   const cfg=LM_palletCfg[_pcVt];if(!cfg)return;
@@ -4818,7 +4818,7 @@ function _pcSetAll(mode){
       }
     }
   }
-  _renderPalletCfg();LM_savePalletCfg();bV();numberAll();rVL();
+  _renderPalletCfg();LM_savePalletCfg();bV();numberAll();rVL();rMain();
 }
 
 const CITY_ABBR={TOR:'Toronto',VAN:'Vancouver',MTL:'Montreal',OTT:'Ottawa',CGY:'Calgary',EDM:'Edmonton',WPG:'Winnipeg',HAL:'Halifax',QUE:'Quebec',CDMX:'Mexico City',MEX:'Mexico City',GDL:'Guadalajara',MTY:'Monterrey',PUE:'Puebla',TIJ:'Tijuana',CUN:'Cancún',MER:'Mérida',QRO:'Querétaro',SLP:'San Luis Potosí',AGS:'Aguascalientes',LEO:'León',ATL:'Atlanta',BOS:'Boston',DAL:'Dallas',HOU:'Houston',KC:'Kansas City',LA:'Los Angeles',MIA:'Miami',NY:'New York',PHI:'Philadelphia',SF:'San Francisco',SEA:'Seattle',CHI:'Chicago',DEN:'Denver',PHX:'Phoenix',MSP:'Minneapolis',DET:'Detroit',CLE:'Cleveland',PIT:'Pittsburgh',CIN:'Cincinnati',STL:'St. Louis',IND:'Indianapolis',CLT:'Charlotte',NSH:'Nashville',JAX:'Jacksonville',ORL:'Orlando',TPA:'Tampa',AUS:'Austin',SA:'San Antonio',RGS:'South Region',RGN:'North Region',RGE:'East Region',RGW:'West Region',RGC:'Central Region',NE:'Northeast',SE:'Southeast',SW:'Southwest',NW:'Northwest',MW:'Midwest'};
@@ -5072,7 +5072,7 @@ function LM_setNomOvr(sku,field,val){
     n[field]=val;// apply to NOM directly
   }
   LM_saveNomOverrides();
-  bV();numberAll();rVL();
+  bV();numberAll();rVL();rMain();
   setTimeout(()=>{_pcRendering=true;try{_renderPalletCfg()}finally{setTimeout(()=>{_pcRendering=false},20)}},60);
 }
 async function LM_saveNomOverrides(){
