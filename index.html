@@ -1089,9 +1089,6 @@ function LP_renderArrivals(el){
     if(a.readyDate)byCont[k].readyDates.add(a.readyDate);
   }
   const conts=Object.values(byCont).sort((a,b)=>{
-    // Sort no-container to end
-    if(a.isNoCont&&!b.isNoCont)return 1;
-    if(!a.isNoCont&&b.isNoCont)return -1;
     const da=[...a.dates].sort()[0]||'9999';
     const db=[...b.dates].sort()[0]||'9999';
     return da.localeCompare(db);
@@ -1129,11 +1126,12 @@ function LP_renderArrivals(el){
 
   const maxPlt=Math.max(...conts.map(x=>x.totalPlt),1);
   // Container cards grid — dense TV layout
+  window._lpConts=conts;// store for popup access
   html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">`;
-  for(const cont of conts){
+  for(let ci=0;ci<conts.length;ci++){
+    const cont=conts[ci];
     const color=cc(cont.key||cont.name);
     const arrDates=[...cont.dates].sort().join(' · ')||'No date';
-    const id='lp-cont-'+(cont.key||cont.name).replace(/[^a-z0-9]/gi,'_');
     const fillPct=Math.min(100,Math.round(cont.totalPlt/maxPlt*100));
     const noContainer=cont.isNoCont;
     const _contKey=cont.key||cont.name;
@@ -1142,9 +1140,13 @@ function LP_renderArrivals(el){
     const _origDate=[...cont.origDates].sort()[0]||'';
     const _origDatesStr=[...cont.origDates].sort().join(' · ')||'No date';
     const _cEsc=_contKey.replace(/'/g,"\\'");
-    html+=`<div style="background:var(--sf);border:1.5px solid ${_hasOvr?'var(--pu)':color+'44'};border-radius:10px;overflow:hidden${_hasOvr?';box-shadow:0 0 0 1px var(--pu)':''}">
-      <div onclick="lpContToggle('${id}')" style="cursor:pointer;padding:9px 11px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+    // Display name: two lines for local delivery
+    const _dispName=noContainer?'Local Delivery':(cont.name||'—');
+    const _dispDate=noContainer?_origDate:'';
+    const _boxShadow=_hasOvr?'0 0 0 1px var(--pu)':'none';
+    html+=`<div style="background:var(--sf);border:1.5px solid ${_hasOvr?'var(--pu)':color+'44'};border-radius:10px;overflow:hidden;box-shadow:${_boxShadow};cursor:pointer;transition:box-shadow .15s" onclick="LP_showContModal(${ci})" onmouseover="this.style.boxShadow='0 2px 10px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='${_boxShadow}'">
+      <div style="padding:9px 11px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">
           <div style="display:flex;align-items:center;gap:6px;min-width:0">
             ${noContainer?`<span style="font-size:14px;flex-shrink:0">🚚</span>`:`<svg width="22" height="16" viewBox="0 0 28 20" style="flex-shrink:0">
               <rect x="1" y="2" width="26" height="13" rx="2" fill="#1a1a2e" stroke="${color}" stroke-width="1.8"/>
@@ -1155,11 +1157,13 @@ function LP_renderArrivals(el){
               <circle cx="7" cy="18" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
               <circle cx="21" cy="18" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
             </svg>`}
-            <span style="font-size:12px;font-weight:800;color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cont.name}</span>
+            <div style="min-width:0">
+              <div style="font-size:12px;font-weight:800;color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_dispName}</div>
+              ${_dispDate?`<div style="font-size:10px;font-weight:600;color:var(--ts)">${_dispDate}</div>`:''}
+            </div>
           </div>
-          <span id="${id}-chev" style="color:var(--tt);font-size:10px;flex-shrink:0;margin-left:4px;transition:transform .2s">▼</span>
         </div>
-        <div style="font-size:10px;color:${_hasOvr?'var(--pu)':'var(--tt)'};margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${_hasOvr?'700':'400'}">📅 ${_hasOvr?_ovrDate+' <span style="color:var(--tt);font-weight:400;text-decoration:line-through">'+_origDatesStr+'</span>':arrDates}</div>
+        <div style="font-size:11px;color:${_hasOvr?'var(--pu)':'var(--tp)'};margin-bottom:3px;font-weight:700;display:flex;align-items:center;gap:4px">📅 <span style="background:${_hasOvr?'var(--ps)':'#F0F1F3'};padding:1px 6px;border-radius:4px">${_hasOvr?_ovrDate+' <span style="color:var(--tt);font-weight:400;font-size:9px;text-decoration:line-through">'+_origDatesStr+'</span>':arrDates}</span></div>
         <div style="font-size:9px;color:var(--gn);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✅ Ready: ${[...cont.readyDates].sort().join(' · ')||'—'} <span style="color:var(--tt)">(+${LP_STATE.turnaround}d)</span></div>
         ${ROLE!=='viewer'?`<div onclick="event.stopPropagation()" style="margin-bottom:6px;display:flex;align-items:center;gap:4px"><input type="date" value="${_ovrDate||_origDate}" onchange="LP_setContDate('${_cEsc}',this.value)" style="width:100%;padding:2px 5px;border-radius:4px;border:1px solid ${_hasOvr?'var(--pu)':'var(--bd)'};font-size:10px;font-family:var(--fd);${_hasOvr?'background:var(--ps);font-weight:700':''}">${_hasOvr?`<button onclick="LP_setContDate('${_cEsc}','')" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0" title="Reset to original">✕</button>`:''}</div>`:''}
         <div style="display:flex;gap:5px;margin-bottom:6px">
@@ -1180,38 +1184,56 @@ function LP_renderArrivals(el){
           <div style="height:100%;width:${fillPct}%;background:${color};border-radius:2px"></div>
         </div>
       </div>
-      <div id="${id}" style="display:none;border-top:1px solid ${color}22;max-height:240px;overflow-y:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:10px">
-          <thead><tr style="background:var(--bg)">
-            <th style="padding:4px 8px;text-align:left;color:var(--tt);font-weight:600">SKU</th>
-            <th style="padding:4px 8px;text-align:left;color:var(--tt);font-weight:600">Name</th>
-            <th style="padding:4px 8px;text-align:right;color:var(--tt);font-weight:600">Qty</th>
-            <th style="padding:4px 8px;text-align:right;color:var(--tt);font-weight:600">Plt</th>
-          </tr></thead>
-          <tbody>
-            ${cont.items.map((a,i)=>`<tr style="background:${i%2?'var(--sf)':'var(--bg)'}">
-              <td style="padding:3px 8px;font-family:monospace;color:${color};font-weight:600">${a.sku}</td>
-              <td style="padding:3px 8px;color:var(--ts);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.name||''}">${a.name||'—'}</td>
-              <td style="padding:3px 8px;text-align:right;font-weight:700;color:var(--ts)">${(a.qty||0).toLocaleString()}</td>
-              <td style="padding:3px 8px;text-align:right;color:var(--tt)">${a.availPallets?a.availPallets.toFixed(1):'—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
     </div>`;
   }
   html+=`</div>`;
   el.innerHTML=html;
 }
 
-function lpContToggle(id){
-  const panel=document.getElementById(id);
-  const chev=document.getElementById(id+'-chev');
-  if(!panel)return;
-  const open=panel.style.display==='none';
-  panel.style.display=open?'block':'none';
-  if(chev)chev.style.transform=open?'rotate(180deg)':'';
+// Helper: aggregate items by SKU for popup display
+function _aggBySku(items,qtyKey,pltKey){
+  const m={};
+  for(const a of items){
+    const sku=a.sku||a.name||'?';
+    if(!m[sku])m[sku]={sku,name:a.name||'',qty:0,pallets:0};
+    m[sku].qty+=a[qtyKey||'qty']||0;
+    m[sku].pallets+=a[pltKey||'availPallets']||a.pallets||0;
+  }
+  return Object.values(m).sort((a,b)=>b.qty-a.qty);
 }
+
+function LP_showContModal(ci){
+  const cont=window._lpConts?.[ci];if(!cont)return;
+  const color=PALETTE[ci%PALETTE.length];
+  const arrDates=[...cont.dates].sort().join(' · ')||'No date';
+  const readyDates=[...cont.readyDates].sort().join(' · ')||'—';
+  const isLocal=cont.isNoCont;
+  const agg=_aggBySku(cont.items,'qty','availPallets');
+  let h=modalHeader(
+    `${isLocal?'🚚':'📦'} ${cont.name}`,
+    `Arrival: ${arrDates} · Ready: ${readyDates} (+${LP_STATE.turnaround}d)`
+  );
+  h+=`<div class="mdb">
+    <div class="mst">
+      <div>SKUs: <strong>${agg.length}</strong></div>
+      <div>Pieces: <strong>${cont.totalQty.toLocaleString()}</strong></div>
+      <div>Pallets: <strong>${cont.totalPlt.toFixed(1)}</strong></div>
+    </div>
+    <div class="csf"><table class="dtb"><thead><tr>
+      <th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th>
+    </tr></thead><tbody>`;
+  for(const a of agg){
+    h+=`<tr>
+      <td class="mono" style="color:${color};font-weight:600">${a.sku}</td>
+      <td class="tcl">${a.name||'—'}</td>
+      <td class="mono fw7">${a.qty.toLocaleString()}</td>
+      <td class="mono">${a.pallets?a.pallets.toFixed(1):'—'}</td>
+    </tr>`;
+  }
+  h+=`</tbody></table></div></div>`;
+  openModal(h,'750px');
+}
+const PALETTE=['#CF5D5D','#4A90D9','#50B86C','#E8A838','#9B59B6','#1ABC9C','#E67E22','#3498DB','#E91E63','#00BCD4'];
 function LP_filterArrivals(){}
 
 /* ─────────────────────────────────────────────
@@ -1551,7 +1573,7 @@ function LP_showTruckModal(truckId){
       <td class="tcl">${s.name||'—'}</td>
       <td style="font-size:10px;color:var(--ts)">${nom.source||'—'}</td>
       <td class="mono fw6">${s.qty.toLocaleString()}</td>
-      <td class="mono">${s.pallets.toFixed(2)}</td>
+      <td class="mono">${s.pallets.toFixed(1)}</td>
       <td class="mono">${nom.palletQty||'—'}</td>
       <td class="mono">${nom.palletSpc||'—'}</td>
       <td class="mono ${remain>0?'cor':'cgn'} fw6" title="Total demand: ${totalDemand.toLocaleString()} − Shipped (LP-1 to LP-${truckId}): ${shippedUpTo.toLocaleString()} = ${remain.toLocaleString()} remaining">${remain.toLocaleString()}</td>
@@ -2554,11 +2576,12 @@ function V26_showCortDetail(id,date){
 // ── Notification Board Popups ──
 function NB_showInbound(idx){
   const cont=window._nbArrConts?.[idx];if(!cont)return;
+  const agg=_aggBySku(cont.items,'qty','availPallets');
   let h=modalHeader(`📥 ${cont.name}`,`Arrival: ${cont.arrDate} · Ready: ${cont.readyDate} (+${LP_STATE.turnaround}d turnaround)`);
-  h+=`<div class="mdb"><div class="mst"><div>SKUs: <strong>${cont.skus}</strong></div><div>Pieces: <strong>${cont.qty.toLocaleString()}</strong></div></div>`;
+  h+=`<div class="mdb"><div class="mst"><div>SKUs: <strong>${agg.length}</strong></div><div>Pieces: <strong>${cont.qty.toLocaleString()}</strong></div></div>`;
   h+=`<div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th></tr></thead><tbody>`;
-  for(const a of cont.items){
-    h+=`<tr><td class="mono">${a.sku}</td><td class="tcl">${a.name||'—'}</td><td class="mono fw7">${(a.qty||0).toLocaleString()}</td><td class="mono">${a.availPallets||'—'}</td></tr>`;
+  for(const a of agg){
+    h+=`<tr><td class="mono">${a.sku}</td><td class="tcl">${a.name||'—'}</td><td class="mono fw7">${a.qty.toLocaleString()}</td><td class="mono">${a.pallets?a.pallets.toFixed(1):'—'}</td></tr>`;
   }
   h+=`</tbody></table></div></div>`;
   openModal(h,'700px');
@@ -2566,31 +2589,33 @@ function NB_showInbound(idx){
 function NB_showLpTruck(idx){
   const t=window._nbLpTrucks?.[idx];if(!t)return;
   const lsr=LP_lsrNumbers[t.id]||'';
-  let h=modalHeader(`📤 LP-${t.id}${lsr?' <span class="mono" style="color:var(--pu);font-size:12px;background:var(--ps);padding:1px 6px;border-radius:3px">'+lsr+'</span>':''}`,`${t.dest} · ${t.items.length} SKUs · ${t.qty.toLocaleString()} pcs · ${t.plt.toFixed(1)} plt`);
+  const agg=_aggBySku(t.items,'qty','pallets');
+  let h=modalHeader(`📤 LP-${t.id}${lsr?' <span class="mono" style="color:var(--pu);font-size:12px;background:var(--ps);padding:1px 6px;border-radius:3px">'+lsr+'</span>':''}`,`${t.dest} · ${agg.length} SKUs · ${t.qty.toLocaleString()} pcs · ${t.plt.toFixed(1)} plt`);
   h+=`<div class="mdb"><div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th></tr></thead><tbody>`;
-  for(const r of t.items){
-    const nm=LP_STATE.nomenclature[r.sku]?.name||r.name||r.sku;
-    h+=`<tr><td class="mono">${r.sku}</td><td class="tcl">${nm}</td><td class="mono fw7">${(r.qty||0).toLocaleString()}</td><td class="mono">${(r.pallets||0).toFixed(1)}</td></tr>`;
+  for(const r of agg){
+    h+=`<tr><td class="mono">${r.sku}</td><td class="tcl">${LP_STATE.nomenclature[r.sku]?.name||r.name||r.sku}</td><td class="mono fw7">${r.qty.toLocaleString()}</td><td class="mono">${r.pallets.toFixed(1)}</td></tr>`;
   }
   h+=`</tbody></table></div></div>`;
   openModal(h,'700px');
 }
 function NB_showLmTruck(idx){
   const t=window._nbLmTrucks?.[idx];if(!t)return;
-  let h=modalHeader(`📤 ${t.id}`,`${clDisp(t.dest)} · ${t.skus} SKUs · ${t.qty.toLocaleString()} pcs · ${t.pallets.toFixed(1)} plt`);
+  const agg=_aggBySku(t.items,'qty','pallets');
+  let h=modalHeader(`📤 ${t.id}`,`${clDisp(t.dest)} · ${agg.length} SKUs · ${t.qty.toLocaleString()} pcs · ${t.pallets.toFixed(1)} plt`);
   h+=`<div class="mdb"><div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th></tr></thead><tbody>`;
-  for(const it of t.items){
-    h+=`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.name||'—'}</td><td class="mono fw7">${(it.qty||0).toLocaleString()}</td><td class="mono">${(it.pallets||0).toFixed(1)}</td></tr>`;
+  for(const it of agg){
+    h+=`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.name||'—'}</td><td class="mono fw7">${it.qty.toLocaleString()}</td><td class="mono">${it.pallets.toFixed(1)}</td></tr>`;
   }
   h+=`</tbody></table></div></div>`;
   openModal(h,'700px');
 }
 function NB_showCort(idx){
   const c=window._nbCort?.[idx];if(!c)return;
-  let h=modalHeader(`🏷 CORT → ${clDisp(c.dest)}`,`${c.qty.toLocaleString()} pcs · ${c.skus} SKUs`);
+  const agg=_aggBySku(c.items,'qty','pallets');
+  let h=modalHeader(`🏷 CORT → ${clDisp(c.dest)}`,`${c.qty.toLocaleString()} pcs · ${agg.length} SKUs`);
   h+=`<div class="mdb"><div class="csf"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Qty</th></tr></thead><tbody>`;
-  for(const it of c.items){
-    h+=`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.name||'—'}</td><td class="mono fw7">${(it.qty||0).toLocaleString()}</td></tr>`;
+  for(const it of agg){
+    h+=`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.name||'—'}</td><td class="mono fw7">${it.qty.toLocaleString()}</td></tr>`;
   }
   h+=`</tbody></table></div></div>`;
   openModal(h,'600px');
