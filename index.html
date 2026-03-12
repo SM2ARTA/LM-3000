@@ -1231,7 +1231,7 @@ function LP_destColor(d){
    ───────────────────────────────────────────── */
 function LP_renderArrivals(el){
   const arr=LP_STATE.arrivals;
-  if(!arr.length){el.innerHTML='<div class="lp-empty">No arrivals data loaded.</div>';return}
+  if(!arr.length){el.innerHTML=`<div class="lp-empty">No arrivals data loaded.</div>${ROLE!=='viewer'?`<div style="text-align:center;margin-top:12px"><button class="rbtn" onclick="LP_showAddItem()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:12px;padding:8px 16px">+ Add Arrival Item</button></div>`:''}`; return}
 
   // Group by container (split no-container by _localName or original arrival date)
   const byCont={};
@@ -1296,7 +1296,10 @@ function LP_renderArrivals(el){
   const maxPlt=Math.max(...conts.map(x=>x.totalPlt),1);
   // Container cards grid — dense TV layout
   window._lpConts=conts;// store for popup access
-  html+=`<input type="text" class="lp-search" placeholder="Search container number..." id="lpArrSearch" oninput="LP_filterArrivals()" style="margin-bottom:8px">`;
+  html+=`<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+    <input type="text" class="lp-search" placeholder="Search container number..." id="lpArrSearch" oninput="LP_filterArrivals()" style="flex:1">
+    ${ROLE!=='viewer'?`<button class="rbtn" onclick="LP_showAddItem()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;white-space:nowrap;font-size:11px;padding:6px 12px">+ Add Item</button>`:''}
+  </div>`;
   html+=`<div id="lpArrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;width:100%">`;
   for(let ci=0;ci<conts.length;ci++){
     const cont=conts[ci];
@@ -1405,16 +1408,21 @@ function LP_showContModal(ci){
     </tr></thead><tbody>`;
 
   if(isLocal&&!isV){
+    h+=`<th style="width:24px"></th>`;// delete column header (inside thead already closed, add it before tbody)
+    // rewrite: close thead, add th, reopen tbody
+    h=h.replace('</tr></thead><tbody>','<th style="width:24px"></th></tr></thead><tbody>');
     for(const a of cont.items){
       const idx=LP_STATE.arrivals.indexOf(a);
       const curName=a._localName||'';
-      h+=`<tr>
-        <td class="mono" style="color:${color};font-weight:600">${a.sku}</td>
+      const isManual=a._manual;
+      h+=`<tr style="${isManual?'background:var(--ps)':''}">
+        <td class="mono" style="color:${color};font-weight:600">${a.sku}${isManual?' <span style="font-size:8px;color:var(--pu)">✚</span>':''}</td>
         <td class="tcl">${a.name||'—'}</td>
         <td class="mono fw7">${(a.qty||0).toLocaleString()}</td>
         <td class="mono">${a.availPallets?a.availPallets.toFixed(1):'—'}</td>
         <td><input type="text" value="${curName.replace(/"/g,'&quot;')}" placeholder="e.g. IKEA, THD..." onkeydown="if(event.key==='Enter')this.blur()" onblur="LP_setItemName(${idx},this.value)" style="width:120px;padding:2px 4px;border:1px solid ${curName?'var(--ac)':'var(--bd)'};border-radius:4px;font-size:10px;font-family:var(--fd);${curName?'font-weight:600;color:var(--ac)':''}"></td>
         <td><input type="date" value="${a.arrivalDate||''}" onchange="LP_setItemDate(${idx},this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd)"></td>
+        <td>${isManual?`<button onclick="LP_removeArrival(${idx})" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:14px;padding:0" title="Remove item">✕</button>`:''}</td>
       </tr>`;
     }
   } else if(isLocal&&isV){
@@ -1470,6 +1478,141 @@ function LP_setItemName(arrIdx,name){
   const trimmed=name.trim();
   const a=LP_STATE.arrivals[arrIdx];
   if(trimmed)a._localName=trimmed;else delete a._localName;
+  LP_saveToSupabase();
+  LP_render();
+  clM();
+}
+
+// ── Add Arrival Item modal ──
+function LP_showAddItem(){
+  if(ROLE==='viewer')return;
+  const nom=LP_STATE.nomenclature||{};
+  const nomKeys=Object.keys(nom).sort();
+  // Collect existing containers for dropdown
+  const existConts=new Set();
+  LP_STATE.arrivals.forEach(a=>{const c=a.container||'';if(c&&c!=='—'&&c.toUpperCase()!=='NO CONTAINER')existConts.add(c)});
+  const contOpts=[...existConts].sort();
+
+  const today=LP_fmtDate(new Date());
+  let h=modalHeader('➕ Add Arrival Item','Search SKU from nomenclature, specify container and quantity');
+  h+=`<div class="mdb" style="min-height:280px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--tt);display:block;margin-bottom:3px">SKU</label>
+        <div style="position:relative">
+          <input type="text" id="lpAddSku" placeholder="Type SKU to search..." oninput="LP_addItemSearch()" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd);outline:none">
+          <div id="lpAddSkuResults" style="position:absolute;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;background:var(--bg);border:1px solid var(--bd);border-radius:0 0 6px 6px;z-index:99;display:none;box-shadow:0 4px 12px rgba(0,0,0,.12)"></div>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--tt);display:block;margin-bottom:3px">Item Name</label>
+        <input type="text" id="lpAddName" readonly style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd);background:#F8F9FB;color:var(--ts)">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--tt);display:block;margin-bottom:3px">Quantity</label>
+        <input type="number" id="lpAddQty" min="1" value="1" oninput="LP_addItemRecalcPlt()" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--tt);display:block;margin-bottom:3px">Arrival Date</label>
+        <input type="date" id="lpAddDate" value="${today}" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--tt);display:block;margin-bottom:3px">Pallets</label>
+        <input type="number" id="lpAddPlt" min="0" step="0.1" value="0" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--tt);display:block;margin-bottom:3px">Container / Delivery</label>
+        <select id="lpAddCont" onchange="document.getElementById('lpAddContCustom').style.display=this.value==='__new'?'block':'none'" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+          <option value="">🚚 Local Delivery</option>
+          ${contOpts.map(c=>`<option value="${c}">📦 ${c}</option>`).join('')}
+          <option value="__new">+ New container…</option>
+        </select>
+        <input type="text" id="lpAddContCustom" placeholder="Container number..." style="display:none;margin-top:4px;width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd)">
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--tt);display:block;margin-bottom:3px">Group Name <span style="font-weight:400">(local delivery only)</span></label>
+        <input type="text" id="lpAddGroup" placeholder="e.g. IKEA, THD..." style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+      </div>
+    </div>
+    <div id="lpAddPreview" style="margin-bottom:12px;font-size:11px;color:var(--ts)"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="rbtn" onclick="clM()" style="padding:6px 16px">Cancel</button>
+      <button class="rbtn" id="lpAddBtn" onclick="LP_addArrivalItem()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;padding:6px 16px;font-weight:700" disabled>+ Add to Arrivals</button>
+    </div>
+  </div>`;
+  openModal(h,'680px');
+}
+
+function LP_addItemSearch(){
+  const q=(document.getElementById('lpAddSku')?.value||'').trim().toUpperCase();
+  const box=document.getElementById('lpAddSkuResults');
+  if(!q||q.length<2){box.style.display='none';return}
+  const nom=LP_STATE.nomenclature||{};
+  const matches=Object.entries(nom).filter(([sku,n])=>sku.toUpperCase().includes(q)||(n.name||'').toUpperCase().includes(q)).slice(0,15);
+  if(!matches.length){box.innerHTML='<div style="padding:8px;font-size:11px;color:var(--tt)">No matches</div>';box.style.display='block';return}
+  box.innerHTML=matches.map(([sku,n])=>`<div onclick="LP_addItemSelect('${sku}')" style="padding:6px 8px;cursor:pointer;border-bottom:1px solid var(--bl);font-size:11px;transition:background .1s" onmouseover="this.style.background='var(--ac)';this.style.color='#fff'" onmouseout="this.style.background='';this.style.color=''">
+    <span class="mono" style="font-weight:700">${sku}</span> <span style="color:var(--ts)">${n.name||''}</span>
+    ${n.palletQty?`<span style="font-size:9px;opacity:.7;margin-left:6px">${n.palletQty}/${n.palletSpc}spc</span>`:''}
+  </div>`).join('');
+  box.style.display='block';
+}
+
+function LP_addItemSelect(sku){
+  const nom=LP_STATE.nomenclature||{};
+  const n=nom[sku]||{};
+  document.getElementById('lpAddSku').value=sku;
+  document.getElementById('lpAddName').value=n.name||sku;
+  document.getElementById('lpAddSkuResults').style.display='none';
+  // Auto-fill pallets from nom if qty is set
+  const qty=parseInt(document.getElementById('lpAddQty')?.value)||1;
+  if(n.palletQty>0&&n.palletSpc>0){
+    const plt=Math.ceil(qty/n.palletQty)*n.palletSpc;
+    document.getElementById('lpAddPlt').value=plt;
+  }
+  document.getElementById('lpAddBtn').disabled=false;
+  // Update preview
+  document.getElementById('lpAddPreview').innerHTML=`<span class="mono fw7" style="color:var(--ac)">${sku}</span> — ${n.name||''} · Source: ${n.source||'—'} · Plt: ${n.palletQty||'—'}/${n.palletSpc||'—'}spc`;
+}
+
+function LP_addItemRecalcPlt(){
+  const sku=(document.getElementById('lpAddSku')?.value||'').trim();
+  const nom=LP_STATE.nomenclature||{};
+  const n=nom[sku];if(!n||!n.palletQty||!n.palletSpc)return;
+  const qty=parseInt(document.getElementById('lpAddQty')?.value)||0;
+  if(qty>0){document.getElementById('lpAddPlt').value=+(Math.ceil(qty/n.palletQty)*n.palletSpc).toFixed(2)}
+}
+
+function LP_addArrivalItem(){
+  if(ROLE==='viewer')return;
+  const sku=(document.getElementById('lpAddSku')?.value||'').trim();
+  if(!sku){alert('Select a SKU first');return}
+  const nom=LP_STATE.nomenclature||{};
+  const n=nom[sku]||{};
+  const qty=parseInt(document.getElementById('lpAddQty')?.value)||0;
+  if(qty<=0){alert('Quantity must be > 0');return}
+  const arrDate=document.getElementById('lpAddDate')?.value||LP_fmtDate(new Date());
+  const plt=parseFloat(document.getElementById('lpAddPlt')?.value)||0;
+  const contSel=document.getElementById('lpAddCont')?.value||'';
+  const contCustom=(document.getElementById('lpAddContCustom')?.value||'').trim();
+  const container=contSel==='__new'?contCustom:contSel;
+  const groupName=(document.getElementById('lpAddGroup')?.value||'').trim();
+  const ta=LP_STATE.turnaround||6;
+  const readyDate=LP_nextWorkday(LP_addDays(arrDate,ta));
+
+  const item={sku,name:n.name||sku,arrivalDate:arrDate,readyDate,availPallets:plt,container:container||'',qty,_manual:true};
+  if(groupName)item._localName=groupName;
+  LP_STATE.arrivals.push(item);
+  LP_saveToSupabase();
+  LP_render();
+  clM();
+}
+function LP_removeArrival(idx){
+  if(ROLE==='viewer'||!LP_STATE.arrivals[idx])return;
+  LP_STATE.arrivals.splice(idx,1);
   LP_saveToSupabase();
   LP_render();
   clM();
@@ -3151,7 +3294,7 @@ function masterBackupExport(){
     const rows=LP_STATE.arrivals.map(a=>({
       SKU:a.sku,Name:a.name||'',Container:a.container||'','Group Name':a._localName||'','Arrival Date':a.arrivalDate||'',
       'Ready Date':a.readyDate||'',Qty:a.qty||0,Pallets:a.availPallets||0,
-      'Orig Arrival':a._origArrDate||''
+      'Orig Arrival':a._origArrDate||'',Manual:a._manual?'Yes':''
     }));
     const ws=XLSX.utils.json_to_sheet(rows);
     ws['!cols']=[{wch:20},{wch:36},{wch:18},{wch:12},{wch:12},{wch:8},{wch:8},{wch:12}];
