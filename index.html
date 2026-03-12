@@ -453,7 +453,7 @@
 <div style="margin-top:24px;font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | <span style="font-weight:600">SM²ARTA™</span> licensed to SM2ARTA LLC</div>
 </div></div>
 <div class="pov" id="pov" style="display:none"><div class="spn"></div><div style="margin-top:16px;font-weight:600;color:var(--ts)">Processing...</div></div>
-<div id="D" style="position:relative"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLM()" title="Reset Last Mile">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="stockReportUpload()" id="stockBtn" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">📦 Stock Report</button><input type="file" accept=".xlsx,.xls" id="stockFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><button class="rbtn" onclick="showPalletCfg()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📐 Pallets</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div id="D" style="position:relative"><div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadge"></span> <span id="sbStatus" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLM()" title="Reset Last Mile">↻</span></div><div style="font-size:10px;color:var(--tt)" id="hm"></div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw" id="modSw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn on" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="sb-toggle" onclick="document.querySelector('.sb').classList.toggle('mob-open');this.textContent=document.querySelector('.sb').classList.contains('mob-open')?'✕ Close':'☰ Venues'">☰ Venues</button><button class="rbtn" onclick="exportXL()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="stockReportUpload()" id="stockBtn" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">📦 Stock Report</button><input type="file" accept=".xlsx,.xls" id="stockFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><button class="rbtn" onclick="showPalletCfg()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📐 Pallets</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div id="totbar" style="display:none;padding:6px 20px;background:#F8F9FB;border-bottom:1px solid var(--bd);font-size:11px;color:var(--ts);gap:8px;flex-wrap:wrap;align-items:center"><div id="tabs" style="display:flex;gap:2px"></div></div>
 <div class="cnt"><aside class="sb">
 <div class="cns" id="cnsPanel"></div>
@@ -480,7 +480,7 @@
 </div>
 <div id="mr"></div>
 <div id="LP" style="position:relative">
-<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeLP"></span> <span id="sbStatusLP" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLP()" title="Reset Load Plan data">↻</span></div><div style="font-size:10px;color:var(--tt)" id="lpSubtitle">Load Plan Module</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn on" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeLP"></span> <span id="sbStatusLP" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLP()" title="Reset Load Plan data">↻</span></div><div style="font-size:10px;color:var(--tt)" id="lpSubtitle">Load Plan Module</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn on" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div class="lp-body">
 <div class="lp-tabs" id="lpTabs">
 <button class="tbtn" onclick="LP_switchTab('arrivals')">📥 Arrivals</button>
@@ -503,7 +503,7 @@
 <footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
 <div id="V26">
-<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeV26"></span> <span id="sbStatusV26" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="systemReset()">↻</span></div><div style="font-size:10px;color:var(--tt)" id="v26Subtitle">Vision 2026</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn on" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="v26ExportBtn" onclick="V26_export()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
+<div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 224"><polygon fill="#CF5D5D" points="43,182 180,182 223,224 202,224 177,195 194,224 29,224 46,195 22,224 0,224"/><path fill="#111318" d="M184 60c-5,-29 -34,-48 -63,-48l-25 0c-77,0 -80,118 7,118l24 0c14,0 15,24 0,24l-26 0c-6,0 -12,-5 -14,-10l-47 8c6,29 34,49 63,49l19 0c42,0 64,-30 63,-60 0,-29 -22,-58 -64,-58l-23 0c-15,0 -15,-25 0,-25l26 0c6,0 11,5 13,11l47 -9z"/></svg></div><div><div style="font-size:14px;font-weight:700">The Master of the Load 3000 <span id="roleBadgeV26"></span> <span id="sbStatusV26" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="systemReset()">↻</span></div><div style="font-size:10px;color:var(--tt)" id="v26Subtitle">Vision 2026</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn on" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div><button class="rbtn" id="v26ExportBtn" onclick="V26_export()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button><button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button><button class="rbtn" onclick="showHelp()">? Help</button></div></div>
 <div class="v26-body" id="v26Body"></div>
 <footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
@@ -526,6 +526,7 @@ function MI_add(key,item){if(!MANUAL_ITEMS[key])MANUAL_ITEMS[key]=[];MANUAL_ITEM
 function MI_remove(key,idx){if(!MANUAL_ITEMS[key])return;MANUAL_ITEMS[key].splice(idx,1);if(!MANUAL_ITEMS[key].length)delete MANUAL_ITEMS[key];MI_save()}
 async function MI_save(){
   if(ROLE==="viewer"||!SB)return;
+  UNDO_capture();
   try{await SB.from('shared_state').upsert({id:'fm-manual-items',value:JSON.stringify(MANUAL_ITEMS),updated_at:new Date().toISOString()})}catch(e){console.warn('MI save:',e)}
 }
 async function MI_load(){
@@ -555,6 +556,110 @@ function MI_addFromForm(key,sf,cb){
   MI_add(key,{sku,name,qty,pallets,hsCode:'',country:'',unitPrice:0,source:'MANUAL'});
   if(cb)cb();
 }
+
+// ── Undo System (admin only, in-memory stack, max 15 steps) ──
+const UNDO_MAX=15;
+const UNDO_stack=[];
+let UNDO_paused=false;// pause during restore to avoid re-capturing
+let _undoLastSnap=null;// holds the LAST known good state (pre-mutation)
+
+function _undoSnap(){
+  return{
+    lp_plan:JSON.stringify(LP_STATE.generatedPlan||[]),
+    lp_dispatched:JSON.stringify([...(LP_dispatched||[])]),
+    lp_contOvr:JSON.stringify(LP_contDateOverrides||{}),
+    lp_lsr:JSON.stringify(LP_lsrNumbers||{}),
+    lp_palletOvr:JSON.stringify(LP_palletOverrides||{}),
+    lp_arrived:JSON.stringify([...(LP_arrivedConts||[])]),
+    lp_turnaround:LP_STATE.turnaround,
+    lp_maxPallets:LP_STATE.maxPallets,
+    lp_maxTrucks:LP_STATE.maxTrucks,
+    lp_maxDests:LP_STATE.maxDests,
+    lp_ricStart:LP_STATE.ricStartDate,
+    lm_vs:JSON.stringify(VS||{}),
+    lm_excluded:JSON.stringify([...(LM_excluded||[])]),
+    lm_exclOvr:JSON.stringify(LM_excludeUserOvr||{}),
+    lm_dispatched:JSON.stringify([...(LM_dispatched||[])]),
+    lm_dateOvr:JSON.stringify(LM_dateOverrides||{}),
+    lm_manual:JSON.stringify(MANUAL_ITEMS||{}),
+    lm_distOvr:JSON.stringify(DIST_OVERRIDES||{})
+  };
+}
+function UNDO_capture(){
+  if(ROLE==='viewer'||UNDO_paused)return;
+  try{
+    // Push the PREVIOUS state (before this mutation) onto stack
+    if(_undoLastSnap){
+      UNDO_stack.push(_undoLastSnap);
+      if(UNDO_stack.length>UNDO_MAX)UNDO_stack.shift();
+    }
+    // Record current (post-mutation) state as the new "last known"
+    _undoLastSnap=_undoSnap();
+    UNDO_updateBtn();
+  }catch(e){console.warn('Undo capture error:',e)}
+}
+function UNDO_restore(){
+  if(ROLE==='viewer'||UNDO_stack.length===0)return;
+  UNDO_paused=true;
+  try{
+    const snap=UNDO_stack.pop();
+    // Restore LP
+    LP_STATE.generatedPlan=JSON.parse(snap.lp_plan);
+    LP_dispatched=new Set(JSON.parse(snap.lp_dispatched));
+    LP_contDateOverrides=JSON.parse(snap.lp_contOvr);
+    LP_lsrNumbers=JSON.parse(snap.lp_lsr);
+    LP_palletOverrides=JSON.parse(snap.lp_palletOvr);
+    LP_arrivedConts=new Set(JSON.parse(snap.lp_arrived));
+    LP_STATE.turnaround=snap.lp_turnaround;
+    LP_STATE.maxPallets=snap.lp_maxPallets;
+    LP_STATE.maxTrucks=snap.lp_maxTrucks;
+    LP_STATE.maxDests=snap.lp_maxDests;
+    LP_STATE.ricStartDate=snap.lp_ricStart;
+    LP_applyContDateOverrides();
+    LP_applyPalletOverrides();
+    LP_snapshotSettings();
+    // Restore LM
+    VS=JSON.parse(snap.lm_vs);
+    LM_excluded=new Set(JSON.parse(snap.lm_excluded));
+    LM_excludeUserOvr=JSON.parse(snap.lm_exclOvr);
+    LM_dispatched=new Set(JSON.parse(snap.lm_dispatched));
+    LM_dateOverrides=JSON.parse(snap.lm_dateOvr);
+    MANUAL_ITEMS=JSON.parse(snap.lm_manual);
+    DIST_OVERRIDES=JSON.parse(snap.lm_distOvr);
+    // Update last known to restored state
+    _undoLastSnap=_undoSnap();
+    // Rebuild LM if data present
+    if(Object.keys(NOM).length&&RW.length){bV();numberAll()}
+    // Save restored state
+    LP_saveToSupabase();
+    saveSharedData();
+    LM_saveDateOverrides();
+    MI_save();
+    DIST_saveOverrides();
+    // Re-render
+    if(typeof LP_render==='function'&&LP_STATE.planGenerated)LP_render();
+    if(typeof rMain==='function')try{rMain()}catch(e){}
+    if(typeof rVL==='function')try{rVL()}catch(e){}
+    if(typeof V26_render==='function')try{V26_render()}catch(e){}
+    UNDO_updateBtn();
+  }catch(e){console.warn('Undo restore error:',e)}
+  UNDO_paused=false;
+}
+function UNDO_updateBtn(){
+  document.querySelectorAll('.undo-btn').forEach(b=>{
+    const n=UNDO_stack.length;
+    b.textContent=n>0?`↩ Undo (${n})`:'↩ Undo';
+    b.style.opacity=n>0?'1':'0.35';
+    b.style.pointerEvents=n>0?'auto':'none';
+  });
+}
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey&&ROLE==='admin'){
+    const tag=document.activeElement?.tagName;
+    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
+    e.preventDefault();UNDO_restore();
+  }
+});
 
 // ── LP Config defaults ──
 const LP_DEFAULT_MAX_PALLETS=26;
@@ -845,6 +950,7 @@ const LP_KEYS={config:'lp-config',nom:'lp-nom',demand:'lp-demand',arr:'lp-arriva
 async function LP_saveToSupabase(){
   if(ROLE==="viewer")return;
   if(!SB)return;
+  UNDO_capture();// snapshot before save
   try{
     const now=new Date().toISOString();
     const u=(id,val)=>SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now});
@@ -2999,8 +3105,8 @@ function enterApp(){
         });
       });
       checkSB();
+      _undoLastSnap=_undoSnap();UNDO_updateBtn();// seed undo baseline
     } else {
-      // No data at all — go straight to Vision 2026 (empty state)
       document.getElementById("US").style.display="none";
       document.getElementById("V26").classList.add("vis");
       curMod="v26";
@@ -3016,6 +3122,7 @@ function enterApp(){
 async function saveSharedData(fullSave){
   if(ROLE==="viewer")return;// viewers cannot save
   if(!SB){console.warn('Supabase not configured');return}
+  UNDO_capture();
   const els=[document.getElementById('sbStatus'),document.getElementById('sbStatusLP'),document.getElementById('sbStatusV26')].filter(Boolean);
   try{
     const now=new Date().toISOString();
@@ -3074,6 +3181,7 @@ async function loadSharedData(){
     document.getElementById("US").style.display="none";
     document.getElementById("D").classList.add("vis");
     applyRole();rT();rVL();rMain();
+    _undoLastSnap=_undoSnap();// seed undo baseline
   }catch(err){
     document.getElementById("pov").style.display="none";
     if(ROLE==="admin"){
@@ -3193,6 +3301,7 @@ function setRateOverride(truckId,val){
 }
 async function DIST_saveOverrides(){
   if(ROLE==='viewer'||!SB)return;
+  UNDO_capture();
   try{await SB.from('shared_state').upsert({id:'fm-dist-overrides',value:JSON.stringify(DIST_OVERRIDES),updated_at:new Date().toISOString()})}catch(e){}
 }
 async function DIST_loadOverrides(){
@@ -4841,6 +4950,7 @@ function LM_isDispatched(t){return LM_dispatched.has(LM_fp(t))}
 function LM_getDateOverride(t){return LM_dateOverrides[LM_fp(t)]||null}
 async function LM_saveDateOverrides(){
   if(ROLE==="viewer"||!SB)return;
+  UNDO_capture();
   try{
     const now=new Date().toISOString();
     await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides}),updated_at:now});
