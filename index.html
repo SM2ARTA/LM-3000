@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>The Master of the Load 3000 v10.1</title>
+<title>ML3K</title>
 <link rel="icon" type="image/svg+xml" href="Favicon.svg">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script async src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -2483,27 +2483,43 @@ function V26_render(){
 
   // ── NOTIFICATION BOARD — Advance inbound/outbound requests ──
   const _nbDays=window._v26NbDays||3;
-  const _nbSkipWknd=window._v26NbSkipWknd!==undefined?window._v26NbSkipWknd:true;
+  const _nbOpen=window._v26NbOpen!==undefined?window._v26NbOpen:true;
   const _today=new Date();_today.setHours(12,0,0,0);
-  const _targetDate=new Date(_today);
-  if(_nbSkipWknd){
-    let wd=0;while(wd<_nbDays){_targetDate.setDate(_targetDate.getDate()+1);const dow=_targetDate.getDay();if(dow!==0&&dow!==6)wd++}
-  } else {
-    _targetDate.setDate(_targetDate.getDate()+_nbDays);
-  }
+  const _targetDate=new Date(_today);_targetDate.setDate(_targetDate.getDate()+_nbDays);
   const _targetKey=LP_fmtDate(_targetDate);
-  const _targetLabel=_targetDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  const _targetDow=_targetDate.getDay();
+  const _isTargetWknd=_targetDow===0||_targetDow===6;
+  const _targetLabel=_targetDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
 
-  // Inbound: LP arrivals on target date
-  const nbArrivals=[];
-  if(LP_STATE.arrivals&&LP_STATE.arrivals.length){
-    for(const a of LP_STATE.arrivals){
-      if(a.arrivalDate===_targetKey&&a.qty>0){
-        nbArrivals.push(a);
-      }
+  // Helper: check if a date has any activity
+  const _nbHasActivity=(dk)=>{
+    const hasArr=LP_STATE.arrivals?.some(a=>a.arrivalDate===dk&&a.qty>0);
+    const hasLp=LP_STATE.generatedPlan?.some(r=>r.date===dk);
+    const hasLm=activeTrucks.some(t=>t.source==='Last Mile'&&t.date===dk);
+    const hasCort=activeCort.some(c=>c.date===dk);
+    return hasArr||hasLp||hasLm||hasCort;
+  };
+
+  // Find the effective display date: target day if it has activity, otherwise scan forward
+  let _effKey=_targetKey;
+  let _effDate=new Date(_targetDate);
+  let _skippedDays=0;
+  if(!_nbHasActivity(_effKey)){
+    // Scan forward up to 30 days to find next scheduled date
+    for(let i=1;i<=30;i++){
+      const d=new Date(_targetDate);d.setDate(d.getDate()+i);
+      const dk=LP_fmtDate(d);
+      if(_nbHasActivity(dk)){_effKey=dk;_effDate=d;_skippedDays=i;break}
     }
   }
-  // Aggregate arrivals by container
+  const _effLabel=_effDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  const _effDow=_effDate.getDay();
+  const _isEffWknd=_effDow===0||_effDow===6;
+  const _hasTargetActivity=_nbHasActivity(_targetKey);
+
+  // Gather data for effective date
+  const nbArrivals=[];
+  if(LP_STATE.arrivals?.length){for(const a of LP_STATE.arrivals){if(a.arrivalDate===_effKey&&a.qty>0)nbArrivals.push(a)}}
   const nbArrByCont={};
   for(const a of nbArrivals){
     const k=a.container||'Local Delivery';
@@ -2511,40 +2527,21 @@ function V26_render(){
     nbArrByCont[k].skus++;nbArrByCont[k].qty+=a.qty;nbArrByCont[k].items.push(a);
   }
   const nbArrConts=Object.values(nbArrByCont);
-
-  // Outbound: LP trucks on target date
   const nbLpTrucks=[];
-  if(LP_STATE.generatedPlan&&LP_STATE.generatedPlan.length){
+  if(LP_STATE.generatedPlan?.length){
     const lpByTruck={};
-    for(const r of LP_STATE.generatedPlan){if(r.date===_targetKey){if(!lpByTruck[r.truckId])lpByTruck[r.truckId]={id:r.truckId,dest:r.destination,items:[],qty:0,plt:0};lpByTruck[r.truckId].items.push(r);lpByTruck[r.truckId].qty+=r.qty||0;lpByTruck[r.truckId].plt+=r.pallets||0}}
+    for(const r of LP_STATE.generatedPlan){if(r.date===_effKey){if(!lpByTruck[r.truckId])lpByTruck[r.truckId]={id:r.truckId,dest:r.destination,items:[],qty:0,plt:0};lpByTruck[r.truckId].items.push(r);lpByTruck[r.truckId].qty+=r.qty||0;lpByTruck[r.truckId].plt+=r.pallets||0}}
     nbLpTrucks.push(...Object.values(lpByTruck));
   }
-
-  // Outbound: LM trucks on target date
   const nbLmTrucks=[];
-  for(const t of activeTrucks.filter(t=>t.source==='Last Mile')){
-    if(t.date===_targetKey)nbLmTrucks.push(t);
-  }
-  // Also CORT on target date
-  const nbCort=activeCort.filter(c=>c.date===_targetKey);
+  for(const t of activeTrucks.filter(t=>t.source==='Last Mile')){if(t.date===_effKey)nbLmTrucks.push(t)}
+  const nbCort=activeCort.filter(c=>c.date===_effKey);
 
   const nbHasInbound=nbArrConts.length>0;
   const nbHasOutbound=nbLpTrucks.length>0||nbLmTrucks.length>0||nbCort.length>0;
+  const nbHasAny=nbHasInbound||nbHasOutbound;
   const nbTotalInQty=nbArrivals.reduce((s,a)=>s+a.qty,0);
   const nbTotalOutTrucks=nbLpTrucks.length+nbLmTrucks.length+nbCort.length;
-
-  html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:10px 14px;margin-top:6px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:13px;font-weight:700">🔔 Advance Notifications</span>
-        <span style="font-size:10px;color:var(--tt)">${_targetLabel}</span>
-      </div>
-      <div style="display:flex;gap:4px;align-items:center">
-        <span style="font-size:9px;color:var(--tt);margin-right:4px">Look-ahead:</span>
-        ${[1,2,3].map(d=>`<button class="tbtn${_nbDays===d?' on':''}" onclick="window._v26NbDays=${d};V26_render()" style="font-size:10px;padding:3px 8px;min-width:32px">${d}d</button>`).join('')}
-        <label style="display:flex;align-items:center;gap:3px;font-size:9px;color:var(--ts);margin-left:8px;cursor:pointer"><input type="checkbox" ${_nbSkipWknd?'checked':''} onchange="window._v26NbSkipWknd=this.checked;V26_render()" style="accent-color:var(--ac);width:12px;height:12px;cursor:pointer">Skip weekends</label>
-      </div>
-    </div>`;
 
   // Store for popup access
   window._nbArrConts=nbArrConts;
@@ -2552,74 +2549,101 @@ function V26_render(){
   window._nbLmTrucks=nbLmTrucks;
   window._nbCort=nbCort;
 
-  if(!nbHasInbound&&!nbHasOutbound){
-    html+=`<div style="text-align:center;padding:12px;color:var(--tt);font-size:12px">No arrivals or dispatches scheduled for ${_targetLabel}</div>`;
-  } else {
-    html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">`;
+  // Summary for collapsed state
+  const _nbSummary=nbHasAny?`${nbHasInbound?nbArrConts.length+' inbound':''}${nbHasInbound&&nbHasOutbound?' · ':''}${nbHasOutbound?nbTotalOutTrucks+' outbound':''}`:(_skippedDays>0?'Next: '+_effLabel:'None scheduled');
 
-    // Inbound column
-    html+=`<div>
-      <div style="font-size:11px;font-weight:700;color:var(--gn);margin-bottom:6px;display:flex;align-items:center;gap:6px">
-        📥 INBOUND <span class="bg bgs bg-gn">${nbArrConts.length} container${nbArrConts.length!==1?'s':''} · ${nbTotalInQty.toLocaleString()} pcs</span>
+  html+=`<div style="margin-top:6px"><div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 14px;background:var(--sf);border:1px solid var(--bl);border-radius:${_nbOpen?'var(--r) var(--r) 0 0':'var(--r)'}" onclick="window._v26NbOpen=!window._v26NbOpen;V26_render()">
+    <span style="font-size:13px;font-weight:700">🔔 Advance Notifications</span>
+    <span style="font-size:10px;color:var(--tt)">${_effLabel}${_isEffWknd?' <span style="color:var(--rd);font-weight:600">Weekend</span>':''}</span>
+    ${!_nbOpen?`<span style="font-size:10px;color:var(--ts);font-weight:500">${_nbSummary}</span>`:''}
+    <div style="display:flex;gap:4px;align-items:center;margin-left:auto" onclick="event.stopPropagation()">
+      <span style="font-size:9px;color:var(--tt)">Look-ahead:</span>
+      ${[1,2,3].map(d=>`<button class="tbtn${_nbDays===d?' on':''}" onclick="event.stopPropagation();window._v26NbDays=${d};V26_render()" style="font-size:10px;padding:3px 8px;min-width:32px">${d}d</button>`).join('')}
+    </div>
+    <span style="font-size:10px;color:var(--ac)">${_nbOpen?'▲':'▼'}</span>
+  </div>`;
+
+  if(_nbOpen){
+    html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-top:none;border-radius:0 0 var(--r) var(--r);padding:10px 14px">`;
+
+    // Status message if target day was empty
+    if(!_hasTargetActivity&&_skippedDays>0){
+      html+=`<div style="font-size:11px;color:var(--tt);margin-bottom:8px;padding:6px 10px;background:var(--bg);border-radius:6px">
+        📅 Nothing scheduled for <strong>${_targetLabel}</strong>${_isTargetWknd?' (weekend)':''}. Next activity: <strong style="color:var(--tp)">${_effLabel}</strong> (+${_nbDays+_skippedDays}d from today)
       </div>`;
-    if(!nbHasInbound){
-      html+=`<div style="font-size:11px;color:var(--tt);padding:8px 0">No arrivals</div>`;
-    } else {
-      for(let ci=0;ci<nbArrConts.length;ci++){
-        const cont=nbArrConts[ci];
-        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showInbound(${ci})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;font-weight:700;color:var(--tp)">${cont.name}</div>
-            <div style="font-size:9px;color:var(--tt)">${cont.arrDate}</div>
-          </div>
-          <div style="font-size:10px;color:var(--ts)">${cont.skus} SKU${cont.skus>1?'s':''} · ${cont.qty.toLocaleString()} pcs</div>
-          <div style="font-size:9px;color:var(--gn);margin-top:1px">Ready: ${cont.readyDate} (+${LP_STATE.turnaround}d)</div>
+    } else if(!_hasTargetActivity&&_skippedDays===0){
+      html+=`<div style="font-size:11px;color:var(--tt);margin-bottom:8px;padding:6px 10px;background:var(--bg);border-radius:6px">
+        📅 Nothing scheduled for <strong>${_targetLabel}</strong>${_isTargetWknd?' (weekend)':''} or the next 30 days
+      </div>`;
+    }
+
+    if(nbHasAny){
+      html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">`;
+
+      // Inbound column
+      html+=`<div>
+        <div style="font-size:11px;font-weight:700;color:var(--gn);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          📥 INBOUND <span class="bg bgs bg-gn">${nbArrConts.length} container${nbArrConts.length!==1?'s':''} · ${nbTotalInQty.toLocaleString()} pcs</span>
         </div>`;
+      if(!nbHasInbound){
+        html+=`<div style="font-size:11px;color:var(--tt);padding:8px 0">No arrivals</div>`;
+      } else {
+        for(let ci=0;ci<nbArrConts.length;ci++){
+          const cont=nbArrConts[ci];
+          html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showInbound(${ci})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:11px;font-weight:700;color:var(--tp)">${cont.name}</div>
+              <div style="font-size:9px;color:var(--tt)">${cont.arrDate}</div>
+            </div>
+            <div style="font-size:10px;color:var(--ts)">${cont.skus} SKU${cont.skus>1?'s':''} · ${cont.qty.toLocaleString()} pcs</div>
+            <div style="font-size:9px;color:var(--gn);margin-top:1px">Ready: ${cont.readyDate} (+${LP_STATE.turnaround}d)</div>
+          </div>`;
+        }
       }
+      html+=`</div>`;
+
+      // Outbound column
+      html+=`<div>
+        <div style="font-size:11px;font-weight:700;color:var(--ac);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          📤 OUTBOUND <span class="bg bgs bg-bl">${nbTotalOutTrucks} truck${nbTotalOutTrucks!==1?'s':''}</span>
+        </div>`;
+      if(!nbHasOutbound){
+        html+=`<div style="font-size:11px;color:var(--tt);padding:8px 0">No dispatches</div>`;
+      } else {
+        for(let li=0;li<nbLpTrucks.length;li++){
+          const t=nbLpTrucks[li];const lsr=LP_lsrNumbers[t.id]||'';
+          html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showLpTruck(${li})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:11px;font-weight:700;color:var(--tp)">LP-${t.id} ${lsr?'<span class="mono" style="font-size:9px;color:var(--pu)">'+lsr+'</span>':''} → <span style="color:var(--ac)">${clDisp(t.dest)}</span></div>
+              <div style="font-size:9px;color:var(--tt)">${_effKey}</div>
+            </div>
+            <div style="font-size:10px;color:var(--ts)">${t.items.length} SKU${t.items.length>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.plt.toFixed(1)} plt</div>
+          </div>`;
+        }
+        for(let mi=0;mi<nbLmTrucks.length;mi++){
+          const t=nbLmTrucks[mi];
+          html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showLmTruck(${mi})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:11px;font-weight:700;color:var(--tp)">${t.id} → <span style="color:var(--gn)">${clDisp(t.dest)}</span></div>
+              <div style="font-size:9px;color:var(--tt)">${_effKey}</div>
+            </div>
+            <div style="font-size:10px;color:var(--ts)">${t.skus} SKU${t.skus>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.pallets.toFixed(1)} plt</div>
+          </div>`;
+        }
+        for(let ki=0;ki<nbCort.length;ki++){
+          const c=nbCort[ki];
+          html+=`<div style="background:#FFF8F8;border-radius:6px;padding:6px 8px;margin-bottom:4px;border:1px solid #F5C6C7;cursor:pointer;transition:box-shadow .15s" onclick="NB_showCort(${ki})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:11px;font-weight:700;color:#E31837">CORT → ${clDisp(c.dest)}</div>
+              <div style="font-size:9px;color:var(--tt)">${_effKey}</div>
+            </div>
+            <div style="font-size:10px;color:var(--ts)">${c.qty.toLocaleString()} pcs · ${c.skus} SKU${c.skus>1?'s':''}</div>
+          </div>`;
+        }
+      }
+      html+=`</div></div>`;
     }
     html+=`</div>`;
-
-    // Outbound column
-    html+=`<div>
-      <div style="font-size:11px;font-weight:700;color:var(--ac);margin-bottom:6px;display:flex;align-items:center;gap:6px">
-        📤 OUTBOUND <span class="bg bgs bg-bl">${nbTotalOutTrucks} truck${nbTotalOutTrucks!==1?'s':''}</span>
-      </div>`;
-    if(!nbHasOutbound){
-      html+=`<div style="font-size:11px;color:var(--tt);padding:8px 0">No dispatches</div>`;
-    } else {
-      for(let li=0;li<nbLpTrucks.length;li++){
-        const t=nbLpTrucks[li];
-        const lsr=LP_lsrNumbers[t.id]||'';
-        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showLpTruck(${li})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;font-weight:700;color:var(--tp)">LP-${t.id} ${lsr?'<span class="mono" style="font-size:9px;color:var(--pu)">'+lsr+'</span>':''} → <span style="color:var(--ac)">${clDisp(t.dest)}</span></div>
-            <div style="font-size:9px;color:var(--tt)">${_targetKey}</div>
-          </div>
-          <div style="font-size:10px;color:var(--ts)">${t.items.length} SKU${t.items.length>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.plt.toFixed(1)} plt</div>
-        </div>`;
-      }
-      for(let mi=0;mi<nbLmTrucks.length;mi++){
-        const t=nbLmTrucks[mi];
-        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showLmTruck(${mi})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;font-weight:700;color:var(--tp)">${t.id} → <span style="color:var(--gn)">${clDisp(t.dest)}</span></div>
-            <div style="font-size:9px;color:var(--tt)">${_targetKey}</div>
-          </div>
-          <div style="font-size:10px;color:var(--ts)">${t.skus} SKU${t.skus>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.pallets.toFixed(1)} plt</div>
-        </div>`;
-      }
-      for(let ki=0;ki<nbCort.length;ki++){
-        const c=nbCort[ki];
-        html+=`<div style="background:#FFF8F8;border-radius:6px;padding:6px 8px;margin-bottom:4px;border:1px solid #F5C6C7;cursor:pointer;transition:box-shadow .15s" onclick="NB_showCort(${ki})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;font-weight:700;color:#E31837">CORT → ${clDisp(c.dest)}</div>
-            <div style="font-size:9px;color:var(--tt)">${_targetKey}</div>
-          </div>
-          <div style="font-size:10px;color:var(--ts)">${c.qty.toLocaleString()} pcs · ${c.skus} SKU${c.skus>1?'s':''}</div>
-        </div>`;
-      }
-    }
-    html+=`</div></div>`;
   }
   html+=`</div>`;
 
