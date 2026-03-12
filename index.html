@@ -1270,24 +1270,29 @@ function LP_renderArrivals(el){
   const byDate=new Set(arr.map(a=>a.arrivalDate).filter(Boolean));
   const contCount=conts.filter(c=>!c.isNoCont).length;
   const localCount=conts.filter(c=>c.isNoCont).length;
-  const localQty=conts.filter(c=>c.isNoCont).reduce((s,c)=>s+c.totalQty,0);
+  const namedGroupCount=conts.filter(c=>c.isNoCont&&c.key?.startsWith('LD|')).length;
+  const manualCount=arr.filter(a=>a._manual).length;
 
   const ovrCount=Object.keys(LP_contDateOverrides).length;
   const arrivedCount=conts.filter(c=>LP_arrivedConts.has(c.key||c.name)).length;
   const earliestReady=[...new Set(arr.map(a=>a.readyDate).filter(Boolean))].sort()[0]||'—';
   // KPI strip
+  const _kpis=[
+    [contCount,'Containers','var(--ac)'],
+    [localCount,'Local Deliveries','var(--or)'],
+    ...(namedGroupCount>0?[[namedGroupCount,'Named Groups','var(--ac)']]:[]),
+    ...(arrivedCount>0?[[arrivedCount+'/'+conts.length,'Arrived','var(--gn)']]:[]),
+    [byDate.size,'Arrival Dates','var(--ac)'],
+    [totalPlt.toFixed(0),'Pallets','var(--rd)'],
+    [totalQty.toLocaleString(),'Pieces','var(--rd)'],
+    [arr.length,'SKU Lines','var(--gn)'],
+    ...(manualCount>0?[[manualCount,'Manual Items','var(--pu)']]:[]),
+    [LP_STATE.turnaround+'d','WH Turnaround','var(--pu)'],
+    [earliestReady,'Earliest Ready','var(--gn)'],
+    ...(ovrCount>0?[[ovrCount,'Date Overrides','var(--pu)']]:[]),
+  ];
   let html=`<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
-    ${[
-      [contCount,'Containers','var(--ac)'],
-      [localCount,'Local Deliveries','var(--or)'],
-      ...(arrivedCount>0?[[arrivedCount+'/'+conts.length,'Arrived','var(--gn)']]:[]),
-      [byDate.size,'Arrival Dates','var(--ac)'],
-      [totalPlt.toFixed(0),'Pallets','var(--rd)'],
-      [totalQty.toLocaleString(),'Pieces','var(--rd)'],
-      [arr.length,'SKU Lines','var(--gn)'],
-      [LP_STATE.turnaround+'d','WH Turnaround','var(--pu)'],
-      [earliestReady,'Earliest Ready','var(--gn)'],
-      ...(ovrCount>0?[[ovrCount,'Date Overrides','var(--pu)']]:[])].map(([v,l,col])=>`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px 18px">
+    ${_kpis.map(([v,l,col])=>`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px 18px">
       <div style="font-size:22px;font-weight:800;color:${col}">${v}</div>
       <div style="font-size:10px;color:var(--tt);margin-top:1px">${l}</div>
     </div>`).join('')}
