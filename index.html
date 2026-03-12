@@ -2209,6 +2209,120 @@ function V26_render(){
   });
   html+=`</div>`;
 
+  // ── NOTIFICATION BOARD — Advance inbound/outbound requests ──
+  const _nbDays=window._v26NbDays||3;
+  const _today=new Date();_today.setHours(12,0,0,0);
+  const _targetDate=new Date(_today);_targetDate.setDate(_targetDate.getDate()+_nbDays);
+  const _targetKey=LP_fmtDate(_targetDate);
+  const _targetLabel=_targetDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+
+  // Inbound: LP arrivals on target date
+  const nbArrivals=[];
+  if(LP_STATE.arrivals&&LP_STATE.arrivals.length){
+    for(const a of LP_STATE.arrivals){
+      if(a.arrivalDate===_targetKey&&a.qty>0){
+        nbArrivals.push(a);
+      }
+    }
+  }
+  // Aggregate arrivals by container
+  const nbArrByCont={};
+  for(const a of nbArrivals){
+    const k=a.container||'No Container';
+    if(!nbArrByCont[k])nbArrByCont[k]={name:k,skus:0,qty:0,items:[]};
+    nbArrByCont[k].skus++;nbArrByCont[k].qty+=a.qty;nbArrByCont[k].items.push(a);
+  }
+  const nbArrConts=Object.values(nbArrByCont);
+
+  // Outbound: LP trucks on target date
+  const nbLpTrucks=[];
+  if(LP_STATE.generatedPlan&&LP_STATE.generatedPlan.length){
+    const lpByTruck={};
+    for(const r of LP_STATE.generatedPlan){if(r.date===_targetKey){if(!lpByTruck[r.truckId])lpByTruck[r.truckId]={id:r.truckId,dest:r.destination,items:[],qty:0,plt:0};lpByTruck[r.truckId].items.push(r);lpByTruck[r.truckId].qty+=r.qty||0;lpByTruck[r.truckId].plt+=r.pallets||0}}
+    nbLpTrucks.push(...Object.values(lpByTruck));
+  }
+
+  // Outbound: LM trucks on target date
+  const nbLmTrucks=[];
+  for(const t of activeTrucks.filter(t=>t.source==='Last Mile')){
+    if(t.date===_targetKey)nbLmTrucks.push(t);
+  }
+  // Also CORT on target date
+  const nbCort=activeCort.filter(c=>c.date===_targetKey);
+
+  const nbHasInbound=nbArrConts.length>0;
+  const nbHasOutbound=nbLpTrucks.length>0||nbLmTrucks.length>0||nbCort.length>0;
+  const nbTotalInQty=nbArrivals.reduce((s,a)=>s+a.qty,0);
+  const nbTotalOutTrucks=nbLpTrucks.length+nbLmTrucks.length+nbCort.length;
+
+  html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:10px 14px;margin-top:6px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px;font-weight:700">🔔 Advance Notifications</span>
+        <span style="font-size:10px;color:var(--tt)">${_targetLabel}</span>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center">
+        <span style="font-size:9px;color:var(--tt);margin-right:4px">Look-ahead:</span>
+        ${[1,2,3].map(d=>`<button class="tbtn${_nbDays===d?' on':''}" onclick="window._v26NbDays=${d};V26_render()" style="font-size:10px;padding:3px 8px;min-width:32px">${d}d</button>`).join('')}
+      </div>
+    </div>`;
+
+  if(!nbHasInbound&&!nbHasOutbound){
+    html+=`<div style="text-align:center;padding:12px;color:var(--tt);font-size:12px">No arrivals or dispatches scheduled for ${_targetLabel}</div>`;
+  } else {
+    html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">`;
+
+    // Inbound column
+    html+=`<div>
+      <div style="font-size:11px;font-weight:700;color:var(--gn);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        📥 INBOUND <span class="bg bgs bg-gn">${nbArrConts.length} container${nbArrConts.length!==1?'s':''} · ${nbTotalInQty.toLocaleString()} pcs</span>
+      </div>`;
+    if(!nbHasInbound){
+      html+=`<div style="font-size:11px;color:var(--tt);padding:8px 0">No arrivals</div>`;
+    } else {
+      for(const cont of nbArrConts){
+        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--tp)">${cont.name}</div>
+          <div style="font-size:10px;color:var(--ts)">${cont.skus} SKU${cont.skus>1?'s':''} · ${cont.qty.toLocaleString()} pcs</div>
+          <div style="font-size:9px;color:var(--tt);margin-top:2px">${cont.items.slice(0,5).map(a=>`${a.sku}: ${a.qty}`).join(' · ')}${cont.items.length>5?' …':''}
+          </div>
+        </div>`;
+      }
+    }
+    html+=`</div>`;
+
+    // Outbound column
+    html+=`<div>
+      <div style="font-size:11px;font-weight:700;color:var(--ac);margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        📤 OUTBOUND <span class="bg bgs bg-bl">${nbTotalOutTrucks} truck${nbTotalOutTrucks!==1?'s':''}</span>
+      </div>`;
+    if(!nbHasOutbound){
+      html+=`<div style="font-size:11px;color:var(--tt);padding:8px 0">No dispatches</div>`;
+    } else {
+      for(const t of nbLpTrucks){
+        const lsr=LP_lsrNumbers[t.id]||'';
+        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--tp)">LP-${t.id} ${lsr?'<span class="mono" style="font-size:9px;color:var(--pu)">'+lsr+'</span>':''} → <span style="color:var(--ac)">${clDisp(t.dest)}</span></div>
+          <div style="font-size:10px;color:var(--ts)">${t.items.length} SKU${t.items.length>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.plt.toFixed(1)} plt</div>
+        </div>`;
+      }
+      for(const t of nbLmTrucks){
+        html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--tp)">LM-${t.id} → <span style="color:var(--gn)">${clDisp(t.dest)}</span></div>
+          <div style="font-size:10px;color:var(--ts)">${t.skus} SKU${t.skus>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.pallets.toFixed(1)} plt</div>
+        </div>`;
+      }
+      for(const c of nbCort){
+        html+=`<div style="background:#FFF8F8;border-radius:6px;padding:6px 8px;margin-bottom:4px;border:1px solid #F5C6C7">
+          <div style="font-size:11px;font-weight:700;color:#E31837">CORT → ${clDisp(c.dest)}</div>
+          <div style="font-size:10px;color:var(--ts)">${c.qty.toLocaleString()} pcs</div>
+        </div>`;
+      }
+    }
+    html+=`</div></div>`;
+  }
+  html+=`</div>`;
+
   html+=`<div style="display:flex;gap:3px;margin:4px 0;flex-wrap:wrap;align-items:center"><span style="font-size:8px;font-weight:700;color:var(--tt);margin-right:3px">LOAD FROM:</span>`;
   for(const[key,cat] of Object.entries(v26FilterCats)){
     const isOn=curFilter===key;
