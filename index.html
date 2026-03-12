@@ -2211,8 +2211,14 @@ function V26_render(){
 
   // ── NOTIFICATION BOARD — Advance inbound/outbound requests ──
   const _nbDays=window._v26NbDays||3;
+  const _nbSkipWknd=window._v26NbSkipWknd!==undefined?window._v26NbSkipWknd:true;
   const _today=new Date();_today.setHours(12,0,0,0);
-  const _targetDate=new Date(_today);_targetDate.setDate(_targetDate.getDate()+_nbDays);
+  const _targetDate=new Date(_today);
+  if(_nbSkipWknd){
+    let wd=0;while(wd<_nbDays){_targetDate.setDate(_targetDate.getDate()+1);const dow=_targetDate.getDay();if(dow!==0&&dow!==6)wd++}
+  } else {
+    _targetDate.setDate(_targetDate.getDate()+_nbDays);
+  }
   const _targetKey=LP_fmtDate(_targetDate);
   const _targetLabel=_targetDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 
@@ -2264,6 +2270,7 @@ function V26_render(){
       <div style="display:flex;gap:4px;align-items:center">
         <span style="font-size:9px;color:var(--tt);margin-right:4px">Look-ahead:</span>
         ${[1,2,3].map(d=>`<button class="tbtn${_nbDays===d?' on':''}" onclick="window._v26NbDays=${d};V26_render()" style="font-size:10px;padding:3px 8px;min-width:32px">${d}d</button>`).join('')}
+        <label style="display:flex;align-items:center;gap:3px;font-size:9px;color:var(--ts);margin-left:8px;cursor:pointer"><input type="checkbox" ${_nbSkipWknd?'checked':''} onchange="window._v26NbSkipWknd=this.checked;V26_render()" style="accent-color:var(--ac);width:12px;height:12px;cursor:pointer">Skip weekends</label>
       </div>
     </div>`;
 
