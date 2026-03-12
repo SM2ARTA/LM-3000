@@ -104,7 +104,7 @@
 .mod-sw{display:flex;gap:2px;margin-right:8px;background:var(--bl);border-radius:8px;padding:2px}
 .mod-btn{padding:5px 14px;border-radius:6px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts);background:transparent;transition:all .15s;white-space:nowrap}
 .mod-btn.on{background:var(--sf);color:var(--ac);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-#LP{display:none;min-height:100vh;flex-direction:column}#LP.vis{display:flex}
+#LP{display:none;min-height:100vh;flex-direction:column;width:100%}#LP.vis{display:flex}
 .sb-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;margin-left:8px;padding:2px 8px;border-radius:4px}
 .sb-status .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
 .sb-status.connected{background:#E6F5ED;color:#12804A}.sb-status.connected .dot{background:#12804A}
@@ -375,7 +375,7 @@
   .dh .dtt{font-size:10px;width:100%}
 }
 /* ── LOAD PLAN PRO UI ── */
-#LP .lp-body{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#LP .lp-body{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;width:100%}
 #LP .lp-tabs{display:flex;gap:2px;padding:6px 20px;background:#F8F9FB;border-bottom:1px solid var(--bd)}
 #LP .lp-tabs .tbtn{text-transform:capitalize}
 #LP .lp-main{flex:1;overflow-y:auto;padding:20px}
@@ -1302,7 +1302,7 @@ function LP_renderArrivals(el){
   // Container cards grid — dense TV layout
   window._lpConts=conts;// store for popup access
   html+=`<input type="text" class="lp-search" placeholder="Search container number..." id="lpArrSearch" oninput="LP_filterArrivals()" style="margin-bottom:8px">`;
-  html+=`<div id="lpArrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">`;
+  html+=`<div id="lpArrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;width:100%">`;
   for(let ci=0;ci<conts.length;ci++){
     const cont=conts[ci];
     const color=cc(cont.key||cont.name);
@@ -1335,12 +1335,13 @@ function LP_renderArrivals(el){
               <circle cx="7" cy="18" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
               <circle cx="21" cy="18" r="2" fill="#111" stroke="${color}" stroke-width="1"/>
             </svg>`}
-            <div style="min-width:0">
+            <div style="min-width:0;flex:1;overflow:hidden">
               <div style="font-size:12px;font-weight:800;color:${color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_dispName}</div>
               ${_dispDate?`<div style="font-size:10px;font-weight:600;color:var(--ts)">${_dispDate}</div>`:''}
-              ${noContainer&&ROLE!=='viewer'?`<input type="text" value="${(_customName||'').replace(/"/g,'&quot;')}" placeholder="Name this delivery..." onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')this.blur()" onblur="LP_setLocalName('${_cEsc}',this.value)" style="width:100%;margin-top:2px;padding:1px 4px;border:1px solid ${_customName?'var(--ac)':'var(--bd)'};border-radius:3px;font-size:9px;font-family:var(--fd);outline:none;${_customName?'font-weight:600;color:var(--ac)':'color:var(--tt)'}">`:''}
+            </div>
           </div>
         </div>
+        ${noContainer&&ROLE!=='viewer'?`<div onclick="event.stopPropagation()" style="margin-bottom:4px"><input type="text" value="${(_customName||'').replace(/"/g,'&quot;')}" placeholder="Name this delivery..." onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')this.blur()" onblur="LP_setLocalName('${_cEsc}',this.value)" style="width:100%;box-sizing:border-box;padding:2px 6px;border:1px solid ${_customName?'var(--ac)':'var(--bd)'};border-radius:4px;font-size:10px;font-family:var(--fd);outline:none;${_customName?'font-weight:600;color:var(--ac)':'color:var(--tt)'}"></div>`:''}
         <div style="font-size:11px;color:${_hasOvr?'var(--pu)':'var(--tp)'};margin-bottom:3px;font-weight:700;display:flex;align-items:center;gap:4px">📅 <span style="background:${_hasOvr?'var(--ps)':'#F0F1F3'};padding:1px 6px;border-radius:4px">${_hasOvr?_ovrDate+' <span style="color:var(--tt);font-weight:400;font-size:9px;text-decoration:line-through">'+_origDatesStr+'</span>':arrDates}</span></div>
         <div style="font-size:9px;color:var(--gn);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✅ Ready: ${[...cont.readyDates].sort().join(' · ')||'—'} <span style="color:var(--tt)">(+${LP_STATE.turnaround}d)</span></div>
         ${ROLE!=='viewer'?`<div onclick="event.stopPropagation()" style="margin-bottom:6px;display:flex;align-items:center;gap:4px"><input type="date" value="${_ovrDate||_origDate}" onchange="LP_setContDate('${_cEsc}',this.value)" style="width:100%;padding:2px 5px;border-radius:4px;border:1px solid ${_hasOvr?'var(--pu)':'var(--bd)'};font-size:10px;font-family:var(--fd);${_hasOvr?'background:var(--ps);font-weight:700':''}">${_hasOvr?`<button onclick="LP_setContDate('${_cEsc}','')" style="background:none;border:none;color:var(--rd);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0" title="Reset to original">✕</button>`:''}</div>`:''}
