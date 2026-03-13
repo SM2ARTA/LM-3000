@@ -587,7 +587,8 @@ function _undoSnap(){
     lm_manual:JSON.stringify(MANUAL_ITEMS||{}),
     lm_distOvr:JSON.stringify(DIST_OVERRIDES||{}),
     lm_demandAdj:JSON.stringify(LM_demandAdj||{}),
-    lm_nomOvr:JSON.stringify(LM_nomOverrides||{})
+    lm_nomOvr:JSON.stringify(LM_nomOverrides||{}),
+    lm_clusterTA:LM_clusterTurnaround
   };
 }
 function UNDO_capture(){
@@ -634,7 +635,7 @@ function UNDO_restore(){
     DIST_OVERRIDES=JSON.parse(snap.lm_distOvr);
     LM_demandAdj=JSON.parse(snap.lm_demandAdj||'{}');
     LM_nomOverrides=JSON.parse(snap.lm_nomOvr||'{}');
-    // Update last known to restored state
+    if(snap.lm_clusterTA!==undefined)LM_clusterTurnaround=snap.lm_clusterTA;
     _undoLastSnap=_undoSnap();
     // Rebuild LM if data present
     if(Object.keys(NOM).length&&RW.length){LM_applyNomOverrides();bV();numberAll()}
@@ -646,7 +647,7 @@ function UNDO_restore(){
     DIST_saveOverrides();
     LM_saveDemandAdj();
     LM_saveNomOverrides();
-    // Re-render
+    LM_saveClusterTA();
     if(typeof LP_render==='function'&&LP_STATE.planGenerated)LP_render();
     if(typeof rMain==='function')try{rMain()}catch(e){}
     if(typeof rVL==='function')try{rVL()}catch(e){}
@@ -3422,6 +3423,7 @@ function masterBackupExport(){
     ];
     // Transit times
     Object.entries(LP_transitDays).forEach(([k,v])=>rows.push({Setting:'Transit Days: '+(CITY_ABBR[k]||k),Value:v}));
+    rows.push({Setting:'LM Cluster Turnaround (days)',Value:LM_clusterTurnaround});
     // Local delivery names
     // Container date overrides
     Object.entries(LP_contDateOverrides).forEach(([k,v])=>rows.push({Setting:'Container Date Override: '+k,Value:v}));
@@ -3591,7 +3593,8 @@ function enterApp(){
       LM_loadPalletCfg().catch(()=>{}),
       DIST_loadOverrides().catch(()=>{}),
       LM_loadDemandAdj().catch(()=>{}),
-      LM_loadNomOverrides().catch(()=>{})
+      LM_loadNomOverrides().catch(()=>{}),
+      LM_loadClusterTA().catch(()=>{})
     ]);
     // Now build venues and trucks AFTER all config is loaded
     if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_applyNomOverrides();bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
@@ -3700,7 +3703,8 @@ async function loadSharedData(){
       LM_loadPalletCfg().catch(()=>{}),
       DIST_loadOverrides().catch(()=>{}),
       LM_loadDemandAdj().catch(()=>{}),
-      LM_loadNomOverrides().catch(()=>{})
+      LM_loadNomOverrides().catch(()=>{}),
+      LM_loadClusterTA().catch(()=>{})
     ]);
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
@@ -3758,7 +3762,16 @@ function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-16","Boston Stadium":"2026-05-14","Dallas Stadium":"2026-05-08","Guadalajara Stadium":"2026-04-21","Houston Stadium":"2026-05-15","International Broadcast Centre":"2026-04-27","International Broadcast Coordination Centre":"2026-04-27","Kansas City Stadium":"2026-05-17","Los Angeles Stadium":"2026-04-20","Los Angeles - Rose Bowl Stadium":"2026-05-13","Mexico City Stadium":"2026-05-12","Miami Stadium":"2026-05-22","Monterrey Stadium":"2026-05-15","New York / New Jersey Stadium":"2026-04-27","Philadelphia Stadium":"2026-05-15","San Francisco Bay Area Stadium":"2026-04-22","Seattle Stadium":"2026-05-16","Toronto Stadium":"2026-04-01","Vancouver Stadium":"2026-05-14"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 
-// Always wipe VS on load — all defaults are now hard-coded in LM_DEFAULT_* maps
+// ── USA Cluster Turnaround (days at satellite warehouse before re-dispatch) ──
+let LM_clusterTurnaround=5;
+async function LM_saveClusterTA(){
+  if(ROLE==='viewer'||!SB)return;
+  try{await SB.from('shared_state').upsert({id:'fm-cluster-ta',value:JSON.stringify(LM_clusterTurnaround),updated_at:new Date().toISOString()})}catch(e){}
+}
+async function LM_loadClusterTA(){
+  if(!SB)return;
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-cluster-ta').single();if(data){const v=JSON.parse(data.value);if(typeof v==='number')LM_clusterTurnaround=v}}catch(e){}
+} — all defaults are now hard-coded in LM_DEFAULT_* maps
 // VS only stores admin overrides that DIFFER from defaults (written by saveCurrentConstraints)
 function LM_cleanVS(){
   const oldKeys=Object.keys(VS).length;
@@ -4183,7 +4196,11 @@ function build(venue,venueList,skipNoBi){
   const isCluster=!!venueList;
   // Determine venue type for pallet resolution (individual: venue's type; cluster: first venue's type)
   const _buildVt=isCluster?(LM_vtMap[venuesToUse[0]]||''):(LM_vtMap[venue]||'');
-  const tCap=gTC(venue),maxT=gMT(venue),lt=gLT(venue);
+  const tCap=gTC(venue),maxT=gMT(venue);
+  let lt=gLT(venue);
+  // USA cluster trucks: add satellite warehouse turnaround to lead time
+  const _isUSACluster=isCluster&&!vcIsCAN(venue)&&!vcIsMEX(venue);
+  if(_isUSACluster)lt+=LM_clusterTurnaround;
   // For clusters, use the cluster's earliest BI; for single venues use venue setting
   let biSS;
   if(isCluster&&CLUSTERS[venue]){
@@ -6001,11 +6018,19 @@ function rConstraints(){
     ${_field('i-mt','Max trucks/day',mt,defMT,'number',1)}
     ${_field('i-lt','Lead time (d)',lt,defLT,'number',0)}
     ${_field('i-bi','Bump-in',bi,defBI,'date')}
-  </div>`;
+  </div>
+  ${(()=>{const _isCl=CLUSTERS[key]&&!vcIsCAN(key)&&!vcIsMEX(key);return _isCl?`<div class="cgrid" style="margin-top:6px"><div class="cf"><label style="display:flex;justify-content:space-between;align-items:center">WH Turnaround (d)<span style="font-size:8px;color:var(--gn)">def:5</span></label><input type="number" min="0" max="30" id="i-cta" value="${LM_clusterTurnaround}" style="border-color:${LM_clusterTurnaround!==5?'var(--pu)':'var(--bd)'}${isV?';opacity:.6':''}"${isV?' disabled':''}></div></div>`:''})()}`;
   if(!isV){
     ['i-tc','i-mt','i-lt','i-bi'].forEach(id=>{
       const inp=document.getElementById(id);
       if(inp)inp.addEventListener('change',_onConstraintChange);
+    });
+    const _ctaInp=document.getElementById('i-cta');
+    if(_ctaInp)_ctaInp.addEventListener('change',()=>{
+      LM_clusterTurnaround=Math.max(0,parseInt(_ctaInp.value)||0);
+      // Invalidate ALL USA cluster caches
+      for(const cl in CLUSTERS){if(!vcIsCAN(cl)&&!vcIsMEX(cl))delete PLAN_CACHE[cl]}
+      LM_saveClusterTA();numberAll();rVL();rMain();
     });
   }
 }
@@ -6433,7 +6458,8 @@ const nCort=_showCort&&P.cortDeliveries?P.cortDeliveries.filter(cd=>!LM_excluded
 const nCortPcs=P.cortDeliveries?P.cortDeliveries.filter(cd=>!LM_excluded.has(cd.id)).reduce((s,d)=>s+d.totalQty,0):0;
 let h=`<div class="fin"><h2 style="font-size:19px;font-weight:700">${displayName}</h2>`;
 if(isClusterSel)h+=`<p style="font-size:11px;color:var(--ts);margin-top:3px">${clusterVenues.length} venues: ${clusterVenues.slice(0,4).join(', ')}${clusterVenues.length>4?' +'+( clusterVenues.length-4)+' more':''}</p>`;
-h+=`<p style="font-size:12px;color:var(--ts);margin-top:3px">Lead: ${P.lt}d · ${P.maxT} trucks/day · ${P.tCap} plt/truck</p></div>`;
+const _isUSACl=isClusterSel&&!vcIsCAN(selCluster)&&!vcIsMEX(selCluster);
+h+=`<p style="font-size:12px;color:var(--ts);margin-top:3px">Lead: ${P.lt}d${_isUSACl?' <span style="color:var(--pu)">('+gLT(cacheKey)+'d transit + '+LM_clusterTurnaround+'d turnaround)</span>':''} · ${P.maxT} trucks/day · ${P.tCap} plt/truck</p></div>`;
 const venueKpis=[
   {label:'📦 Pallets',value:Math.round(totalPlt*10)/10,color:'var(--ac)'},
   {label:'📋 Pieces',value:totalPcs.toLocaleString(),color:'#A84444'},
@@ -6949,7 +6975,7 @@ function doSystemReset(){
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};
-  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};
+  STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};
   // Restore upload screen
@@ -7104,9 +7130,9 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
   document.getElementById("D").classList.add("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.remove("vis");
