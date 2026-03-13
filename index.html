@@ -1930,10 +1930,14 @@ function LP_renderPlan(el){
       const _arrDate=LP_getArrivalDate(t.date,t.dest);
       const _arrDisp=LP_parseLocalDate(_arrDate)?LP_parseLocalDate(_arrDate).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';
       const _transitD=LP_getTransitDays(t.dest);
+      const _lpAllIn=STOCK_SKUS.size>0&&aggSkus.length>0&&aggSkus.every(s=>STOCK_SKUS.has(s.sku));
+      const _lpDotColor=STOCK_SKUS.size===0?'var(--tt)':(_lpAllIn?'var(--gn)':'var(--rd)');
+      const _lpDotTitle=STOCK_SKUS.size===0?'No stock report':(_lpAllIn?'All SKUs in stock':'Some SKUs not in stock');
       html+=`<div class="lp-truck${dispClass}" data-search="${t.id} ${t.dest} ${clDisp(t.dest)} ${lsr} ${aggSkus.map(s=>s.sku+' '+s.name).join(' ')}" onclick="LP_showTruckModal(${t.id})">
         <div class="lp-truck-hd">
           <div style="display:flex;align-items:center;gap:8px">
             <span>${isDisp?'🔒':'🚛'}</span>
+            <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${_lpDotColor};flex-shrink:0" title="${_lpDotTitle}"></span>
             <span class="lp-truck-id">LP-${t.id}</span>
             ${lsr?`<span class="mono lsr-badge" style="font-size:9px;color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px">${lsr}</span>`:''}
             <span class="lp-dest-badge" style="background:${dc.bg};color:${dc.color};border:1px solid ${dc.border}">${clDisp(t.dest)}</span>
