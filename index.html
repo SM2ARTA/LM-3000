@@ -1670,7 +1670,7 @@ function LP_renderDemand(el){
     <h2 style="font-size:18px;font-weight:700">📋 Demand Summary</h2>
     <div style="display:flex;gap:8px;align-items:center"><span class="bg bg-bl">${skus.length} SKUs · ${totalDests.size} dests</span><span class="bg bg-gy">${grandQty.toLocaleString()} pcs · ${grandPlt.toFixed(1)} plt</span>${pltOvrCount?`<span class="bg bg-pu">★ ${pltOvrCount} pallet override${pltOvrCount>1?'s':''}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LP_palletOverrides={};LP_applyPalletOverrides();LP_render();LP_saveToSupabase()" style="font-size:9px;padding:2px 6px" title="Clear all pallet overrides">↻ Reset</button>`:''}`:''}</div>
   </div>
-  ${pltOvrCount?'<div class="note note-pu" style="margin-bottom:10px">Pallet qty overrides active (★). <strong>Regenerate</strong> the plan to apply new pallet dimensions to undispatched trucks.</div>':''}
+  ${pltOvrCount?'<div class="note note-pu" style="margin-bottom:10px">Pallet qty overrides active (★). <strong>Regenerate</strong> the plan to apply new pallet dimensions to unlocked trucks.</div>':''}
   <input type="text" class="lp-search" placeholder="Search by SKU or name..." id="lpDemSearch" oninput="LP_filterDemand()">
   <div class="csf" id="lpDemBody"><table class="dtb"><thead><tr>
     <th>SKU</th><th>Name</th><th>Total Qty</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
@@ -1802,7 +1802,7 @@ function LP_renderPlan(el){
     <h2 style="font-size:18px;font-weight:700">🚛 Load Plan</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <span class="bg bg-bl">${truckList.length} trucks</span>
-      ${dispCount>0?`<span class="bg bg-gn">${dispCount} dispatched</span>`:''}
+      ${dispCount>0?`<span class="bg bg-gn">${dispCount} locked</span>`:''}
       <span class="bg bg-gy">${dates.length} dates</span>
     </div>
   </div>
@@ -1848,9 +1848,9 @@ function LP_renderPlan(el){
         </div>
         <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs · ${t.totalPlt.toFixed(1)} plt${rateInputHtml('LP-'+t.id,t.dest,LP_STATE.maxPallets,false,'LP_render()')}</div>
         ${MI_get(MI_lpKey(t.id)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lpKey(t.id)).length} manual item${MI_get(MI_lpKey(t.id)).length>1?'s':''}</span></div>`:''}
-        ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>✅ Dispatched</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>🔒 Locked</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <input type="checkbox" ${checked} onclick="event.stopPropagation();LP_toggleDispatch(${t.id},this.checked)">
-          <span onclick="event.stopPropagation()" style="flex:1">${isDisp?'✅ Dispatched':'Mark dispatched'}</span>
+          <span onclick="event.stopPropagation()" style="flex:1">${isDisp?'🔒 Locked':'Lock'}</span>
           <input type="date" value="${t.date}" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate(${t.id},this.value)">
         </div>`}
         <div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:5px;margin-top:4px">
@@ -2001,7 +2001,7 @@ function LP_showTruckModal(truckId){
   const mrEl=document.getElementById('mr');
   const _lsr=LP_lsrNumbers[truckId]||'';
   let mh=modalHeader(
-    `${isDisp?'🔒':'🚛'} LP-${truckId}${_lsr?' <span class="mono" style="color:var(--pu);font-size:12px;background:var(--ps);padding:1px 6px;border-radius:3px;margin-left:6px">'+_lsr+'</span>':''}${isDisp?' <span style="color:var(--gn);font-size:12px">Dispatched</span>':''}`,
+    `${isDisp?'🔒':'🚛'} LP-${truckId}${_lsr?' <span class="mono" style="color:var(--pu);font-size:12px;background:var(--ps);padding:1px 6px;border-radius:3px;margin-left:6px">'+_lsr+'</span>':''}${isDisp?' <span style="color:var(--gn);font-size:12px">Locked</span>':''}`,
     `${first.date} · <span style="color:${dc.color}">${clDisp(first.destination)}</span>`,
     `<button class="rbtn" onclick="LP_exportSingleTruck(${truckId})" style="background:var(--as);color:var(--ac);border-color:var(--ab);font-size:11px">⬇ Excel</button><button class="rbtn" onclick="LP_exportCI(${truckId})" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-size:11px">📄 CI</button>`
   );
@@ -2380,12 +2380,12 @@ function LP_exportPlan(){
     for(const s of agg){
       const n=LP_STATE.nomenclature[s.sku]||{};
       rows.push({'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'SKU':s.sku,'Name':s.name||n.name||'',
-        'Qty':s.qty,'Pallets':+s.pallets.toFixed(2),'Dispatched':LP_dispatched.has(t.id)?'Yes':'','Source':n.source||''});
+        'Qty':s.qty,'Pallets':+s.pallets.toFixed(2),'Locked':LP_dispatched.has(t.id)?'Yes':'','Source':n.source||''});
     }
     // Manual items for this truck
     for(const mi of MI_get(MI_lpKey(t.id))){
       rows.push({'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'SKU':mi.sku,'Name':mi.name||'',
-        'Qty':mi.qty||0,'Pallets':mi.pallets||0,'Dispatched':LP_dispatched.has(t.id)?'Yes':'','Source':'MANUAL'});
+        'Qty':mi.qty||0,'Pallets':mi.pallets||0,'Locked':LP_dispatched.has(t.id)?'Yes':'','Source':'MANUAL'});
     }
   }
   const ws=XLSX.utils.json_to_sheet(rows);
@@ -2397,7 +2397,7 @@ function LP_exportPlan(){
     const agg=LP_aggregateTruck(t.items);
     const plt=t.items.reduce((s,r)=>s+(r.pallets||0),0);
     const qty=t.items.reduce((s,r)=>s+(r.qty||0),0);
-    return{'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'Pallets':+plt.toFixed(1),'Pieces':qty,'SKUs':agg.length,'Utilization':Math.round((plt/LP_STATE.maxPallets)*100)+'%','Dispatched':LP_dispatched.has(t.id)?'Yes':''};
+    return{'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'Pallets':+plt.toFixed(1),'Pieces':qty,'SKUs':agg.length,'Utilization':Math.round((plt/LP_STATE.maxPallets)*100)+'%','Locked':LP_dispatched.has(t.id)?'Yes':''};
   });
   const ws2=XLSX.utils.json_to_sheet(tRows);
   ws2['!cols']=[{wch:8},{wch:12},{wch:16},{wch:10},{wch:10},{wch:8},{wch:12},{wch:10}];
@@ -3235,7 +3235,7 @@ function masterBackupExport(){
             'Truck ID':t.id,'Destination':t.destLabel||label,
             'Dispatch Date':t.dd||'','Bump-in':t.biK||'',
             SKU:it.sku,Name:it.nm||'',Qty:it.loadQty||0,Pallets:+(it.loadPlt||0).toFixed(2),
-            Dispatched:LM_dispatched.has(fp)?'Yes':'',
+            Locked:LM_dispatched.has(fp)?'Yes':'',
             Excluded:LM_excluded.has(t.id)?'Yes':''
           });
         });
@@ -3249,7 +3249,7 @@ function masterBackupExport(){
   // 5. LM Dispatch & Date Overrides
   {
     const rows=[];
-    LM_dispatched.forEach(fp=>rows.push({Fingerprint:fp,Type:'Dispatched',Value:LM_dateOverrides[fp]||''}));
+    LM_dispatched.forEach(fp=>rows.push({Fingerprint:fp,Type:'Locked',Value:LM_dateOverrides[fp]||''}));
     Object.entries(LM_dateOverrides).forEach(([fp,d])=>{if(!LM_dispatched.has(fp))rows.push({Fingerprint:fp,Type:'Date Override',Value:d})});
     if(rows.length){const ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'LM Dispatch State')}
   }
@@ -3954,7 +3954,7 @@ function renderTruckCard(t,opts){
       ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}${isExcl?'':rateInputHtml(t.id,t.destLabel||t.dest||opts.displayName||'',tCap,true,'rMain()')}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
-      ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">✅ Dispatched</span></div>':''}
+      ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">🔒 Locked</span></div>':''}
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
@@ -3965,7 +3965,7 @@ function renderTruckCard(t,opts){
     ${opts.showExcludeCheckbox&&ROLE!=="viewer"?`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <input type="checkbox" ${isExcl?'checked':''} onchange="LM_toggleExclude('${t.id}',this.checked)"><span>${isExcl?'🚫 Excluded':'Exclude'}</span>
       <span style="color:var(--bd);margin:0 2px">|</span>
-      <input type="checkbox" ${isLmDisp?'checked':''} onchange="LM_toggleDispatchTruck(${opts.truckIdx!=null?opts.truckIdx:-1},this.checked)"><span>${isLmDisp?'✅ Dispatched':'Dispatch'}</span>
+      <input type="checkbox" ${isLmDisp?'checked':''} onchange="LM_toggleDispatchTruck(${opts.truckIdx!=null?opts.truckIdx:-1},this.checked)"><span>${isLmDisp?'🔒 Locked':'Lock'}</span>
       <input type="date" value="${t.dd||''}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px;margin-left:auto" onchange="LM_changeDate(${opts.truckIdx!=null?opts.truckIdx:-1},this.value)">
     </div>`:''}
   </div>`;
@@ -5527,7 +5527,7 @@ let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stop
 <div class="mdh"><div><h3>🚛 ${t.id}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
 <div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${LP.tCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span></div>${PB(t.pallets,LP.tCap)}
 ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10px 0;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:11px;flex-wrap:wrap">
-  <input type="checkbox" ${LM_isDispatched(t)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_isDispatched(t)?'✅ Dispatched':'Mark dispatched'}</span>
+  <input type="checkbox" ${LM_isDispatched(t)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_isDispatched(t)?'🔒 Locked':'Lock'}</span>
   <span style="color:var(--bd)">|</span>
   <label style="color:var(--ts)">Date:</label><input type="date" value="${t.dd||''}" style="font-size:11px;font-family:var(--fm);padding:4px 6px;border:1px solid var(--bd);border-radius:6px;color:var(--tp)" onchange="LM_changeDate(${i},this.value);clM()">
   <span style="color:var(--bd)">|</span>
@@ -5800,8 +5800,8 @@ function showHelp(){
   <p><strong>Tabs:</strong><br>
   <strong>📥 Arrivals</strong> — view the container arrival schedule, see what's coming and when.<br>
   <strong>📋 Demand</strong> — destination-level demand summary showing required quantities per SKU.<br>
-  <strong>🚛 Plan</strong> — the generated truck plan. Each truck card shows destination, date, SKU manifest, and pallet utilization. Trucks can be marked as "dispatched" (checkbox) — dispatched trucks are locked and won't change on re-generation. New trucks start after the last dispatched date.</p>
-  <p><strong>Dispatch & Lock:</strong> Check the box on a truck to mark it dispatched. When you regenerate the plan (e.g., after new arrivals data), dispatched trucks are preserved exactly as-is, and the engine only replans the remaining undispatched inventory. This lets you lock in shipments as they go out the door while keeping the future plan flexible.</p>
+  <strong>🚛 Plan</strong> — the generated truck plan. Each truck card shows destination, date, SKU manifest, and pallet utilization. Trucks can be marked as "locked" (checkbox) — locked trucks won't change on re-generation. New trucks start after the last locked date.</p>
+  <p><strong>Lock:</strong> Check the box on a truck to lock it. When you regenerate the plan (e.g., after new arrivals data), locked trucks are preserved exactly as-is, and the engine only replans the remaining unlocked inventory. This lets you lock in shipments as they go out the door while keeping the future plan flexible.</p>
   <p><strong>Commercial Invoice (CI):</strong> Each LP truck has a 📄 button that generates a formatted Excel with Combined Invoice & Packing List — includes shipper details, HS codes, country of origin, unit values, and total values. Ready for customs clearance.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">🚛 Last Mile — Venue Distribution</h4>
@@ -5843,8 +5843,8 @@ function showHelp(){
   <strong>Bump-in start</strong> — earliest date planning starts. Items before this date are flagged as "Early".<br>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">Roles & Access</h4>
-  <p><strong>Admin</strong> — full access: upload files, edit venue constraints, generate/regenerate plans, mark trucks as dispatched, system reset. All changes sync to the database and are visible to viewers in real-time.<br>
-  <strong>Viewer</strong> — read-only access: browse all plans, export to Excel, inspect truck details. Cannot modify constraints, upload files, or mark dispatches.</p>
+  <p><strong>Admin</strong> — full access: upload files, edit venue constraints, generate/regenerate plans, lock trucks, system reset. All changes sync to the database and are visible to viewers in real-time.<br>
+  <strong>Viewer</strong> — read-only access: browse all plans, export to Excel, inspect truck details. Cannot modify constraints, upload files, or lock trucks.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">Database & Sync</h4>
   <p>The system uses Supabase for real-time data persistence. When an admin uploads files or changes constraints, the data is saved to the cloud. Viewers loading the page will see the latest published plan automatically. The connection status indicator (green = connected, red = offline) shows database health. When offline, the system works locally but changes won't persist.</p>
