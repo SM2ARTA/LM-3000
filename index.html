@@ -400,7 +400,7 @@
 .lp-day-hdr{display:flex;align-items:center;gap:8px;margin:20px 0 8px;padding:12px 16px;background:linear-gradient(135deg,#1E2330,#2A3040);border-radius:10px;flex-wrap:wrap;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .lp-day-hdr .dt{font-size:15px;font-weight:800;letter-spacing:-.3px}.lp-day-hdr .ds{font-size:11px;color:rgba(255,255,255,.6);font-weight:500}.lp-day-hdr .dp{font-size:11px;color:rgba(255,255,255,.7);margin-left:auto}
 .lp-search{width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--bd);font-size:12px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:12px}.lp-search:focus{border-color:var(--ac)}
-.lm-dem-open{display:block!important}
+.lm-dem-open{display:block!important;overflow-x:auto;-webkit-overflow-scrolling:touch}
 
 @media(max-width:768px){
   #LP .lp-tabs{padding:6px 10px;gap:1px;overflow-x:auto}
@@ -6657,14 +6657,14 @@ function LM_renderDemand(el){
 
   // KPI strip
   const prefillV=venueFilter&&venueFilter.size===1?[...venueFilter][0]:'';
-  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-    <h2 style="font-size:18px;font-weight:700">📋 LM Demand${venueFilter?' · '+venues.length+' venue'+(venues.length>1?'s':''):''}</h2>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span class="bg bg-bl">${venues.length} venues · ${Object.values(byVenue).reduce((s,v)=>s+v.skuList.length,0)} lines</span>
-      <span class="bg bg-gy">${grandOrigQty.toLocaleString()} pcs orig${grandAdjQty!==grandOrigQty?' → <strong>'+grandAdjQty.toLocaleString()+'</strong>':''}</span>
-      ${manualCount>0?`<span class="bg bg-gn">✏ ${manualCount} manual</span>`:''}
-      ${adjItems>0?`<span class="bg bg-pu">★ ${adjItems} adjusted</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_demandAdj={};LM_saveDemandAdj();PLAN_CACHE={};numberAll();rMain()" style="font-size:9px;padding:2px 6px" title="Reset all demand adjustments">↻ Reset All</button>`:''}`:''}
-      ${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px;padding:5px 12px">+ Add Item</button>`:''}
+  let html=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+    <h2 style="font-size:16px;font-weight:700;margin:0">📋 Demand${venueFilter?' · '+venues.length+'v':''}</h2>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span class="bg bg-bl">${venues.length}v · ${Object.values(byVenue).reduce((s,v)=>s+v.skuList.length,0)} ln</span>
+      <span class="bg bg-gy">${grandOrigQty.toLocaleString()}${grandAdjQty!==grandOrigQty?' → <b>'+grandAdjQty.toLocaleString()+'</b>':' pcs'}</span>
+      ${manualCount>0?`<span class="bg bg-gn">✏${manualCount}</span>`:''}
+      ${adjItems>0?`<span class="bg bg-pu">★${adjItems}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_demandAdj={};LM_saveDemandAdj();PLAN_CACHE={};numberAll();rMain()" style="font-size:9px;padding:2px 6px">↻</button>`:''}`:''}
+      ${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button>`:''}
     </div>
   </div>`;
 
@@ -6676,17 +6676,16 @@ function LM_renderDemand(el){
     const hasManual=v.skuList.some(s=>s.manualIndices.length>0);
     const vEsc=v.name.replace(/'/g,"\\'");
     html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
-      <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="this.parentElement.querySelector('.lm-dem-body').classList.toggle('lm-dem-open')">
-        <div>
-          <span style="font-size:13px;font-weight:700;color:var(--tp)">${v.name}</span>
-          <span style="font-size:10px;color:var(--tt);margin-left:8px">${v.skuList.length} SKUs · ${v.totalOrig.toLocaleString()} pcs${v.totalAdj!==v.totalOrig?' → <strong style="color:var(--pu)">'+v.totalAdj.toLocaleString()+'</strong>':''}</span>
-          ${hasManual?'<span class="bg bgs bg-gn" style="margin-left:4px;font-size:8px">✏ MANUAL</span>':''}
+      <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="this.parentElement.querySelector('.lm-dem-body').classList.toggle('lm-dem-open')">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}</div>
+          <div style="font-size:10px;color:var(--tt)">${v.skuList.length} SKUs · ${v.totalOrig.toLocaleString()} pcs${v.totalAdj!==v.totalOrig?' → <strong style="color:var(--pu)">'+v.totalAdj.toLocaleString()+'</strong>':''}</div>
         </div>
         <span style="font-size:10px;color:var(--tt)">▼</span>
       </div>
       <div class="lm-dem-body" style="display:none;border-top:1px solid var(--bl)">
-        <table class="dtb" style="font-size:11px"><thead><tr>
-          <th>SKU</th><th>Item</th><th>Source</th><th>Original Qty</th><th style="min-width:90px">Adjusted Qty</th><th>Δ</th>${ROLE!=='viewer'?'<th></th>':''}
+        <table class="dtb"><thead><tr>
+          <th>SKU</th><th>Item</th><th>Src</th><th>Orig</th><th>Adj Qty</th><th>Δ</th>${ROLE!=='viewer'?'<th></th>':''}
         </tr></thead><tbody>`;
     for(const s of v.skuList){
       const delta=s.adjQty-s.origQty;
@@ -6698,7 +6697,7 @@ function LM_renderDemand(el){
         <td class="tcl">${s.name}</td>
         <td style="font-size:10px;color:var(--tt)">${s.src}</td>
         <td class="mono">${s.origQty.toLocaleString()}</td>
-        <td>${ROLE!=='viewer'?`<input type="number" value="${s.adjQty}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setDemand('${vEsc}','${s.sku}',+this.value,${s.origQty})" style="width:80px;padding:2px 4px;border:1px solid ${s.isAdj?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fd);${s.isAdj?'background:var(--ps);font-weight:700':''}">`:s.adjQty.toLocaleString()}</td>
+        <td>${ROLE!=='viewer'?`<input type="number" value="${s.adjQty}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setDemand('${vEsc}','${s.sku}',+this.value,${s.origQty})" style="width:65px;padding:2px 4px;border:1px solid ${s.isAdj?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fd);${s.isAdj?'background:var(--ps);font-weight:700':''}">`:s.adjQty.toLocaleString()}</td>
         <td style="color:${deltaColor};font-weight:${delta!==0?'700':'400'};font-size:10px">${deltaStr}</td>
         ${ROLE!=='viewer'?`<td>${isMnl?s.manualIndices.map(mi=>`<span onclick="event.stopPropagation();LM_removeManualDemand(${mi})" style="color:var(--rd);cursor:pointer;font-size:11px" title="Remove manual item">✕</span>`).join(''):''}${!isMnl?'':''}</td>`:''} 
       </tr>`;
