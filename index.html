@@ -5888,7 +5888,7 @@ function LM_injectManualDemand(){
     if(!m.sku||!m.venue||!m.qty)continue;
     // Ensure NOM entry
     if(!NOM[m.sku]){
-      NOM[m.sku]={nm:m.nm||m.sku,src:m.src||'MANUAL',uom:m.uom||'pc',ppu:m.ppu||1,pq:m.pq||0,ps:m.ps||0,pqA:m.pqA||0,psA:m.psA||0};
+      NOM[m.sku]={nm:m.nm||m.sku,src:m.src||'MANUAL',uom:m.uom||'pc',ppu:m.ppu||1,pq:m.pq||0,ps:m.ps||0,pqA:m.pqA||0,psA:m.psA||0,_manualNom:true};
     }
     // Add RW row
     RW.push({"Venue":m.venue,"Nomenclature":m.sku,"Required":m.qty,"Estimated bump-in date":m.biDate||'',"Venue cluster":m.cluster||'',"Venue code":m.venueCode||'',"Venue type":m.venueType||'',"_manual":true});
@@ -5904,106 +5904,188 @@ async function LM_loadManualDemand(){
 }
 function LM_showAddDemand(prefillVenue){
   if(ROLE==='viewer')return;
-  // Build venue list from existing VN + RW
   const vSet=new Set(VN.map(v=>v.name));RW.forEach(r=>{if(r.Venue)vSet.add(r.Venue)});
   const vList=[...vSet].sort();
-  // Build cluster/type lookup from existing data
   const clLookup={},vtLookup={},vcLookup={};
   for(const r of RW){if(r.Venue){if(r['Venue cluster'])clLookup[r.Venue]=r['Venue cluster'];if(r['Venue type'])vtLookup[r.Venue]=r['Venue type'];if(r['Venue code'])vcLookup[r.Venue]=r['Venue code']}}
+  const nomList=Object.entries(NOM).map(([sku,n])=>({sku,nm:n.nm||sku,src:n.src||''})).sort((a,b)=>a.sku.localeCompare(b.sku));
+  const venueDemand={};
+  for(const r of RW){const v=r.Venue,s=r.Nomenclature;if(!v||!s)continue;const k=v+'|'+s;venueDemand[k]=(venueDemand[k]||0)+(parseInt(r.Required)||0)}
+  window._mdLookup={clLookup,vtLookup,vcLookup,nomList,venueDemand};
   const mr=document.getElementById('mr');
   mr.innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
-    <div class="mdi" style="max-width:520px">
+    <div class="mdi" style="max-width:540px">
       <div class="mdh" style="background:var(--gs);border-bottom-color:var(--gn)">
-        <h3 style="color:var(--gn)">+ Add Demand Item</h3>
+        <h3 style="color:var(--gn)">+ Add / Adjust Demand Item</h3>
         <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
       </div>
       <div class="mdb" style="padding:16px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div style="grid-column:1/-1"><label style="font-size:10px;font-weight:700;color:var(--ts)">Venue *</label>
-            <select id="md_venue" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+            <select id="md_venue" onchange="_mdCheckSku()" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
               <option value="">Select venue...</option>
               ${vList.map(v=>`<option value="${v}"${v===prefillVenue?' selected':''}>${v}</option>`).join('')}
             </select>
           </div>
-          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">SKU Code *</label>
-            <input id="md_sku" placeholder="e.g. FNCHR-001-002" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
-          </div>
-          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Item Name *</label>
-            <input id="md_nm" placeholder="e.g. Folding Chair" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
-          </div>
-          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Source</label>
-            <input id="md_src" value="MANUAL" placeholder="e.g. RIC, STP" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
-          </div>
-          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Required Qty *</label>
-            <input id="md_qty" type="number" min="1" placeholder="e.g. 500" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
-          </div>
-          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Bump-in Date</label>
-            <input id="md_bi" type="date" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
-          </div>
-          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">UOM</label>
-            <input id="md_uom" value="pc" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
-          </div>
-          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Pieces per Unit</label>
-            <input id="md_ppu" type="number" min="1" value="1" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+          <div style="grid-column:1/-1;position:relative"><label style="font-size:10px;font-weight:700;color:var(--ts)">SKU Code * <span style="font-weight:400;color:var(--tt)">— type to search nomenclature</span></label>
+            <input id="md_sku" autocomplete="off" placeholder="Type SKU or item name..." oninput="_mdSkuSearch()" onfocus="_mdSkuSearch()" onblur="setTimeout(()=>{const d=document.getElementById('md_skuDrop');if(d)d.style.display='none'},200)" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+            <div id="md_skuDrop" style="display:none;position:absolute;left:0;right:0;top:100%;background:var(--sf);border:1px solid var(--bd);border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.12)"></div>
           </div>
         </div>
-        <details style="margin-top:12px">
-          <summary style="font-size:10px;font-weight:700;color:var(--ts);cursor:pointer">Pallet Dimensions (optional)</summary>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:8px">
-            <div><label style="font-size:9px;color:var(--tt)">Dis Qty</label><input id="md_pq" type="number" min="0" placeholder="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
-            <div><label style="font-size:9px;color:var(--tt)">Dis Spc</label><input id="md_ps" type="number" min="0" placeholder="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
-            <div><label style="font-size:9px;color:var(--tt)">Asm Qty</label><input id="md_pqA" type="number" min="0" placeholder="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
-            <div><label style="font-size:9px;color:var(--tt)">Asm Spc</label><input id="md_psA" type="number" min="0" placeholder="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+        <div id="md_status" style="margin-top:10px;display:none"></div>
+        <div id="md_fields" style="display:none;margin-top:10px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Item Name *</label>
+              <input id="md_nm" placeholder="e.g. Folding Chair" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+            </div>
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Source</label>
+              <input id="md_src" value="MANUAL" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+            </div>
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)"><span id="md_qtyLabel">Required Qty *</span></label>
+              <input id="md_qty" type="number" min="0" placeholder="e.g. 500" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+            </div>
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Bump-in Date</label>
+              <input id="md_bi" type="date" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+            </div>
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">UOM</label>
+              <input id="md_uom" value="pc" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+            </div>
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Pieces per Unit</label>
+              <input id="md_ppu" type="number" min="1" value="1" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+            </div>
           </div>
-          <p style="font-size:9px;color:var(--tt);margin-top:4px">If SKU already exists in nomenclature, pallet dims are inherited. Fill only for new SKUs.</p>
-        </details>
+          <details id="md_palletSec" style="margin-top:12px">
+            <summary style="font-size:10px;font-weight:700;color:var(--ts);cursor:pointer">Pallet Dimensions</summary>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:8px">
+              <div><label style="font-size:9px;color:var(--tt)">Dis Qty</label><input id="md_pq" type="number" min="0" placeholder="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+              <div><label style="font-size:9px;color:var(--tt)">Dis Spc</label><input id="md_ps" type="number" min="0" placeholder="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+              <div><label style="font-size:9px;color:var(--tt)">Asm Qty</label><input id="md_pqA" type="number" min="0" placeholder="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+              <div><label style="font-size:9px;color:var(--tt)">Asm Spc</label><input id="md_psA" type="number" min="0" placeholder="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+            </div>
+          </details>
+        </div>
         <div id="md_err" style="color:var(--rd);font-size:11px;margin-top:8px;display:none"></div>
-        <button onclick="LM_addDemandItem()" style="margin-top:14px;width:100%;padding:10px;border-radius:8px;border:none;background:var(--gn);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd)">+ Add to Demand</button>
+        <button id="md_btn" onclick="LM_addDemandItem()" style="margin-top:14px;width:100%;padding:10px;border-radius:8px;border:none;background:var(--gn);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd);display:none">+ Add to Demand</button>
       </div>
     </div>
   </div>`;
-  // Auto-fill if SKU exists
-  document.getElementById('md_sku').addEventListener('blur',function(){
-    const sku=this.value.trim();if(!sku||!NOM[sku])return;
-    const n=NOM[sku];
-    if(!document.getElementById('md_nm').value)document.getElementById('md_nm').value=n.nm||'';
-    if(document.getElementById('md_src').value==='MANUAL')document.getElementById('md_src').value=n.src||'MANUAL';
-    if(!document.getElementById('md_pq').value&&n.pq)document.getElementById('md_pq').value=n.pq;
-    if(!document.getElementById('md_ps').value&&n.ps)document.getElementById('md_ps').value=n.ps;
-    if(!document.getElementById('md_pqA').value&&n.pqA)document.getElementById('md_pqA').value=n.pqA;
-    if(!document.getElementById('md_psA').value&&n.psA)document.getElementById('md_psA').value=n.psA;
-    if(n.uom)document.getElementById('md_uom').value=n.uom;
-    if(n.ppu)document.getElementById('md_ppu').value=n.ppu;
-  });
-  // Store lookups for submit
-  window._mdClLookup=clLookup;window._mdVtLookup=vtLookup;window._mdVcLookup=vcLookup;
+  if(prefillVenue)setTimeout(_mdCheckSku,50);
+}
+function _mdSkuSearch(){
+  const q=(document.getElementById('md_sku')?.value||'').trim().toLowerCase();
+  const drop=document.getElementById('md_skuDrop');if(!drop)return;
+  if(!q||q.length<1){drop.style.display='none';_mdCheckSku();return}
+  const L=window._mdLookup?.nomList||[];
+  const matches=L.filter(n=>n.sku.toLowerCase().includes(q)||n.nm.toLowerCase().includes(q)).slice(0,15);
+  if(!matches.length&&q.length>=3){
+    drop.innerHTML=`<div style="padding:8px 12px;font-size:11px;color:var(--pu);cursor:pointer" onmousedown="_mdPickSku('${q.toUpperCase().replace(/'/g,"\\'")}')"><span style="font-size:13px">✨</span> Create new SKU: <strong>${q.toUpperCase()}</strong></div>`;
+    drop.style.display='block';
+  } else if(matches.length){
+    drop.innerHTML=matches.map(n=>`<div style="padding:6px 12px;font-size:11px;cursor:pointer;border-bottom:1px solid var(--bl);display:flex;justify-content:space-between" onmousedown="_mdPickSku('${n.sku.replace(/'/g,"\\'")}')"><span><strong class="mono">${n.sku}</strong> ${n.nm}</span><span style="color:var(--tt);font-size:9px">${n.src}</span></div>`).join('');
+    drop.style.display='block';
+  } else {drop.style.display='none'}
+  _mdCheckSku();
+}
+function _mdPickSku(sku){
+  document.getElementById('md_sku').value=sku;
+  document.getElementById('md_skuDrop').style.display='none';
+  _mdCheckSku();
+}
+function _mdCheckSku(){
+  const venue=document.getElementById('md_venue')?.value||'';
+  const sku=(document.getElementById('md_sku')?.value||'').trim();
+  const statusEl=document.getElementById('md_status');
+  const fieldsEl=document.getElementById('md_fields');
+  const btnEl=document.getElementById('md_btn');
+  const errEl=document.getElementById('md_err');
+  if(errEl)errEl.style.display='none';
+  if(!venue||!sku){statusEl.style.display='none';fieldsEl.style.display='none';btnEl.style.display='none';return}
+  const inNom=!!NOM[sku];
+  const demKey=venue+'|'+sku;
+  const existingQty=window._mdLookup?.venueDemand?.[demKey]||0;
+  const adjQty=LM_demandAdj[demKey]!==undefined?LM_demandAdj[demKey]:existingQty;
+  const n=NOM[sku];
+  if(n){
+    document.getElementById('md_nm').value=n.nm||'';
+    document.getElementById('md_src').value=n.src||'MANUAL';
+    document.getElementById('md_uom').value=n.uom||'pc';
+    document.getElementById('md_ppu').value=n.ppu||1;
+    document.getElementById('md_pq').value=(n._origPq??n.pq)||'';
+    document.getElementById('md_ps').value=(n._origPs??n.ps)||'';
+    document.getElementById('md_pqA').value=(n._origPqA??n.pqA)||'';
+    document.getElementById('md_psA').value=(n._origPsA??n.psA)||'';
+  } else {
+    document.getElementById('md_nm').value='';document.getElementById('md_src').value='MANUAL';
+    document.getElementById('md_uom').value='pc';document.getElementById('md_ppu').value='1';
+    ['md_pq','md_ps','md_pqA','md_psA'].forEach(id=>{document.getElementById(id).value=''});
+  }
+  const lockFields=(lock)=>['md_nm','md_src','md_uom','md_ppu','md_pq','md_ps','md_pqA','md_psA'].forEach(id=>{const e=document.getElementById(id);if(e){e.disabled=lock;e.style.opacity=lock?'0.5':'1'}});
+  if(inNom&&existingQty>0){
+    window._mdMode='adjust';
+    document.getElementById('md_qty').value=adjQty;
+    document.getElementById('md_qtyLabel').innerHTML=`Adjusted Qty * <span style="font-weight:400;color:var(--tt)">(current: ${existingQty.toLocaleString()})</span>`;
+    statusEl.innerHTML=`<div style="padding:8px 12px;border-radius:8px;background:var(--os);border:1px solid var(--or);font-size:11px">📋 <strong>${sku}</strong> already at <strong>${venue}</strong> with <strong>${existingQty.toLocaleString()}</strong> pcs. Change qty to adjust.</div>`;
+    statusEl.style.display='block';
+    btnEl.textContent='✎ Adjust Demand Qty';btnEl.style.background='var(--or)';
+    lockFields(true);
+  } else if(inNom){
+    window._mdMode='add';
+    document.getElementById('md_qty').value='';
+    document.getElementById('md_qtyLabel').textContent='Required Qty *';
+    statusEl.innerHTML=`<div style="padding:8px 12px;border-radius:8px;background:var(--gs);border:1px solid var(--gn);font-size:11px">✅ <strong>${sku}</strong> — ${n.nm} — found in nomenclature. Adding to <strong>${venue}</strong>.</div>`;
+    statusEl.style.display='block';
+    btnEl.textContent='+ Add to Demand';btnEl.style.background='var(--gn)';
+    lockFields(true);
+  } else {
+    window._mdMode='new';
+    document.getElementById('md_qty').value='';
+    document.getElementById('md_qtyLabel').textContent='Required Qty *';
+    statusEl.innerHTML=`<div style="padding:8px 12px;border-radius:8px;background:var(--ps);border:1px solid var(--pu);font-size:11px">✨ <strong>${sku}</strong> is a new SKU. Fill all details below.</div>`;
+    statusEl.style.display='block';
+    btnEl.textContent='✨ Create SKU & Add';btnEl.style.background='var(--pu)';
+    lockFields(false);
+    document.getElementById('md_palletSec')?.setAttribute('open','');
+  }
+  fieldsEl.style.display='block';btnEl.style.display='block';
+  if(!document.getElementById('md_bi').value){
+    const biDate=RW.filter(r=>r.Venue===venue).map(r=>r['Estimated bump-in date']).filter(Boolean).sort()[0];
+    if(biDate)document.getElementById('md_bi').value=biDate;
+  }
 }
 function LM_addDemandItem(){
   const venue=document.getElementById('md_venue').value;
   const sku=document.getElementById('md_sku').value.trim();
   const nm=document.getElementById('md_nm').value.trim();
-  const qty=parseInt(document.getElementById('md_qty').value)||0;
+  const qty=parseInt(document.getElementById('md_qty').value);
   const errEl=document.getElementById('md_err');
-  if(!venue||!sku||!nm||qty<=0){errEl.textContent='Venue, SKU, Name, and Qty > 0 are required.';errEl.style.display='block';return}
-  const item={
-    sku,nm,venue,qty,
+  const mode=window._mdMode||'add';
+  if(!venue||!sku){errEl.textContent='Venue and SKU are required.';errEl.style.display='block';return}
+  if(mode==='adjust'){
+    if(isNaN(qty)||qty<0){errEl.textContent='Qty must be >= 0.';errEl.style.display='block';return}
+    const demKey=venue+'|'+sku;const origQty=window._mdLookup?.venueDemand?.[demKey]||0;
+    if(qty===origQty){delete LM_demandAdj[demKey]}else{LM_demandAdj[demKey]=qty}
+    bV();PLAN_CACHE={};numberAll();LM_saveDemandAdj();
+    document.querySelector('.mo')?.remove();
+    setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
+    return;
+  }
+  if(!nm){errEl.textContent='Item Name is required.';errEl.style.display='block';return}
+  if(isNaN(qty)||qty<=0){errEl.textContent='Qty must be > 0.';errEl.style.display='block';return}
+  const item={sku,nm,venue,qty,
     src:document.getElementById('md_src').value.trim()||'MANUAL',
     biDate:document.getElementById('md_bi').value||'',
     uom:document.getElementById('md_uom').value.trim()||'pc',
     ppu:parseInt(document.getElementById('md_ppu').value)||1,
-    pq:parseInt(document.getElementById('md_pq').value)||0,
-    ps:parseInt(document.getElementById('md_ps').value)||0,
-    pqA:parseInt(document.getElementById('md_pqA').value)||0,
-    psA:parseInt(document.getElementById('md_psA').value)||0,
-    cluster:window._mdClLookup?.[venue]||'',
-    venueCode:window._mdVcLookup?.[venue]||'',
-    venueType:window._mdVtLookup?.[venue]||'',
+    pq:parseInt(document.getElementById('md_pq').value)||0,ps:parseInt(document.getElementById('md_ps').value)||0,
+    pqA:parseInt(document.getElementById('md_pqA').value)||0,psA:parseInt(document.getElementById('md_psA').value)||0,
+    cluster:window._mdLookup?.clLookup?.[venue]||'',
+    venueCode:window._mdLookup?.vcLookup?.[venue]||'',
+    venueType:window._mdLookup?.vtLookup?.[venue]||'',
   };
-  LM_MANUAL_DEMAND.push(item);
-  LM_saveManualDemand();
-  // Rebuild everything
-  LM_rebuildAfterManualDemand();
-  // Close modal
+  if(mode==='new'&&(!item.pq||!item.ps)&&(!item.pqA||!item.psA)){
+    errEl.textContent='New SKU needs at least one pallet dimension set (Dis or Asm Qty+Spc).';errEl.style.display='block';return;
+  }
+  LM_MANUAL_DEMAND.push(item);LM_saveManualDemand();LM_rebuildAfterManualDemand();
   document.querySelector('.mo')?.remove();
 }
 function LM_removeManualDemand(idx){
@@ -6015,10 +6097,10 @@ function LM_removeManualDemand(idx){
 function LM_rebuildAfterManualDemand(){
   // Remove old injected rows, re-inject, rebuild
   RW=RW.filter(r=>!r._manual);
-  // Remove NOM entries that were ONLY from manual demand and are no longer needed
-  const fileSkus=new Set(RW.map(r=>r.Nomenclature||r.nomenclature).filter(Boolean));
+  // Only remove NOM entries that were CREATED by manual demand (tagged _manualNom)
+  // Never touch original file-loaded nomenclature entries
   const manualSkus=new Set(LM_MANUAL_DEMAND.map(m=>m.sku).filter(Boolean));
-  for(const sku in NOM){if(!fileSkus.has(sku)&&!manualSkus.has(sku))delete NOM[sku]}
+  for(const sku in NOM){if(NOM[sku]._manualNom&&!manualSkus.has(sku))delete NOM[sku]}
   LM_injectManualDemand();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
