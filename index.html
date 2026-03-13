@@ -882,12 +882,20 @@ let LP_palletOverrides={};// sku -> {palletQty, palletSpc} — manual overrides 
 let LP_arrivedConts=new Set();// container keys marked as arrived
 const LP_TRANSIT_DEFAULTS={TOR:5,VAN:5,CDMX:7,GDL:7,MTY:7,KC:1,HOU:1,NY:3};
 let LP_transitDays={...LP_TRANSIT_DEFAULTS};// dest abbr -> transit days (editable)
-function LP_getTransitDays(dest){
+// Match destination string to transit abbreviation (checks both abbr and full city name)
+function LP_matchTransitAbbr(dest){
   const u=(dest||'').toUpperCase();
-  for(const [abbr,days] of Object.entries(LP_transitDays)){
-    if(u.includes(abbr))return days;
+  for(const abbr of Object.keys(LP_transitDays)){
+    if(u.includes(abbr))return abbr;
+    // Also check full city name from CITY_ABBR (e.g. KC→"Kansas City", NY→"New York")
+    const full=(CITY_ABBR[abbr]||'').toUpperCase();
+    if(full&&u.includes(full))return abbr;
   }
-  return 2;// fallback for unknown destinations
+  return null;
+}
+function LP_getTransitDays(dest){
+  const m=LP_matchTransitAbbr(dest);
+  return m?LP_transitDays[m]:2;
 }
 function LP_getArrivalDate(shipDate,dest){
   const td=LP_getTransitDays(dest);
@@ -908,9 +916,13 @@ function LM_getLPDestAbbrs(rawName){
   if(LM_LPFED_STADIUM_KEYS[rawName])return[LM_LPFED_STADIUM_KEYS[rawName]];
   const u=(rawName||'').toUpperCase();
   const abbrs=Object.keys(LP_TRANSIT_DEFAULTS);
-  const m=abbrs.filter(a=>u.includes(a));
+  const m=abbrs.filter(a=>{
+    if(u.includes(a))return true;
+    const full=(CITY_ABBR[a]||'').toUpperCase();
+    return full&&u.includes(full);
+  });
   if(m.length)return m;
-  if(typeof VN!=='undefined'){const v=VN.find(vn=>vn.name===rawName);if(v&&v.cluster){const cu=v.cluster.toUpperCase();return abbrs.filter(a=>cu.includes(a))}}
+  if(typeof VN!=='undefined'){const v=VN.find(vn=>vn.name===rawName);if(v&&v.cluster){const cu=v.cluster.toUpperCase();return abbrs.filter(a=>{if(cu.includes(a))return true;const full=(CITY_ABBR[a]||'').toUpperCase();return full&&cu.includes(full)})}}
   return[];
 }
 let LP_ARRIVAL_MAP={};// abbr -> { sku -> earliestArrivalDate }
@@ -918,14 +930,12 @@ function LM_buildLPArrivalMap(){
   LP_ARRIVAL_MAP={};
   if(!LP_STATE.generatedPlan||!LP_STATE.generatedPlan.length)return;
   for(const r of LP_STATE.generatedPlan){
-    const du=(r.destination||'').toUpperCase();
     const arrDate=LP_getArrivalDate(r.date,r.destination);
-    for(const abbr of Object.keys(LP_transitDays)){
-      if(du.includes(abbr)){
-        if(!LP_ARRIVAL_MAP[abbr])LP_ARRIVAL_MAP[abbr]={};
-        if(!LP_ARRIVAL_MAP[abbr][r.sku]||arrDate<LP_ARRIVAL_MAP[abbr][r.sku])
-          LP_ARRIVAL_MAP[abbr][r.sku]=arrDate;
-      }
+    const abbr=LP_matchTransitAbbr(r.destination);
+    if(abbr){
+      if(!LP_ARRIVAL_MAP[abbr])LP_ARRIVAL_MAP[abbr]={};
+      if(!LP_ARRIVAL_MAP[abbr][r.sku]||arrDate<LP_ARRIVAL_MAP[abbr][r.sku])
+        LP_ARRIVAL_MAP[abbr][r.sku]=arrDate;
     }
   }
 }
