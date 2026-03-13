@@ -5667,11 +5667,36 @@ function rVL(){
   const staVenues=isUS?ls.filter(v=>isStadium(v.name)):[];
   const groupable=isUS?ls.filter(v=>!isStadium(v.name)):ls;
 
+  // Build dispatch date map from PLAN_CACHE: venue/cluster name → earliest dispatch date
+  const _dispMap={};// name -> earliest dd (string YYYY-MM-DD)
+  for(const [label,P] of Object.entries(PLAN_CACHE)){
+    if(!P||!P.allT)continue;
+    for(const t of P.allT){
+      if(!t.dd)continue;
+      if(!_dispMap[label]||t.dd<_dispMap[label])_dispMap[label]=t.dd;
+    }
+  }
+  const _getDisp=name=>_dispMap[name]||'';
+  const _dispFmt=d=>{if(!d)return'';try{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};
+
   // Group venues by cluster
   const groups={};groupable.forEach(v=>{const cl=v.cluster||'Other';if(!groups[cl])groups[cl]=[];groups[cl].push(v)});
   const _safeTime=d=>(d instanceof Date)?d.getTime():(typeof d==='string'&&d?new Date(d+'T12:00:00').getTime():Infinity);
-  for(const cl in groups){groups[cl].sort((a,b)=>_safeTime(a.earlyBI)-_safeTime(b.earlyBI))}
-  const clKeys=Object.keys(groups).sort((a,b)=>{const ea=CLUSTERS[a]?.earlyBI?_safeTime(CLUSTERS[a].earlyBI):Infinity;const eb=CLUSTERS[b]?.earlyBI?_safeTime(CLUSTERS[b].earlyBI):Infinity;return ea-eb});
+  // Sort venues within clusters by earliest dispatch date, fallback to bump-in
+  for(const cl in groups){groups[cl].sort((a,b)=>{
+    const da=_getDisp(a.name)||'9999';const db=_getDisp(b.name)||'9999';
+    if(da!==db)return da<db?-1:1;
+    return _safeTime(a.earlyBI)-_safeTime(b.earlyBI);
+  })}
+  // Sort clusters by earliest dispatch date of their venues, fallback to bump-in
+  const clKeys=Object.keys(groups).sort((a,b)=>{
+    const da=_getDisp(a)||groups[a].reduce((m,v)=>(!m||(_getDisp(v.name)&&_getDisp(v.name)<m))?_getDisp(v.name):m,'')||'9999';
+    const db=_getDisp(b)||groups[b].reduce((m,v)=>(!m||(_getDisp(v.name)&&_getDisp(v.name)<m))?_getDisp(v.name):m,'')||'9999';
+    if(da!==db)return da<db?-1:1;
+    const ea=CLUSTERS[a]?.earlyBI?_safeTime(CLUSTERS[a].earlyBI):Infinity;
+    const eb=CLUSTERS[b]?.earlyBI?_safeTime(CLUSTERS[b].earlyBI):Infinity;
+    return ea-eb;
+  });
   const _safeFmt=d=>{if(!d)return'';if(d instanceof Date)return fS(d);if(typeof d==='string')try{return fS(new Date(d+'T12:00:00'))}catch(e){return d}return''};
   const regionKey='__region_'+vCat;
   const regionLabel=vCat==='us'?'USA Overview':vCat==='can'?'Canada Overview':'Mexico Overview';
@@ -5701,9 +5726,10 @@ function rVL(){
     html+=`<div onclick="expCl['${staKey}']=!expCl['${staKey}']; rVL()" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">🏟️ Stadiums + IBC <span style="font-weight:400;opacity:.7">(${staVenues.length})</span></div>`;
     html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${staSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round(staPlt*10)/10} plt</div></div>`;
     if(staExp){
-      staVenues.sort((a,b)=>b.ep-a.ep);
+      staVenues.sort((a,b)=>{const da=_getDisp(a.name)||'9999';const db=_getDisp(b.name)||'9999';if(da!==db)return da<db?-1:1;return b.ep-a.ep});
       for(const v of staVenues){
-        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln</div></div>`;
+        const sdd=_dispFmt(_getDisp(v.name));
+        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${sdd?' · 🚛 '+sdd:''}</div></div>`;
       }
     }
   }
@@ -5711,6 +5737,8 @@ function rVL(){
   // Cluster groups
   for(const cl of clKeys){
     const ci=CLUSTERS[cl];const ebi=_safeFmt(ci?.earlyBI);
+    const clDD=_getDisp(cl)||groups[cl].reduce((m,v)=>(!m||(_getDisp(v.name)&&_getDisp(v.name)<m))?_getDisp(v.name):m,'');
+    const clDDf=_dispFmt(clDD);
     const isSel=selCluster===cl||sel===('__cluster_'+cl);
     const isExp=!!expCl[cl];
     const vCount=groups[cl].length;
@@ -5721,11 +5749,12 @@ function rVL(){
     } else {
       html+=`<div onclick="selClOv('${cl.replace(/'/g,"\\'")}')" style="cursor:pointer;flex:1;padding:6px 8px;font-size:10px;font-weight:700">${clDisp(cl)} <span style="font-weight:400;opacity:.7">(${vCount})</span></div>`;
     }
-    html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${isSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round((ci?.plt||0)*10)/10} plt${ebi?' · '+ebi:''}</div></div>`;
+    html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${isSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round((ci?.plt||0)*10)/10} plt${clDDf?' · '+clDDf:(ebi?' · '+ebi:'')}</div></div>`;
     if(isExp){
       for(const v of groups[cl]){
         const vbi=_safeFmt(v.earlyBI);
-        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${vbi?' · BI: '+vbi:''}</div></div>`;
+        const vdd=_dispFmt(_getDisp(v.name));
+        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${vdd?' · 🚛 '+vdd:(vbi?' · BI: '+vbi:'')}</div></div>`;
       }
     }
   }
@@ -7396,6 +7425,10 @@ function doResetLM(){
     SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta']).then(()=>{}).catch(()=>{});
   }
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
+  // Clear rendered content so upload overlay is visible
+  document.getElementById("vl").innerHTML='';
+  document.getElementById("mn").innerHTML='';
+  const tb=document.getElementById("totbar");if(tb)tb.style.display='none';
   document.getElementById("D").classList.add("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.remove("vis");
@@ -7414,6 +7447,10 @@ function doSoftResetLM(){
   // VS, LM_excluded, LM_excludeUserOvr, LM_dispatched, LM_dateOverrides,
   // MANUAL_ITEMS, DIST_OVERRIDES, LM_demandAdj, LM_nomOverrides,
   // LM_palletCfg, LM_clusterTurnaround, STOCK_SKUS, STOCK_REPORT_NAME — all preserved
+  // Clear rendered content so upload overlay is visible
+  document.getElementById("vl").innerHTML='';
+  document.getElementById("mn").innerHTML='';
+  const tb=document.getElementById("totbar");if(tb)tb.style.display='none';
   document.getElementById("D").classList.add("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.remove("vis");
@@ -7453,6 +7490,8 @@ function doResetLP(){
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};
   lpUf=[];lpRenderUpload();
+  // Clear rendered content so upload overlay is visible
+  const lpM=document.getElementById('lpMain');if(lpM)lpM.innerHTML='';
   document.getElementById("D").classList.remove("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.add("vis");
@@ -7481,6 +7520,8 @@ function doSoftResetLP(){
   // LP_dispatched, LP_lsrNumbers, LP_palletOverrides, LP_arrivedConts, LP_transitDays,
   // LP_contDateOverrides — all preserved
   lpUf=[];lpRenderUpload();
+  // Clear rendered content so upload overlay is visible
+  const lpM2=document.getElementById('lpMain');if(lpM2)lpM2.innerHTML='';
   document.getElementById("D").classList.remove("vis");
   document.getElementById("V26").classList.remove("vis");
   document.getElementById("LP").classList.add("vis");
