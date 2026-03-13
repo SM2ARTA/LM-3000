@@ -893,7 +893,59 @@ function LP_getArrivalDate(shipDate,dest){
   return LP_addDays(shipDate,td);
 }
 
-function LP_recalcReadyDates(){
+// ── LP-fed location logic (CAN, MEX, 3 USA stadiums) ──
+const LM_LPFED_STADIUMS=new Set(['New York / New Jersey Stadium','Kansas City Stadium','Houston Stadium']);
+const LM_LPFED_STADIUM_KEYS={'New York / New Jersey Stadium':'NY','Kansas City Stadium':'KC','Houston Stadium':'HOU'};
+function LM_isLPFed(rawName){
+  if(LM_LPFED_STADIUMS.has(rawName))return true;
+  const u=(rawName||'').toUpperCase();
+  if(u.startsWith('CAN ')||u.startsWith('MEX '))return true;
+  if(typeof VN!=='undefined'){const v=VN.find(vn=>vn.name===rawName);if(v&&(vcIsCAN(v.cluster)||vcIsMEX(v.cluster)))return true}
+  return false;
+}
+function LM_getLPDestAbbrs(rawName){
+  if(LM_LPFED_STADIUM_KEYS[rawName])return[LM_LPFED_STADIUM_KEYS[rawName]];
+  const u=(rawName||'').toUpperCase();
+  const abbrs=Object.keys(LP_TRANSIT_DEFAULTS);
+  const m=abbrs.filter(a=>u.includes(a));
+  if(m.length)return m;
+  if(typeof VN!=='undefined'){const v=VN.find(vn=>vn.name===rawName);if(v&&v.cluster){const cu=v.cluster.toUpperCase();return abbrs.filter(a=>cu.includes(a))}}
+  return[];
+}
+let LP_ARRIVAL_MAP={};// abbr -> { sku -> earliestArrivalDate }
+function LM_buildLPArrivalMap(){
+  LP_ARRIVAL_MAP={};
+  if(!LP_STATE.generatedPlan||!LP_STATE.generatedPlan.length)return;
+  for(const r of LP_STATE.generatedPlan){
+    const du=(r.destination||'').toUpperCase();
+    const arrDate=LP_getArrivalDate(r.date,r.destination);
+    for(const abbr of Object.keys(LP_transitDays)){
+      if(du.includes(abbr)){
+        if(!LP_ARRIVAL_MAP[abbr])LP_ARRIVAL_MAP[abbr]={};
+        if(!LP_ARRIVAL_MAP[abbr][r.sku]||arrDate<LP_ARRIVAL_MAP[abbr][r.sku])
+          LP_ARRIVAL_MAP[abbr][r.sku]=arrDate;
+      }
+    }
+  }
+}
+// Check if a SKU arrives on time from LP for a given LP-fed location and dispatch date
+function LM_skuArrivedOnTime(sku,lpAbbrs,dispatchDate){
+  if(!lpAbbrs||!lpAbbrs.length||!dispatchDate)return false;
+  for(const abbr of lpAbbrs){
+    const m=LP_ARRIVAL_MAP[abbr];
+    if(m&&m[sku]&&m[sku]<=dispatchDate)return true;
+  }
+  return false;
+}
+// Get LP arrival date for a SKU at LP-fed location (earliest across matched abbrs)
+function LM_getSkuLPArrival(sku,lpAbbrs){
+  let earliest=null;
+  for(const abbr of (lpAbbrs||[])){
+    const m=LP_ARRIVAL_MAP[abbr];
+    if(m&&m[sku]&&(!earliest||m[sku]<earliest))earliest=m[sku];
+  }
+  return earliest;
+}
   const ta=LP_STATE.turnaround||6;
   for(const a of LP_STATE.arrivals){
     // Use overridden arrival date if present, otherwise original
@@ -3255,19 +3307,27 @@ function masterBackupExport(){
 
   // 4. LM Trucks — from PLAN_CACHE
   if(Object.keys(PLAN_CACHE).length){
+    LM_buildLPArrivalMap();
     const truckRows=[];
     for(const[label,P]of Object.entries(PLAN_CACHE)){
+      const _eAbbrs=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
       P.allT.forEach(t=>{
         const fp=LM_fp(t);
         const nonCort=t.items.filter(it=>!isCort(it.sku));
         nonCort.forEach(it=>{
-          truckRows.push({
+          const row={
             'Truck ID':t.id,'Destination':t.destLabel||label,
             'Dispatch Date':t.dd||'','Bump-in':t.biK||'',
             SKU:it.sku,Name:it.nm||'',Qty:it.loadQty||0,Pallets:+(it.loadPlt||0).toFixed(2),
             Locked:LM_dispatched.has(fp)?'Yes':'',
             Excluded:LM_excluded.has(t.id)?'Yes':''
-          });
+          };
+          if(_eAbbrs.length){
+            const lpArr=LM_getSkuLPArrival(it.sku,_eAbbrs);
+            row['LP Arrival']=lpArr||'';
+            row['On Time']=(lpArr&&t.dd)?(lpArr<=t.dd?'Yes':'Late'):'';
+          }
+          truckRows.push(row);
         });
       });
     }
@@ -3983,7 +4043,7 @@ function renderTruckCard(t,opts){
     <div class="tto"><div class="tin"><span style="font-size:18px">${isLmDisp?'🔒':(isExcl?'🚫':'🚛')}</span><div>
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
       <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty</div>
-      ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
+      ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const _lpA=opts.lpFedAbbrs;const _dd=t.dd||'';if(_lpA&&_lpA.length&&_dd&&Object.keys(LP_ARRIVAL_MAP).length){const onTime=nonStp.filter(it=>LM_skuArrivedOnTime(it.sku,_lpA,_dd)).length;const late=nonStp.length-onTime;const pct=Math.round(onTime/nonStp.length*100);const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">🚚 ${pct}% arrived (${onTime}/${nonStp.length})</span>${late>0?`<span class="bg bgs" style="background:var(--rs);color:var(--rd);margin-left:3px">⚠ ${late} late</span>`:''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}${isExcl?'':rateInputHtml(t.id,t.destLabel||t.dest||opts.displayName||'',tCap,true,'rMain()')}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">🔒 Locked</span></div>':''}
@@ -5555,6 +5615,9 @@ function showM(i){const t=LP.allT[i];if(!t)return;const fp=Math.round(t.pallets/
 const pDisp=Number.isInteger(t.pallets)?t.pallets:t.pallets.toFixed(1);
 const ovLabel=t.isOverflow?' · <span style="color:var(--or);font-weight:600">Overflow</span> (ideal: '+fS(new Date(t.idealDisp+"T12:00:00"))+')':'';
 const isClusterTruck=!!(selCluster&&CLUSTERS[selCluster]);
+const _mCacheKey=isClusterTruck?selCluster:sel;
+const _mLpAbbrs=LM_isLPFed(_mCacheKey)?LM_getLPDestAbbrs(_mCacheKey):[];
+const _mIsLpFed=_mLpAbbrs.length>0&&Object.keys(LP_ARRIVAL_MAP).length>0;
 let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stopPropagation()">
 <div class="mdh"><div><h3>🚛 ${t.id}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
 <div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${LP.tCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span></div>${PB(t.pallets,LP.tCap)}
@@ -5565,7 +5628,7 @@ ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10
   <span style="color:var(--bd)">|</span>
   <input type="checkbox" ${LM_hideStaples?'checked':''} onchange="LM_hideStaples=this.checked;showM(${i})"><span>Hide Staples</span>
 </div>`:''}
-${(()=>{const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=nonStp.length>0?Math.round(inSt/nonStp.length*100):0;const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">📦 In Stock: ${STOCK_SKUS.size===0?'— (no report)':pct+'% ('+inSt+'/'+nonStp.length+' SKUs excl. STP/CT)'}</div>`})()}
+${(()=>{const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(_mIsLpFed&&t.dd){const onTime=nonStp.filter(it=>LM_skuArrivedOnTime(it.sku,_mLpAbbrs,t.dd)).length;const late=nonStp.length-onTime;const pct=nonStp.length>0?Math.round(onTime/nonStp.length*100):0;const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">🚚 LP Arrived: ${pct}% (${onTime}/${nonStp.length} SKUs excl. STP/CT)${late>0?' · <span style="color:var(--rd)">⚠ '+late+' late</span>':''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=nonStp.length>0?Math.round(inSt/nonStp.length*100):0;const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">📦 In Stock: ${STOCK_SKUS.size===0?'— (no report)':pct+'% ('+inSt+'/'+nonStp.length+' SKUs excl. STP/CT)'}</div>`})()}
 <table class="dtb" style="margin-top:14px"><thead><tr>
 <th colspan="4" style="border-right:2px solid var(--bd)"></th>
 <th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--ts)">${isClusterTruck?'CLUSTER TOTAL':'VENUE TOTAL'}</th>
@@ -5577,8 +5640,12 @@ ${isClusterTruck?'':`<th style="color:var(--pu)">NOTE</th>`}
 t.items.forEach(it=>{
 const lmSrc=(NOM[it.sku]?.src)||'';
 if(LM_hideStaples&&(lmSrc.toUpperCase().startsWith('STP')))return;
-const lmInStock=STOCK_SKUS.has(it.sku);
-const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmInStock?'var(--gn)':'var(--rd)'}" title="${lmInStock?'In stock':'Not in stock'}"></span>`;
+const _isStp=lmSrc.toUpperCase().startsWith('STP')||lmSrc.toUpperCase().startsWith('CT');
+const _skuOnTime=_mIsLpFed&&!_isStp&&t.dd?LM_skuArrivedOnTime(it.sku,_mLpAbbrs,t.dd):null;
+const _skuLpArr=_mIsLpFed&&!_isStp?LM_getSkuLPArrival(it.sku,_mLpAbbrs):null;
+const lmInStock=_skuOnTime!==null?_skuOnTime:STOCK_SKUS.has(it.sku);
+const _dotTitle=_skuOnTime!==null?(_skuOnTime?'LP arrives '+((_skuLpArr)||'on time'):'Late — LP arrives '+(_skuLpArr||'after dispatch')):(lmInStock?'In stock':'Not in stock');
+const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmInStock?'var(--gn)':'var(--rd)'}" title="${_dotTitle}"></span>`;
 const totalForSku=it.noPallet?LP.all.filter(x=>x.sku===it.sku).reduce((s,x)=>s+x.qty,0):LP.all.filter(x=>x.sku===it.sku&&x.ok).reduce((s,x)=>s+x.qty,0);
 const poolLeft=it.noPallet?'—':(it.poolAfter!==undefined?it.poolAfter:'—');
 const reqPlt=(it.noPallet||it.pq===0)?0:(it.sched>0?((it.sched/it.pq)*it.ps):0);
@@ -6093,7 +6160,7 @@ function LM_setDemand(venue,sku,newQty,origQty){
   setTimeout(()=>{rMain();rVL();if(typeof V26_render==='function')try{V26_render()}catch(e){}},50);
 }
 
-function rMain(){const el=document.getElementById("mn");
+function rMain(){LM_buildLPArrivalMap();const el=document.getElementById("mn");
 
 // ── DEMAND VIEW ──
 if(cv==="demand"){LM_renderDemand(el);return}
@@ -6350,6 +6417,7 @@ const displayName=isClusterSel?clDisp(selCluster):sel;
 
 rConstraints();
 const cacheKey=isClusterSel?selCluster:sel;
+const _lpFedAbbrs=LM_isLPFed(cacheKey)?LM_getLPDestAbbrs(cacheKey):[];
 const P=PLAN_CACHE[cacheKey]||(()=>{const _p=isClusterSel?build(sel,clusterVenues):build(sel);PLAN_CACHE[cacheKey]=_p;return _p})();
 LP=P;
 // Use globally-numbered CORT from CORT_CACHE (set by numberAll)
@@ -6423,8 +6491,38 @@ ${day.isEarly?B("Early","pu"):""} ${day.hasOverflow?B("Overflow","or"):""} ${day
 <div class="dpr">${day.dayP}% · ${day.cumP}% cum</div></div><div class="tgr">`;
 day.trucks.forEach(tr=>{const ti=LP.allT.indexOf(tr);
 const arrLabel=day.isNoBi?'':'📅 '+fS(day.dDate)+(day.biDate?' → '+fS(day.biDate):'');
-h+=renderTruckCard(tr,{tCap:P.tCap,displayName:displayName,dayLabel:arrLabel,onClickFn:`showM(${ti})`,exportFn:`exportTruck(${ti})`,showExcludeCheckbox:true,truckIdx:ti})});
+h+=renderTruckCard(tr,{tCap:P.tCap,displayName:displayName,dayLabel:arrLabel,onClickFn:`showM(${ti})`,exportFn:`exportTruck(${ti})`,showExcludeCheckbox:true,truckIdx:ti,lpFedAbbrs:_lpFedAbbrs})});
 h+=`</div></div>`})}
+// ── Late Arrival List (LP-fed locations only) ──
+if(_lpFedAbbrs.length&&Object.keys(LP_ARRIVAL_MAP).length){
+  const lateItems=[];
+  P.days.forEach(day=>{day.trucks.forEach(tr=>{
+    const dd=tr.dd||day.dKey;if(!dd)return;
+    tr.items.forEach(it=>{
+      const src=(NOM[it.sku]?.src||'').toUpperCase();
+      if(src.startsWith('STP')||src.startsWith('CT'))return;
+      const lpArr=LM_getSkuLPArrival(it.sku,_lpFedAbbrs);
+      if(!lpArr)lateItems.push({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',truckId:tr.id,dispatch:dd,lpArrival:'No LP shipment',qty:it.loadQty||0});
+      else if(lpArr>dd)lateItems.push({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',truckId:tr.id,dispatch:dd,lpArrival:lpArr,qty:it.loadQty||0,daysLate:Math.round((new Date(lpArr+'T12:00:00')-new Date(dd+'T12:00:00'))/(864e5))});
+    });
+  })});
+  if(lateItems.length){
+    lateItems.sort((a,b)=>(a.dispatch||'').localeCompare(b.dispatch||'')||(a.sku||'').localeCompare(b.sku||''));
+    h+=`<div class="lp-card fin" style="margin-top:16px;border:2px solid var(--rd);background:linear-gradient(135deg,#fff,#FEF0F0)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h4 style="margin:0;font-size:13px;color:var(--rd)">⚠ Late LP Arrivals (${lateItems.length} SKUs)</h4>
+        <span class="bg bg-rd" style="font-size:10px">${[...new Set(lateItems.map(l=>l.truckId))].length} trucks affected</span>
+      </div>
+      <div style="font-size:10px;color:var(--ts);margin-bottom:8px">SKUs where LP truck arrival date is after the LM dispatch date</div>
+      <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Truck</th><th>Dispatch</th><th>LP Arrival</th><th>Days Late</th><th>Qty</th></tr></thead><tbody>`;
+    lateItems.forEach(l=>{
+      const arrDisp=l.lpArrival==='No LP shipment'?`<span style="color:var(--rd);font-weight:600">None</span>`:l.lpArrival;
+      const daysL=l.daysLate!=null?`<span style="color:var(--rd);font-weight:700">+${l.daysLate}d</span>`:'<span style="color:var(--rd)">—</span>';
+      h+=`<tr><td class="mono">${l.sku}</td><td class="tcl">${l.name}</td><td class="mono">${l.truckId}</td><td class="mono">${l.dispatch}</td><td class="mono">${arrDisp}</td><td>${daysL}</td><td class="mono fw6">${l.qty.toLocaleString()}</td></tr>`;
+    });
+    h+=`</tbody></table></div>`;
+  }
+}
 // ── Compute CORT + excluded freight merge (used by trucks view and timeline) ──
 const showClusterCort=!isClusterSel||vcIsCAN(selCluster)||vcIsMEX(selCluster);
 let cortWithMerge=[];
