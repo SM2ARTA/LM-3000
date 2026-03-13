@@ -2945,20 +2945,23 @@ function V26_render(){
 
   // ── DISPATCH CHART (compact bar chart replacing calendar) ──
   if(fDates.length>0){
-    const maxDay=Math.max(...fDates.map(d=>{const items=fByDate[d]||[];return items.filter(t=>!t.excluded).length}),1);
+    if(!window._v26Series)window._v26Series={lp:true,lm:true,cort:true};
+    const _sr=window._v26Series;
+    const _togSr=(k)=>`window._v26Series.${k}=!window._v26Series.${k};V26_render()`;
+    const maxDay=Math.max(...fDates.map(d=>{const items=fByDate[d]||[];return items.filter(t=>!t.excluded&&((_sr.lp&&t.source==='Load Plan')||(_sr.lm&&t.source==='Last Mile')||(_sr.cort&&t.source==='CORT'))).length}),1);
     html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:10px 14px;margin-top:6px;flex:1;min-height:120px;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <div style="font-size:12px;font-weight:700">📊 Dispatch Volume</div>
-      <div style="display:flex;gap:10px;font-size:9px;color:var(--tt);align-items:center"><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#6CB4EE;vertical-align:middle;margin-right:3px"></span>LP</span><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#78C68D;vertical-align:middle;margin-right:3px"></span>LM</span><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#E8745A;vertical-align:middle;margin-right:3px"></span>CORT</span><span style="margin-left:6px;font-weight:600">Peak: ${fPeakCount} · ${fDates.length} days</span></div>
+      <div style="display:flex;gap:10px;font-size:9px;color:var(--tt);align-items:center"><span onclick="${_togSr('lp')}" style="cursor:pointer;user-select:none;${_sr.lp?'':'opacity:0.3;text-decoration:line-through'}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#6CB4EE;vertical-align:middle;margin-right:3px"></span>LP</span><span onclick="${_togSr('lm')}" style="cursor:pointer;user-select:none;${_sr.lm?'':'opacity:0.3;text-decoration:line-through'}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#78C68D;vertical-align:middle;margin-right:3px"></span>LM</span><span onclick="${_togSr('cort')}" style="cursor:pointer;user-select:none;${_sr.cort?'':'opacity:0.3;text-decoration:line-through'}"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#E8745A;vertical-align:middle;margin-right:3px"></span>CORT</span><span style="margin-left:6px;font-weight:600">Peak: ${fPeakCount} · ${fDates.length} days</span></div>
     </div>
     <div style="display:flex;align-items:flex-end;gap:2px;height:calc(100vh - 300px);min-height:80px;padding-bottom:18px;position:relative">`;
     for(const d of fDates){
       const items=fByDate[d]||[];
       const active=items.filter(t=>!t.excluded);
-      const n=active.length;
-      const lp=active.filter(t=>t.source==='Load Plan').length;
-      const lm=active.filter(t=>t.source==='Last Mile').length;
-      const cort=active.filter(t=>t.source==='CORT').length;
+      const lp=_sr.lp?active.filter(t=>t.source==='Load Plan').length:0;
+      const lm=_sr.lm?active.filter(t=>t.source==='Last Mile').length:0;
+      const cort=_sr.cort?active.filter(t=>t.source==='CORT').length:0;
+      const n=lp+lm+cort;
       const dObj=LP_parseLocalDate(d);
       const isWknd=dObj?(dObj.getDay()===0||dObj.getDay()===6):false;
       const dayLbl=dObj?dObj.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
@@ -4066,7 +4069,8 @@ function getDistCity(label){
   }
   return null;
 }
-const DIST_LOCAL_RATE=950;// USD local distribution within city
+const DIST_LOCAL_RATE=950;// USD local distribution within city (CAN default)
+const DIST_LOCAL_RATE_MEX=851;// USD local distribution for MEX region
 const DIST_LOCAL_LM=new Set(['Toronto','Vancouver','Guadalajara','Mexico City','Monterrey','New York / New Jersey Stadium','Kansas City Stadium','Houston Stadium']);
 const DIST_LOCAL_CLUSTERS=new Set([]);// cluster city names that should use local rate
 function getDistRate(dest,tCap,isLM){
@@ -4074,8 +4078,13 @@ function getDistRate(dest,tCap,isLM){
   if(isLM){
     const u=(dest||'').toUpperCase();
     if(u.startsWith('CAN ')||u.includes('TOR')||u.includes('VAN'))return DIST_LOCAL_RATE;
-    if(u.startsWith('MEX ')||u.includes('CDMX')||u.includes('GDL')||u.includes('MTY')||u.includes('GUADALAJARA')||u.includes('MEXICO CITY')||u.includes('MONTERREY'))return DIST_LOCAL_RATE;
-    if(DIST_LOCAL_LM.has(dest))return DIST_LOCAL_RATE;
+    if(u.startsWith('MEX ')||u.includes('CDMX')||u.includes('GDL')||u.includes('MTY')||u.includes('GUADALAJARA')||u.includes('MEXICO CITY')||u.includes('MONTERREY'))return DIST_LOCAL_RATE_MEX;
+    if(DIST_LOCAL_LM.has(dest)){
+      // Check if it's a MEX venue
+      const uDest=(dest||'').toUpperCase();
+      if(uDest.includes('GUADALAJARA')||uDest.includes('MEXICO CITY')||uDest.includes('MONTERREY'))return DIST_LOCAL_RATE_MEX;
+      return DIST_LOCAL_RATE;
+    }
     // Check if destination cluster city matches local rate cities
     const city=getDistCity(dest);
     if(city&&DIST_LOCAL_CLUSTERS.has(city))return DIST_LOCAL_RATE;
