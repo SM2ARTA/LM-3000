@@ -965,9 +965,16 @@ function LP_recalcReadyDates(){
     const origArrDate=a._origArrDate?a._origArrDate:a.arrivalDate;
     const rawCont=a.container||'';
     const isNoCont=!rawCont||rawCont==='—'||rawCont.toUpperCase()==='NO CONTAINER';
-    // Check override: container key first, then no-container composite key (—|origDate)
-    const ovrKey=isNoCont?('—|'+origArrDate):rawCont;
-    const effArr=LP_contDateOverrides[ovrKey]||LP_contDateOverrides[rawCont]||origArrDate;
+    // Build all possible override keys for this item
+    let effArr=origArrDate;
+    if(isNoCont){
+      // Try LD|localName key first, then —|origDate fallback
+      const ldKey=a._localName?('LD|'+a._localName):'';
+      const dashKey='—|'+origArrDate;
+      effArr=LP_contDateOverrides[ldKey]||LP_contDateOverrides[dashKey]||origArrDate;
+    } else {
+      effArr=LP_contDateOverrides[rawCont]||origArrDate;
+    }
     a.arrivalDate=effArr;
     if(effArr!==origArrDate){
       if(!a._origArrDate)a._origArrDate=origArrDate;
