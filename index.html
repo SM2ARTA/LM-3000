@@ -6544,13 +6544,14 @@ if(_lpFedAbbrs.length&&Object.keys(LP_ARRIVAL_MAP).length){
         <span class="bg bg-rd" style="font-size:10px">${[...new Set(lateItems.map(l=>l.truckId))].length} trucks affected</span>
       </div>
       <div style="font-size:10px;color:var(--ts);margin-bottom:8px">SKUs where LP truck arrival date is after the LM dispatch date</div>
-      <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Truck</th><th>Dispatch</th><th>LP Arrival</th><th>Days Late</th><th>Qty</th></tr></thead><tbody>`;
+      <div style="overflow-x:auto"><table class="dtb" style="font-size:11px;white-space:nowrap"><thead><tr><th>SKU</th><th>Item</th><th>Truck</th><th>Dispatch</th><th>LP Arrival</th><th>Late</th><th>Qty</th></tr></thead><tbody>`;
+    const _sd=d=>d?d.slice(5):'';// show MM-DD only
     lateItems.forEach(l=>{
-      const arrDisp=l.lpArrival==='No LP shipment'?`<span style="color:var(--rd);font-weight:600">None</span>`:l.lpArrival;
+      const arrDisp=l.lpArrival==='No LP shipment'?`<span style="color:var(--rd);font-weight:600">None</span>`:`<span class="mono">${_sd(l.lpArrival)}</span>`;
       const daysL=l.daysLate!=null?`<span style="color:var(--rd);font-weight:700">+${l.daysLate}d</span>`:'<span style="color:var(--rd)">—</span>';
-      h+=`<tr><td class="mono">${l.sku}</td><td class="tcl">${l.name}</td><td class="mono">${l.truckId}</td><td class="mono">${l.dispatch}</td><td class="mono">${arrDisp}</td><td>${daysL}</td><td class="mono fw6">${l.qty.toLocaleString()}</td></tr>`;
+      h+=`<tr><td class="mono">${l.sku}</td><td class="tcl" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${l.name}</td><td class="mono">${l.truckId}</td><td class="mono">${_sd(l.dispatch)}</td><td>${arrDisp}</td><td>${daysL}</td><td class="mono fw6">${l.qty.toLocaleString()}</td></tr>`;
     });
-    h+=`</tbody></table></div>`;
+    h+=`</tbody></table></div></div>`;
   }
 }
 // ── Compute CORT + excluded freight merge (used by trucks view and timeline) ──
