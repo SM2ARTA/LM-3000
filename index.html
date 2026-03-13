@@ -947,6 +947,8 @@ function LM_getSkuLPArrival(sku,lpAbbrs){
   }
   return earliest;
 }
+
+function LP_recalcReadyDates(){
   const ta=LP_STATE.turnaround||6;
   for(const a of LP_STATE.arrivals){
     // Use overridden arrival date if present, otherwise original
@@ -3771,7 +3773,9 @@ async function LM_saveClusterTA(){
 async function LM_loadClusterTA(){
   if(!SB)return;
   try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-cluster-ta').single();if(data){const v=JSON.parse(data.value);if(typeof v==='number')LM_clusterTurnaround=v}}catch(e){}
-} — all defaults are now hard-coded in LM_DEFAULT_* maps
+}
+
+// Always wipe VS on load — all defaults are now hard-coded in LM_DEFAULT_* maps
 // VS only stores admin overrides that DIFFER from defaults (written by saveCurrentConstraints)
 function LM_cleanVS(){
   const oldKeys=Object.keys(VS).length;
