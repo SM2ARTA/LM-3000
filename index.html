@@ -5633,6 +5633,7 @@ function rVTabs(){
 }
 function rVL(){
   rVTabs();
+  try{
   const q=(document.getElementById("vs")?.value||"").toLowerCase();
   let ls=VN.filter(v=>catFilter(v));
   if(q)ls=ls.filter(v=>v.name.toLowerCase().includes(q)||((v.cluster||'').toLowerCase().includes(q)));
@@ -5646,8 +5647,10 @@ function rVL(){
 
   // Group venues by cluster
   const groups={};groupable.forEach(v=>{const cl=v.cluster||'Other';if(!groups[cl])groups[cl]=[];groups[cl].push(v)});
-  for(const cl in groups){groups[cl].sort((a,b)=>{const ad=a.earlyBI?a.earlyBI.getTime():Infinity;const bd=b.earlyBI?b.earlyBI.getTime():Infinity;return ad-bd})}
-  const clKeys=Object.keys(groups).sort((a,b)=>{const ea=CLUSTERS[a]?.earlyBI?.getTime()||Infinity;const eb=CLUSTERS[b]?.earlyBI?.getTime()||Infinity;return ea-eb});
+  const _safeTime=d=>(d instanceof Date)?d.getTime():(typeof d==='string'&&d?new Date(d+'T12:00:00').getTime():Infinity);
+  for(const cl in groups){groups[cl].sort((a,b)=>_safeTime(a.earlyBI)-_safeTime(b.earlyBI))}
+  const clKeys=Object.keys(groups).sort((a,b)=>{const ea=CLUSTERS[a]?.earlyBI?_safeTime(CLUSTERS[a].earlyBI):Infinity;const eb=CLUSTERS[b]?.earlyBI?_safeTime(CLUSTERS[b].earlyBI):Infinity;return ea-eb});
+  const _safeFmt=d=>{if(!d)return'';if(d instanceof Date)return fS(d);if(typeof d==='string')try{return fS(new Date(d+'T12:00:00'))}catch(e){return d}return''};
   const regionKey='__region_'+vCat;
   const regionLabel=vCat==='us'?'USA Overview':vCat==='can'?'Canada Overview':'Mexico Overview';
   const regionPlt=ls.reduce((s,v)=>s+v.ep,0);
@@ -5685,7 +5688,7 @@ function rVL(){
 
   // Cluster groups
   for(const cl of clKeys){
-    const ci=CLUSTERS[cl];const ebi=ci?.earlyBI?fS(ci.earlyBI):'';
+    const ci=CLUSTERS[cl];const ebi=_safeFmt(ci?.earlyBI);
     const isSel=selCluster===cl||sel===('__cluster_'+cl);
     const isExp=!!expCl[cl];
     const vCount=groups[cl].length;
@@ -5699,13 +5702,14 @@ function rVL(){
     html+=`<div style="padding:6px 14px 6px 0;font-size:10px;font-weight:500;${isSel?'color:rgba(255,255,255,.7)':'color:var(--tt)'}">${Math.round((ci?.plt||0)*10)/10} plt${ebi?' · '+ebi:''}</div></div>`;
     if(isExp){
       for(const v of groups[cl]){
-        const vbi=v.earlyBI?fS(v.earlyBI):'';
+        const vbi=_safeFmt(v.earlyBI);
         html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${vbi?' · BI: '+vbi:''}</div></div>`;
       }
     }
   }
   document.getElementById("vl").innerHTML=html;
   rTotals();
+  }catch(e){console.error('rVL error:',e);document.getElementById("vl").innerHTML='<div style="padding:16px;color:var(--rd);font-size:12px">⚠ Venue list render error: '+e.message+'</div>'}
 }
 function rTotals(){
   let totPlt=0,totPcs=0,totTrucks=0,totDays=0,totVenues=VN.length;
