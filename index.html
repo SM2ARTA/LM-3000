@@ -2597,6 +2597,16 @@ function V26_gatherTrucks(){
   
   trucks.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id<b.id?-1:1));
   cortTrucks.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  
+  // ── STP Direct Deliveries ──
+  for(const del of LM_STP_DELIVERIES){
+    const truck=LM_STP_TRUCKS[del.venue];if(!truck||!truck.items.length)continue;
+    trucks.push({id:del.id,date:del.date||'',source:'STP Direct',dest:del.venue,destDisplay:clDisp(del.venue),
+      pallets:truck.pallets,qty:truck.pcs,skus:truck.items.length,
+      items:truck.items.map(it=>({sku:it.sku,name:it.nm,qty:it.loadQty,pallets:it.loadPlt||0})),excluded:false,_isStp:true});
+  }
+  trucks.sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id<b.id?-1:1));
+  
   V26_allTrucks=trucks;
   V26_cortTrucks=cortTrucks;
   // Debug: verify truck counts
@@ -3512,6 +3522,13 @@ function masterBackupExport(){
     XLSX.utils.book_append_sheet(wb,ws,'LM Kits');
   }
 
+  // 20. LM STP Deliveries
+  if(LM_STP_DELIVERIES.length>0){
+    const rows=LM_STP_DELIVERIES.map(d=>({ID:d.id,Venue:d.venue,Date:d.date||'',Rate:d.rate||0}));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'LM STP Deliveries');
+  }
+
   XLSX.writeFile(wb,`ML3K_Backup_${ts}.xlsx`);
 }
 
@@ -3700,6 +3717,14 @@ async function masterBackupRestore(file){
       log.push('Kits: '+LM_KITS.length);
     }
 
+    // ── 20. LM STP Deliveries → LM_STP_DELIVERIES ──
+    const stpRows=getSheet('LM STP Deliveries');
+    if(stpRows){
+      LM_STP_DELIVERIES=stpRows.map(r=>({id:r.ID||'',venue:r.Venue||'',date:r.Date||'',rate:r.Rate||0}));
+      _stpNextId=LM_STP_DELIVERIES.reduce((mx,d)=>Math.max(mx,(parseInt(String(d.id).replace(/\D/g,''))||0)+1),1);
+      log.push('STP Deliveries: '+LM_STP_DELIVERIES.length);
+    }
+
     // ── Rebuild everything ──
     console.log('[ML3K] Backup restore:',log.join(' | '));
 
@@ -3722,6 +3747,7 @@ async function masterBackupRestore(file){
       await LM_saveClusterTA();
       if(LM_MANUAL_DEMAND.length)await LM_saveManualDemand();
       if(LM_KITS.length)await LM_saveKits();
+      if(LM_STP_DELIVERIES.length)await LM_saveStpDeliveries();
       if(STOCK_SKUS.size>0){
         await SB.from('shared_state').upsert({id:'fm-stock',value:JSON.stringify({skus:[...STOCK_SKUS],name:STOCK_REPORT_NAME}),updated_at:new Date().toISOString()});
       }
@@ -3880,6 +3906,7 @@ function enterApp(){
       stockReportLoad().catch(()=>{}),
       LM_loadManualDemand().catch(()=>{}),
       LM_loadKits().catch(()=>{}),
+      LM_loadStpDeliveries().catch(()=>{}),
       LM_loadDateOverrides().catch(()=>{}),
       MI_load().catch(()=>{}),
       LM_loadPalletCfg().catch(()=>{}),
@@ -3992,6 +4019,7 @@ async function loadSharedData(){
       stockReportLoad().catch(()=>{}),
       LM_loadManualDemand().catch(()=>{}),
       LM_loadKits().catch(()=>{}),
+      LM_loadStpDeliveries().catch(()=>{}),
       LM_loadDateOverrides().catch(()=>{}),
       MI_load().catch(()=>{}),
       LM_loadPalletCfg().catch(()=>{}),
@@ -4076,6 +4104,7 @@ function LM_cleanVS(){
 }
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
+function isStp(sku){return(NOM[sku]?.src||'').toUpperCase().trim().startsWith('STP')}
 
 // ── Distribution Rates (FTL from Dallas, USD) ──
 // From RIC Rates sheet: Dallas → destination
@@ -4532,6 +4561,8 @@ function build(venue,venueList,skipNoBi){
 
   // Kit allocation map
   const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
+  // STP delivery filter: skip STP items for venues with active STP delivery
+  const _stpVenues=LM_stpVenueSet();
 
   // Aggregate by (bumpIn, sku) across all venues in list
   const agg={};
@@ -4541,6 +4572,8 @@ function build(venue,venueList,skipNoBi){
   const cortTotalQty={};// sku -> total qty across all dates (for X/Y display)
   for(const r of RW){if(!venuesToUse.includes(r["Venue"]))continue;const bi=pD(r["Estimated bump-in date"]);let _raw=parseInt(r["Required"])||0;if(_raw<=0)continue;
     const s=r["Nomenclature"]||"?";if(!NOM[s])continue;// skip items with no NOM entry (e.g. golf carts)
+    // Skip STP items at venues with STP delivery — they go to STP truck
+    if(_stpVenues.has(r["Venue"])&&isStp(s))continue;
     // Apply demand adjustment scaling
     const _adjK=r["Venue"]+'|'+s;
     if(_adjScale[_adjK]!==undefined)_raw=Math.round(_raw*_adjScale[_adjK]);
@@ -5425,6 +5458,17 @@ function numberAll(){
   let cn=1;allCort.forEach(e=>{e.ref.id=`C-${cn++}`;e.ref.destDisplay=e.venueName||''});
   // Re-apply manual date overrides after re-numbering
   LM_applyDateOverrides();
+
+  // ── Build STP trucks ──
+  LM_STP_TRUCKS={};
+  for(const del of LM_STP_DELIVERIES){
+    const truck=_stpBuildTruck(del);
+    if(truck){
+      LM_STP_TRUCKS[del.venue]=truck;
+      // Inject into PLAN_CACHE so it shows in venue view
+      if(PLAN_CACHE[del.venue]){PLAN_CACHE[del.venue]._stpTruck=truck}
+    }
+  }
 }
 
 /* ── RENDER ── */
@@ -6150,6 +6194,161 @@ function LM_showKitDetail(kitId){
       </div>
     </div>
   </div>`;
+}
+// ── LM Staples Direct Deliveries ──────────────────────────────
+let LM_STP_DELIVERIES=[];// [{id:'STP-1', venue:'Dallas Stadium', date:'2026-05-08', rate:0}]
+let _stpNextId=1;
+let LM_STP_TRUCKS={};// venue -> truck object (populated by numberAll)
+function LM_stpVenueSet(){return new Set(LM_STP_DELIVERIES.map(d=>d.venue))}
+function LM_getStpForVenue(v){return LM_STP_DELIVERIES.find(d=>d.venue===v)}
+async function LM_saveStpDeliveries(){
+  if(ROLE==='viewer'||!SB)return;UNDO_capture();
+  try{await SB.from('shared_state').upsert({id:'fm-lm-stp-deliveries',value:JSON.stringify(LM_STP_DELIVERIES),updated_at:new Date().toISOString()})}catch(e){}
+}
+async function LM_loadStpDeliveries(){
+  if(!SB)return;
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-lm-stp-deliveries').single();if(data){LM_STP_DELIVERIES=JSON.parse(data.value)||[];_stpNextId=LM_STP_DELIVERIES.reduce((mx,d)=>Math.max(mx,(parseInt(String(d.id).replace(/\D/g,''))||0)+1),1)}}catch(e){}
+}
+function _stpBuildTruck(del){
+  // Build a truck-like object from STP items for this venue
+  const items=[];let totalPlt=0,totalPcs=0;
+  const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
+  const _adjScale={};
+  if(Object.keys(LM_demandAdj).length>0){const ot={};for(const r of RW){const v=r.Venue;if(!v||v!==del.venue)continue;const raw=parseInt(r.Required)||0;if(raw<=0)continue;const s=r.Nomenclature;if(!NOM[s])continue;ot[v+'|'+s]=(ot[v+'|'+s]||0)+raw};for(const k in LM_demandAdj){if(ot[k]&&ot[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/ot[k]}}
+  const bySkuMap={};
+  for(const r of RW){
+    if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;
+    if(!isStp(s))continue;if(r._kit)continue;
+    let q=parseInt(r.Required)||0;if(q<=0)continue;
+    const ak=r.Venue+'|'+s;if(_adjScale[ak]!==undefined)q=Math.round(q*_adjScale[ak]);
+    if(!r._kit&&_kitAl[ak])q=Math.max(0,q-_kitAl[ak]);
+    if(q<=0)continue;
+    if(!bySkuMap[s])bySkuMap[s]=0;bySkuMap[s]+=q;
+  }
+  for(const[sku,rawQty] of Object.entries(bySkuMap)){
+    const nm=NOM[sku];const ppu=nm?.ppu||1;const qty=Math.ceil(rawQty/ppu);
+    const vt=LM_vtMap[del.venue]||'';const country=LM_venueCountry('',del.venue);
+    const eff=LM_getEffPallet(sku,vt,country);
+    const pqUom=eff.pq>0?eff.pq/ppu:0;const psVal=eff.ps;
+    const plt=pqUom>0&&psVal>0?(qty/pqUom)*psVal:0;
+    items.push({sku,nm:nm?.nm||sku,loadQty:qty,loadPlt:plt,pq:pqUom,ps:psVal,sched:qty,topUp:0,pulled:false,pulledFrom:'',remainder:0,noPallet:pqUom<=0||psVal<=0,poolAfter:0,biK:del.date||''});
+    totalPlt+=plt;totalPcs+=qty;
+  }
+  if(!items.length)return null;
+  items.sort((a,b)=>a.sku.localeCompare(b.sku));
+  return{id:del.id,items,pallets:Math.round(totalPlt*100)/100,pcs:totalPcs,dd:del.date||'',destLabel:del.venue,destDisplay:clDisp(del.venue),_isStp:true,_stpRate:del.rate||0};
+}
+function LM_deleteStp(venue){
+  if(ROLE==='viewer')return;
+  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>d.venue!==venue);
+  LM_saveStpDeliveries();PLAN_CACHE={};numberAll();
+  setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
+}
+function LM_showCreateStp(prefillVenue){
+  if(ROLE==='viewer')return;
+  const stpVenues=LM_stpVenueSet();
+  // Only venues that have STP items AND don't already have an STP delivery
+  const eligible=VN.filter(v=>{
+    if(stpVenues.has(v.name))return false;
+    return RW.some(r=>r.Venue===v.name&&r.Nomenclature&&NOM[r.Nomenclature]&&isStp(r.Nomenclature));
+  }).map(v=>v.name).sort();
+  if(!eligible.length){alert('No venues with STP items available for direct delivery.');return}
+  const defVenue=prefillVenue&&eligible.includes(prefillVenue)?prefillVenue:eligible[0];
+  const mr=document.getElementById('mr');
+  mr.innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:480px">
+      <div class="mdh" style="background:#FFF3E0;border-bottom-color:#EF6C00">
+        <h3 style="color:#EF6C00">🏪 Create STP Direct Delivery</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
+      </div>
+      <div class="mdb" style="padding:16px">
+        <p style="font-size:11px;color:var(--ts);margin:0 0 12px">Creates a separate delivery truck for all Staples-sourced items (STP*) at this venue. Items will be removed from regular LM trucks.</p>
+        <div style="display:grid;gap:10px;margin-bottom:12px">
+          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Venue *</label>
+            <select id="stp_venue" onchange="_stpPreview()" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+              ${eligible.map(v=>`<option value="${v}"${v===defVenue?' selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Delivery Date</label>
+              <input id="stp_date" type="date" value="${gBI(defVenue)||'2026-05-08'}" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+            </div>
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Rate (USD)</label>
+              <input id="stp_rate" type="number" min="0" value="0" placeholder="0 = vendor delivers" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+            </div>
+          </div>
+        </div>
+        <div id="stp_preview" style="max-height:200px;overflow-y:auto;border:1px solid var(--bl);border-radius:8px;margin-bottom:12px"></div>
+        <button onclick="_stpCreate()" style="width:100%;padding:10px;border-radius:8px;border:none;background:#EF6C00;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd)">🏪 Create STP Delivery</button>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(_stpPreview,50);
+}
+function _stpPreview(){
+  const venue=document.getElementById('stp_venue')?.value;
+  const el=document.getElementById('stp_preview');if(!el||!venue)return;
+  // Count STP items for this venue
+  const bySkuMap={};
+  for(const r of RW){if(r.Venue!==venue)continue;const s=r.Nomenclature;if(!s||!NOM[s]||!isStp(s))continue;bySkuMap[s]=(bySkuMap[s]||0)+(parseInt(r.Required)||0)}
+  const skus=Object.entries(bySkuMap).sort(([a],[b])=>a.localeCompare(b));
+  if(!skus.length){el.innerHTML='<div style="padding:12px;color:var(--tt);text-align:center">No STP items at this venue</div>';return}
+  let totalPcs=0,totalPlt=0;
+  el.innerHTML=`<table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Src</th><th>Qty</th><th>Plt</th></tr></thead><tbody>`+
+    skus.map(([sku,qty])=>{
+      const n=NOM[sku];const ppu=n?.ppu||1;const q=Math.ceil(qty/ppu);
+      const vt=LM_vtMap[venue]||'';const country=LM_venueCountry('',venue);
+      const eff=LM_getEffPallet(sku,vt,country);const pqU=eff.pq>0?eff.pq/ppu:0;
+      const plt=pqU>0&&eff.ps>0?(q/pqU)*eff.ps:0;totalPcs+=q;totalPlt+=plt;
+      return`<tr><td class="mono">${sku}</td><td class="tcl">${n?.nm||sku}</td><td style="font-size:9px;color:var(--tt)">${n?.src||''}</td><td class="mono">${q.toLocaleString()}</td><td class="mono">${plt.toFixed(1)}</td></tr>`;
+    }).join('')+`</tbody></table>
+    <div style="padding:6px 12px;font-size:11px;font-weight:600;color:var(--ts);border-top:1px solid var(--bl)">${skus.length} SKUs · ${totalPcs.toLocaleString()} pcs · ${totalPlt.toFixed(1)} plt</div>`;
+  // Update date to venue BI
+  const dateEl=document.getElementById('stp_date');
+  if(dateEl&&!dateEl._userSet){dateEl.value=gBI(venue)||'2026-05-08';dateEl._userSet=false;dateEl.onchange=()=>{dateEl._userSet=true}}
+}
+function _stpCreate(){
+  const venue=document.getElementById('stp_venue')?.value;
+  const date=document.getElementById('stp_date')?.value||'';
+  const rate=parseFloat(document.getElementById('stp_rate')?.value)||0;
+  if(!venue)return;
+  if(LM_STP_DELIVERIES.find(d=>d.venue===venue)){alert('STP delivery already exists for '+venue);return}
+  LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date,rate});
+  LM_saveStpDeliveries();PLAN_CACHE={};numberAll();
+  document.querySelector('.mo')?.remove();
+  setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
+}
+function LM_showStpDetail(venue){
+  const del=LM_getStpForVenue(venue);if(!del)return;
+  const truck=LM_STP_TRUCKS[venue];
+  const rows=truck?truck.items.map(it=>`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.nm}</td><td class="mono">${it.loadQty.toLocaleString()}</td><td class="mono">${it.noPallet?'—':it.loadPlt.toFixed(1)}</td></tr>`).join(''):'<tr><td colspan="4">No items</td></tr>';
+  document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:500px">
+      <div class="mdh" style="background:#FFF3E0;border-bottom-color:#EF6C00">
+        <h3 style="color:#EF6C00">🏪 ${del.id} · ${venue}</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
+      </div>
+      <div class="mdb" style="padding:16px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="bg" style="background:#FFF3E0;color:#EF6C00">${del.id}</span>
+          <span class="bg bg-gy">${del.date||'No date'}</span>
+          <span class="bg bg-gy">Rate: ${del.rate>0?fmtUSD(del.rate):'Vendor delivers'}</span>
+          ${truck?`<span class="bg bg-bl">${truck.items.length} items · ${truck.pcs.toLocaleString()} pcs · ${truck.pallets.toFixed(1)} plt</span>`:''}
+        </div>
+        ${ROLE!=='viewer'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts)">Date</label><input type="date" value="${del.date}" onchange="LM_updateStp('${venue}','date',this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts)">Rate (USD)</label><input type="number" value="${del.rate||0}" min="0" onchange="LM_updateStp('${venue}','rate',+this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+        </div>`:''}
+        <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Qty</th><th>Plt</th></tr></thead><tbody>${rows}</tbody></table>
+        ${ROLE!=='viewer'?`<button onclick="LM_deleteStp('${venue}');this.closest('.mo').remove()" style="margin-top:12px;width:100%;padding:8px;border-radius:6px;border:1px solid var(--rd);background:var(--rs);color:var(--rd);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--fd)">🗑 Delete STP Delivery</button>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+function LM_updateStp(venue,field,val){
+  const del=LM_getStpForVenue(venue);if(!del)return;
+  del[field]=val;LM_saveStpDeliveries();
+  if(field==='date'){PLAN_CACHE={};numberAll();setTimeout(()=>{rMain();rVL()},50)}
 }
 function LM_showAddDemand(prefillVenue){
   if(ROLE==='viewer')return;
@@ -6914,8 +7113,9 @@ function LM_renderDemand(el){
       <span class="bg bg-gy">${grandOrigQty.toLocaleString()}${grandAdjQty!==grandOrigQty?' → <b>'+grandAdjQty.toLocaleString()+'</b>':' pcs'}</span>
       ${manualCount>0?`<span class="bg bg-gn">✏${manualCount}</span>`:''}
       ${adjItems>0?`<span class="bg bg-pu">★${adjItems}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_demandAdj={};LM_saveDemandAdj();PLAN_CACHE={};numberAll();rMain()" style="font-size:9px;padding:2px 6px">↻</button>`:''}`:''}
-      ${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button><button class="rbtn" onclick="LM_showCreateKit('${prefillV.replace(/'/g,"\\'")}')" style="background:#E8F5E9;color:#43A047;border-color:#A5D6A7;font-size:10px;padding:4px 10px">📦 Kit</button>`:''}
+      ${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button><button class="rbtn" onclick="LM_showCreateKit('${prefillV.replace(/'/g,"\\'")}')" style="background:#E8F5E9;color:#43A047;border-color:#A5D6A7;font-size:10px;padding:4px 10px">📦 Kit</button><button class="rbtn" onclick="LM_showCreateStp('${prefillV.replace(/'/g,"\\'")}')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:10px;padding:4px 10px">🏪 STP</button>`:''}
       ${LM_KITS.length>0?`<span class="bg" style="background:#E8F5E9;color:#43A047">📦 ${LM_KITS.length} kit${LM_KITS.length>1?'s':''}</span>`:''}
+      ${LM_STP_DELIVERIES.length>0?`<span class="bg" style="background:#FFF3E0;color:#EF6C00">🏪 ${LM_STP_DELIVERIES.length} STP</span>`:''}
     </div>
   </div>`;
 
@@ -6930,11 +7130,12 @@ function LM_renderDemand(el){
     const hasManual=v.skuList.some(s=>s.manualIndices.length>0);
     const venueKits=LM_getKitsForVenue(v.name);
     const hasKit=venueKits.length>0;
+    const venueStp=LM_getStpForVenue(v.name);
     const vEsc=v.name.replace(/'/g,"\\'");
-    html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')+' '+venueKits.map(k=>k.sku+' '+k.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${hasKit?'#43A047':hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
+    html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')+' '+venueKits.map(k=>k.sku+' '+k.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${venueStp?'#EF6C00':hasKit?'#43A047':hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="this.parentElement.querySelector('.lm-dem-body').classList.toggle('lm-dem-open')">
         <div style="min-width:0;flex:1">
-          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}${venueStp?' <span class="bg bgs" style="background:#FFF3E0;color:#EF6C00;font-size:8px;vertical-align:middle">🏪 STP</span>':''}</div>
           <div style="font-size:10px;color:var(--tt)">${v.skuList.length} SKUs · ${v.totalOrig.toLocaleString()} pcs${v.totalAdj!==v.totalOrig?' → <strong style="color:var(--pu)">'+v.totalAdj.toLocaleString()+'</strong>':''}</div>
         </div>
         <span style="font-size:10px;color:var(--tt)">▼</span>
@@ -6955,6 +7156,17 @@ function LM_renderDemand(el){
       }
       html+=`</div>`;
     }
+    // STP delivery card for this venue
+    if(venueStp){
+      const stpTruck=LM_STP_TRUCKS[v.name];
+      html+=`<div style="padding:8px 12px;background:#FFF8F0;border-bottom:1px solid #FFCC80">
+        <div onclick="LM_showStpDetail('${vEsc}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border:1px solid #FFCC80;border-radius:6px;cursor:pointer;font-size:11px">
+          <span style="font-size:14px">🏪</span>
+          <div style="flex:1;min-width:0"><div style="font-weight:700;color:#EF6C00">STP Direct · ${venueStp.id}</div><div style="font-size:9px;color:var(--tt)">${stpTruck?stpTruck.items.length+' items · '+stpTruck.pcs.toLocaleString()+' pcs · '+stpTruck.pallets.toFixed(1)+' plt':'Building...'} · ${venueStp.date||'No date'}${venueStp.rate>0?' · '+fmtUSD(venueStp.rate):''}</div></div>
+          ${ROLE!=='viewer'?`<span onclick="event.stopPropagation();LM_deleteStp('${vEsc}')" style="color:var(--rd);cursor:pointer;font-size:13px" title="Delete STP delivery">🗑</span>`:''}
+        </div>
+      </div>`;
+    }
     html+=`<table class="dtb"><thead><tr>
           <th>SKU</th><th>Item</th><th>Src</th><th>Orig</th><th>Adj Qty</th><th>Δ</th>${ROLE!=='viewer'?'<th></th>':''}
         </tr></thead><tbody>`;
@@ -6965,8 +7177,9 @@ function LM_renderDemand(el){
       const isMnl=s.manualIndices.length>0;
       const kitAlQty=_kitAlMap[v.name+'|'+s.sku]||0;
       const kitPct=kitAlQty>0&&s.origQty>0?Math.round(kitAlQty/s.origQty*100):0;
-      html+=`<tr style="${isMnl?'background:var(--gs)':s.isAdj?'background:var(--ps)':''}">
-        <td class="mono">${s.sku}${isMnl?' <span style="color:var(--gn);font-size:8px;font-weight:700">✏</span>':''}${kitAlQty>0?' <span style="color:#43A047;font-size:8px;font-weight:700">📦</span>':''}</td>
+      const _isStp=venueStp&&isStp(s.sku);
+      html+=`<tr style="${_isStp?'background:#FFF8F0;opacity:0.6':isMnl?'background:var(--gs)':s.isAdj?'background:var(--ps)':''}">
+        <td class="mono">${s.sku}${isMnl?' <span style="color:var(--gn);font-size:8px;font-weight:700">✏</span>':''}${kitAlQty>0?' <span style="color:#43A047;font-size:8px;font-weight:700">📦</span>':''}${_isStp?' <span style="color:#EF6C00;font-size:8px;font-weight:700">🏪</span>':''}</td>
         <td class="tcl">${s.name}</td>
         <td style="font-size:10px;color:var(--tt)">${s.src}</td>
         <td class="mono">${s.origQty.toLocaleString()}${kitAlQty>0?'<div style="font-size:8px;color:#43A047">-'+kitAlQty+' in kit'+(kitPct>=100?' (all)':'')+'</div>':''}</td>
@@ -7446,6 +7659,19 @@ if(cv==="trucks"&&cortWithMerge.length>0){
   });
   h+=`</div></div>`;
 }
+// ── STP Direct Delivery ──
+const _stpTruck=LP?._stpTruck;
+if(_stpTruck){
+  h+=`<div style="margin-top:16px;border:2px solid #EF6C00;border-radius:var(--r);overflow:hidden;background:#FFF8F0">
+    <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="LM_showStpDetail('${_stpTruck.destLabel.replace(/'/g,"\\'")}')">
+      <div><div style="font-weight:700;color:#EF6C00;font-size:13px">🏪 ${_stpTruck.id} · Staples Direct</div>
+        <div style="font-size:10px;color:var(--tt)">${_stpTruck.items.length} SKUs · ${_stpTruck.pcs.toLocaleString()} pcs · ${_stpTruck.pallets.toFixed(1)} plt${_stpTruck._stpRate>0?' · Rate: '+fmtUSD(_stpTruck._stpRate):' · Vendor delivers'}</div>
+        <div style="font-size:10px;color:var(--tt)">${_stpTruck.dd?'Date: '+fS(new Date(_stpTruck.dd+'T12:00:00')):'No date set'}</div>
+      </div>
+      <span style="font-size:10px;color:var(--tt)">▶</span>
+    </div>
+  </div>`;
+}
 el.innerHTML=h;rTotals()}
 
 function closeMobSb(){const sb=document.querySelector('.sb');if(sb)sb.classList.remove('mob-open');const btn=document.querySelector('.sb-toggle');if(btn)btn.textContent='☰ Venues'}
@@ -7660,6 +7886,18 @@ function exportXL(){
   VN.filter(v=>!isStadium(v.name)&&v.cluster&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>addVenue(v.name,v.name));
   // CAN/MEX individual
   VN.filter(v=>!isStadium(v.name)&&(vcIsCAN(v.cluster)||vcIsMEX(v.cluster))).forEach(v=>addVenue(v.name,v.name));
+
+  // STP Direct Deliveries
+  for(const del of LM_STP_DELIVERIES){
+    const truck=LM_STP_TRUCKS[del.venue];if(!truck)continue;
+    truck.items.forEach(it=>{
+      truckRows.push({
+        'Venue/Cluster':del.venue,'Truck':del.id,'Dispatch Date':del.date?fF(new Date(del.date+'T12:00:00')):'',
+        'Bump-In Date':'STP Direct','SKU':it.sku,'Item':it.nm,'Qty':it.loadQty,
+        'Pallets':it.noPallet?'—':Math.round(it.loadPlt*100)/100,'Note':'STP Direct'+(del.rate>0?' · Rate '+fmtUSD(del.rate):'')
+      });
+    });
+  }
 
   if(truckRows.length>0){
     const ws1=XLSX.utils.json_to_sheet(truckRows);
@@ -7972,9 +8210,9 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits','fm-lm-stp-deliveries']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
   document.getElementById("mn").innerHTML='';
@@ -7997,7 +8235,7 @@ function doSoftResetLM(){
   // VS, LM_excluded, LM_excludeUserOvr, LM_dispatched, LM_dateOverrides,
   // MANUAL_ITEMS, DIST_OVERRIDES, LM_demandAdj, LM_nomOverrides,
   // LM_palletCfg, LM_clusterTurnaround, STOCK_SKUS, STOCK_REPORT_NAME,
-  // LM_MANUAL_DEMAND, LM_KITS — all preserved
+  // LM_MANUAL_DEMAND, LM_KITS, LM_STP_DELIVERIES — all preserved
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
   document.getElementById("mn").innerHTML='';
