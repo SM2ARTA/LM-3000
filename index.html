@@ -488,6 +488,7 @@
 <button class="tbtn" onclick="LP_switchTab('arrivals')">📥 Arrivals</button>
 <button class="tbtn" onclick="LP_switchTab('demand')">📋 Demand</button>
 <button class="tbtn on" onclick="LP_switchTab('plan')">🚛 Plan</button>
+<button class="tbtn" onclick="LP_switchTab('simulator')">🔬 Simulator</button>
 </div>
 <div class="lp-main" id="lpMain"></div>
 </div>
@@ -1185,12 +1186,13 @@ function LP_render(){
   // Sync tab button highlighting
   document.querySelectorAll('#lpTabs .tbtn').forEach(b=>{
     const txt=b.textContent.toLowerCase();
-    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='plan'&&txt.includes('plan'));
+    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='simulator'&&txt.includes('sim'));
     b.classList.toggle('on',active);
   });
   switch(LP_TAB){
     case'arrivals':LP_renderArrivals(el);break;
     case'demand':LP_renderDemand(el);break;
+    case'simulator':LP_renderSimulator(el);break;
     case'plan':LP_renderPlan(el);break;
     default:LP_renderPlan(el);
   }
@@ -2143,6 +2145,306 @@ function LP_showTruckModal(truckId){
         ${MI_formHtml(lpMiKey,'LP_showTruckModal('+truckId+')')}
       </div>`;
   openModal(mh,'860px');
+}
+
+// ═══════════════════════════════════════════════════════════
+// LP PIPELINE SIMULATOR — Sandbox analysis without touching real data
+// ═══════════════════════════════════════════════════════════
+function LP_renderSimulator(el){
+  if(!LP_STATE.arrivals.length&&!LP_STATE.materialPlan.length){
+    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--tt)"><div style="font-size:32px;margin-bottom:12px">🔬</div><div style="font-size:14px;font-weight:600;margin-bottom:6px">Pipeline Simulator</div><div style="font-size:12px">Upload arrivals and demand data first, then simulate different engine settings here.</div></div>';return}
+
+  // ── Initialize sandbox settings (preserved across re-renders) ──
+  if(!window._simCfg)window._simCfg={ta:LP_STATE.turnaround,mt:LP_STATE.maxTrucks,md:LP_STATE.maxDests,mp:LP_STATE.maxPallets,ric:LP_STATE.ricStartDate||'2026-04-01'};
+  const S=window._simCfg;
+
+  // ── Gather arrivals data ──
+  const arrivals=LP_STATE.arrivals.filter(a=>a.qty>0);
+  const nom=LP_STATE.nomenclature||{};
+  const demand=LP_STATE.materialPlan||[];
+  const isTruck=d=>{const u=(d.destination||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
+  const demandTruck=demand.filter(d=>isTruck(d));
+
+  // ── Arrivals by week ──
+  const byWeek={};
+  const contSet=new Set();
+  for(const a of arrivals){
+    const d=new Date((a.arrivalDate||'2026-01-01')+'T12:00:00');
+    const mon=d.getDay()===0?6:(d.getDay()-1);
+    const wk=new Date(d);wk.setDate(wk.getDate()-mon);
+    const wkKey=wk.toISOString().slice(0,10);
+    if(!byWeek[wkKey])byWeek[wkKey]={skus:new Set(),pcs:0,conts:new Set()};
+    byWeek[wkKey].skus.add(a.sku);
+    byWeek[wkKey].pcs+=a.qty;
+    if(a.container)byWeek[wkKey].conts.add(a.container);
+    if(a.container)contSet.add(a.container);
+  }
+  const weeks=Object.entries(byWeek).sort((a,b)=>a[0].localeCompare(b[0]));
+  const maxWkPcs=Math.max(1,...weeks.map(([,w])=>w.pcs));
+
+  // ── Demand by destination ──
+  const destDemand={};
+  for(const d of demandTruck){
+    const dest=d.destination||'?';
+    if(!destDemand[dest])destDemand[dest]={pcs:0,skus:new Set(),plt:0};
+    destDemand[dest].pcs+=(d.qty||0);
+    destDemand[dest].skus.add(d.sku);
+    const n=nom[d.sku];
+    if(n&&n.palletQty>0&&n.palletSpc>0)destDemand[dest].plt+=(d.qty||0)/n.palletQty*n.palletSpc;
+  }
+
+  // ── Backward deadline calc from LM bump-in ──
+  const LP_FED_DESTS={
+    'Toronto Stadium':      {dest:'TOR',bi:LM_DEFAULT_BI['Toronto Stadium']||'2026-04-01'},
+    'Vancouver Stadium':    {dest:'VAN',bi:LM_DEFAULT_BI['Vancouver Stadium']||'2026-05-14'},
+    'Guadalajara Stadium':  {dest:'GDL',bi:LM_DEFAULT_BI['Guadalajara Stadium']||'2026-04-21'},
+    'Mexico City Stadium':  {dest:'CDMX',bi:LM_DEFAULT_BI['Mexico City Stadium']||'2026-05-12'},
+    'Monterrey Stadium':    {dest:'MTY',bi:LM_DEFAULT_BI['Monterrey Stadium']||'2026-05-15'},
+    'NY/NJ Stadium':        {dest:'NY',bi:LM_DEFAULT_BI['New York / New Jersey Stadium']||'2026-04-27'},
+    'Kansas City Stadium':  {dest:'KC',bi:LM_DEFAULT_BI['Kansas City Stadium']||'2026-04-24'},
+    'Houston Stadium':      {dest:'HOU',bi:LM_DEFAULT_BI['Houston Stadium']||'2026-05-14'},
+  };
+  const _wdBack=(dateStr,n)=>{const d=new Date(dateStr+'T12:00:00');let r=n;while(r>0){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)r--}return d.toISOString().slice(0,10)};
+  const deadlines=[];
+  for(const[venue,cfg]of Object.entries(LP_FED_DESTS)){
+    const transit=LP_transitDays[cfg.dest]||LP_TRANSIT_DEFAULTS[cfg.dest]||0;
+    const latestDisp=_wdBack(cfg.bi,transit);
+    const latestArr=_wdBack(latestDisp,S.ta);
+    // Match to LP demand destination
+    const lpDest=Object.keys(destDemand).find(d=>d.toUpperCase().includes(cfg.dest)||(CITY_ABBR[cfg.dest]&&d.toUpperCase().includes(CITY_ABBR[cfg.dest].toUpperCase())));
+    const plt=lpDest?Math.round(destDemand[lpDest].plt*10)/10:0;
+    const pcs=lpDest?destDemand[lpDest].pcs:0;
+    const trucksNeeded=plt>0?Math.ceil(plt/S.mp):0;
+    deadlines.push({venue,dest:cfg.dest,bi:cfg.bi,transit,latestDisp,latestArr,plt,pcs,trucksNeeded,lpDest:lpDest||'—'});
+  }
+  deadlines.sort((a,b)=>a.latestDisp.localeCompare(b.latestDisp));
+
+  // ── Run simulation with sandbox settings ──
+  let simResult=window._simResult||null;
+  const simRun=()=>{
+    // Deep-copy arrivals with sandbox turnaround
+    const simArrivals=arrivals.map(a=>{
+      const rawReady=LP_addDays(a.arrivalDate,S.ta);
+      return{sku:a.sku,name:a.name,arrivalDate:a.arrivalDate,readyDate:LP_nextWorkday(rawReady),qty:a.qty,availPallets:a.availPallets,container:a.container};
+    });
+    // Deep-copy demand (isolate sourceIds from real LP_STATE)
+    const simDemand=demandTruck.map(d=>({...d,sourceIds:d.sourceIds?d.sourceIds.map(s=>({...s})):undefined}));
+    const simCfg={maxPallets:S.mp,maxTrucks:S.mt,maxDests:S.md,ricStartDate:S.ric,nomenclature:nom,startTruckId:0};
+    const plan=LP_buildLoadPlan(simDemand,simArrivals,simCfg);
+    // Analyze results
+    const byDest={};
+    for(const r of plan){
+      if(!byDest[r.destination])byDest[r.destination]={trucks:new Set(),firstDisp:'9999',lastDisp:'',pcs:0,plt:0};
+      byDest[r.destination].trucks.add(r.truckId);
+      if(r.date<byDest[r.destination].firstDisp)byDest[r.destination].firstDisp=r.date;
+      if(r.date>byDest[r.destination].lastDisp)byDest[r.destination].lastDisp=r.date;
+      byDest[r.destination].pcs+=r.qty||0;
+      byDest[r.destination].plt+=r.pallets||0;
+    }
+    // Check on-time for each LP-fed destination
+    let onTime=0,late=0;
+    const destResults=[];
+    for(const dl of deadlines){
+      const lpDests=Object.keys(byDest).filter(d=>{const u=d.toUpperCase();return u.includes(dl.dest)||(CITY_ABBR[dl.dest]&&u.includes(CITY_ABBR[dl.dest].toUpperCase()))});
+      let lastD='';let trks=0;let simPlt=0;
+      for(const ld of lpDests){const bd=byDest[ld];lastD=lastD>bd.lastDisp?lastD:bd.lastDisp;trks+=bd.trucks.size;simPlt+=bd.plt}
+      const isOk=!lastD||lastD<=dl.latestDisp;
+      if(dl.plt>0){if(isOk)onTime++;else late++}
+      const arrDate=lastD?LP_addDays(lastD,dl.transit):'—';
+      destResults.push({...dl,simLastDisp:lastD||'—',simTrucks:trks,simPlt:Math.round(simPlt*10)/10,
+        arrDate:typeof arrDate==='string'?arrDate:'—',
+        isOk,gap:lastD&&!isOk?Math.round((new Date(lastD+'T12:00:00')-new Date(dl.latestDisp+'T12:00:00'))/86400000):0});
+    }
+    const total=onTime+late;
+    return{plan,byDest,destResults,onTime,late,total,pct:total>0?Math.round(onTime/total*100):100,totalTrucks:new Set(plan.map(r=>r.truckId)).size,
+      totalPlt:Math.round(plan.reduce((s,r)=>s+(r.pallets||0),0)*10)/10};
+  };
+
+  // If no sim result yet, run initial
+  if(!simResult){simResult=simRun();window._simResult=simResult}
+
+  // ── Render ──
+  const fD=d=>{if(!d||d==='—')return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};
+  let h='<div style="padding:16px 20px;max-width:1100px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">';
+  h+='<div><h2 style="font-size:16px;font-weight:700;margin:0">🔬 Pipeline Simulator</h2><div style="font-size:11px;color:var(--tt);margin-top:2px">Sandbox — changes here do NOT affect real plan data</div></div>';
+  h+='<div style="display:flex;gap:6px">';
+  h+='<button class="rbtn" onclick="_simRunAndRender()" style="background:var(--ac);color:#fff;border-color:var(--ab);font-size:12px;padding:6px 16px;font-weight:700">▶ Run Simulation</button>';
+  h+='<button class="rbtn" onclick="_simAutoOptimize()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-size:12px;padding:6px 16px;font-weight:700">⚡ Auto-Optimize</button>';
+  h+='</div></div>';
+
+  // ── Settings Panel ──
+  h+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;padding:14px 16px;background:var(--sf);border:1px solid var(--bl);border-radius:10px">';
+  h+='<div style="grid-column:1/-1;font-size:10px;font-weight:700;color:var(--tt);letter-spacing:.5px;text-transform:uppercase">Sandbox Settings</div>';
+  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">Turnaround (days)</label><input type="number" value="${S.ta}" min="1" max="14" onchange="window._simCfg.ta=+this.value" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:var(--fm);font-weight:700;text-align:center"></div>`;
+  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">Max Trucks/Day</label><input type="number" value="${S.mt}" min="1" max="10" onchange="window._simCfg.mt=+this.value" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:var(--fm);font-weight:700;text-align:center"></div>`;
+  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">Max Dests/Day</label><input type="number" value="${S.md}" min="1" max="6" onchange="window._simCfg.md=+this.value" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:var(--fm);font-weight:700;text-align:center"></div>`;
+  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">Truck Capacity</label><input type="number" value="${S.mp}" min="1" max="53" onchange="window._simCfg.mp=+this.value" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:var(--fm);font-weight:700;text-align:center"></div>`;
+  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">RIC Start Date</label><input type="date" value="${S.ric}" onchange="window._simCfg.ric=this.value" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm);font-weight:600"></div>`;
+  h+='</div>';
+
+  // ── Simulation Results KPI ──
+  if(simResult){
+    const sr=simResult;
+    const pctClr=sr.pct>=100?'var(--gn)':sr.pct>=75?'var(--or)':'var(--rd)';
+    const pctBg=sr.pct>=100?'var(--gs)':sr.pct>=75?'var(--os)':'var(--rs)';
+    h+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px">';
+    h+=kpi({label:'✅ On-Time',value:sr.pct+'%',color:pctClr,sub:sr.onTime+'/'+sr.total+' destinations',style:'background:'+pctBg});
+    h+=kpi({label:'🚛 Sim Trucks',value:sr.totalTrucks,color:'var(--ac)',sub:sr.totalPlt+' pallets'});
+    h+=kpi({label:'📦 Containers',value:contSet.size,color:'var(--ts)',sub:arrivals.length+' arrival rows'});
+    h+=kpi({label:'📍 Destinations',value:Object.keys(destDemand).length,color:'var(--ts)',sub:demandTruck.length+' demand rows'});
+    h+=kpi({label:'⚠ Late',value:sr.late,color:sr.late>0?'var(--rd)':'var(--gn)',sub:sr.late>0?'Needs attention':'All clear'});
+    h+='</div>';
+  }
+
+  // ── Two-column layout: Deadline Analysis + Arrivals ──
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">';
+
+  // Left: Deadline table
+  h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px">';
+  h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">📅 Dispatch Deadlines (Backward from LM Bump-in)</div>';
+  h+='<div class="csf" style="max-height:320px"><table class="dtb" style="font-size:10px"><thead><tr><th>Destination</th><th>Bump-in</th><th>Transit</th><th>Latest Dispatch</th><th>Container By</th><th>Plt</th><th>Trucks</th></tr></thead><tbody>';
+  for(const dl of deadlines){
+    const isUrgent=dl.latestArr<=(new Date().toISOString().slice(0,10));
+    h+=`<tr${isUrgent?' style="background:var(--rs)"':''}>`;
+    h+=`<td class="fw6">${dl.dest}</td><td>${fD(dl.bi)}</td><td>${dl.transit}d</td>`;
+    h+=`<td class="fw6">${fD(dl.latestDisp)}</td><td>${fD(dl.latestArr)}</td>`;
+    h+=`<td>${dl.plt||'—'}</td><td>${dl.trucksNeeded||'—'}</td></tr>`;
+  }
+  h+='</tbody></table></div></div>';
+
+  // Right: Arrivals by week
+  h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px">';
+  h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">📥 Arrivals by Week</div>';
+  h+='<div class="csf" style="max-height:320px">';
+  for(const[wk,data]of weeks){
+    const pct=Math.round(data.pcs/maxWkPcs*100);
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">`;
+    h+=`<div style="font-size:10px;font-weight:600;width:70px;flex-shrink:0" class="mono">${fD(wk)}</div>`;
+    h+=`<div style="flex:1;height:16px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--ac);border-radius:4px;transition:width .3s"></div></div>`;
+    h+=`<div style="font-size:9px;color:var(--tt);width:90px;text-align:right;flex-shrink:0">${data.conts.size}c · ${data.skus.size}s · ${data.pcs.toLocaleString()}</div>`;
+    h+=`</div>`;
+  }
+  h+='</div></div>';
+  h+='</div>';// end two-column
+
+  // ── Demand by Destination ──
+  h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px;margin-bottom:20px">';
+  h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">📍 Demand by Destination</div>';
+  const destEntries=Object.entries(destDemand).sort((a,b)=>b[1].plt-a[1].plt);
+  const maxDestPlt=Math.max(1,...destEntries.map(([,d])=>d.plt));
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">';
+  for(const[dest,d]of destEntries){
+    const pct=Math.round(d.plt/maxDestPlt*100);
+    const clr=dest.toUpperCase().includes('MEX')?'#E31837':dest.toUpperCase().includes('CAN')?'var(--ac)':'#6CB4EE';
+    h+=`<div style="background:var(--bg);border-radius:8px;padding:10px 12px">`;
+    h+=`<div style="font-size:11px;font-weight:700;margin-bottom:4px">${clDisp(dest)}</div>`;
+    h+=`<div style="height:6px;background:var(--bl);border-radius:3px;margin-bottom:6px"><div style="height:100%;width:${pct}%;background:${clr};border-radius:3px"></div></div>`;
+    h+=`<div style="font-size:10px;color:var(--ts)">${Math.round(d.plt*10)/10} plt · ${d.pcs.toLocaleString()} pcs · ${d.skus.size} SKUs · ${Math.ceil(d.plt/S.mp)} trucks</div>`;
+    h+=`</div>`;
+  }
+  h+='</div></div>';
+
+  // ── Simulation Results Detail ──
+  if(simResult&&simResult.destResults){
+    h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px;margin-bottom:20px">';
+    h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">🚛 Simulation Results vs Deadlines</div>';
+    h+='<table class="dtb" style="font-size:10px"><thead><tr><th>Destination</th><th>Deadline</th><th>Sim Last Dispatch</th><th>Arrival Est.</th><th>Bump-in</th><th>Trucks</th><th>Plt</th><th>Status</th></tr></thead><tbody>';
+    for(const r of simResult.destResults){
+      if(!r.plt)continue;
+      const bg=r.isOk?'':'background:var(--rs)';
+      h+=`<tr style="${bg}"><td class="fw6">${r.dest}</td><td>${fD(r.latestDisp)}</td>`;
+      h+=`<td class="fw6">${fD(r.simLastDisp)}</td><td>${fD(r.arrDate)}</td><td>${fD(r.bi)}</td>`;
+      h+=`<td>${r.simTrucks}</td><td>${r.simPlt}</td>`;
+      h+=`<td>${r.isOk?'<span style="color:var(--gn);font-weight:700">✅ On-time</span>':'<span style="color:var(--rd);font-weight:700">⚠ Late +'+r.gap+'d</span>'}</td></tr>`;
+    }
+    h+='</tbody></table></div>';
+  }
+
+  // ── Turnaround Sensitivity ──
+  h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px;margin-bottom:20px">';
+  h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Turnaround Sensitivity (containers must arrive by)</div>';
+  h+='<table class="dtb" style="font-size:10px"><thead><tr><th>TA</th>';
+  for(const dl of deadlines.slice(0,6))h+=`<th>${dl.dest}</th>`;
+  h+='</tr></thead><tbody>';
+  for(let ta=3;ta<=8;ta++){
+    const isCur=ta===S.ta;
+    h+=`<tr${isCur?' style="background:var(--as);font-weight:700"':''}><td>${ta}d${isCur?' ←':''}</td>`;
+    for(const dl of deadlines.slice(0,6)){
+      const arr=_wdBack(dl.latestDisp,ta);
+      const isPast=arr<='2026-03-14';
+      h+=`<td${isPast?' style="color:var(--rd);font-weight:700"':''}>${fD(arr)}</td>`;
+    }
+    h+='</tr>';
+  }
+  h+='</tbody></table></div>';
+
+  // ── Auto-Optimizer result (if available) ──
+  if(window._simOptResult){
+    const o=window._simOptResult;
+    h+='<div style="background:linear-gradient(135deg,#F3E8FF,#EFF6FF);border:2px solid var(--pu);border-radius:12px;padding:16px;margin-bottom:20px">';
+    h+='<div style="font-size:13px;font-weight:700;color:var(--pu);margin-bottom:8px">⚡ Optimal Settings Found</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">';
+    h+=`<div><div style="font-size:10px;color:var(--tt)">Turnaround</div><div style="font-size:20px;font-weight:800;color:var(--pu)">${o.ta}d</div></div>`;
+    h+=`<div><div style="font-size:10px;color:var(--tt)">Max Trucks/Day</div><div style="font-size:20px;font-weight:800;color:var(--pu)">${o.mt}</div></div>`;
+    h+=`<div><div style="font-size:10px;color:var(--tt)">Max Dests/Day</div><div style="font-size:20px;font-weight:800;color:var(--pu)">${o.md}</div></div>`;
+    h+=`<div><div style="font-size:10px;color:var(--tt)">On-Time</div><div style="font-size:20px;font-weight:800;color:${o.pct>=100?'var(--gn)':'var(--or)'}">${o.pct}%</div></div>`;
+    h+=`<div><div style="font-size:10px;color:var(--tt)">Sim Trucks</div><div style="font-size:20px;font-weight:800;color:var(--ac)">${o.trucks}</div></div>`;
+    h+='</div>';
+    h+=`<button class="rbtn" onclick="window._simCfg.ta=${o.ta};window._simCfg.mt=${o.mt};window._simCfg.md=${o.md};_simRunAndRender()" style="margin-top:12px;background:var(--pu);color:#fff;border:none;font-size:12px;padding:8px 20px;font-weight:700">Apply & Re-simulate</button>`;
+    h+='</div>';
+  }
+
+  h+='</div>';// end main container
+  el.innerHTML=h;
+}
+
+// ── Simulator action buttons ──
+function _simRunAndRender(){
+  window._simResult=null;// force re-run
+  LP_render();
+}
+function _simAutoOptimize(){
+  // Temporarily build optimizer inline
+  const S=window._simCfg;
+  const arrivals=LP_STATE.arrivals.filter(a=>a.qty>0);
+  const nom=LP_STATE.nomenclature||{};
+  const demand=(LP_STATE.materialPlan||[]).filter(d=>{const u=(d.destination||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')});
+  if(!arrivals.length||!demand.length){window._simOptResult={ta:S.ta,mt:S.mt,md:S.md,pct:0,trucks:0,onTime:0,late:0};LP_render();return}
+  const _wdBack2=(ds,n)=>{const d=new Date(ds+'T12:00:00');let r=n;while(r>0){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)r--}return d.toISOString().slice(0,10)};
+
+  const LP_FED={TOR:{bi:LM_DEFAULT_BI['Toronto Stadium']||'2026-04-01'},VAN:{bi:LM_DEFAULT_BI['Vancouver Stadium']||'2026-05-14'},GDL:{bi:LM_DEFAULT_BI['Guadalajara Stadium']||'2026-04-21'},CDMX:{bi:LM_DEFAULT_BI['Mexico City Stadium']||'2026-05-12'},MTY:{bi:LM_DEFAULT_BI['Monterrey Stadium']||'2026-05-15'},NY:{bi:LM_DEFAULT_BI['New York / New Jersey Stadium']||'2026-04-27'},KC:{bi:LM_DEFAULT_BI['Kansas City Stadium']||'2026-04-24'},HOU:{bi:LM_DEFAULT_BI['Houston Stadium']||'2026-05-14'}};
+
+  const checkOnTime=(ta,mt,md)=>{
+    const simArr=arrivals.map(a=>({sku:a.sku,name:a.name,arrivalDate:a.arrivalDate,readyDate:LP_nextWorkday(LP_addDays(a.arrivalDate,ta)),qty:a.qty,availPallets:a.availPallets,container:a.container}));
+    const simDemand=demand.map(d=>({...d,sourceIds:d.sourceIds?d.sourceIds.map(s=>({...s})):undefined}));
+    const plan=LP_buildLoadPlan(simDemand,simArr,{maxPallets:S.mp,maxTrucks:mt,maxDests:md,ricStartDate:S.ric,nomenclature:nom});
+    const byDest={};
+    for(const r of plan){if(!byDest[r.destination])byDest[r.destination]='';if(r.date>byDest[r.destination])byDest[r.destination]=r.date}
+    let ok=0,bad=0;
+    for(const[abbr,cfg]of Object.entries(LP_FED)){
+      const transit=LP_transitDays[abbr]||LP_TRANSIT_DEFAULTS[abbr]||0;
+      const deadline=_wdBack2(cfg.bi,transit);
+      const lpDest=Object.keys(byDest).find(d=>{const u=d.toUpperCase();return u.includes(abbr)||(CITY_ABBR[abbr]&&u.includes(CITY_ABBR[abbr].toUpperCase()))});
+      if(!lpDest){ok++;continue}// no demand = on time
+      if(byDest[lpDest]<=deadline)ok++;else bad++;
+    }
+    return{ok,bad,pct:ok+bad>0?Math.round(ok/(ok+bad)*100):100,trucks:new Set(plan.map(r=>r.truckId)).size};
+  };
+
+  let best=null;
+  for(const ta of[3,4,5,6,7]){
+    for(const mt of[2,3,4,5,6]){
+      for(const md of[1,2,3]){
+        const r=checkOnTime(ta,mt,md);
+        const score=r.pct*1000-r.trucks-ta;
+        if(!best||score>best.score||(score===best.score&&r.trucks<best.trucks))
+          best={ta,mt,md,pct:r.pct,trucks:r.trucks,onTime:r.ok,late:r.bad,score};
+      }
+    }
+  }
+  window._simOptResult=best;
+  LP_render();
 }
 
 function LP_exportSingleTruck(truckId){
