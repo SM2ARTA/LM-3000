@@ -2855,18 +2855,21 @@ function V26_render(){
   }
   const nbLmTrucks=[];
   for(const t of activeTrucks.filter(t=>t.source==='Last Mile')){if(t.date===_effKey)nbLmTrucks.push(t)}
+  const nbStp=[];
+  for(const t of fActiveTrucks.filter(t=>t.source==='STP Direct')){if(t.date===_effKey)nbStp.push(t)}
   const nbCort=activeCort.filter(c=>c.date===_effKey);
 
   const nbHasInbound=nbArrConts.length>0;
-  const nbHasOutbound=nbLpTrucks.length>0||nbLmTrucks.length>0||nbCort.length>0;
+  const nbHasOutbound=nbLpTrucks.length>0||nbLmTrucks.length>0||nbCort.length>0||nbStp.length>0;
   const nbHasAny=nbHasInbound||nbHasOutbound;
   const nbTotalInQty=nbArrivals.reduce((s,a)=>s+a.qty,0);
-  const nbTotalOutTrucks=nbLpTrucks.length+nbLmTrucks.length+nbCort.length;
+  const nbTotalOutTrucks=nbLpTrucks.length+nbLmTrucks.length+nbCort.length+nbStp.length;
 
   // Store for popup access
   window._nbArrConts=nbArrConts;
   window._nbLpTrucks=nbLpTrucks;
   window._nbLmTrucks=nbLmTrucks;
+  window._nbStp=nbStp;
   window._nbCort=nbCort;
 
   // Summary for collapsed state
@@ -2958,6 +2961,16 @@ function V26_render(){
               <div style="font-size:9px;color:var(--tt)">${_effKey}</div>
             </div>
             <div style="font-size:10px;color:var(--ts)">${c.qty.toLocaleString()} pcs · ${c.skus} SKU${c.skus>1?'s':''}</div>
+          </div>`;
+        }
+        for(let si=0;si<nbStp.length;si++){
+          const s=nbStp[si];
+          html+=`<div style="background:#FFF8F0;border-radius:6px;padding:6px 8px;margin-bottom:4px;border:1px solid #FFCC80;cursor:pointer;transition:box-shadow .15s" onclick="LM_showStpDetail('${(s.dest||s.destDisplay||'').replace(/'/g,"\\'")}')" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:11px;font-weight:700;color:#EF6C00">🏪 STP → ${clDisp(s.dest||s.destDisplay)}</div>
+              <div style="font-size:9px;color:var(--tt)">${_effKey}</div>
+            </div>
+            <div style="font-size:10px;color:var(--ts)">${s.qty.toLocaleString()} pcs · ${s.pallets.toFixed(1)} plt · ${s.skus||s.items?.length||0} SKU${(s.skus||s.items?.length||0)>1?'s':''}</div>
           </div>`;
         }
       }
@@ -4587,7 +4600,7 @@ function renderCalendarGrid(dates,cellFn,opts){
       h+=`<div class="cal-cell"${click?` onclick="${click}"`:''} style="background:${bg};border:${brd};border-radius:8px;padding:5px 3px 4px;text-align:center;min-height:48px;position:relative${click?';cursor:pointer;transition:all .15s':''}" title="${tip}">`;
       h+=`<div style="font-size:11px;font-weight:${hasActivity?'700':'400'};color:${numClr}">${dd}</div>`;
       if(trucks>0)h+=`<div style="font-size:10px;font-weight:700;color:${clr};margin-top:2px">${trucks}${excl>0?'<span style="font-size:8px;opacity:.5">+'+excl+'🚫</span>':''}</div>`;
-      else if(excl>0&&cort===0)h+=`<div style="font-size:9px;color:#999;margin-top:2px">${excl}🚫</div>`;
+      else if(excl>0&&cort===0&&stp===0)h+=`<div style="font-size:9px;color:#999;margin-top:2px">${excl}🚫</div>`;
       if(cort>0){h+=`<div style="position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#E31837"></div>`;if(trucks===0&&stp===0)h+=`<div style="font-size:9px;font-weight:600;color:#E31837;margin-top:2px">${cort>0&&excl===0?'C':''}${cort}</div>`}
       if(stp>0){h+=`<div style="position:absolute;top:3px;${cort>0?'right:12px':'right:3px'};width:6px;height:6px;border-radius:50%;background:#EF6C00"></div>`;if(trucks===0&&cort===0)h+=`<div style="font-size:9px;font-weight:600;color:#EF6C00;margin-top:2px">S${stp}</div>`}
       h+=`</div>`;
@@ -7577,7 +7590,7 @@ if(cv==="dashboard"){
       const barW=peakTrucks>0?Math.round(d.trucks/peakTrucks*100):0;
       const arrDate=d.biDate;
       const arrWknd=arrDate&&!d.isNoBi?(arrDate.getDay()===0||arrDate.getDay()===6):false;
-      const rowBg=arrWknd?'background:#FEF0F0;':(isWknd?'background:#FEF8F4;':(d.cort>0&&d.trucks===0?'background:#FFF8F8;':''));
+      const rowBg=arrWknd?'background:#FEF0F0;':(isWknd?'background:#FEF8F4;':(d.cort>0&&d.trucks===0&&d.stp===0?'background:#FFF8F8;':(d.stp>0&&d.trucks===0&&d.cort===0?'background:#FFF8F0;':'')));
 
       h+=`<tr style="${rowBg}cursor:pointer" onclick="showDayDetail('${dk3}')"><td class="fw6">${fS(dt)}</td>
       <td style="color:${isWknd?'var(--rd)':'var(--tt)'};font-weight:${isWknd?'700':'400'}">${dt.toLocaleDateString('en-US',{weekday:'short'})}${isWknd?' ⚠':''}</td>`;
