@@ -488,7 +488,7 @@
 <button class="tbtn" onclick="LP_switchTab('arrivals')">📥 Arrivals</button>
 <button class="tbtn" onclick="LP_switchTab('demand')">📋 Demand</button>
 <button class="tbtn on" onclick="LP_switchTab('plan')">🚛 Plan</button>
-<button class="tbtn" onclick="LP_switchTab('simulator')">🔬 Simulator</button>
+<button class="tbtn" onclick="LP_switchTab('late')">⚠ Late</button>
 </div>
 <div class="lp-main" id="lpMain"></div>
 </div>
@@ -1186,13 +1186,13 @@ function LP_render(){
   // Sync tab button highlighting
   document.querySelectorAll('#lpTabs .tbtn').forEach(b=>{
     const txt=b.textContent.toLowerCase();
-    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='simulator'&&txt.includes('sim'));
+    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='late'&&txt.includes('late'));
     b.classList.toggle('on',active);
   });
   switch(LP_TAB){
     case'arrivals':LP_renderArrivals(el);break;
     case'demand':LP_renderDemand(el);break;
-    case'simulator':LP_renderSimulator(el);break;
+    case'late':LP_renderLate(el);break;
     case'plan':LP_renderPlan(el);break;
     default:LP_renderPlan(el);
   }
@@ -2148,303 +2148,289 @@ function LP_showTruckModal(truckId){
 }
 
 // ═══════════════════════════════════════════════════════════
-// LP PIPELINE SIMULATOR — Sandbox analysis without touching real data
+// LP LATE ARRIVALS — Pipeline visibility for delayed items
 // ═══════════════════════════════════════════════════════════
-function LP_renderSimulator(el){
-  if(!LP_STATE.arrivals.length&&!LP_STATE.materialPlan.length){
-    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--tt)"><div style="font-size:32px;margin-bottom:12px">🔬</div><div style="font-size:14px;font-weight:600;margin-bottom:6px">Pipeline Simulator</div><div style="font-size:12px">Upload arrivals and demand data first, then simulate different engine settings here.</div></div>';return}
+function LP_renderLate(el){
+  if(!LP_STATE.planGenerated||!LP_STATE.generatedPlan.length){
+    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--tt)"><div style="font-size:32px;margin-bottom:12px">⚠</div><div style="font-size:14px;font-weight:600;margin-bottom:6px">Late Arrival Analysis</div><div style="font-size:12px">Generate a plan first to see late arrival analysis.</div></div>';return}
 
-  // ── Initialize sandbox settings (preserved across re-renders) ──
-  if(!window._simCfg)window._simCfg={ta:LP_STATE.turnaround,mt:LP_STATE.maxTrucks,md:LP_STATE.maxDests,mp:LP_STATE.maxPallets,ric:LP_STATE.ricStartDate||'2026-04-01'};
-  const S=window._simCfg;
-
-  // ── Gather arrivals data ──
-  const arrivals=LP_STATE.arrivals.filter(a=>a.qty>0);
+  const plan=LP_STATE.generatedPlan;
+  const arrivals=LP_STATE.arrivals||[];
   const nom=LP_STATE.nomenclature||{};
-  const demand=LP_STATE.materialPlan||[];
-  const isTruck=d=>{const u=(d.destination||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
-  const demandTruck=demand.filter(d=>isTruck(d));
+  const fD=d=>{if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};
 
-  // ── Arrivals by week ──
-  const byWeek={};
-  const contSet=new Set();
+  // ── Map destination abbreviation → LM bump-in deadline ──
+  const DEST_BI={
+    TOR:LM_DEFAULT_BI['Toronto Stadium']||'2026-04-01',
+    VAN:LM_DEFAULT_BI['Vancouver Stadium']||'2026-05-14',
+    GDL:LM_DEFAULT_BI['Guadalajara Stadium']||'2026-04-21',
+    CDMX:LM_DEFAULT_BI['Mexico City Stadium']||'2026-05-12',
+    MTY:LM_DEFAULT_BI['Monterrey Stadium']||'2026-05-15',
+    NY:LM_DEFAULT_BI['New York / New Jersey Stadium']||'2026-04-27',
+    KC:LM_DEFAULT_BI['Kansas City Stadium']||'2026-04-24',
+    HOU:LM_DEFAULT_BI['Houston Stadium']||'2026-05-14'
+  };
+
+  // ── Build container → SKU map from arrivals ──
+  // For each SKU: which containers carry it, with arrival and ready dates
+  const skuContainers={};// sku -> [{container, arrivalDate, readyDate, qty}]
   for(const a of arrivals){
-    const d=new Date((a.arrivalDate||'2026-01-01')+'T12:00:00');
-    const mon=d.getDay()===0?6:(d.getDay()-1);
-    const wk=new Date(d);wk.setDate(wk.getDate()-mon);
-    const wkKey=wk.toISOString().slice(0,10);
-    if(!byWeek[wkKey])byWeek[wkKey]={skus:new Set(),pcs:0,conts:new Set()};
-    byWeek[wkKey].skus.add(a.sku);
-    byWeek[wkKey].pcs+=a.qty;
-    if(a.container)byWeek[wkKey].conts.add(a.container);
-    if(a.container)contSet.add(a.container);
-  }
-  const weeks=Object.entries(byWeek).sort((a,b)=>a[0].localeCompare(b[0]));
-  const maxWkPcs=Math.max(1,...weeks.map(([,w])=>w.pcs));
-
-  // ── Demand by destination ──
-  const destDemand={};
-  for(const d of demandTruck){
-    const dest=d.destination||'?';
-    if(!destDemand[dest])destDemand[dest]={pcs:0,skus:new Set(),plt:0};
-    destDemand[dest].pcs+=(d.qty||0);
-    destDemand[dest].skus.add(d.sku);
-    const n=nom[d.sku];
-    if(n&&n.palletQty>0&&n.palletSpc>0)destDemand[dest].plt+=(d.qty||0)/n.palletQty*n.palletSpc;
+    if(!a.sku||a.qty<=0)continue;
+    if(!skuContainers[a.sku])skuContainers[a.sku]=[];
+    skuContainers[a.sku].push({container:a.container||'—',arrivalDate:a.arrivalDate||'—',readyDate:a.readyDate||'—',qty:a.qty,localName:a._localName||''});
   }
 
-  // ── Backward deadline calc from LM bump-in ──
-  const LP_FED_DESTS={
-    'Toronto Stadium':      {dest:'TOR',bi:LM_DEFAULT_BI['Toronto Stadium']||'2026-04-01'},
-    'Vancouver Stadium':    {dest:'VAN',bi:LM_DEFAULT_BI['Vancouver Stadium']||'2026-05-14'},
-    'Guadalajara Stadium':  {dest:'GDL',bi:LM_DEFAULT_BI['Guadalajara Stadium']||'2026-04-21'},
-    'Mexico City Stadium':  {dest:'CDMX',bi:LM_DEFAULT_BI['Mexico City Stadium']||'2026-05-12'},
-    'Monterrey Stadium':    {dest:'MTY',bi:LM_DEFAULT_BI['Monterrey Stadium']||'2026-05-15'},
-    'NY/NJ Stadium':        {dest:'NY',bi:LM_DEFAULT_BI['New York / New Jersey Stadium']||'2026-04-27'},
-    'Kansas City Stadium':  {dest:'KC',bi:LM_DEFAULT_BI['Kansas City Stadium']||'2026-04-24'},
-    'Houston Stadium':      {dest:'HOU',bi:LM_DEFAULT_BI['Houston Stadium']||'2026-05-14'},
-  };
-  const _wdBack=(dateStr,n)=>{const d=new Date(dateStr+'T12:00:00');let r=n;while(r>0){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)r--}return d.toISOString().slice(0,10)};
-  const deadlines=[];
-  for(const[venue,cfg]of Object.entries(LP_FED_DESTS)){
-    const transit=LP_transitDays[cfg.dest]||LP_TRANSIT_DEFAULTS[cfg.dest]||0;
-    const latestDisp=_wdBack(cfg.bi,transit);
-    const latestArr=_wdBack(latestDisp,S.ta);
-    // Match to LP demand destination
-    const lpDest=Object.keys(destDemand).find(d=>d.toUpperCase().includes(cfg.dest)||(CITY_ABBR[cfg.dest]&&d.toUpperCase().includes(CITY_ABBR[cfg.dest].toUpperCase())));
-    const plt=lpDest?Math.round(destDemand[lpDest].plt*10)/10:0;
-    const pcs=lpDest?destDemand[lpDest].pcs:0;
-    const trucksNeeded=plt>0?Math.ceil(plt/S.mp):0;
-    deadlines.push({venue,dest:cfg.dest,bi:cfg.bi,transit,latestDisp,latestArr,plt,pcs,trucksNeeded,lpDest:lpDest||'—'});
+  // ── Analyze each truck ──
+  const byTruck={};
+  for(const r of plan){
+    if(!byTruck[r.truckId])byTruck[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,items:[],plt:0};
+    byTruck[r.truckId].items.push(r);
+    byTruck[r.truckId].plt+=r.pallets||0;
   }
-  deadlines.sort((a,b)=>a.latestDisp.localeCompare(b.latestDisp));
 
-  // ── Run simulation with sandbox settings ──
-  let simResult=window._simResult||null;
-  const simRun=()=>{
-    // Deep-copy arrivals with sandbox turnaround
-    const simArrivals=arrivals.map(a=>{
-      const rawReady=LP_addDays(a.arrivalDate,S.ta);
-      return{sku:a.sku,name:a.name,arrivalDate:a.arrivalDate,readyDate:LP_nextWorkday(rawReady),qty:a.qty,availPallets:a.availPallets,container:a.container};
-    });
-    // Deep-copy demand (isolate sourceIds from real LP_STATE)
-    const simDemand=demandTruck.map(d=>({...d,sourceIds:d.sourceIds?d.sourceIds.map(s=>({...s})):undefined}));
-    const simCfg={maxPallets:S.mp,maxTrucks:S.mt,maxDests:S.md,ricStartDate:S.ric,nomenclature:nom,startTruckId:0};
-    const plan=LP_buildLoadPlan(simDemand,simArrivals,simCfg);
-    // Analyze results
-    const byDest={};
-    for(const r of plan){
-      if(!byDest[r.destination])byDest[r.destination]={trucks:new Set(),firstDisp:'9999',lastDisp:'',pcs:0,plt:0};
-      byDest[r.destination].trucks.add(r.truckId);
-      if(r.date<byDest[r.destination].firstDisp)byDest[r.destination].firstDisp=r.date;
-      if(r.date>byDest[r.destination].lastDisp)byDest[r.destination].lastDisp=r.date;
-      byDest[r.destination].pcs+=r.qty||0;
-      byDest[r.destination].plt+=r.pallets||0;
+  const lateItems=[];// flat list for table
+  const lateTrucks=[];
+  const onTimeTrucks=[];
+  let totalLateSkus=0,totalLatePcs=0,totalLatePlt=0;
+
+  for(const t of Object.values(byTruck)){
+    const abbr=LP_matchTransitAbbr(t.dest);
+    const bi=abbr?DEST_BI[abbr]:null;
+    const transit=LP_getTransitDays(t.dest);
+    const arrivalDate=LP_getArrivalDate(t.date,t.dest);
+    const isLocked=LP_dispatched.has(t.id);
+    const lsr=LP_lsrNumbers[t.id]||'';
+    const isLate=bi&&arrivalDate>bi;
+    const daysLate=isLate?Math.round((new Date(arrivalDate+'T12:00:00')-new Date(bi+'T12:00:00'))/86400000):0;
+
+    const truckInfo={...t,abbr:abbr||'?',bi:bi||'—',transit,arrivalDate,isLate,daysLate,isLocked,lsr,
+      totalPcs:t.items.reduce((s,i)=>s+(i.qty||0),0),totalPlt:Math.round(t.plt*10)/10};
+
+    if(isLate){
+      lateTrucks.push(truckInfo);
+      for(const item of t.items){
+        const conts=skuContainers[item.sku]||[];
+        // Find the container that most likely fed this item (latest arrival before truck dispatch)
+        const feeding=conts.filter(c=>c.readyDate<=t.date).sort((a,b)=>b.readyDate.localeCompare(a.readyDate));
+        const feedCont=feeding[0]||conts[0]||null;
+        lateItems.push({
+          truckId:t.id,truckDate:t.date,dest:clDisp(t.dest),destAbbr:abbr||'?',
+          arrivalDate,bi:bi||'—',daysLate,lsr,isLocked,
+          sku:item.sku,name:nom[item.sku]?.name||item.name||item.sku,
+          qty:item.qty||0,plt:Math.round((item.pallets||0)*100)/100,
+          container:feedCont?feedCont.container:'—',
+          contArrival:feedCont?feedCont.arrivalDate:'—',
+          contReady:feedCont?feedCont.readyDate:'—'
+        });
+        totalLateSkus++;totalLatePcs+=item.qty||0;totalLatePlt+=item.pallets||0;
+      }
+    } else {
+      onTimeTrucks.push(truckInfo);
     }
-    // Check on-time for each LP-fed destination
-    let onTime=0,late=0;
-    const destResults=[];
-    for(const dl of deadlines){
-      const lpDests=Object.keys(byDest).filter(d=>{const u=d.toUpperCase();return u.includes(dl.dest)||(CITY_ABBR[dl.dest]&&u.includes(CITY_ABBR[dl.dest].toUpperCase()))});
-      let lastD='';let trks=0;let simPlt=0;
-      for(const ld of lpDests){const bd=byDest[ld];lastD=lastD>bd.lastDisp?lastD:bd.lastDisp;trks+=bd.trucks.size;simPlt+=bd.plt}
-      const isOk=!lastD||lastD<=dl.latestDisp;
-      if(dl.plt>0){if(isOk)onTime++;else late++}
-      const arrDate=lastD?LP_addDays(lastD,dl.transit):'—';
-      destResults.push({...dl,simLastDisp:lastD||'—',simTrucks:trks,simPlt:Math.round(simPlt*10)/10,
-        arrDate:typeof arrDate==='string'?arrDate:'—',
-        isOk,gap:lastD&&!isOk?Math.round((new Date(lastD+'T12:00:00')-new Date(dl.latestDisp+'T12:00:00'))/86400000):0});
-    }
-    const total=onTime+late;
-    return{plan,byDest,destResults,onTime,late,total,pct:total>0?Math.round(onTime/total*100):100,totalTrucks:new Set(plan.map(r=>r.truckId)).size,
-      totalPlt:Math.round(plan.reduce((s,r)=>s+(r.pallets||0),0)*10)/10};
-  };
+  }
+  lateTrucks.sort((a,b)=>a.daysLate>b.daysLate?-1:1);
+  lateItems.sort((a,b)=>b.daysLate-a.daysLate||a.dest.localeCompare(b.dest)||a.truckId-b.truckId);
 
-  // If no sim result yet, run initial
-  if(!simResult){simResult=simRun();window._simResult=simResult}
+  // ── Unfulfilled demand: SKUs needed but never dispatched ──
+  const dispatchedByDest={};// dest -> sku -> qty dispatched
+  for(const r of plan){
+    if(!dispatchedByDest[r.destination])dispatchedByDest[r.destination]={};
+    dispatchedByDest[r.destination][r.sku]=(dispatchedByDest[r.destination][r.sku]||0)+(r.qty||0);
+  }
+  const isTruckDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
+  const unfulfilled=[];
+  for(const d of(LP_STATE.materialPlan||[])){
+    if(!isTruckDest(d.destination))continue;
+    const dispatched=dispatchedByDest[d.destination]?.[d.sku]||0;
+    const needed=d.qty||d.requiredQty||0;
+    if(needed>dispatched){
+      const gap=needed-dispatched;
+      const conts=skuContainers[d.sku]||[];
+      const contStr=conts.length?conts.map(c=>c.container).filter((v,i,a)=>a.indexOf(v)===i).join(', '):'None';
+      const latestArr=conts.length?conts.sort((a,b)=>b.arrivalDate.localeCompare(a.arrivalDate))[0].arrivalDate:'—';
+      unfulfilled.push({dest:clDisp(d.destination),sku:d.sku,name:nom[d.sku]?.name||d.name||d.sku,needed,dispatched,gap,containers:contStr,latestArrival:latestArr});
+    }
+  }
+  // Deduplicate unfulfilled by dest+sku
+  const ufMap={};
+  for(const u of unfulfilled){const k=u.dest+'|'+u.sku;if(!ufMap[k])ufMap[k]={...u};else{ufMap[k].needed+=u.needed;ufMap[k].gap=ufMap[k].needed-ufMap[k].dispatched}}
+  const ufList=Object.values(ufMap).filter(u=>u.gap>0).sort((a,b)=>b.gap-a.gap);
+
+  // ── Summary by destination ──
+  const destSummary={};
+  for(const t of[...lateTrucks,...onTimeTrucks]){
+    if(!destSummary[t.abbr])destSummary[t.abbr]={dest:clDisp(t.dest),abbr:t.abbr,bi:t.bi,trucks:0,late:0,onTime:0,lateDays:0,plt:0};
+    destSummary[t.abbr].trucks++;destSummary[t.abbr].plt+=t.totalPlt;
+    if(t.isLate){destSummary[t.abbr].late++;if(t.daysLate>destSummary[t.abbr].lateDays)destSummary[t.abbr].lateDays=t.daysLate}
+    else destSummary[t.abbr].onTime++;
+  }
+
+  // ── No Arrival: SKUs in demand but no container/arrival scheduled ──
+  const arrivalSkus=new Set(arrivals.map(a=>a.sku));
+  const noArrival=[];
+  const noArrSeen=new Set();
+  for(const d of(LP_STATE.materialPlan||[])){
+    if(!isTruckDest(d.destination))continue;
+    const sku=d.sku;
+    const k=d.destination+'|'+sku;
+    if(noArrSeen.has(k))continue;noArrSeen.add(k);
+    if(arrivalSkus.has(sku))continue;
+    const qty=d.qty||d.requiredQty||0;
+    if(qty<=0)continue;
+    const n=nom[sku];
+    const src=n?.source||'';
+    if(src.toUpperCase().startsWith('STP'))continue;
+    const abbr=LP_matchTransitAbbr(d.destination);
+    const plt=(n&&n.palletQty>0&&n.palletSpc>0)?Math.round(qty/n.palletQty*n.palletSpc*100)/100:0;
+    noArrival.push({dest:clDisp(d.destination),destAbbr:abbr||'?',sku,name:n?.name||d.name||sku,src,qty,plt,bi:abbr?DEST_BI[abbr]||'—':'—'});
+  }
+  const naMap={};
+  for(const na of noArrival){const k=na.dest+'|'+na.sku;if(!naMap[k])naMap[k]={...na};else{naMap[k].qty+=na.qty;naMap[k].plt+=na.plt}}
+  const naList=Object.values(naMap).sort((a,b)=>a.dest.localeCompare(b.dest)||b.qty-a.qty);
 
   // ── Render ──
-  const fD=d=>{if(!d||d==='—')return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};
-  let h='<div style="padding:16px 20px;max-width:1100px">';
+  const totalTrucks=Object.keys(byTruck).length;
+  let h='<div style="padding:16px 20px;max-width:1200px">';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">';
-  h+='<div><h2 style="font-size:16px;font-weight:700;margin:0">🔬 Pipeline Simulator</h2><div style="font-size:11px;color:var(--tt);margin-top:2px">Sandbox — changes here do NOT affect real plan data</div></div>';
-  h+='<div style="display:flex;gap:6px">';
-  h+='<button class="rbtn" onclick="_simRunAndRender()" style="background:var(--ac);color:#fff;border-color:var(--ab);font-size:12px;padding:6px 16px;font-weight:700">▶ Run Simulation</button>';
-  h+='<button class="rbtn" onclick="_simAutoOptimize()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-size:12px;padding:6px 16px;font-weight:700">⚡ Auto-Optimize</button>';
-  h+='</div></div>';
-
-  // ── Settings Panel ──
-  h+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;padding:14px 16px;background:var(--sf);border:1px solid var(--bl);border-radius:10px">';
-  h+='<div style="grid-column:1/-1;font-size:10px;font-weight:700;color:var(--tt);letter-spacing:.5px;text-transform:uppercase">Sandbox Settings</div>';
-  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">Turnaround (days)</label><input type="number" value="${S.ta}" min="1" max="14" onchange="window._simCfg.ta=+this.value" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:var(--fm);font-weight:700;text-align:center"></div>`;
-  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">Max Trucks/Day</label><input type="number" value="${S.mt}" min="1" max="10" onchange="window._simCfg.mt=+this.value" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:var(--fm);font-weight:700;text-align:center"></div>`;
-  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">Max Dests/Day</label><input type="number" value="${S.md}" min="1" max="6" onchange="window._simCfg.md=+this.value" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:var(--fm);font-weight:700;text-align:center"></div>`;
-  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">Truck Capacity</label><input type="number" value="${S.mp}" min="1" max="53" onchange="window._simCfg.mp=+this.value" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:var(--fm);font-weight:700;text-align:center"></div>`;
-  h+=`<div><label style="font-size:10px;font-weight:600;color:var(--ts)">RIC Start Date</label><input type="date" value="${S.ric}" onchange="window._simCfg.ric=this.value" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm);font-weight:600"></div>`;
+  h+='<div><h2 style="font-size:16px;font-weight:700;margin:0">⚠ Late Arrival Analysis</h2>';
+  h+='<div style="font-size:11px;color:var(--tt);margin-top:2px">LP truck arrivals vs LM bump-in deadlines</div></div>';
+  h+=`<input type="text" class="lp-search" placeholder="Search SKU, container, destination..." id="lpLateSearch" oninput="LP_filterLate()" style="width:220px;padding:6px 10px;font-size:11px">`;
   h+='</div>';
 
-  // ── Simulation Results KPI ──
-  if(simResult){
-    const sr=simResult;
-    const pctClr=sr.pct>=100?'var(--gn)':sr.pct>=75?'var(--or)':'var(--rd)';
-    const pctBg=sr.pct>=100?'var(--gs)':sr.pct>=75?'var(--os)':'var(--rs)';
-    h+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px">';
-    h+=kpi({label:'✅ On-Time',value:sr.pct+'%',color:pctClr,sub:sr.onTime+'/'+sr.total+' destinations',style:'background:'+pctBg});
-    h+=kpi({label:'🚛 Sim Trucks',value:sr.totalTrucks,color:'var(--ac)',sub:sr.totalPlt+' pallets'});
-    h+=kpi({label:'📦 Containers',value:contSet.size,color:'var(--ts)',sub:arrivals.length+' arrival rows'});
-    h+=kpi({label:'📍 Destinations',value:Object.keys(destDemand).length,color:'var(--ts)',sub:demandTruck.length+' demand rows'});
-    h+=kpi({label:'⚠ Late',value:sr.late,color:sr.late>0?'var(--rd)':'var(--gn)',sub:sr.late>0?'Needs attention':'All clear'});
+  // KPI
+  const pct=totalTrucks>0?Math.round((totalTrucks-lateTrucks.length)/totalTrucks*100):100;
+  const pctClr=pct>=100?'var(--gn)':pct>=75?'var(--or)':'var(--rd)';
+  const pctBg=pct>=100?'var(--gs)':pct>=75?'var(--os)':'var(--rs)';
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:20px">';
+  h+=kpi({label:'✅ On-Time',value:pct+'%',color:pctClr,sub:(totalTrucks-lateTrucks.length)+'/'+totalTrucks+' trucks',style:'background:'+pctBg});
+  h+=kpi({label:'⚠ Late Trucks',value:lateTrucks.length,color:lateTrucks.length?'var(--rd)':'var(--gn)',sub:lateTrucks.length?totalLateSkus+' items · '+Math.round(totalLatePcs).toLocaleString()+' pcs':'All clear'});
+  h+=kpi({label:'📦 Late Pallets',value:Math.round(totalLatePlt*10)/10,color:totalLatePlt>0?'var(--rd)':'var(--gn)',sub:totalLatePlt>0?'delayed':'—'});
+  h+=kpi({label:'❌ Unfulfilled',value:ufList.length,color:ufList.length?'var(--or)':'var(--gn)',sub:ufList.length?ufList.reduce((s,u)=>s+u.gap,0).toLocaleString()+' pcs short':'Fully covered'});
+  h+=kpi({label:'🚫 No Arrival',value:naList.length,color:naList.length?'#B45309':'var(--gn)',sub:naList.length?naList.reduce((s,n)=>s+n.qty,0).toLocaleString()+' pcs · no container':'All sourced',style:naList.length?'background:#FFF8F0':''});
+  h+=kpi({label:'📍 Destinations',value:Object.keys(destSummary).length,color:'var(--ts)'});
+  h+=kpi({label:'🚛 Total Trucks',value:totalTrucks,color:'var(--ac)',sub:Math.round(Object.values(byTruck).reduce((s,t)=>s+t.plt,0)*10)/10+' plt'});
+  h+='</div>';
+
+  // ── Destination Summary ──
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:20px">';
+  for(const[abbr,ds]of Object.entries(destSummary).sort((a,b)=>b[1].late-a[1].late||a[0].localeCompare(b[0]))){
+    const bg=ds.late>0?'var(--rs)':'var(--gs)';const clr=ds.late>0?'var(--rd)':'var(--gn)';
+    h+=`<div style="background:${bg};border-radius:10px;padding:10px 12px;border:1px solid ${ds.late>0?'#F5C6C7':'#B8DFCA'}">`;
+    h+=`<div style="font-size:12px;font-weight:700;color:${clr}">${ds.dest}</div>`;
+    h+=`<div style="font-size:10px;color:var(--ts);margin-top:4px">BI: ${fD(ds.bi)} · ${ds.trucks} trucks · ${ds.plt} plt</div>`;
+    h+=`<div style="font-size:10px;font-weight:600;color:${clr};margin-top:2px">${ds.late>0?'⚠ '+ds.late+' late (max +'+ds.lateDays+'d)':'✅ All on-time'}</div>`;
+    h+=`</div>`;
+  }
+  h+='</div>';
+
+  // ── Late Trucks Detail ──
+  if(lateTrucks.length>0){
+    h+='<div style="background:var(--rs);border:1px solid #F5C6C7;border-radius:10px;padding:14px;margin-bottom:20px">';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--rd);margin-bottom:10px">⚠ Late Trucks — '+lateTrucks.length+' trucks arriving after bump-in</div>';
+    h+='<div class="csf" style="max-height:240px"><table class="dtb" style="font-size:10px"><thead><tr>';
+    h+='<th>Truck</th><th>LSR</th><th>Destination</th><th>Dispatch</th><th>Transit</th><th>Arrives</th><th>Bump-in</th><th>Late</th><th>Items</th><th>Pcs</th><th>Plt</th>';
+    h+='</tr></thead><tbody>';
+    for(const t of lateTrucks){
+      h+=`<tr style="background:#FEF0F0"><td class="fw6">LP-${t.id}</td><td class="mono" style="color:var(--pu)">${t.lsr}</td>`;
+      h+=`<td>${clDisp(t.dest)}</td><td>${fD(t.date)}</td><td>${t.transit}d</td>`;
+      h+=`<td class="fw6">${fD(t.arrivalDate)}</td><td>${fD(t.bi)}</td>`;
+      h+=`<td style="color:var(--rd);font-weight:700">+${t.daysLate}d</td>`;
+      h+=`<td>${t.items.length}</td><td>${t.totalPcs.toLocaleString()}</td><td>${t.totalPlt}</td></tr>`;
+    }
+    h+='</tbody></table></div></div>';
+  } else {
+    h+='<div style="background:var(--gs);border:1px solid #B8DFCA;border-radius:10px;padding:16px;margin-bottom:20px;text-align:center">';
+    h+='<div style="font-size:14px;font-weight:700;color:var(--gn)">✅ All LP trucks arrive on time</div>';
+    h+='<div style="font-size:11px;color:var(--ts);margin-top:4px">Every truck arrives before its destination\'s bump-in date</div>';
     h+='</div>';
   }
 
-  // ── Two-column layout: Deadline Analysis + Arrivals ──
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">';
-
-  // Left: Deadline table
-  h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px">';
-  h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">📅 Dispatch Deadlines (Backward from LM Bump-in)</div>';
-  h+='<div class="csf" style="max-height:320px"><table class="dtb" style="font-size:10px"><thead><tr><th>Destination</th><th>Bump-in</th><th>Transit</th><th>Latest Dispatch</th><th>Container By</th><th>Plt</th><th>Trucks</th></tr></thead><tbody>';
-  for(const dl of deadlines){
-    const isUrgent=dl.latestArr<=(new Date().toISOString().slice(0,10));
-    h+=`<tr${isUrgent?' style="background:var(--rs)"':''}>`;
-    h+=`<td class="fw6">${dl.dest}</td><td>${fD(dl.bi)}</td><td>${dl.transit}d</td>`;
-    h+=`<td class="fw6">${fD(dl.latestDisp)}</td><td>${fD(dl.latestArr)}</td>`;
-    h+=`<td>${dl.plt||'—'}</td><td>${dl.trucksNeeded||'—'}</td></tr>`;
-  }
-  h+='</tbody></table></div></div>';
-
-  // Right: Arrivals by week
-  h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px">';
-  h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">📥 Arrivals by Week</div>';
-  h+='<div class="csf" style="max-height:320px">';
-  for(const[wk,data]of weeks){
-    const pct=Math.round(data.pcs/maxWkPcs*100);
-    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">`;
-    h+=`<div style="font-size:10px;font-weight:600;width:70px;flex-shrink:0" class="mono">${fD(wk)}</div>`;
-    h+=`<div style="flex:1;height:16px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--ac);border-radius:4px;transition:width .3s"></div></div>`;
-    h+=`<div style="font-size:9px;color:var(--tt);width:90px;text-align:right;flex-shrink:0">${data.conts.size}c · ${data.skus.size}s · ${data.pcs.toLocaleString()}</div>`;
-    h+=`</div>`;
-  }
-  h+='</div></div>';
-  h+='</div>';// end two-column
-
-  // ── Demand by Destination ──
-  h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px;margin-bottom:20px">';
-  h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">📍 Demand by Destination</div>';
-  const destEntries=Object.entries(destDemand).sort((a,b)=>b[1].plt-a[1].plt);
-  const maxDestPlt=Math.max(1,...destEntries.map(([,d])=>d.plt));
-  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">';
-  for(const[dest,d]of destEntries){
-    const pct=Math.round(d.plt/maxDestPlt*100);
-    const clr=dest.toUpperCase().includes('MEX')?'#E31837':dest.toUpperCase().includes('CAN')?'var(--ac)':'#6CB4EE';
-    h+=`<div style="background:var(--bg);border-radius:8px;padding:10px 12px">`;
-    h+=`<div style="font-size:11px;font-weight:700;margin-bottom:4px">${clDisp(dest)}</div>`;
-    h+=`<div style="height:6px;background:var(--bl);border-radius:3px;margin-bottom:6px"><div style="height:100%;width:${pct}%;background:${clr};border-radius:3px"></div></div>`;
-    h+=`<div style="font-size:10px;color:var(--ts)">${Math.round(d.plt*10)/10} plt · ${d.pcs.toLocaleString()} pcs · ${d.skus.size} SKUs · ${Math.ceil(d.plt/S.mp)} trucks</div>`;
-    h+=`</div>`;
-  }
-  h+='</div></div>';
-
-  // ── Simulation Results Detail ──
-  if(simResult&&simResult.destResults){
+  // ── Late Items Detail (SKU-level with container info) ──
+  if(lateItems.length>0){
     h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px;margin-bottom:20px">';
-    h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">🚛 Simulation Results vs Deadlines</div>';
-    h+='<table class="dtb" style="font-size:10px"><thead><tr><th>Destination</th><th>Deadline</th><th>Sim Last Dispatch</th><th>Arrival Est.</th><th>Bump-in</th><th>Trucks</th><th>Plt</th><th>Status</th></tr></thead><tbody>';
-    for(const r of simResult.destResults){
-      if(!r.plt)continue;
-      const bg=r.isOk?'':'background:var(--rs)';
-      h+=`<tr style="${bg}"><td class="fw6">${r.dest}</td><td>${fD(r.latestDisp)}</td>`;
-      h+=`<td class="fw6">${fD(r.simLastDisp)}</td><td>${fD(r.arrDate)}</td><td>${fD(r.bi)}</td>`;
-      h+=`<td>${r.simTrucks}</td><td>${r.simPlt}</td>`;
-      h+=`<td>${r.isOk?'<span style="color:var(--gn);font-weight:700">✅ On-time</span>':'<span style="color:var(--rd);font-weight:700">⚠ Late +'+r.gap+'d</span>'}</td></tr>`;
+    h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">📋 Late Items — Full Pipeline ('+lateItems.length+' items)</div>';
+    h+='<div class="csf" id="lpLateTable" style="max-height:400px"><table class="dtb" style="font-size:10px"><thead><tr>';
+    h+='<th>SKU</th><th>Item</th><th>Container</th><th>Cont. Arrival</th><th>Stock Ready</th><th>Truck</th><th>Dispatch</th><th>Truck Arrives</th><th>Bump-in</th><th>Late</th><th>Qty</th><th>Plt</th>';
+    h+='</tr></thead><tbody>';
+    for(const it of lateItems){
+      h+=`<tr class="lp-late-row" data-search="${(it.sku+' '+it.name+' '+it.container+' '+it.dest).toLowerCase()}">`;
+      h+=`<td class="mono fw6">${it.sku}</td><td class="tcl">${it.name}</td>`;
+      h+=`<td class="mono">${it.container}</td><td>${fD(it.contArrival)}</td><td>${fD(it.contReady)}</td>`;
+      h+=`<td class="fw6">LP-${it.truckId}${it.lsr?' <span class="mono" style="font-size:8px;color:var(--pu)">'+it.lsr+'</span>':''}</td>`;
+      h+=`<td>${fD(it.truckDate)}</td><td class="fw6" style="color:var(--rd)">${fD(it.arrivalDate)}</td>`;
+      h+=`<td>${fD(it.bi)}</td><td style="color:var(--rd);font-weight:700">+${it.daysLate}d</td>`;
+      h+=`<td class="mono">${it.qty.toLocaleString()}</td><td class="mono">${it.plt}</td></tr>`;
     }
-    h+='</tbody></table></div>';
+    h+='</tbody></table></div></div>';
   }
 
-  // ── Turnaround Sensitivity ──
-  h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px;margin-bottom:20px">';
-  h+='<div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Turnaround Sensitivity (containers must arrive by)</div>';
-  h+='<table class="dtb" style="font-size:10px"><thead><tr><th>TA</th>';
-  for(const dl of deadlines.slice(0,6))h+=`<th>${dl.dest}</th>`;
-  h+='</tr></thead><tbody>';
-  for(let ta=3;ta<=8;ta++){
-    const isCur=ta===S.ta;
-    h+=`<tr${isCur?' style="background:var(--as);font-weight:700"':''}><td>${ta}d${isCur?' ←':''}</td>`;
-    for(const dl of deadlines.slice(0,6)){
-      const arr=_wdBack(dl.latestDisp,ta);
-      const isPast=arr<='2026-03-14';
-      h+=`<td${isPast?' style="color:var(--rd);font-weight:700"':''}>${fD(arr)}</td>`;
+  // ── Unfulfilled Demand ──
+  if(ufList.length>0){
+    h+='<div style="background:var(--os);border:1px solid #F5D6B8;border-radius:10px;padding:14px;margin-bottom:20px">';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--or);margin-bottom:10px">❌ Unfulfilled Demand — '+ufList.length+' SKUs not fully dispatched</div>';
+    h+='<div class="csf" style="max-height:300px"><table class="dtb" style="font-size:10px"><thead><tr>';
+    h+='<th>Destination</th><th>SKU</th><th>Item</th><th>Needed</th><th>Dispatched</th><th>Gap</th><th>Containers</th><th>Latest Arrival</th>';
+    h+='</tr></thead><tbody>';
+    for(const u of ufList){
+      h+=`<tr class="lp-late-row" data-search="${(u.sku+' '+u.name+' '+u.dest+' '+u.containers).toLowerCase()}">`;
+      h+=`<td>${u.dest}</td><td class="mono fw6">${u.sku}</td><td class="tcl">${u.name}</td>`;
+      h+=`<td class="mono">${u.needed.toLocaleString()}</td><td class="mono">${u.dispatched.toLocaleString()}</td>`;
+      h+=`<td class="mono fw6" style="color:var(--or)">${u.gap.toLocaleString()}</td>`;
+      h+=`<td class="mono" style="font-size:9px">${u.containers}</td><td>${fD(u.latestArrival)}</td></tr>`;
     }
-    h+='</tr>';
-  }
-  h+='</tbody></table></div>';
-
-  // ── Auto-Optimizer result (if available) ──
-  if(window._simOptResult){
-    const o=window._simOptResult;
-    h+='<div style="background:linear-gradient(135deg,#F3E8FF,#EFF6FF);border:2px solid var(--pu);border-radius:12px;padding:16px;margin-bottom:20px">';
-    h+='<div style="font-size:13px;font-weight:700;color:var(--pu);margin-bottom:8px">⚡ Optimal Settings Found</div>';
-    h+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">';
-    h+=`<div><div style="font-size:10px;color:var(--tt)">Turnaround</div><div style="font-size:20px;font-weight:800;color:var(--pu)">${o.ta}d</div></div>`;
-    h+=`<div><div style="font-size:10px;color:var(--tt)">Max Trucks/Day</div><div style="font-size:20px;font-weight:800;color:var(--pu)">${o.mt}</div></div>`;
-    h+=`<div><div style="font-size:10px;color:var(--tt)">Max Dests/Day</div><div style="font-size:20px;font-weight:800;color:var(--pu)">${o.md}</div></div>`;
-    h+=`<div><div style="font-size:10px;color:var(--tt)">On-Time</div><div style="font-size:20px;font-weight:800;color:${o.pct>=100?'var(--gn)':'var(--or)'}">${o.pct}%</div></div>`;
-    h+=`<div><div style="font-size:10px;color:var(--tt)">Sim Trucks</div><div style="font-size:20px;font-weight:800;color:var(--ac)">${o.trucks}</div></div>`;
-    h+='</div>';
-    h+=`<button class="rbtn" onclick="window._simCfg.ta=${o.ta};window._simCfg.mt=${o.mt};window._simCfg.md=${o.md};_simRunAndRender()" style="margin-top:12px;background:var(--pu);color:#fff;border:none;font-size:12px;padding:8px 20px;font-weight:700">Apply & Re-simulate</button>`;
-    h+='</div>';
+    h+='</tbody></table></div></div>';
   }
 
-  h+='</div>';// end main container
+  if(naList.length>0){
+    const naTotalPcs=naList.reduce((s,n)=>s+n.qty,0);
+    const naTotalPlt=Math.round(naList.reduce((s,n)=>s+n.plt,0)*10)/10;
+    h+='<div style="background:#FFF8F0;border:1px solid #EFC88B;border-radius:10px;padding:14px;margin-bottom:20px">';
+    h+='<div style="font-size:12px;font-weight:700;color:#B45309;margin-bottom:4px">🚫 No Container / No Arrival — '+naList.length+' SKUs with zero arrival records</div>';
+    h+='<div style="font-size:10px;color:var(--ts);margin-bottom:10px">These items are in demand for LP destinations but have no container or arrival date in the system. They will never be dispatched unless arrivals are added.</div>';
+    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
+    h+=`<span style="font-size:11px;font-weight:600;color:#B45309">${naList.length} SKUs · ${naTotalPcs.toLocaleString()} pcs · ${naTotalPlt} plt</span>`;
+    const naByDest={};for(const n of naList){naByDest[n.dest]=(naByDest[n.dest]||0)+1}
+    h+=`<span style="font-size:10px;color:var(--ts)">${Object.entries(naByDest).map(([d,c])=>d+': '+c).join(' · ')}</span>`;
+    h+='</div>';
+    h+='<div class="csf" style="max-height:320px"><table class="dtb" style="font-size:10px"><thead><tr>';
+    h+='<th>Destination</th><th>Bump-in</th><th>SKU</th><th>Item</th><th>Source</th><th>Qty</th><th>Pallets</th>';
+    h+='</tr></thead><tbody>';
+    for(const na of naList){
+      h+=`<tr class="lp-late-row" data-search="${(na.sku+' '+na.name+' '+na.dest+' '+na.src).toLowerCase()}">`;
+      h+=`<td>${na.dest}</td><td>${fD(na.bi)}</td>`;
+      h+=`<td class="mono fw6">${na.sku}</td><td class="tcl">${na.name}</td>`;
+      h+=`<td style="font-size:9px">${na.src}</td>`;
+      h+=`<td class="mono">${na.qty.toLocaleString()}</td><td class="mono">${na.plt}</td></tr>`;
+    }
+    h+='</tbody></table></div></div>';
+  }
+
+  // ── On-Time Trucks (collapsed by default) ──
+  if(onTimeTrucks.length>0){
+    h+='<details style="margin-bottom:20px"><summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--gn);padding:8px 0">✅ '+onTimeTrucks.length+' On-Time Trucks (click to expand)</summary>';
+    h+='<div style="background:var(--sf);border:1px solid var(--bl);border-radius:10px;padding:14px;margin-top:8px">';
+    h+='<div class="csf" style="max-height:300px"><table class="dtb" style="font-size:10px"><thead><tr>';
+    h+='<th>Truck</th><th>LSR</th><th>Destination</th><th>Dispatch</th><th>Arrives</th><th>Bump-in</th><th>Buffer</th><th>Items</th><th>Plt</th>';
+    h+='</tr></thead><tbody>';
+    for(const t of onTimeTrucks.sort((a,b)=>a.date.localeCompare(b.date))){
+      const buffer=t.bi&&t.bi!=='—'?Math.round((new Date(t.bi+'T12:00:00')-new Date(t.arrivalDate+'T12:00:00'))/86400000):0;
+      h+=`<tr class="lp-late-row" data-search="${('lp-'+t.id+' '+clDisp(t.dest)+' '+(t.lsr||'')).toLowerCase()}"><td class="fw6">LP-${t.id}</td><td class="mono" style="color:var(--pu)">${t.lsr}</td>`;
+      h+=`<td>${clDisp(t.dest)}</td><td>${fD(t.date)}</td>`;
+      h+=`<td>${fD(t.arrivalDate)}</td><td>${fD(t.bi)}</td>`;
+      h+=`<td style="color:var(--gn);font-weight:600">${buffer>0?'+'+buffer+'d':'0d'}</td>`;
+      h+=`<td>${t.items.length}</td><td>${t.totalPlt}</td></tr>`;
+    }
+    h+='</tbody></table></div></div></details>';
+  }
+
+  h+='</div>';
   el.innerHTML=h;
 }
-
-// ── Simulator action buttons ──
-function _simRunAndRender(){
-  window._simResult=null;// force re-run
-  LP_render();
-}
-function _simAutoOptimize(){
-  // Temporarily build optimizer inline
-  const S=window._simCfg;
-  const arrivals=LP_STATE.arrivals.filter(a=>a.qty>0);
-  const nom=LP_STATE.nomenclature||{};
-  const demand=(LP_STATE.materialPlan||[]).filter(d=>{const u=(d.destination||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')});
-  if(!arrivals.length||!demand.length){window._simOptResult={ta:S.ta,mt:S.mt,md:S.md,pct:0,trucks:0,onTime:0,late:0};LP_render();return}
-  const _wdBack2=(ds,n)=>{const d=new Date(ds+'T12:00:00');let r=n;while(r>0){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)r--}return d.toISOString().slice(0,10)};
-
-  const LP_FED={TOR:{bi:LM_DEFAULT_BI['Toronto Stadium']||'2026-04-01'},VAN:{bi:LM_DEFAULT_BI['Vancouver Stadium']||'2026-05-14'},GDL:{bi:LM_DEFAULT_BI['Guadalajara Stadium']||'2026-04-21'},CDMX:{bi:LM_DEFAULT_BI['Mexico City Stadium']||'2026-05-12'},MTY:{bi:LM_DEFAULT_BI['Monterrey Stadium']||'2026-05-15'},NY:{bi:LM_DEFAULT_BI['New York / New Jersey Stadium']||'2026-04-27'},KC:{bi:LM_DEFAULT_BI['Kansas City Stadium']||'2026-04-24'},HOU:{bi:LM_DEFAULT_BI['Houston Stadium']||'2026-05-14'}};
-
-  const checkOnTime=(ta,mt,md)=>{
-    const simArr=arrivals.map(a=>({sku:a.sku,name:a.name,arrivalDate:a.arrivalDate,readyDate:LP_nextWorkday(LP_addDays(a.arrivalDate,ta)),qty:a.qty,availPallets:a.availPallets,container:a.container}));
-    const simDemand=demand.map(d=>({...d,sourceIds:d.sourceIds?d.sourceIds.map(s=>({...s})):undefined}));
-    const plan=LP_buildLoadPlan(simDemand,simArr,{maxPallets:S.mp,maxTrucks:mt,maxDests:md,ricStartDate:S.ric,nomenclature:nom});
-    const byDest={};
-    for(const r of plan){if(!byDest[r.destination])byDest[r.destination]='';if(r.date>byDest[r.destination])byDest[r.destination]=r.date}
-    let ok=0,bad=0;
-    for(const[abbr,cfg]of Object.entries(LP_FED)){
-      const transit=LP_transitDays[abbr]||LP_TRANSIT_DEFAULTS[abbr]||0;
-      const deadline=_wdBack2(cfg.bi,transit);
-      const lpDest=Object.keys(byDest).find(d=>{const u=d.toUpperCase();return u.includes(abbr)||(CITY_ABBR[abbr]&&u.includes(CITY_ABBR[abbr].toUpperCase()))});
-      if(!lpDest){ok++;continue}// no demand = on time
-      if(byDest[lpDest]<=deadline)ok++;else bad++;
-    }
-    return{ok,bad,pct:ok+bad>0?Math.round(ok/(ok+bad)*100):100,trucks:new Set(plan.map(r=>r.truckId)).size};
-  };
-
-  let best=null;
-  for(const ta of[3,4,5,6,7]){
-    for(const mt of[2,3,4,5,6]){
-      for(const md of[1,2,3]){
-        const r=checkOnTime(ta,mt,md);
-        const score=r.pct*1000-r.trucks-ta;
-        if(!best||score>best.score||(score===best.score&&r.trucks<best.trucks))
-          best={ta,mt,md,pct:r.pct,trucks:r.trucks,onTime:r.ok,late:r.bad,score};
-      }
-    }
-  }
-  window._simOptResult=best;
-  LP_render();
+function LP_filterLate(){
+  const q=(document.getElementById('lpLateSearch')?.value||'').toLowerCase();
+  document.querySelectorAll('.lp-late-row').forEach(r=>{
+    r.style.display=(!q||r.dataset.search?.includes(q))?'':'none';
+  });
 }
 
 function LP_exportSingleTruck(truckId){
