@@ -5288,11 +5288,16 @@ if(Object.keys(LM_demandAdj).length>0){
 }
 // Kit allocation map: subtract from individual items
 const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
+// STP delivery filter
+const _stpVBv=LM_STP_DELIVERIES.length>0?LM_stpVenueSet():new Set();
 for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(r["Venue cluster"])clMap[v]=r["Venue cluster"];
   const vc=String(r["Venue code"]||"").trim().toUpperCase();
   if(vc&&!vcMap[v])vcMap[v]=vc;
   if(!vtMapLocal[v]){const vt=LM_VENUE_TYPE_MAP[v]||String(r["Venue type"]||"").trim();vtMapLocal[v]=vt}
+  // Skip STP items at venues with STP delivery (they go to STP truck)
+  const _bvSku=r["Nomenclature"]||"?";
+  if(_stpVBv.has(v)&&NOM[_bvSku]&&isStp(_bvSku))continue;
   let _rawQ=parseInt(r["Required"])||0;if(_rawQ<=0)continue;
   // Apply demand adjustment
   const _adjK=v+'|'+(r["Nomenclature"]||"?");
@@ -5991,12 +5996,17 @@ function LM_injectKits(){
   for(const kit of LM_KITS){
     const totalQty=kit.items.reduce((s,i)=>s+i.qty,0);
     if(totalQty<=0)continue;
-    // Compute sum of component pallets
+    // Resolve venue type + country for effective pallet calc
+    const refRow=RW.find(r=>r.Venue===kit.venue&&!r._kit&&!r._manual);
+    const _kitVt=LM_vtMap[kit.venue]||LM_VENUE_TYPE_MAP?.[kit.venue]||String(refRow?.['Venue type']||'').trim();
+    const _kitCountry=LM_venueCountry(refRow?.['Venue cluster']||'', kit.venue);
+    // Compute sum of component pallets using effective pallet dims (asm/dis aware)
     let sumPlt=0,earliestBI=null;const srcs=new Set();
     for(const item of kit.items){
       const n=NOM[item.sku];
       if(n){
-        if(n.pq>0&&n.ps>0)sumPlt+=(item.qty/n.pq)*n.ps;
+        const _eff=LM_getEffPallet(item.sku,_kitVt,_kitCountry);
+        if(_eff.pq>0&&_eff.ps>0)sumPlt+=(item.qty/_eff.pq)*_eff.ps;
         srcs.add(n.src||'');
       }
       // Get earliest BI from venue demand
@@ -6012,7 +6022,6 @@ function LM_injectKits(){
       pqA:0,psA:0,_kitNom:true,_kitId:kit.id,_kitSumPlt:sumPlt
     };
     // Add RW row for kit
-    const refRow=RW.find(r=>r.Venue===kit.venue&&!r._kit&&!r._manual);
     RW.push({
       Venue:kit.venue,Nomenclature:kit.sku,Required:totalQty,
       'Estimated bump-in date':earliestBI?dk(earliestBI):'',
@@ -6053,7 +6062,7 @@ function LM_kitArrivedOnTime(sku,lpAbbrs,dispDate){
 function LM_deleteKit(id){
   if(ROLE==='viewer')return;
   LM_KITS=LM_KITS.filter(k=>k.id!==id);
-  LM_saveKits();LM_injectKits();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
 function LM_showCreateKit(prefillVenue){
@@ -6161,7 +6170,7 @@ function _kitCreate(){
   const kit={id:'KIT-'+(_kitNextId++),sku,name,venue,items,pq:pqOvr||null,ps:psOvr||null};
   LM_KITS.push(kit);
   LM_saveKits();
-  LM_injectKits();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
   document.querySelector('.mo')?.remove();
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
