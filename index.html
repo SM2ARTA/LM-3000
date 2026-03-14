@@ -638,7 +638,7 @@ function UNDO_restore(){
     if(snap.lm_clusterTA!==undefined)LM_clusterTurnaround=snap.lm_clusterTA;
     _undoLastSnap=_undoSnap();
     // Rebuild LM if data present
-    if(Object.keys(NOM).length&&RW.length){LM_injectManualDemand();LM_applyNomOverrides();bV();numberAll()}
+    if(Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();numberAll()}
     // Save restored state
     LP_saveToSupabase();
     saveSharedData();
@@ -2738,7 +2738,7 @@ function V26_render(){
   const fDemandSkus=new Set();
   // LM material plan (RW)
   if(curFilter!=='lp'){
-    for(const r of RW){const sku=r["Nomenclature"];if(!sku||!NOM[sku])continue;if(_isExclSrc(sku))continue;const v=r["Venue"];if(!v||!_isVenueMatch(v))continue;fDemandSkus.add(sku)}
+    for(const r of RW){const sku=r["Nomenclature"];if(!sku||!NOM[sku])continue;if(NOM[sku]._kitNom)continue;if(_isExclSrc(sku))continue;const v=r["Venue"];if(!v||!_isVenueMatch(v))continue;fDemandSkus.add(sku)}
   }
   // LP material plan
   if(curFilter==='all'||curFilter==='lp'){
@@ -3505,6 +3505,13 @@ function masterBackupExport(){
     XLSX.utils.book_append_sheet(wb,ws,'LM Manual Demand');
   }
 
+  // 19. LM Kits
+  if(LM_KITS.length>0){
+    const rows=LM_KITS.map(k=>({ID:k.id,SKU:k.sku,Name:k.name,Venue:k.venue,Items:JSON.stringify(k.items),'Pallet Qty':k.pq||'','Pallet Spc':k.ps||''}));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'LM Kits');
+  }
+
   XLSX.writeFile(wb,`ML3K_Backup_${ts}.xlsx`);
 }
 
@@ -3682,12 +3689,23 @@ async function masterBackupRestore(file){
       log.push('Manual demand: '+LM_MANUAL_DEMAND.length+' items');
     }
 
+    // ── 19. LM Kits → LM_KITS ──
+    const kitRows=getSheet('LM Kits');
+    if(kitRows){
+      LM_KITS=kitRows.map(r=>{
+        let items=[];try{items=JSON.parse(r.Items||'[]')}catch(e){}
+        return{id:r.ID||'',sku:r.SKU||'',name:r.Name||'',venue:r.Venue||'',items,pq:r['Pallet Qty']||null,ps:r['Pallet Spc']||null};
+      });
+      _kitNextId=LM_KITS.reduce((mx,k)=>Math.max(mx,(parseInt(String(k.id).replace(/\D/g,''))||0)+1),1);
+      log.push('Kits: '+LM_KITS.length);
+    }
+
     // ── Rebuild everything ──
     console.log('[ML3K] Backup restore:',log.join(' | '));
 
     // Rebuild LM if data present
     if(Object.keys(NOM).length&&RW.length){
-      LM_injectManualDemand();LM_applyNomOverrides();bV();
+      LM_injectAll();LM_applyNomOverrides();bV();
       if(VN.length){numberAll();sel='';cv='dashboard'}
     }
 
@@ -3703,6 +3721,7 @@ async function masterBackupRestore(file){
       await LM_savePalletCfg();
       await LM_saveClusterTA();
       if(LM_MANUAL_DEMAND.length)await LM_saveManualDemand();
+      if(LM_KITS.length)await LM_saveKits();
       if(STOCK_SKUS.size>0){
         await SB.from('shared_state').upsert({id:'fm-stock',value:JSON.stringify({skus:[...STOCK_SKUS],name:STOCK_REPORT_NAME}),updated_at:new Date().toISOString()});
       }
@@ -3860,6 +3879,7 @@ function enterApp(){
     await Promise.all([
       stockReportLoad().catch(()=>{}),
       LM_loadManualDemand().catch(()=>{}),
+      LM_loadKits().catch(()=>{}),
       LM_loadDateOverrides().catch(()=>{}),
       MI_load().catch(()=>{}),
       LM_loadPalletCfg().catch(()=>{}),
@@ -3869,7 +3889,7 @@ function enterApp(){
       LM_loadClusterTA().catch(()=>{})
     ]);
     // Now build venues and trucks AFTER all config is loaded
-    if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectManualDemand();LM_applyNomOverrides();bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
+    if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
     // Load LP data
     try{lpOk=await LP_loadFromSupabase()}catch(e){}
     
@@ -3971,6 +3991,7 @@ async function loadSharedData(){
     await Promise.all([
       stockReportLoad().catch(()=>{}),
       LM_loadManualDemand().catch(()=>{}),
+      LM_loadKits().catch(()=>{}),
       LM_loadDateOverrides().catch(()=>{}),
       MI_load().catch(()=>{}),
       LM_loadPalletCfg().catch(()=>{}),
@@ -3981,7 +4002,7 @@ async function loadSharedData(){
     ]);
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
-    LM_injectManualDemand();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
+    LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
     numberAll();
     sel="";cv="dashboard";
     document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
@@ -4337,7 +4358,7 @@ function renderTruckCard(t,opts){
     <div class="tto"><div class="tin"><span style="font-size:18px">${isLmDisp?'🔒':(isExcl?'🚫':'🚛')}</span><div>
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
       <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty</div>
-      ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const _lpA=opts.lpFedAbbrs;const _dd=t.dd||'';if(_lpA&&_lpA.length&&_dd&&Object.keys(LP_ARRIVAL_MAP).length){const onTime=nonStp.filter(it=>LM_skuArrivedOnTime(it.sku,_lpA,_dd)).length;const late=nonStp.length-onTime;const pct=Math.round(onTime/nonStp.length*100);const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">🚚 ${pct}% arrived (${onTime}/${nonStp.length})</span>${late>0?`<span class="bg bgs" style="background:var(--rs);color:var(--rd);margin-left:3px">⚠ ${late} late</span>`:''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
+      ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const _lpA=opts.lpFedAbbrs;const _dd=t.dd||'';if(_lpA&&_lpA.length&&_dd&&Object.keys(LP_ARRIVAL_MAP).length){const onTime=nonStp.filter(it=>LM_kitArrivedOnTime(it.sku,_lpA,_dd)).length;const late=nonStp.length-onTime;const pct=Math.round(onTime/nonStp.length*100);const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">🚚 ${pct}% arrived (${onTime}/${nonStp.length})</span>${late>0?`<span class="bg bgs" style="background:var(--rs);color:var(--rd);margin-left:3px">⚠ ${late} late</span>`:''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>LM_kitInStock(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}${isExcl?'':rateInputHtml(t.id,t.destLabel||t.dest||opts.displayName||'',tCap,true,'rMain()')}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">🔒 Locked</span></div>':''}
@@ -4509,6 +4530,9 @@ function build(venue,venueList,skipNoBi){
     }
   }
 
+  // Kit allocation map
+  const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
+
   // Aggregate by (bumpIn, sku) across all venues in list
   const agg={};
   const noBiAgg={};// SKUs with no bump-in date
@@ -4520,6 +4544,8 @@ function build(venue,venueList,skipNoBi){
     // Apply demand adjustment scaling
     const _adjK=r["Venue"]+'|'+s;
     if(_adjScale[_adjK]!==undefined)_raw=Math.round(_raw*_adjScale[_adjK]);
+    // Subtract kit-allocated qty (not from kit rows themselves)
+    if(!r._kit&&_kitAl[_adjK])_raw=Math.max(0,_raw-_kitAl[_adjK]);
     if(_raw<=0)continue;
     const nm=NOM[s];
     const ppu=nm?.ppu||1;const q=Math.ceil(_raw/ppu);
@@ -5227,6 +5253,8 @@ if(Object.keys(LM_demandAdj).length>0){
   for(const r of RW){const v=r["Venue"];if(!v)continue;const raw=parseInt(r["Required"])||0;if(raw<=0)continue;const s=r["Nomenclature"]||"?";if(!NOM[s])continue;const k=v+'|'+s;origTotals[k]=(origTotals[k]||0)+raw}
   for(const k in LM_demandAdj){if(origTotals[k]&&origTotals[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/origTotals[k]}
 }
+// Kit allocation map: subtract from individual items
+const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
 for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(r["Venue cluster"])clMap[v]=r["Venue cluster"];
   const vc=String(r["Venue code"]||"").trim().toUpperCase();
@@ -5236,6 +5264,8 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   // Apply demand adjustment
   const _adjK=v+'|'+(r["Nomenclature"]||"?");
   if(_adjScale[_adjK]!==undefined)_rawQ=Math.round(_rawQ*_adjScale[_adjK]);
+  // Subtract kit-allocated qty (not from kit rows themselves)
+  if(!r._kit&&_kitAl[_adjK])_rawQ=Math.max(0,_rawQ-_kitAl[_adjK]);
   if(_rawQ<=0)continue;
   const bi=pD(r["Estimated bump-in date"]);
   if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
@@ -5246,7 +5276,7 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   const vt=vtMapLocal[v]||'';
   const _country=LM_venueCountry(clMap[v], v);
   // Track SKU per venue type + country for pallet config filtering
-  if(vt&&(nm.pq>0||nm.pqA>0)){
+  if(vt&&(nm.pq>0||nm.pqA>0)&&!nm._kitNom){
     if(!_vtSkuMap[vt])_vtSkuMap[vt]={};
     if(!_vtSkuMap[vt][_country])_vtSkuMap[vt][_country]=new Set();
     _vtSkuMap[vt][_country].add(s);
@@ -5502,7 +5532,7 @@ function _renderPalletCfg(){
   const isV=ROLE==='viewer';
   const cfg=LM_palletCfg[_pcVt]||{mode:'asm',overrides:new Set()};
   // Collect all SKUs that have pallet data in NOM
-  const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0)).sort((a,b)=>a[0]<b[0]?-1:1);
+  const allSkus=Object.entries(NOM).filter(([k,n])=>(n.pq>0||n.pqA>0)&&!n._kitNom).sort((a,b)=>a[0]<b[0]?-1:1);
   // Get unique sources
   const sources=[...new Set(allSkus.map(([k,n])=>n.src||'').filter(Boolean))].sort();
 
@@ -5902,6 +5932,225 @@ async function LM_loadManualDemand(){
   if(!SB)return;
   try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-lm-manual-demand').single();if(data)LM_MANUAL_DEMAND=JSON.parse(data.value)||[]}catch(e){}
 }
+// ── LM Kits ──────────────────────────────────────────────────
+let LM_KITS=[];// [{id,sku,name,venue,items:[{sku,qty}],pq:null,ps:null}]
+let _kitNextId=1;
+function LM_kitAllocMap(){
+  const m={};// "venue|sku" → total qty allocated to kits
+  for(const kit of LM_KITS){for(const item of kit.items){const k=kit.venue+'|'+item.sku;m[k]=(m[k]||0)+item.qty}}
+  return m;
+}
+function LM_injectKits(){
+  // Remove old kit rows + NOM entries (idempotent)
+  RW=RW.filter(r=>!r._kit);
+  for(const sku in NOM){if(NOM[sku]._kitNom)delete NOM[sku]}
+  for(const kit of LM_KITS){
+    const totalQty=kit.items.reduce((s,i)=>s+i.qty,0);
+    if(totalQty<=0)continue;
+    // Compute sum of component pallets
+    let sumPlt=0,earliestBI=null;const srcs=new Set();
+    for(const item of kit.items){
+      const n=NOM[item.sku];
+      if(n){
+        if(n.pq>0&&n.ps>0)sumPlt+=(item.qty/n.pq)*n.ps;
+        srcs.add(n.src||'');
+      }
+      // Get earliest BI from venue demand
+      for(const r of RW){if(r.Venue===kit.venue&&r.Nomenclature===item.sku&&!r._kit){const bi=pD(r['Estimated bump-in date']);if(bi&&(!earliestBI||bi<earliestBI))earliestBI=bi;break}}
+    }
+    const hasPltOvr=kit.pq>0&&kit.ps>0;
+    const _kitSrc=srcs.size===1?[...srcs][0]:'KIT';
+    const _safeSrc=(_kitSrc.toUpperCase().startsWith('CT'))?'KIT':_kitSrc;
+    NOM[kit.sku]={
+      nm:kit.name,src:_safeSrc,uom:'kit',ppu:1,
+      pq:hasPltOvr?kit.pq:Math.max(totalQty,1),
+      ps:hasPltOvr?kit.ps:(sumPlt>0?Math.round(sumPlt*1000)/1000:0),
+      pqA:0,psA:0,_kitNom:true,_kitId:kit.id,_kitSumPlt:sumPlt
+    };
+    // Add RW row for kit
+    const refRow=RW.find(r=>r.Venue===kit.venue&&!r._kit&&!r._manual);
+    RW.push({
+      Venue:kit.venue,Nomenclature:kit.sku,Required:totalQty,
+      'Estimated bump-in date':earliestBI?dk(earliestBI):'',
+      'Venue cluster':refRow?.['Venue cluster']||'','Venue code':refRow?.['Venue code']||'',
+      'Venue type':refRow?.['Venue type']||'',_kit:true
+    });
+  }
+}
+function LM_injectAll(){LM_injectManualDemand();LM_injectKits()}
+async function LM_saveKits(){
+  if(ROLE==='viewer'||!SB)return;
+  UNDO_capture();
+  try{await SB.from('shared_state').upsert({id:'fm-lm-kits',value:JSON.stringify(LM_KITS),updated_at:new Date().toISOString()})}catch(e){}
+}
+async function LM_loadKits(){
+  if(!SB)return;
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-lm-kits').single();if(data){LM_KITS=JSON.parse(data.value)||[];_kitNextId=LM_KITS.reduce((mx,k)=>Math.max(mx,(parseInt(String(k.id).replace(/\D/g,''))||0)+1),1)}}catch(e){}
+}
+function LM_getKitById(id){return LM_KITS.find(k=>k.id===id)}
+function LM_getKitsForVenue(venue){return LM_KITS.filter(k=>k.venue===venue)}
+function LM_getKitForSku(sku){return LM_KITS.find(k=>k.sku===sku)}
+// Kit-aware stock check: for kit SKUs, check ALL components
+function LM_kitInStock(sku){
+  const n=NOM[sku];
+  if(!n?._kitNom)return STOCK_SKUS.has(sku);
+  const kit=LM_getKitById(n._kitId);
+  if(!kit||!kit.items.length)return false;
+  return kit.items.every(i=>STOCK_SKUS.has(i.sku));
+}
+// Kit-aware LP arrival check: for kit SKUs, check ALL components arrived on time
+function LM_kitArrivedOnTime(sku,lpAbbrs,dispDate){
+  const n=NOM[sku];
+  if(!n?._kitNom)return LM_skuArrivedOnTime(sku,lpAbbrs,dispDate);
+  const kit=LM_getKitById(n._kitId);
+  if(!kit||!kit.items.length)return false;
+  return kit.items.every(i=>LM_skuArrivedOnTime(i.sku,lpAbbrs,dispDate));
+}
+function LM_deleteKit(id){
+  if(ROLE==='viewer')return;
+  LM_KITS=LM_KITS.filter(k=>k.id!==id);
+  LM_saveKits();LM_injectKits();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
+}
+function LM_showCreateKit(prefillVenue){
+  if(ROLE==='viewer')return;
+  const vSet=new Set(VN.map(v=>v.name));
+  const vList=[...vSet].sort();
+  const mr=document.getElementById('mr');
+  mr.innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:600px">
+      <div class="mdh" style="background:#E8F5E9;border-bottom-color:#43A047">
+        <h3 style="color:#43A047">📦 Create Kit</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
+      </div>
+      <div class="mdb" style="padding:16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+          <div style="grid-column:1/-1"><label style="font-size:10px;font-weight:700;color:var(--ts)">Venue *</label>
+            <select id="kit_venue" onchange="_kitLoadItems()" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+              <option value="">Select venue...</option>
+              ${vList.map(v=>`<option value="${v}"${v===prefillVenue?' selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Kit SKU *</label>
+            <input id="kit_sku" placeholder="e.g. KIT-STA-DAL-001" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+          </div>
+          <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Kit Name *</label>
+            <input id="kit_name" placeholder="e.g. Dallas Stationery Kit" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd)">
+          </div>
+        </div>
+        <details style="margin-bottom:10px">
+          <summary style="font-size:10px;font-weight:700;color:var(--ts);cursor:pointer">Pallet Override (optional — defaults to sum of components)</summary>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+            <div><label style="font-size:9px;color:var(--tt)">Pallet Qty (items/pallet)</label><input id="kit_pq" type="number" min="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+            <div><label style="font-size:9px;color:var(--tt)">Pallet Spaces</label><input id="kit_ps" type="number" min="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+          </div>
+        </details>
+        <div style="font-size:10px;font-weight:700;color:var(--ts);margin-bottom:6px">Select Items & Quantities</div>
+        <div style="margin-bottom:8px"><input type="text" class="lp-search" placeholder="Filter items..." id="kitFilterInput" oninput="_kitFilterItems()" style="font-size:11px;padding:5px 8px"></div>
+        <div id="kit_items" style="max-height:300px;overflow-y:auto;border:1px solid var(--bl);border-radius:8px"></div>
+        <div id="kit_summary" style="margin-top:8px;font-size:11px;color:var(--ts)"></div>
+        <div id="kit_err" style="color:var(--rd);font-size:11px;margin-top:6px;display:none"></div>
+        <button onclick="_kitCreate()" style="margin-top:12px;width:100%;padding:10px;border-radius:8px;border:none;background:#43A047;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd)">📦 Create Kit</button>
+      </div>
+    </div>
+  </div>`;
+  if(prefillVenue)setTimeout(_kitLoadItems,50);
+}
+function _kitLoadItems(){
+  const venue=document.getElementById('kit_venue')?.value;
+  const el=document.getElementById('kit_items');if(!el)return;
+  if(!venue){el.innerHTML='<div style="padding:12px;color:var(--tt);text-align:center">Select a venue first</div>';return}
+  // Get all demand items for this venue (including manual, excluding kit rows)
+  const bySkuMap={};
+  for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;bySkuMap[s]=(bySkuMap[s]||0)+(parseInt(r.Required)||0)}
+  // Subtract already-allocated kit amounts
+  const alloc=LM_kitAllocMap();
+  const skuList=Object.entries(bySkuMap).map(([sku,totalQty])=>{
+    const allocd=alloc[venue+'|'+sku]||0;
+    const avail=Math.max(0,totalQty-allocd);
+    return{sku,name:NOM[sku]?.nm||sku,src:NOM[sku]?.src||'',totalQty,allocd,avail};
+  }).filter(s=>s.avail>0).sort((a,b)=>a.sku.localeCompare(b.sku));
+  if(!skuList.length){el.innerHTML='<div style="padding:12px;color:var(--tt);text-align:center">No available items (all allocated to kits)</div>';return}
+  el.innerHTML=`<table class="dtb" style="font-size:11px"><thead><tr><th style="width:30px">✓</th><th>SKU</th><th>Item</th><th>Src</th><th>Avail</th><th style="width:70px">Kit Qty</th></tr></thead><tbody>`+
+    skuList.map(s=>`<tr class="kit-item-row" data-sku="${s.sku}" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}">
+      <td><input type="checkbox" class="kit-chk" data-sku="${s.sku}" onchange="_kitUpdateSummary()"></td>
+      <td class="mono">${s.sku}</td><td class="tcl">${s.name}</td>
+      <td style="font-size:9px;color:var(--tt)">${s.src}</td>
+      <td class="mono">${s.avail.toLocaleString()}${s.allocd>0?'<span style="color:var(--or);font-size:8px"> ('+s.allocd+' in kits)</span>':''}</td>
+      <td><input type="number" class="kit-qty" data-sku="${s.sku}" value="${s.avail}" min="1" max="${s.avail}" style="width:60px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)" onchange="_kitUpdateSummary()"></td>
+    </tr>`).join('')+`</tbody></table>`;
+  _kitUpdateSummary();
+}
+function _kitFilterItems(){
+  const q=(document.getElementById('kitFilterInput')?.value||'').toLowerCase().trim();
+  document.querySelectorAll('.kit-item-row').forEach(r=>{r.style.display=(!q||r.dataset.search.includes(q))?'':'none'});
+}
+function _kitUpdateSummary(){
+  const checks=document.querySelectorAll('.kit-chk:checked');
+  let totalPcs=0,totalPlt=0,count=0;
+  checks.forEach(chk=>{
+    const sku=chk.dataset.sku;const qtyInput=document.querySelector(`.kit-qty[data-sku="${sku}"]`);
+    const qty=parseInt(qtyInput?.value)||0;const n=NOM[sku];
+    totalPcs+=qty;
+    if(n&&n.pq>0&&n.ps>0)totalPlt+=(qty/n.pq)*n.ps;
+    count++;
+  });
+  const el=document.getElementById('kit_summary');
+  if(el)el.innerHTML=count>0?`<strong>${count}</strong> items selected · <strong>${totalPcs.toLocaleString()}</strong> pcs · <strong>${totalPlt.toFixed(1)}</strong> plt`:'No items selected';
+}
+function _kitCreate(){
+  const venue=document.getElementById('kit_venue')?.value;
+  const sku=document.getElementById('kit_sku')?.value.trim();
+  const name=document.getElementById('kit_name')?.value.trim();
+  const errEl=document.getElementById('kit_err');
+  if(!venue||!sku||!name){errEl.textContent='Venue, SKU, and Name are required.';errEl.style.display='block';return}
+  if(NOM[sku]&&!NOM[sku]._kitNom){errEl.textContent='SKU "'+sku+'" already exists in nomenclature.';errEl.style.display='block';return}
+  if(LM_KITS.find(k=>k.sku===sku)){errEl.textContent='Kit SKU "'+sku+'" already exists.';errEl.style.display='block';return}
+  const items=[];
+  document.querySelectorAll('.kit-chk:checked').forEach(chk=>{
+    const s=chk.dataset.sku;const qtyInput=document.querySelector(`.kit-qty[data-sku="${s}"]`);
+    const qty=parseInt(qtyInput?.value)||0;if(qty>0)items.push({sku:s,qty});
+  });
+  if(!items.length){errEl.textContent='Select at least one item.';errEl.style.display='block';return}
+  const pqOvr=parseInt(document.getElementById('kit_pq')?.value)||0;
+  const psOvr=parseInt(document.getElementById('kit_ps')?.value)||0;
+  const kit={id:'KIT-'+(_kitNextId++),sku,name,venue,items,pq:pqOvr||null,ps:psOvr||null};
+  LM_KITS.push(kit);
+  LM_saveKits();
+  LM_injectKits();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  document.querySelector('.mo')?.remove();
+  setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
+}
+function LM_showKitDetail(kitId){
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  let sumPlt=0;
+  const rows=kit.items.map(item=>{
+    const n=NOM[item.sku];const plt=(n&&n.pq>0&&n.ps>0)?(item.qty/n.pq)*n.ps:0;sumPlt+=plt;
+    return`<tr><td class="mono">${item.sku}</td><td class="tcl">${n?.nm||item.sku}</td><td style="font-size:9px;color:var(--tt)">${n?.src||''}</td><td class="mono">${item.qty.toLocaleString()}</td><td class="mono">${plt.toFixed(1)}</td></tr>`;
+  }).join('');
+  const hasPltOvr=kit.pq>0&&kit.ps>0;
+  const effPlt=hasPltOvr?((kit.items.reduce((s,i)=>s+i.qty,0)/kit.pq)*kit.ps):sumPlt;
+  document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:500px">
+      <div class="mdh" style="background:#E8F5E9;border-bottom-color:#43A047">
+        <h3 style="color:#43A047">📦 ${kit.name}</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
+      </div>
+      <div class="mdb" style="padding:16px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="bg bg-bl">${kit.sku}</span>
+          <span class="bg bg-gy">${kit.venue}</span>
+          <span class="bg bg-gn">${kit.items.length} items · ${kit.items.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs</span>
+          <span class="bg ${hasPltOvr?'bg-pu':'bg-gy'}">${effPlt.toFixed(1)} plt${hasPltOvr?' (override)':''}</span>
+        </div>
+        <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Src</th><th>Qty</th><th>Plt</th></tr></thead><tbody>${rows}</tbody></table>
+        ${ROLE!=='viewer'?`<div style="margin-top:12px;display:flex;gap:8px">
+          <button onclick="LM_deleteKit('${kit.id}');this.closest('.mo').remove()" style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--rd);background:var(--rs);color:var(--rd);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--fd)">🗑 Delete Kit</button>
+        </div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
 function LM_showAddDemand(prefillVenue){
   if(ROLE==='viewer')return;
   const vSet=new Set(VN.map(v=>v.name));RW.forEach(r=>{if(r.Venue)vSet.add(r.Venue)});
@@ -6101,7 +6350,7 @@ function LM_rebuildAfterManualDemand(){
   // Never touch original file-loaded nomenclature entries
   const manualSkus=new Set(LM_MANUAL_DEMAND.map(m=>m.sku).filter(Boolean));
   for(const sku in NOM){if(NOM[sku]._manualNom&&!manualSkus.has(sku))delete NOM[sku]}
-  LM_injectManualDemand();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
 // ── LM Nomenclature Pallet Overrides (global, across all venue types) ──
@@ -6184,7 +6433,7 @@ ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10
   <span style="color:var(--bd)">|</span>
   <input type="checkbox" ${LM_hideStaples?'checked':''} onchange="LM_hideStaples=this.checked;showM(${i})"><span>Hide Staples</span>
 </div>`:''}
-${(()=>{const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(_mIsLpFed&&t.dd){const onTime=nonStp.filter(it=>LM_skuArrivedOnTime(it.sku,_mLpAbbrs,t.dd)).length;const late=nonStp.length-onTime;const pct=nonStp.length>0?Math.round(onTime/nonStp.length*100):0;const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">🚚 LP Arrived: ${pct}% (${onTime}/${nonStp.length} SKUs excl. STP/CT)${late>0?' · <span style="color:var(--rd)">⚠ '+late+' late</span>':''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>STOCK_SKUS.has(it.sku)).length:0;const pct=nonStp.length>0?Math.round(inSt/nonStp.length*100):0;const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">📦 In Stock: ${STOCK_SKUS.size===0?'— (no report)':pct+'% ('+inSt+'/'+nonStp.length+' SKUs excl. STP/CT)'}</div>`})()}
+${(()=>{const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(_mIsLpFed&&t.dd){const onTime=nonStp.filter(it=>LM_kitArrivedOnTime(it.sku,_mLpAbbrs,t.dd)).length;const late=nonStp.length-onTime;const pct=nonStp.length>0?Math.round(onTime/nonStp.length*100):0;const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">🚚 LP Arrived: ${pct}% (${onTime}/${nonStp.length} SKUs excl. STP/CT)${late>0?' · <span style="color:var(--rd)">⚠ '+late+' late</span>':''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>LM_kitInStock(it.sku)).length:0;const pct=nonStp.length>0?Math.round(inSt/nonStp.length*100):0;const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">📦 In Stock: ${STOCK_SKUS.size===0?'— (no report)':pct+'% ('+inSt+'/'+nonStp.length+' SKUs excl. STP/CT)'}</div>`})()}
 <table class="dtb" style="margin-top:14px"><thead><tr>
 <th colspan="4" style="border-right:2px solid var(--bd)"></th>
 <th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--ts)">${isClusterTruck?'CLUSTER TOTAL':'VENUE TOTAL'}</th>
@@ -6197,9 +6446,9 @@ t.items.forEach(it=>{
 const lmSrc=(NOM[it.sku]?.src)||'';
 if(LM_hideStaples&&(lmSrc.toUpperCase().startsWith('STP')))return;
 const _isStp=lmSrc.toUpperCase().startsWith('STP')||lmSrc.toUpperCase().startsWith('CT');
-const _skuOnTime=_mIsLpFed&&!_isStp&&t.dd?LM_skuArrivedOnTime(it.sku,_mLpAbbrs,t.dd):null;
+const _skuOnTime=_mIsLpFed&&!_isStp&&t.dd?LM_kitArrivedOnTime(it.sku,_mLpAbbrs,t.dd):null;
 const _skuLpArr=_mIsLpFed&&!_isStp?LM_getSkuLPArrival(it.sku,_mLpAbbrs):null;
-const lmInStock=_skuOnTime!==null?_skuOnTime:STOCK_SKUS.has(it.sku);
+const lmInStock=_skuOnTime!==null?_skuOnTime:LM_kitInStock(it.sku);
 const _dotTitle=_skuOnTime!==null?(_skuOnTime?'LP arrives '+((_skuLpArr)||'on time'):'Late — LP arrives '+(_skuLpArr||'after dispatch')):(lmInStock?'In stock':'Not in stock');
 const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmInStock?'var(--gn)':'var(--rd)'}" title="${_dotTitle}"></span>`;
 const totalForSku=it.noPallet?LP.all.filter(x=>x.sku===it.sku).reduce((s,x)=>s+x.qty,0):LP.all.filter(x=>x.sku===it.sku&&x.ok).reduce((s,x)=>s+x.qty,0);
@@ -6227,7 +6476,8 @@ if(it.noPallet){
   reqQtyHtml=`<span style="color:var(--tt);font-size:10px">${it.loadQty.toLocaleString()} / ${denom.toLocaleString()}</span>`;
   reqPltHtml=`<span style="color:var(--tt);font-size:10px">${lPltD} / ${denomPltD}</span>`;
 }
-h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}</td><td class="mono">${it.sku}</td><td class="tcl" style="color:var(--ts)">${it.nm}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
+const _isKit=!!NOM[it.sku]?._kitNom;
+h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}</td><td class="mono">${it.sku}${_isKit?' <span onclick="event.stopPropagation();LM_showKitDetail(\''+NOM[it.sku]._kitId+'\')" style="cursor:pointer;font-size:10px" title="View kit contents">📦</span>':''}</td><td class="tcl" style="color:var(--ts)">${it.nm}${_isKit?' <span style="font-size:8px;color:#43A047;font-weight:700">KIT</span>':''}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
 <td class="fw6">${totalForSku.toLocaleString()}</td><td class="cgr" style="border-right:2px solid var(--bl)" title="${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'Pallet qty '+(it.pq*_ppu)+' ÷ PPU '+_ppu+' = '+it.pq:'Pallet qty per UOM';})()}">${it.pq||'—'}${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'<span style="font-size:8px;color:var(--tt)"> ×'+_ppu+'</span>':'';})()}</td>
 ${isClusterTruck?'':`<td style="border-right:none">${reqQtyHtml}</td><td style="border-right:2px solid var(--bl)">${reqPltHtml}</td>`}
 <td class="fw7 cgn">${it.loadQty.toLocaleString()}</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.noPallet?'<span style="color:var(--or);font-size:10px">—</span>':(Number.isInteger(it.loadPlt)?it.loadPlt:it.loadPlt.toFixed(1))}</td>
@@ -6664,27 +6914,48 @@ function LM_renderDemand(el){
       <span class="bg bg-gy">${grandOrigQty.toLocaleString()}${grandAdjQty!==grandOrigQty?' → <b>'+grandAdjQty.toLocaleString()+'</b>':' pcs'}</span>
       ${manualCount>0?`<span class="bg bg-gn">✏${manualCount}</span>`:''}
       ${adjItems>0?`<span class="bg bg-pu">★${adjItems}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_demandAdj={};LM_saveDemandAdj();PLAN_CACHE={};numberAll();rMain()" style="font-size:9px;padding:2px 6px">↻</button>`:''}`:''}
-      ${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button>`:''}
+      ${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button><button class="rbtn" onclick="LM_showCreateKit('${prefillV.replace(/'/g,"\\'")}')" style="background:#E8F5E9;color:#43A047;border-color:#A5D6A7;font-size:10px;padding:4px 10px">📦 Kit</button>`:''}
+      ${LM_KITS.length>0?`<span class="bg" style="background:#E8F5E9;color:#43A047">📦 ${LM_KITS.length} kit${LM_KITS.length>1?'s':''}</span>`:''}
     </div>
   </div>`;
 
   html+=`<input type="text" class="lp-search" placeholder="Search venue, SKU, or item name..." id="lmDemSearch" oninput="LM_filterDemand()" style="margin-bottom:10px">`;
 
+  // Kit allocation map for display
+  const _kitAlMap=LM_kitAllocMap();
+
   // Venue cards
   for(const v of venues){
     const hasAdj=v.skuList.some(s=>s.isAdj);
     const hasManual=v.skuList.some(s=>s.manualIndices.length>0);
+    const venueKits=LM_getKitsForVenue(v.name);
+    const hasKit=venueKits.length>0;
     const vEsc=v.name.replace(/'/g,"\\'");
-    html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
+    html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')+' '+venueKits.map(k=>k.sku+' '+k.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${hasKit?'#43A047':hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="this.parentElement.querySelector('.lm-dem-body').classList.toggle('lm-dem-open')">
         <div style="min-width:0;flex:1">
-          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}</div>
           <div style="font-size:10px;color:var(--tt)">${v.skuList.length} SKUs · ${v.totalOrig.toLocaleString()} pcs${v.totalAdj!==v.totalOrig?' → <strong style="color:var(--pu)">'+v.totalAdj.toLocaleString()+'</strong>':''}</div>
         </div>
         <span style="font-size:10px;color:var(--tt)">▼</span>
       </div>
-      <div class="lm-dem-body" style="display:none;border-top:1px solid var(--bl)">
-        <table class="dtb"><thead><tr>
+      <div class="lm-dem-body" style="display:none;border-top:1px solid var(--bl)">`;
+    // Kit cards for this venue
+    if(venueKits.length>0){
+      html+=`<div style="padding:8px 12px;background:#F1F8E9;border-bottom:1px solid #C5E1A5">`;
+      for(const kit of venueKits){
+        const kPcs=kit.items.reduce((s,i)=>s+i.qty,0);
+        let kPlt=0;kit.items.forEach(i=>{const n=NOM[i.sku];if(n&&n.pq>0&&n.ps>0)kPlt+=(i.qty/n.pq)*n.ps});
+        const effPlt=(kit.pq>0&&kit.ps>0)?((kPcs/kit.pq)*kit.ps):kPlt;
+        html+=`<div onclick="LM_showKitDetail('${kit.id}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#fff;border:1px solid #A5D6A7;border-radius:6px;cursor:pointer;font-size:11px">
+          <span style="font-size:14px">📦</span>
+          <div style="flex:1;min-width:0"><div style="font-weight:700;color:#2E7D32">${kit.name}</div><div style="font-size:9px;color:var(--tt)">${kit.sku} · ${kit.items.length} items · ${kPcs.toLocaleString()} pcs · ${effPlt.toFixed(1)} plt</div></div>
+          ${ROLE!=='viewer'?`<span onclick="event.stopPropagation();LM_deleteKit('${kit.id}')" style="color:var(--rd);cursor:pointer;font-size:13px" title="Delete kit">🗑</span>`:''}
+        </div>`;
+      }
+      html+=`</div>`;
+    }
+    html+=`<table class="dtb"><thead><tr>
           <th>SKU</th><th>Item</th><th>Src</th><th>Orig</th><th>Adj Qty</th><th>Δ</th>${ROLE!=='viewer'?'<th></th>':''}
         </tr></thead><tbody>`;
     for(const s of v.skuList){
@@ -6692,11 +6963,13 @@ function LM_renderDemand(el){
       const deltaStr=delta>0?'+'+delta.toLocaleString():delta<0?delta.toLocaleString():'—';
       const deltaColor=delta>0?'var(--gn)':delta<0?'var(--rd)':'var(--tt)';
       const isMnl=s.manualIndices.length>0;
+      const kitAlQty=_kitAlMap[v.name+'|'+s.sku]||0;
+      const kitPct=kitAlQty>0&&s.origQty>0?Math.round(kitAlQty/s.origQty*100):0;
       html+=`<tr style="${isMnl?'background:var(--gs)':s.isAdj?'background:var(--ps)':''}">
-        <td class="mono">${s.sku}${isMnl?' <span style="color:var(--gn);font-size:8px;font-weight:700">✏</span>':''}</td>
+        <td class="mono">${s.sku}${isMnl?' <span style="color:var(--gn);font-size:8px;font-weight:700">✏</span>':''}${kitAlQty>0?' <span style="color:#43A047;font-size:8px;font-weight:700">📦</span>':''}</td>
         <td class="tcl">${s.name}</td>
         <td style="font-size:10px;color:var(--tt)">${s.src}</td>
-        <td class="mono">${s.origQty.toLocaleString()}</td>
+        <td class="mono">${s.origQty.toLocaleString()}${kitAlQty>0?'<div style="font-size:8px;color:#43A047">-'+kitAlQty+' in kit'+(kitPct>=100?' (all)':'')+'</div>':''}</td>
         <td>${ROLE!=='viewer'?`<input type="number" value="${s.adjQty}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setDemand('${vEsc}','${s.sku}',+this.value,${s.origQty})" style="width:65px;padding:2px 4px;border:1px solid ${s.isAdj?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fd);${s.isAdj?'background:var(--ps);font-weight:700':''}">`:s.adjQty.toLocaleString()}</td>
         <td style="color:${deltaColor};font-weight:${delta!==0?'700':'400'};font-size:10px">${deltaStr}</td>
         ${ROLE!=='viewer'?`<td>${isMnl?s.manualIndices.map(mi=>`<span onclick="event.stopPropagation();LM_removeManualDemand(${mi})" style="color:var(--rd);cursor:pointer;font-size:11px" title="Remove manual item">✕</span>`).join(''):''}${!isMnl?'':''}</td>`:''} 
@@ -7348,6 +7621,7 @@ function exportXL(){
       P.days.forEach(day=>{
         day.trucks.forEach(tr=>{
           tr.items.forEach(it=>{
+            const _nom=NOM[it.sku]||{};
             truckRows.push({
               'Venue/Cluster':label,
               'Truck':tr.id,
@@ -7357,8 +7631,10 @@ function exportXL(){
               'Item':it.nm,
               'Qty':it.loadQty,
               'Pallets':Number.isInteger(it.loadPlt)?it.loadPlt:Math.round(it.loadPlt*100)/100,
-              'Note':it.noPallet?'No pallet data':(it.pulledFrom==='no-bi'?'No bump-in':(it.topUp>0?'Top-up':(it.sched===0?'From pool':'')))
+              'Note':_nom._kitNom?'KIT':(it.noPallet?'No pallet data':(it.pulledFrom==='no-bi'?'No bump-in':(it.topUp>0?'Top-up':(it.sched===0?'From pool':''))))
             });
+            // Expand kit contents
+            if(_nom._kitNom&&_nom._kitId){const kit=LM_getKitById(_nom._kitId);if(kit){kit.items.forEach(ci=>{truckRows.push({'Venue/Cluster':label,'Truck':tr.id,'Dispatch Date':'','Bump-In Date':'','SKU':'  ↳ '+ci.sku,'Item':NOM[ci.sku]?.nm||ci.sku,'Qty':ci.qty,'Pallets':'','Note':'in kit'})})}}
           });
           // Append manual items for this truck
           for(const mi of MI_get(MI_lmKey(tr))){
@@ -7469,15 +7745,29 @@ function exportXL(){
 function exportTruck(truckIdx){
   const t=LP.allT[truckIdx];if(!t)return;
   const dest=selCluster&&CLUSTERS[selCluster]?clDisp(selCluster):clDisp(sel);
-  const rows=t.items.filter(it=>(it.loadQty||0)>0).map(it=>{
+  const rows=t.items.filter(it=>(it.loadQty||0)>0).flatMap(it=>{
     const nom=NOM[it.sku]||{};
-    return{
+    const mainRow={
       'Nomenclature code':it.sku,
       'Nomenclature name':it.nm||nom.nm||it.sku,
       'Source':nom.src||'',
-      'In Stock':STOCK_SKUS.has(it.sku)?'Yes':'No',
+      'In Stock':LM_kitInStock(it.sku)?'Yes':'No',
       'Qty':it.loadQty
     };
+    // If this is a kit, expand its contents as sub-rows
+    if(nom._kitNom&&nom._kitId){
+      const kit=LM_getKitById(nom._kitId);
+      if(kit){
+        return[mainRow,...kit.items.map(ci=>({
+          'Nomenclature code':'  ↳ '+ci.sku,
+          'Nomenclature name':(NOM[ci.sku]?.nm||ci.sku),
+          'Source':NOM[ci.sku]?.src||'',
+          'In Stock':STOCK_SKUS.has(ci.sku)?'Yes':'—',
+          'Qty':ci.qty
+        }))];
+      }
+    }
+    return[mainRow];
   });
   // Append manual items
   for(const mi of MI_get(MI_lmKey(t))){
@@ -7598,7 +7888,7 @@ async function goGenerate(){
     NOM=pNm(nE.wb);RW=pPl(pE.wb);
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
-    LM_injectManualDemand();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
+    LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
     numberAll();sel="";cv="dashboard";
     document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
 
@@ -7682,9 +7972,9 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};LM_excluded=new Set();CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
   document.getElementById("mn").innerHTML='';
@@ -7707,7 +7997,7 @@ function doSoftResetLM(){
   // VS, LM_excluded, LM_excludeUserOvr, LM_dispatched, LM_dateOverrides,
   // MANUAL_ITEMS, DIST_OVERRIDES, LM_demandAdj, LM_nomOverrides,
   // LM_palletCfg, LM_clusterTurnaround, STOCK_SKUS, STOCK_REPORT_NAME,
-  // LM_MANUAL_DEMAND — all preserved
+  // LM_MANUAL_DEMAND, LM_KITS — all preserved
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
   document.getElementById("mn").innerHTML='';
@@ -8059,7 +8349,7 @@ async function goGenerateLM(){
     NOM=pNm(nE.wb);RW=pPl(pE.wb);
     if(!Object.keys(NOM).length)throw new Error('No nomenclature data.');
     if(!RW.length)throw new Error('No plan data.');
-    LM_injectManualDemand();LM_applyNomOverrides();bV();if(!VN.length)throw new Error('No venues.');
+    LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error('No venues.');
     numberAll();sel='';cv='dashboard';
     document.getElementById('hm').textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
     document.getElementById('pov').style.display='none';
