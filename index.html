@@ -588,7 +588,15 @@ function _undoSnap(){
     lm_distOvr:JSON.stringify(DIST_OVERRIDES||{}),
     lm_demandAdj:JSON.stringify(LM_demandAdj||{}),
     lm_nomOvr:JSON.stringify(LM_nomOverrides||{}),
-    lm_clusterTA:LM_clusterTurnaround
+    lm_clusterTA:LM_clusterTurnaround,
+    lm_kits:JSON.stringify(LM_KITS||[]),
+    lm_kitNextId:_kitNextId,
+    lm_stp:JSON.stringify(LM_STP_DELIVERIES||[]),
+    lm_stpNextId:_stpNextId,
+    lm_manualDemand:JSON.stringify(LM_MANUAL_DEMAND||[]),
+    lm_palletCfg:JSON.stringify(Object.fromEntries(Object.entries(LM_palletCfg||{}).map(([k,v])=>([k,{mode:v.mode,overrides:[...v.overrides]}])))),
+    lm_stockSkus:JSON.stringify([...(STOCK_SKUS||[])]),
+    lm_stockName:STOCK_REPORT_NAME||''
   };
 }
 function UNDO_capture(){
@@ -636,6 +644,12 @@ function UNDO_restore(){
     LM_demandAdj=JSON.parse(snap.lm_demandAdj||'{}');
     LM_nomOverrides=JSON.parse(snap.lm_nomOvr||'{}');
     if(snap.lm_clusterTA!==undefined)LM_clusterTurnaround=snap.lm_clusterTA;
+    // Restore newer features (with backward compat for old snapshots)
+    if(snap.lm_kits){LM_KITS=JSON.parse(snap.lm_kits);_kitNextId=snap.lm_kitNextId||1}
+    if(snap.lm_stp){LM_STP_DELIVERIES=JSON.parse(snap.lm_stp);_stpNextId=snap.lm_stpNextId||1;LM_STP_TRUCKS={}}
+    if(snap.lm_manualDemand)LM_MANUAL_DEMAND=JSON.parse(snap.lm_manualDemand);
+    if(snap.lm_palletCfg){const pc=JSON.parse(snap.lm_palletCfg);LM_palletCfg={};for(const[k,v]of Object.entries(pc))LM_palletCfg[k]={mode:v.mode||'dis',overrides:new Set(v.overrides||[])}}
+    if(snap.lm_stockSkus){STOCK_SKUS=new Set(JSON.parse(snap.lm_stockSkus));STOCK_REPORT_NAME=snap.lm_stockName||''}
     _undoLastSnap=_undoSnap();
     // Rebuild LM if data present
     if(Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();numberAll()}
@@ -648,6 +662,11 @@ function UNDO_restore(){
     LM_saveDemandAdj();
     LM_saveNomOverrides();
     LM_saveClusterTA();
+    LM_savePalletCfg();
+    LM_saveKits();
+    LM_saveStpDeliveries();
+    LM_saveManualDemand();
+    stockReportSave();
     if(typeof LP_render==='function'&&LP_STATE.planGenerated)LP_render();
     if(typeof rMain==='function')try{rMain()}catch(e){}
     if(typeof rVL==='function')try{rVL()}catch(e){}
@@ -7020,10 +7039,27 @@ function showHelp(){
   <strong>LM-1, LM-2, ...</strong> — Last Mile palletized freight trucks<br>
   <strong>LP-1, LP-2, ...</strong> — Load Plan warehouse dispatch trucks<br>
   <strong>C-1, C-2, ...</strong> — CORT direct deliveries<br>
+  <strong>STP-1, STP-2, ...</strong> — Staples direct deliveries<br>
   Numbers are assigned once at plan generation and stay consistent across all views.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px"><span style="background:#E31837;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">CORT</span> Direct Deliveries</h4>
   <p>SKUs sourced from <strong>CT RNT</strong> (CORT Rental) or <strong>CT RTL</strong> (CORT Retail) are direct deliveries — they bypass the pallet engine entirely. They don't go on freight trucks. Instead, they're shown as separate CORT deliveries grouped by date, with their own numbering (C-1, C-2...). CORT items appear in the calendar with a red dot, in the sidebar with a red badge, and in venue summaries.</p>
+
+  <h4 style="color:var(--tp);margin:16px 0 8px"><span style="background:#EF6C00;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">🏪 STP</span> Staples Direct Deliveries</h4>
+  <p>SKUs sourced from <strong>STP</strong> (Staples, STP CAN, STP MEX) are vendor-delivered directly to venues. One STP delivery per venue max. Create from the Demand tab. Each STP delivery has a manual rate, delivery date, and automatically pulls all STP-sourced items from that venue's demand (respecting demand adjustments and kit allocations). STP deliveries appear with an orange dot in calendars, orange cards in trucks view, and a dedicated 🏪 Staples KPI card in dashboard and Vision.</p>
+
+  <h4 style="color:var(--tp);margin:16px 0 8px">📦 Kits (Admin only)</h4>
+  <p>Kits bundle multiple component SKUs into a single virtual item for truck planning. Create from the venue's Demand tab. The kit gets its own nomenclature code, aggregated pallet dimensions, and inherits bump-in dates from its components. Component quantities are subtracted from individual demand to avoid double-counting. Kits are included in truck loads, exports, and backup/restore.</p>
+
+  <h4 style="color:var(--tp);margin:16px 0 8px">📐 Pallet Configuration</h4>
+  <p>Each venue type (Volunteer Centre, Ticketing, etc.) can be set to <strong>Assembled</strong> or <strong>Disassembled</strong> mode via the 📐 Pallets button. This controls which pallet dimensions (asm qty/spc vs dis qty/spc) are used for pallet calculations. Individual SKUs can be overridden to use the opposite mode. Pallet dim overrides (per-SKU pallet quantity/spaces) can also be set from the truck detail modal.</p>
+
+  <h4 style="color:var(--tp);margin:16px 0 8px">📋 Demand Adjustments & Manual Demand</h4>
+  <p><strong>Demand Adjustments</strong> — in the Demand tab, click any SKU quantity to override it. Adjustments persist across plan regenerations. A ★ badge shows how many adjustments are active.<br>
+  <strong>Manual Demand</strong> — add entirely new SKU/venue combinations not in the original material plan. Added items are injected into the venue's demand and participate in truck loading like regular items.</p>
+
+  <h4 style="color:var(--tp);margin:16px 0 8px">💰 Rate Overrides</h4>
+  <p>Each truck shows a distribution cost (💰) based on default rates per destination. Admins can override any truck's rate by clicking the rate input on the truck card. Overrides are shown in purple. Reset by clicking ✕. All rates roll up into the Vision 2026 distribution cost KPI.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">Last Mile Views</h4>
   <p><strong>📊 Dashboard</strong> — calendar heatmap showing dispatch intensity across all venues, daily dispatch detail table, and venue/cluster workload breakdown. Select a specific venue or "All Venues" for the aggregate view.<br>
@@ -7044,11 +7080,12 @@ function showHelp(){
   <p>The system uses Supabase for real-time data persistence. When an admin uploads files or changes constraints, the data is saved to the cloud. Viewers loading the page will see the latest published plan automatically. The connection status indicator (green = connected, red = offline) shows database health. When offline, the system works locally but changes won't persist.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">Exports</h4>
-  <p><strong>⬇ Export (Last Mile)</strong> — full plan as Excel: Truck Plan sheet (every item on every truck), Dispatch Summary (daily totals), Venue Summary (per-venue stats).<br>
+  <p><strong>⬇ Export (Last Mile)</strong> — full plan as Excel: Truck Plan sheet (every item on every truck incl. STP + kits), Dispatch Summary (daily totals + STP rows), Venue Summary (per-venue stats with CORT/STP columns).<br>
   <strong>⬇ Export (Load Plan)</strong> — truck plan with destination breakdowns, CI summary sheet, and per-truck detail sheets.<br>
-  <strong>⬇ Export (Vision)</strong> — unified truck list across both modules.<br>
+  <strong>⬇ Export (Vision)</strong> — unified truck list across both modules with separate CORT + STP sheets, By Date/Destination summaries with LP/LM/STP/CORT columns.<br>
   <strong>📄 CI (LP trucks only)</strong> — formatted Commercial Invoice + Packing List Excel for customs. Includes shipper info, HS codes, country of origin, declared values.<br>
-  <strong>⬇ Per-truck Excel</strong> — individual shipping order with nomenclature codes, names, UoM, and order quantities.</p>
+  <strong>⬇ Per-truck Excel</strong> — individual shipping order with nomenclature codes, names, UoM, and order quantities. Kit items are expanded as sub-rows.<br>
+  <strong>💾 Backup</strong> — full system backup (20 sheets covering all data + settings). Use 📂 Restore to reload from a backup file.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">Warnings & Flags</h4>
   <p><span class="bg bgs bg-rd">⚠ Weekend</span> — dispatch or arrival falls on Saturday/Sunday. Rows are highlighted red.<br>
@@ -7060,8 +7097,11 @@ function showHelp(){
   <h4 style="color:var(--tp);margin:16px 0 8px">Quick Tips</h4>
   <p>• Click any truck card to inspect its full manifest — works in all modules.<br>
   • Use the search box in the sidebar to quickly find a venue.<br>
-  • The sidebar shows pallet count and line count per venue. CORT venues have a red badge.<br>
+  • The sidebar shows pallet count and line count per venue. CORT venues have a red badge, STP venues an orange badge.<br>
   • In Dashboard view, click calendar day cells for a detailed popup breakdown.<br>
+  • STP deliveries created for individual venues inside a cluster correctly bubble up to cluster-level views.<br>
+  • The Demand tab (📋) lets you adjust quantities, add manual demand, create kits, and manage STP deliveries.<br>
+  • 📐 Pallet button opens the asm/dis mode config — changes take effect immediately across all trucks.</p>
   • System Reset (↻ icon next to title) erases everything and returns to the upload screen. Use with caution — it affects all users.</p>
 
   <div style="margin-top:20px;padding-top:12px;border-top:1px solid var(--bl);font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | SM²ARTA™ licensed to SM2ARTA LLC</div>
