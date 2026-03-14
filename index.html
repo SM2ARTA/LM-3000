@@ -5402,6 +5402,8 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(!vtMapLocal[v]){const vt=LM_VENUE_TYPE_MAP[v]||String(r["Venue type"]||"").trim();vtMapLocal[v]=vt}
   // Skip STP items at venues with STP delivery (they go to STP truck)
   const _bvSku=r["Nomenclature"]||"?";
+  // Always create venue entry first so venue appears in sidebar even if all items are STP
+  if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
   if(_stpVBv.has(v)&&NOM[_bvSku]&&isStp(_bvSku))continue;
   let _rawQ=parseInt(r["Required"])||0;if(_rawQ<=0)continue;
   // Apply demand adjustment
@@ -5411,7 +5413,6 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(!r._kit&&_kitAl[_adjK])_rawQ=Math.max(0,_rawQ-_kitAl[_adjK]);
   if(_rawQ<=0)continue;
   const bi=pD(r["Estimated bump-in date"]);
-  if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
   const s=r["Nomenclature"]||"?";
   if(!NOM[s])continue;
   if(isCort(s))a[v].hasCort=true;
@@ -5886,6 +5887,11 @@ function rVL(){
       if(!_dispMap[label]||t.dd<_dispMap[label])_dispMap[label]=t.dd;
     }
   }
+  // Include STP delivery dates
+  for(const del of LM_STP_DELIVERIES){
+    if(!del.date||!del.venue)continue;
+    if(!_dispMap[del.venue]||del.date<_dispMap[del.venue])_dispMap[del.venue]=del.date;
+  }
   const _getDisp=name=>_dispMap[name]||'';
   const _dispFmt=d=>{if(!d)return'';try{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};
 
@@ -6355,7 +6361,7 @@ function _stpBuildTruck(del){
 function LM_deleteStp(venue){
   if(ROLE==='viewer')return;
   LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>d.venue!==venue);
-  LM_saveStpDeliveries();PLAN_CACHE={};numberAll();
+  LM_saveStpDeliveries();bV();PLAN_CACHE={};numberAll();
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
 function LM_showCreateStp(prefillVenue){
@@ -6428,7 +6434,7 @@ function _stpCreate(){
   if(!venue)return;
   if(LM_STP_DELIVERIES.find(d=>d.venue===venue)){alert('STP delivery already exists for '+venue);return}
   LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date,rate});
-  LM_saveStpDeliveries();PLAN_CACHE={};numberAll();
+  LM_saveStpDeliveries();bV();PLAN_CACHE={};numberAll();
   document.querySelector('.mo')?.remove();
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
@@ -7556,7 +7562,6 @@ if(cv==="dashboard"){
     calMap[dk2].stp++;
     calMap[dk2].stpPcs+=truck.pcs;
     calMap[dk2].stpPlt+=truck.pallets;
-    calMap[dk2].pcs+=truck.pcs;
   }
 
   const calDates=Object.keys(calMap).filter(d=>d.match(/^\d{4}-/)).sort();
