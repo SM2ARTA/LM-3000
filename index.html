@@ -1753,9 +1753,9 @@ function _hsStep0(el){
   h+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
   h+=`<button class="mbtn" onclick="_hsAIDetect()" style="padding:8px 14px;font-size:11px;flex:1;background:${_provColors[aiProv]||_provColors.gemini};color:#fff;border-color:transparent">${hasAIKey?'✨ Classify':'✨ Setup AI'}</button>`;
   h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=')" style="padding:8px 8px;font-size:9px;background:#fff;color:#4285F4;border:1px solid #ddd" title="Search Google">Google</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=site:uline.com+')" style="padding:8px 8px;font-size:9px;background:#fff;color:#333;border:1px solid #ddd" title="Search Uline via Google">Uline</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=site:staples.com+')" style="padding:8px 8px;font-size:9px;background:#fff;color:#CC0000;border:1px solid #ddd" title="Search Staples via Google">Staples</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=site:homedepot.com+')" style="padding:8px 8px;font-size:9px;background:#fff;color:#F96302;border:1px solid #ddd" title="Search Home Depot via Google">THD</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.uline.com/Product/AdvSearch?keywords=')" style="padding:8px 8px;font-size:9px;background:#fff;color:#333;border:1px solid #ddd" title="Search Uline">Uline</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.staples.com/search?query=')" style="padding:8px 8px;font-size:9px;background:#fff;color:#CC0000;border:1px solid #ddd" title="Search Staples">Staples</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.homedepot.com/s/')" style="padding:8px 8px;font-size:9px;background:#fff;color:#F96302;border:1px solid #ddd" title="Search Home Depot">THD</button>`;
   if(hasAIKey)h+=`<button class="mbtn" onclick="_hsClearAI();_hsRenderStep()" style="padding:8px 8px;font-size:9px;color:var(--ts);border-color:var(--bd)" title="Change AI provider">⟳</button>`;
   h+=`</div>`;
   h+=`<div id="hsAIStatus"></div>`;
