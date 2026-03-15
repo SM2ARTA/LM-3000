@@ -1746,20 +1746,17 @@ function _hsStep0(el){
   const _prodName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
   const _searchQ=encodeURIComponent(_prodName.replace(/\b(HOLD|FIFA|GENERIC|WC26)\b/gi,'').replace(/[-_]/g,' ').replace(/\s{2,}/g,' ').trim());
   h+=`<div style="margin-bottom:14px">`;
-  h+=`<div style="font-size:12px;font-weight:700;color:var(--tp);margin-bottom:4px">Step 1 · Find product & classify with AI</div>`;
-  h+=`<input id="hsSearchQ" type="text" value="${_prodName.replace(/"/g,'&quot;')}" style="width:100%;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:10px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px;color:var(--ts)" placeholder="Edit search query...">`;
+  h+=`<div style="font-size:12px;font-weight:700;color:var(--tp);margin-bottom:4px">Step 1 · AI Classification</div>`;
+  h+=`<div style="font-size:10px;color:var(--ts);margin-bottom:6px">Classify by product name, or paste a URL for more accurate results</div>`;
+  h+=`<input id="hsSearchQ" type="text" value="${_prodName.replace(/"/g,'&quot;')}" style="width:100%;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:10px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:4px;color:var(--ts)" placeholder="Product name for AI classification...">`;
+  h+=`<input id="hsUrlInput" type="text" value="${_hsWiz.url}" placeholder="(Optional) Paste product URL for better accuracy" style="width:100%;padding:7px 10px;border:1px solid var(--bd);border-radius:6px;font-size:10px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px;color:var(--ts)">`;
   h+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
-  if(hasAIKey)h+=`<button class="mbtn" onclick="_hsAIFindUrls()" style="padding:7px 12px;font-size:10px;flex:1;background:${_provColors[aiProv]||_provColors.gemini};color:#fff;border-color:transparent">🔍 AI Find Product</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=')" style="padding:7px 10px;font-size:10px;background:#fff;color:#4285F4;border:1px solid #4285F4"><b>G</b>oogle</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.uline.com/BL/')" style="padding:7px 10px;font-size:10px;background:#fff;color:#333;border:1px solid #ccc">Uline</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.staples.com/s?searchTerm=')" style="padding:7px 10px;font-size:10px;background:#fff;color:#CC0000;border:1px solid #CC0000">Staples</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.homedepot.com/s/')" style="padding:7px 10px;font-size:10px;background:#fff;color:#F96302;border:1px solid #F96302">THD</button>`;
-  h+=`</div>`;
-  h+=`<div id="hsUrlResults" style="margin-bottom:6px"></div>`;
-  h+=`<input id="hsUrlInput" type="text" value="${_hsWiz.url}" placeholder="Paste product URL or click AI Find Product above" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px">`;
-  h+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-  h+=`<button class="mbtn" onclick="_hsAIDetect()" style="padding:8px 16px;font-size:11px;flex:1;background:${_provColors[aiProv]||_provColors.gemini};color:#fff;border-color:transparent">${aiLabel}</button>`;
-  if(hasAIKey)h+=`<button class="mbtn" onclick="_hsClearAI();_hsRenderStep()" style="padding:8px 10px;font-size:11px;color:var(--ts);border-color:var(--bd)" title="Change AI provider">⟳</button>`;
+  h+=`<button class="mbtn" onclick="_hsAIDetect()" style="padding:8px 14px;font-size:11px;flex:1;background:${_provColors[aiProv]||_provColors.gemini};color:#fff;border-color:transparent">${hasAIKey?'✨ Classify':'✨ Setup AI'}</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=')" style="padding:8px 8px;font-size:9px;background:#fff;color:#4285F4;border:1px solid #ddd" title="Search Google">Google</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.uline.com/BL/')" style="padding:8px 8px;font-size:9px;background:#fff;color:#333;border:1px solid #ddd" title="Search Uline">Uline</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.staples.com/s?searchTerm=')" style="padding:8px 8px;font-size:9px;background:#fff;color:#CC0000;border:1px solid #ddd" title="Search Staples">Staples</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.homedepot.com/s/')" style="padding:8px 8px;font-size:9px;background:#fff;color:#F96302;border:1px solid #ddd" title="Search Home Depot">THD</button>`;
+  if(hasAIKey)h+=`<button class="mbtn" onclick="_hsClearAI();_hsRenderStep()" style="padding:8px 8px;font-size:9px;color:var(--ts);border-color:var(--bd)" title="Change AI provider">⟳</button>`;
   h+=`</div>`;
   h+=`<div id="hsAIStatus"></div>`;
   h+=`</div>`;
@@ -1913,7 +1910,8 @@ async function _hsAIDetect(){
   }
   _hsWiz.url=(document.getElementById('hsUrlInput')?.value||'').trim();
   _hsWiz.urlKw=_hsParseURL(_hsWiz.url);
-  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  // Use editable search query if available (user may have refined it), fall back to nom name
+  const origName=(document.getElementById('hsSearchQ')?.value||'').trim()||(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
   const prov=_hsGetAIProvider();
   const _pn={claude:'Claude',openai:'ChatGPT',gemini:'Gemini'};
   statusEl.innerHTML=`<div style="padding:16px;text-align:center"><div class="spn" style="width:24px;height:24px;margin:0 auto 8px"></div><div style="font-size:11px;color:var(--ts)">${_pn[prov]||'AI'} is classifying "${origName}"...</div></div>`;
