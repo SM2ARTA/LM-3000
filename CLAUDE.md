@@ -4,7 +4,7 @@
 Single-page web application for managing ground transport logistics for FWC26. Handles trucks, stadiums, venues, routes, and staffing across USA, Canada, and Mexico host cities.
 
 ## Architecture
-- **Single file**: Everything lives in `index.html` (~9,800 lines). No build step, no bundler.
+- **Single file**: Everything lives in `index.html` (~11,000 lines). No build step, no bundler.
 - **Backend**: Supabase (URL and anon key near the bottom of `index.html`, search for `supabase.createClient`)
 - **External libs** (CDN): `@supabase/supabase-js@2`, `xlsx@0.18.5`, `exceljs@4.4.0`, Google Fonts
 - **No framework** — vanilla JS and CSS with CSS custom properties (design tokens in `:root`)
@@ -93,6 +93,9 @@ Every scrollable module container must have explicit `padding-bottom` that accou
 - `LP_TAB` — current LP tab: `'arrivals'`, `'demand'`, `'plan'`, `'late'`
 - `LP_STATE.generatedPlan` — LP truck rows; `LP_STATE.materialPlan` — demand rows
 - `PLAN_CACHE[venue]` — LM plan cache per venue; `LM_dateOverrides` — manual truck date overrides
+- `LP_TRANSIT_DEFAULTS` — `{TOR:7,VAN:7,CDMX:7,GDL:7,MTY:7,KC:1,HOU:1,NY:3}` — migration: if TOR/VAN is 5 (old default), auto-upgraded to 7
+- `LP_DEST_WHS_DEFAULTS` — all destinations default to 3 days satellite warehouse processing
+- `LP_customsOverrides` — `{sku: {hsCode, country, price, customsName, hsConfirmed}}` — customs data overrides per SKU
 
 ## Bottom Support Bar (`#global-supp-bar`)
 Fixed bar at `bottom:0`, `z-index:65`, `height:44px`. Always visible on desktop.
@@ -121,44 +124,75 @@ Fixed bar at `bottom:0`, `z-index:65`, `height:44px`. Always visible on desktop.
 ## HS Code Assistant
 3-step wizard in LP Demand tab (🔍 button next to each HS Code cell):
 
-### Step 0 — Siblings + AI
-- **Sibling SKU detection**: `_hsFindSiblings(sku)` extracts prefix (e.g., `CTBAR-001` from `CTBAR-001-002`), finds siblings with existing HS codes, groups by code, shows with description + source + product name
-- **AI Classification** (Claude or Gemini): sends product URL + name to AI, gets HS code + customs name + country of origin with confidence levels
+### Step 0 — Siblings + AI + URL
+- **Sibling SKU detection**: `_hsFindSiblings(sku)` extracts immediate parent prefix (e.g., `CTBAR-001` from `CTBAR-001-002`), finds siblings in LP demand only (not full nom file) with **confirmed** HS codes (`hsConfirmed===true`), groups by code, shows with HS description + source + product name
+- **AI Classification**: URL-first — paste product URL, AI identifies actual product from retailer catalog
 - **Country of origin**: AI returns `{primary, alternatives[], reasoning}` — shown as selectable buttons in accept dialog
 
-### AI Integration
-- **Providers**: Claude (Anthropic, `claude-haiku-4-5-20251001`) or Gemini (Google, `gemini-2.0-flash`)
-- **API keys in `localStorage`**: `hs-ai-provider`, `hs-ai-key` — browser only
-- **URL-first prompt**: when URL provided, AI is told to identify the product FROM the URL, not from internal name
-- **CORS**: Claude uses `anthropic-dangerous-direct-browser-access: true` header; Gemini is CORS-friendly natively
-- **Key persistence**: only 401 clears the key; 429/quota errors show friendly retry message
+### AI Providers
+- **Claude** (Anthropic): `claude-haiku-4-5-20251001`, uses `anthropic-dangerous-direct-browser-access: true` header for browser CORS
+- **ChatGPT** (OpenAI): `gpt-5-mini`, uses `max_completion_tokens` (not `max_tokens` — GPT-5 requirement)
+- **Gemini** (Google): `gemini-2.0-flash`, uses `systemInstruction` for system prompt, CORS-friendly natively
+- **Prompt**: `_hsBuildPrompt()` builds minimal system+user messages to save tokens. System = format spec (~30 words). User = URL + ref name + material + usage. customsName requested as SHORT (5-8 words). Country = MANUFACTURING origin (not destination).
+- **Error handling**: only 401 clears API key; 429/quota shows friendly retry message with raw error detail on click
+
+### AI Key Persistence
+- **Three layers**: `localStorage` (instant) + Supabase key `hs-ai-config` (cross-browser) + startup load
+- **`_hsSetAI(provider,key)`** → writes to both localStorage and Supabase
+- **`_hsClearAI()`** → removes from both localStorage and Supabase
+- **`_hsLoadAIConfig()`** → called on app startup (in `Promise.all` with other init), restores from Supabase to localStorage
+- **`doSystemReset()`** clears `hs-ai-config` via `.neq('id','')` bulk delete
+
+### HS Code Confirmation
+- **`LP_toggleHSConfirm(sku,el)`** — toggles `LP_customsOverrides[sku].hsConfirmed`
+- **UI**: ○ (unconfirmed, grey) / ✓ (confirmed, green) button next to HS code input
+- **Confirmed cell**: green background (`var(--gs)`), green text, bold
+- **In-place update**: does NOT call `LP_render()` — updates styles directly on the DOM element for no jumping
+- **Sibling suggestions**: only show confirmed codes (`if(hs&&confirmed)`)
+- **Persisted**: stored in `LP_customsOverrides` → `lp-truck-state` → Supabase
 
 ### HS Code Normalization
 - `_hsNormalize(code)` → strips non-digits → formats as `XXXX.XX`
 - Applied in: `LP_setCustomsOvr`, `_lpCustNom`, Excel nom import, nom update merge
-- Edge cases: `""` → `""`, `"8301"` → `"8301"`, `"8301.40.0090"` → `"8301.40"`
+- Edge cases: `""` → `""`, `"8301"` → `"8301"` (≤4 digits returned as-is), `"8301.40.0090"` → `"8301.40"`
 
 ### Customs Name
 - Separate field from product name — stored in `LP_customsOverrides[sku].customsName`
 - Own column in demand table (editable, purple when overridden)
 - CI exports use `customsName || name` for DESCRIPTION field
 - `_lpCustNom(sku)` returns `{name, customsName, unitPrice, hsCode, country}`
+- AI suggests SHORT customs names (5-8 words, e.g., "Steel padlock keyed", "Polyester event banner")
 
-### Step 1 — Category Selection (manual path)
+### Manual Path (Steps 1-2)
+- **Step 1 — 4-digit Heading**: `_hsStep1()` groups `_HS_DB` entries by heading (first 4 digits), shows headings scored by product name keywords, best matches highlighted
+- **Step 2 — 6-digit Subheading**: `_hsStep2()` shows all codes under selected heading, scored by name keywords, click to accept
 - `_HS_CATS[]` — 17 categories with keywords and chapter mappings
-- Auto-detected from product name keywords, shown at top
-- Clicking a category → Step 2 (refine with material/usage)
+- `_HS_DB[]` — ~200 HS codes across chapters 39–96 (includes 8301.10–8301.70 for locks/padlocks)
 
-### Step 2 — Results
-- `_HS_DB[]` — ~200 HS codes across chapters 39–96
-- Filtered by selected category chapters, scored by all context keywords
-- Accept → saves HS code + customs name + country via `LP_setCustomsOvr`
+### LP Customs Overrides (`LP_customsOverrides`)
+- **Structure**: `{sku: {hsCode, country, price, customsName, hsConfirmed}}`
+- **Saved in**: `lp-truck-state` via `LP_saveToSupabase()`
+- **Loaded from**: `LP_loadFromSupabase()` (both new and legacy paths)
+- **Undo**: included in `_undoSnap()` / `UNDO_restore()`
+- **Backup**: exported as `Customs Override: SKU` rows in LP Config sheet, restored via `JSON.parse`
+- **Hard reset** (`doResetLP`): clears to `{}`
+- **Soft reset** (`doSoftResetLP`): **preserved** (not cleared)
 
-### Demand Table Destination Filter
-- Multi-select checkbox dropdown (`#lpDemDestDrop`) in demand tab toolbar
-- Each row has `data-dests="|Houston|Kansas City|..."` attribute
-- `LP_filterDemand()` checks text search + source + selected destinations
-- `_lpDemDestAll(check)` — select all / none helper
+## Demand Table Filters
+- **Source filter**: multi-select checkbox dropdown (`#lpDemSrcDrop`, `.lp-src-chk`)
+- **Destination filter**: multi-select checkbox dropdown (`#lpDemDestDrop`, `.lp-dest-chk`)
+- Each row has `data-source` and `data-dests="|Houston|Kansas City|..."` attributes
+- `LP_filterDemand()` checks text search + selected sources + selected destinations
+- **Filter state preservation**: `_lpDemFilterState` saves search/sources/dests; `_lpDemRestoreFilters()` restores after re-render with scroll position preservation
+- `_lpDemSrcAll(check)` / `_lpDemDestAll(check)` — select all / none helpers
+- Click-outside handlers close dropdowns
+
+## Hold by Source
+- **Source select** + **Destination select** + Hold/Release buttons + Combined CI button
+- **`_lpHoldSrcChanged()`**: when source selected, shows destination hold status badges below
+- Destinations grouped by LP transit abbreviation (`LP_matchTransitAbbr`), displayed with `CITY_ABBR` names
+- **Badge indicators**: ▶ green (no holds) / ⚠ yellow (partial) / ⏸ orange (all held) — shows held/total count
+- Status auto-refreshes after Hold/Release via `setTimeout(_lpHoldSrcChanged,100)`
 
 ## CI Export
 - `LP_exportCI_ExcelJS(truckId, items, dest, date, totalPlt, nomenclature, partyOverride)` — 7th param optional
@@ -235,6 +269,7 @@ Four reset functions exist — any new state must be added to all that apply:
 **`doSoftResetLP` preserves**: all LP_* globals + `lockedRows` + `customsOverrides` + manual arrivals (`_manual:true` entries in `LP_STATE.arrivals`) — both fixed 2026-03-15
 **Manual arrivals**: pushed into `LP_STATE.arrivals` with `_manual:true` by `LP_addArrivalItem()`. `LP_STATE.manualArrivals` is unused/dead code.
 **LM/shared Supabase keys** (saved by `saveSharedData()` + dedicated fns): `fm-nom`, `fm-rw`, `fm-vs`, `fm-excl`, `fm-excl-ovr`, `fm-stock`, `fm-lm-dispatch`, `fm-manual-items`, `fm-lm-demand-adj`, `fm-lm-nom-ovr`, `fm-cluster-ta`, `fm-lm-manual-demand`, `fm-lm-kits`, `fm-lm-stp-deliveries`, `fm-dist-overrides`, `fm-pallet-cfg`
+**Other Supabase keys**: `hs-ai-config` (AI provider + API key, saved by `_hsSetAI`, loaded by `_hsLoadAIConfig` on startup)
 
 ### UI / Rendering
 - [ ] New buttons/controls render correctly on both desktop and mobile widths
@@ -245,6 +280,8 @@ Four reset functions exist — any new state must be added to all that apply:
 - [ ] Colors use CSS vars from `:root` — no hardcoded hex except border colors for colored button variants
 - [ ] Module activation always via `switchMod(mod)` — never manual `classList.add("vis")`
 - [ ] New scrollable module containers explicitly set `padding-bottom:44px` (shorthand `padding` will override cascade)
+- [ ] Inline edits (HS confirm, customs fields) should update DOM in-place — avoid `LP_render()` for single-cell changes to prevent scroll jumping
+- [ ] If `LP_render()` is unavoidable, `_lpDemRestoreFilters()` runs via `setTimeout(...,0)` to restore filter state + scroll position
 
 ## Module Layout (viewport-locked)
 All three modules use `height:100vh;overflow:hidden` — no page-level scrollbar:
@@ -262,7 +299,7 @@ All three modules use `height:100vh;overflow:hidden` — no page-level scrollbar
 - **Git**: user.name=SM2ARTA, user.email=sm2arta@outlook.com, remote=https://github.com/SM2ARTA/LM-3000.git
 
 ## Editing
-- File is large (~9,800 lines) — always use `offset` + `limit` when reading sections
+- File is large (~11,000 lines) — always use `offset` + `limit` when reading sections
 - Use `Grep` with line numbers to locate functions before editing
 - Prefer `Edit` over full rewrites
 - Key IDs to preserve: `stockBtn`, `stockFileInput`, `lpExportBtn`, `v26ExportBtn`, `lm-bottom-nav`, `global-supp-bar`
