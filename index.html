@@ -1431,8 +1431,33 @@ let _hsWiz={step:0,cats:[],selCat:null,material:'',usage:'',url:'',composition:'
 // ── AI integration for HS code lookup (Claude + Gemini) ──
 function _hsGetAIProvider(){return localStorage.getItem('hs-ai-provider')||''}
 function _hsGetAIKey(){return localStorage.getItem('hs-ai-key')||''}
-function _hsSetAI(provider,key){localStorage.setItem('hs-ai-provider',provider);localStorage.setItem('hs-ai-key',(key||'').trim())}
-function _hsClearAI(){localStorage.removeItem('hs-ai-provider');localStorage.removeItem('hs-ai-key')}
+function _hsSetAI(provider,key){
+  localStorage.setItem('hs-ai-provider',provider);
+  localStorage.setItem('hs-ai-key',(key||'').trim());
+  // Persist to Supabase so keys survive across browsers/devices
+  if(SB&&ROLE!=='viewer'){
+    const now=new Date().toISOString();
+    SB.from('shared_state').upsert({id:'hs-ai-config',value:JSON.stringify({provider,key:(key||'').trim()}),updated_at:now}).catch(()=>{});
+  }
+}
+function _hsClearAI(){
+  localStorage.removeItem('hs-ai-provider');localStorage.removeItem('hs-ai-key');
+  if(SB&&ROLE!=='viewer'){SB.from('shared_state').delete().eq('id','hs-ai-config').catch(()=>{})}
+}
+// Load AI config from Supabase on startup (called from loadSharedData or LP init)
+async function _hsLoadAIConfig(){
+  if(!SB)return;
+  try{
+    const{data}=await SB.from('shared_state').select('value').eq('id','hs-ai-config').single();
+    if(data?.value){
+      const cfg=JSON.parse(data.value);
+      if(cfg.provider&&cfg.key){
+        localStorage.setItem('hs-ai-provider',cfg.provider);
+        localStorage.setItem('hs-ai-key',cfg.key);
+      }
+    }
+  }catch(e){}
+}
 function _hsResetAI(){_hsClearAI();_hsRenderStep()}
 
 // URL preview — fetch OG meta via proxy
@@ -6086,7 +6111,8 @@ function enterApp(){
       DIST_loadOverrides().catch(()=>{}),
       LM_loadDemandAdj().catch(()=>{}),
       LM_loadNomOverrides().catch(()=>{}),
-      LM_loadClusterTA().catch(()=>{})
+      LM_loadClusterTA().catch(()=>{}),
+      _hsLoadAIConfig().catch(()=>{})
     ]);
     // Now build venues and trucks AFTER all config is loaded
     if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
