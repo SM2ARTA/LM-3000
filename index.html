@@ -1134,11 +1134,20 @@ function LP_customsInput(el){
   if(ROLE==='viewer')return;
   LP_setCustomsOvr(el.dataset.sku,el.dataset.field,el.value);
 }
-function LP_toggleHSConfirm(sku){
+function LP_toggleHSConfirm(sku,el){
   if(ROLE==='viewer')return;
   if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
-  LP_customsOverrides[sku].hsConfirmed=!LP_customsOverrides[sku].hsConfirmed;
-  LP_saveToSupabase();LP_render();
+  const conf=LP_customsOverrides[sku].hsConfirmed=!LP_customsOverrides[sku].hsConfirmed;
+  LP_saveToSupabase();
+  // Update UI in place without full re-render
+  if(el){
+    el.textContent=conf?'✓':'○';
+    el.style.color=conf?'var(--gn)':'var(--tt)';
+    el.style.opacity=conf?'1':'.5';
+    el.title=conf?'HS confirmed — click to unconfirm':'Click to confirm HS code';
+    const td=el.closest('td');
+    if(td){td.style.color=conf?'var(--gn)':'';td.style.fontWeight=conf?'700':'';td.style.background=conf?'var(--gs)':''}
+  }
 }
 function _lpCustNom(sku){
   const n=LP_STATE.nomenclature[sku]||{};
@@ -1470,8 +1479,8 @@ async function _hsUrlPreview(){
 function _hsBuildPrompt(productName,material,usage){
   const url=_hsWiz.url||'';
   const sys=`HS tariff classifier for customs declarations. Return JSON only:
-{"codes":[{"hs":"XXXX.XX","description":"heading name","confidence":"high/medium/low","customsName":"full customs declaration description including material composition, product type, dimensions/specs if known"}],"country":{"primary":"MANUFACTURING country (e.g. China, Taiwan, Mexico, Germany — NOT the destination country)","alternatives":["other likely manufacturing countries"],"reasoning":"why this origin"},"notes":"product identification and reasoning"}
-Rules: 1-2 codes max. 6-digit HS format. customsName MUST be detailed customs-ready description. Country = where product is MANUFACTURED/made, never USA/Canada unless actually made there.`;
+{"codes":[{"hs":"XXXX.XX","description":"heading name","confidence":"high/medium/low","customsName":"SHORT customs name for CI, max 5-8 words, e.g. Steel padlock keyed, Polyester event banner, Folding metal table"}],"country":{"primary":"MANUFACTURING country (China, Taiwan, Mexico, Germany etc — NOT destination)","alternatives":["other likely"],"reasoning":"why"},"notes":"reasoning"}
+Rules: 1-2 codes. 6-digit HS. customsName = SHORT (5-8 words, material + product type). Country = where MANUFACTURED.`;
   let usr='';
   if(url){
     usr=`URL: ${url}\nIdentify the actual product from this URL using retailer catalog knowledge. What is it made of? Where is it manufactured?`;
@@ -3083,7 +3092,7 @@ function LP_renderDemand(el){
       ?'<input type="text" value="'+val+'" data-sku="'+s.sku+'" data-field="'+field+'" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="'+ph+'" style="width:'+w+'px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(isOvr2?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(isOvr2?'var(--pu)':'var(--tp)')+';outline:none;background:'+(isOvr2?'var(--ps)':'var(--sf)')+'">':String(val||'—');
     const _priceCell=ROLE!=='viewer'?('<input type="number" step="0.01" min="0" value="'+_priceVal+'" data-sku="'+s.sku+'" data-field="price" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="0.00" style="width:60px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_priceOvr?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_priceOvr?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_priceOvr?'var(--ps)':'var(--sf)')+'">'):String(_priceVal||'—');
     const _hsConf=!!_cOvr.hsConfirmed;
-    const _hsConfBtn=ROLE!=='viewer'&&_hsVal?`<span onclick="LP_toggleHSConfirm('${s.sku}')" title="${_hsConf?'HS confirmed — click to unconfirm':'Click to confirm HS code'}" style="cursor:pointer;font-size:10px;margin-left:2px;${_hsConf?'color:var(--gn)':'color:var(--tt);opacity:.5'}" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=${_hsConf?'1':'.5'}">${_hsConf?'✓':'○'}</span>`:'';
+    const _hsConfBtn=ROLE!=='viewer'&&_hsVal?`<span onclick="event.stopPropagation();LP_toggleHSConfirm('${s.sku}',this)" title="${_hsConf?'HS confirmed — click to unconfirm':'Click to confirm HS code'}" style="cursor:pointer;font-size:10px;margin-left:2px;${_hsConf?'color:var(--gn)':'color:var(--tt);opacity:.5'}" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=${_hsConf?'1':'.5'}">${_hsConf?'✓':'○'}</span>`:'';
     const _hsCell=_mkTxtIn('hsCode',_hsVal,_hsOvr,80,'0000.00.00')+_hsConfBtn+(ROLE!=='viewer'?'<span onclick="LP_showHSLookup(\''+s.sku+'\')" title="HS Code Lookup" style="cursor:pointer;font-size:12px;margin-left:2px;opacity:.5" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.5">🔍</span>':'');
     const _cooCell=_mkTxtIn('country',_cooVal,_cooOvr,44,'China');
     const _cnVal=_cOvr.customsName||_nom.customsName||'';const _cnOvr=!!_cOvr.customsName;
@@ -3139,11 +3148,16 @@ function LP_filterDemand(){
 }
 function _lpDemRestoreFilters(){
   const st=_lpDemFilterState;if(!st)return;
+  // Save scroll position before restoring filters
+  const lpMain=document.getElementById('lpMain');
+  const scrollTop=lpMain?lpMain.scrollTop:0;
   const searchEl=document.getElementById('lpDemSearch');
   if(searchEl&&st.search){searchEl.value=st.search}
   if(st.srcs){document.querySelectorAll('.lp-src-chk').forEach(cb=>{cb.checked=st.srcs.includes(cb.value)})}
   if(st.dests){document.querySelectorAll('.lp-dest-chk').forEach(cb=>{cb.checked=st.dests.includes(cb.value)})}
   if(st.srcs||st.dests||st.search)LP_filterDemand();
+  // Restore scroll position
+  if(lpMain)lpMain.scrollTop=scrollTop;
 }
 function _lpDemSrcAll(check){
   document.querySelectorAll('.lp-src-chk').forEach(cb=>{cb.checked=check});
