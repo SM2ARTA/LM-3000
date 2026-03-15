@@ -1282,9 +1282,9 @@ function LP_render(){
     case'plan':LP_renderPlan(el);break;
     default:LP_renderPlan(el);
   }
-  // Show/hide export+reset buttons
+  // Show/hide export button based on plan state
   const show=LP_STATE.planGenerated;
-  // Export button always visible now for consistent layout
+  const lpExp=document.getElementById('lpExportBtn');if(lpExp)lpExp.style.display=show?'':'none';
   // Update subtitle with stats
   const sub=document.getElementById('lpSubtitle');
   if(sub&&LP_STATE.planGenerated){
@@ -7992,10 +7992,12 @@ function showHelp(){
   4. <strong>Split Handling</strong> — if stock is short, the engine allocates proportionally across destinations so no single venue gets starved.</p>
   <p><strong>Tabs:</strong><br>
   <strong>📥 Arrivals</strong> — view the container arrival schedule, see what's coming and when.<br>
-  <strong>📋 Demand</strong> — destination-level demand summary showing required quantities per SKU.<br>
-  <strong>🚛 Plan</strong> — the generated truck plan. Each truck card shows destination, date, SKU manifest, and pallet utilization. Trucks can be marked as "locked" (checkbox) — locked trucks won't change on re-generation. New trucks start after the last locked date.</p>
+  <strong>📋 Demand</strong> — destination-level demand summary showing required quantities per SKU. Includes Hold by Source tool to hold/release SKU groups from planning, and <strong>📄 Combined CI</strong> button to export a multi-destination customs invoice.<br>
+  <strong>🚛 Plan</strong> — the generated truck plan. Each truck card shows destination, date, SKU manifest, and pallet utilization. Trucks can be marked as "locked" (checkbox) — locked trucks won't change on re-generation. New trucks start after the last locked date.<br>
+  <strong>⚠ Late</strong> — analysis of containers that may arrive too late for their LM dispatch window. Shows which SKUs at which destinations have LP arrival dates after the LM truck departs. Sidebar lets you exclude destinations from analysis. Live-updates when LM truck dates change.</p>
   <p><strong>Lock:</strong> Check the box on a truck to lock it. When you regenerate the plan (e.g., after new arrivals data), locked trucks are preserved exactly as-is, and the engine only replans the remaining unlocked inventory. This lets you lock in shipments as they go out the door while keeping the future plan flexible.</p>
-  <p><strong>Commercial Invoice (CI):</strong> Each LP truck has a 📄 button that generates a formatted Excel with Combined Invoice & Packing List — includes shipper details, HS codes, country of origin, unit values, and total values. Ready for customs clearance.</p>
+  <p><strong>Commercial Invoice (CI):</strong> Each LP truck has a 📄 button that generates a formatted Excel with Combined Invoice & Packing List — includes shipper details, HS codes, country of origin, unit values, and total values. Ready for customs clearance.<br>
+  <strong>📄 Combined CI:</strong> In the Demand tab, the Combined CI button opens a modal where you pick any combination of the 8 LP destinations and sources. Sources auto-filter based on selected destinations. Export generates a single CI summing all demand quantities across your selection — useful for multi-destination customs filings.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">🚛 Last Mile — Venue Distribution</h4>
   <p>Final mile delivery from regional hubs to individual venues. Takes a Nomenclature file (SKU master with pallet dimensions) and Material Plan (what goes where and when), then generates an optimized truck loading plan.</p>
@@ -8064,8 +8066,12 @@ function showHelp(){
   <strong>⬇ Export (Load Plan)</strong> — truck plan with destination breakdowns, CI summary sheet, and per-truck detail sheets.<br>
   <strong>⬇ Export (Vision)</strong> — unified truck list across both modules with separate CORT + STP sheets, By Date/Destination summaries with LP/LM/STP/CORT columns.<br>
   <strong>📄 CI (LP trucks only)</strong> — formatted Commercial Invoice + Packing List Excel for customs. Includes shipper info, HS codes, country of origin, declared values.<br>
+  <strong>📄 Combined CI</strong> — multi-destination CI from the Demand tab. Select any combination of the 8 LP destinations and sources; quantities summed from demand data.<br>
   <strong>⬇ Per-truck Excel</strong> — individual shipping order with nomenclature codes, names, UoM, and order quantities. Kit items are expanded as sub-rows.<br>
   <strong>💾 Backup</strong> — full system backup (20 sheets covering all data + settings). Use 📂 Restore to reload from a backup file.</p>
+
+  <h4 style="color:var(--tp);margin:16px 0 8px">Bottom Support Bar</h4>
+  <p>All support buttons (Export, Backup, Restore, Undo, Help) are in a fixed bar at the bottom of the screen — consistent across all three modules so the interface doesn't jump when switching. Module-specific buttons (Venues toggle, Stock Report, Pallets for LM; Export for LP/Vision) appear on the left side of the bar. Shared buttons (Backup, Restore, Undo, Help) are always on the right.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">Warnings & Flags</h4>
   <p><span class="bg bgs bg-rd">⚠ Weekend</span> — dispatch or arrival falls on Saturday/Sunday. Rows are highlighted red.<br>
