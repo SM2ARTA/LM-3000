@@ -1463,14 +1463,16 @@ function _hsSetAI(provider,key){
   localStorage.setItem('hs-ai-provider',provider);
   localStorage.setItem('hs-ai-key',(key||'').trim());
   // Persist to Supabase so keys survive across browsers/devices
-  if(SB&&ROLE!=='viewer'){
+  if(SB){
     const now=new Date().toISOString();
-    SB.from('shared_state').upsert({id:'hs-ai-config',value:JSON.stringify({provider,key:(key||'').trim()}),updated_at:now}).catch(()=>{});
+    SB.from('shared_state').upsert({id:'hs-ai-config',value:JSON.stringify({provider,key:(key||'').trim()}),updated_at:now})
+      .then(r=>{if(r.error)console.warn('AI config save failed:',r.error)})
+      .catch(e=>console.warn('AI config save error:',e));
   }
 }
 function _hsClearAI(){
   localStorage.removeItem('hs-ai-provider');localStorage.removeItem('hs-ai-key');
-  if(SB&&ROLE!=='viewer'){SB.from('shared_state').delete().eq('id','hs-ai-config').catch(()=>{})}
+  if(SB){SB.from('shared_state').delete().eq('id','hs-ai-config').catch(e=>console.warn('AI config clear error:',e))}
 }
 // Load AI config from Supabase on startup (called from loadSharedData or LP init)
 async function _hsLoadAIConfig(){
