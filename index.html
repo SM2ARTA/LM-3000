@@ -10788,13 +10788,17 @@ function LP_updateNomPrompt(){
       for(const sku in newNom){
         if(LP_STATE.nomenclature[sku]){
           // Merge — update metadata fields, preserve palletQty/palletSpc from current nom
-          Object.assign(LP_STATE.nomenclature[sku],{
-            name:newNom[sku].name||LP_STATE.nomenclature[sku].name,
-            source:newNom[sku].source||LP_STATE.nomenclature[sku].source,
-            hsCode:_hsNormalize(newNom[sku].hsCode),
-            country:newNom[sku].country,
-            unitPrice:newNom[sku].unitPrice||LP_STATE.nomenclature[sku].unitPrice,
-          });
+          // Only overwrite HS/country/price if new file has values AND no manual override exists
+          const cur=LP_STATE.nomenclature[sku];
+          const ovr=LP_customsOverrides[sku]||{};
+          const nn=newNom[sku];
+          if(nn.name)cur.name=nn.name;
+          if(nn.source)cur.source=nn.source;
+          // Only update nom-level fields if no manual override exists for that field
+          if(nn.hsCode&&!ovr.hsCode)cur.hsCode=_hsNormalize(nn.hsCode);
+          if(nn.country&&!ovr.country)cur.country=nn.country;
+          if(nn.unitPrice&&!ovr.price)cur.unitPrice=nn.unitPrice;
+          // Never overwrite customsName from nom update — it's manual-only
         }else{
           LP_STATE.nomenclature[sku]=newNom[sku];
         }
