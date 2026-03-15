@@ -36,6 +36,7 @@
 .hl{display:flex;align-items:center;gap:12px}
 .tbtn{background:transparent;border:1px solid transparent;border-radius:6px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts);text-transform:capitalize}.tbtn.on{background:var(--as);color:var(--ac);border-color:var(--ab)}
 .rbtn{background:transparent;border:1px solid var(--bd);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;color:var(--ts);margin-left:10px;font-family:var(--fd)}
+.mbtn{display:inline-flex;align-items:center;justify-content:center;padding:9px 22px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fd);border:1px solid var(--bd);background:var(--sf);color:var(--ts);transition:opacity .15s;line-height:1}.mbtn:hover{opacity:.82}.mbtn-primary{background:var(--ac);color:#fff;border-color:var(--ac)}.mbtn-danger{background:var(--rd);color:#fff;border-color:var(--rd)}.mbtn-wide{width:100%}
 .cnt{display:flex;flex:1;overflow:hidden}
 .sb{width:290px;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0}
 .cns{padding:14px;border-bottom:1px solid var(--bd)}.cnst{font-size:10px;font-weight:700;color:var(--tt);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
@@ -104,7 +105,7 @@
 .mod-sw{display:flex;gap:2px;margin-right:8px;background:var(--bl);border-radius:8px;padding:2px}
 .mod-btn{padding:5px 14px;border-radius:6px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts);background:transparent;transition:all .15s;white-space:nowrap}
 .mod-btn.on{background:var(--sf);color:var(--ac);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-#LP{display:none;min-height:100vh;flex-direction:column;width:100%}#LP.vis{display:flex}
+#LP{display:none;height:100vh;overflow:hidden;flex-direction:column;width:100%}#LP.vis{display:flex}
 .sb-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;margin-left:8px;padding:2px 8px;border-radius:4px}
 .sb-status .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
 .sb-status.connected{background:#E6F5ED;color:#12804A}.sb-status.connected .dot{background:#12804A}
@@ -392,7 +393,7 @@
 #LP .lp-body{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;width:100%}
 #LP .lp-tabs{display:flex;gap:2px;padding:6px 20px;background:#F8F9FB;border-bottom:1px solid var(--bd)}
 #LP .lp-tabs .tbtn{text-transform:capitalize}
-#LP .lp-main{flex:1;overflow-y:auto;padding:20px}
+#LP .lp-main{flex:1;overflow-y:auto;padding:20px;position:relative}
 .lp-card{background:var(--sf);border:1px solid var(--bl);border-radius:var(--r);padding:16px;margin-bottom:14px}
 .lp-card h3{font-size:14px;font-weight:700;margin-bottom:10px}
 .lp-card h4{font-size:12px;font-weight:700;margin-bottom:8px;color:var(--ts)}
@@ -425,7 +426,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
 }
 /* ── VISION 2026 DASHBOARD ── */
 #V26{display:none;min-height:100vh;flex-direction:column}#V26.vis{display:flex}
-.v26-body{flex:1;overflow-y:auto;padding:10px 20px;max-width:1400px;margin:0 auto;width:100%;display:flex;flex-direction:column}
+.v26-body{flex:1;overflow-y:auto;padding:10px 20px 44px;max-width:1400px;margin:0 auto;width:100%;display:flex;flex-direction:column}
 .v26-hero{text-align:center;padding:20px 0 10px}
 .v26-hero h1{font-size:28px;font-weight:700;letter-spacing:-.5px}
 .v26-hero p{font-size:12px;color:var(--ts);margin-top:4px}
@@ -518,12 +519,10 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
     <button class="gbtn off" id="lp_gb">Generate Load Plan</button>
   </div>
 </div>
-<footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
 <div id="V26">
 <div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><img src="data:image/png;base64,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" style="width:32px;height:32px;border-radius:6px"></div><div><div style="font-size:14px;font-weight:700">ML3K <span id="roleBadgeV26"></span> <span id="sbStatusV26" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="systemReset()">↻</span></div><div style="font-size:10px;color:var(--tt)" id="v26Subtitle">Vision 2026</div></div></div><div style="display:flex;align-items:center;gap:4px"><div class="mod-sw"><button class="mod-btn on" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div></div></div>
 <div class="v26-body" id="v26Body"></div>
-<footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
 <div id="global-supp-bar">
   <div id="gsb-lm" style="display:flex;align-items:center;gap:4px">
@@ -535,15 +534,18 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
   </div>
   <div id="gsb-lp" style="display:none;align-items:center;gap:4px">
     <button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button>
+    <button class="rbtn admin-only" id="lpUpdateNomBtn" onclick="LP_updateNomPrompt()" style="display:none">📋 Update Nom</button>
+    <input type="file" accept=".xlsx,.xls" id="lpNomFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
   </div>
   <div id="gsb-v26" style="display:none;align-items:center;gap:4px">
     <button class="rbtn" id="v26ExportBtn" onclick="V26_export()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button>
   </div>
   <div style="flex:1"></div>
-  <button class="rbtn" onclick="masterBackupExport()" style="background:#FEF3EB;color:#C4550A;border-color:#F5D6B8;font-size:10px;padding:4px 8px" title="Download full system backup as Excel">💾 Backup</button>
-  <button class="rbtn admin-only" onclick="masterBackupRestorePrompt()" style="background:#EFF6FF;color:#2563eb;border-color:#BFDBFE;font-size:10px;padding:4px 8px" title="Restore from backup file">📂 Restore</button>
-  <button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none;font-size:10px;padding:4px 8px">↩ Undo</button>
+  <button class="rbtn" onclick="masterBackupExport()" style="background:var(--os);color:var(--or);border-color:#F5D6B8" title="Download full system backup as Excel">💾 Backup</button>
+  <button class="rbtn admin-only" onclick="masterBackupRestorePrompt()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE" title="Restore from backup file">📂 Restore</button>
+  <button class="rbtn undo-btn" onclick="UNDO_restore()" style="opacity:0.35;pointer-events:none">↩ Undo</button>
   <button class="rbtn" onclick="showHelp()">? Help</button>
+  <span style="font-size:9px;color:var(--tt);margin-left:8px;white-space:nowrap">©2026 Vladislav Abramov | <span style="font-weight:600">SM²ARTA™</span></span>
 </div>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -637,6 +639,7 @@ function _undoSnap(){
     lm_manualDemand:JSON.stringify(LM_MANUAL_DEMAND||[]),
     lm_palletCfg:JSON.stringify(Object.fromEntries(Object.entries(LM_palletCfg||{}).map(([k,v])=>([k,{mode:v.mode,overrides:[...v.overrides]}])))),
     lm_stockSkus:JSON.stringify([...(STOCK_SKUS||[])]),
+    lm_stockQtys:JSON.stringify(STOCK_QTYS||{}),
     lm_stockName:STOCK_REPORT_NAME||''
   };
 }
@@ -694,7 +697,7 @@ function UNDO_restore(){
     if(snap.lm_stp){LM_STP_DELIVERIES=JSON.parse(snap.lm_stp);_stpNextId=snap.lm_stpNextId||1;LM_STP_TRUCKS={}}
     if(snap.lm_manualDemand)LM_MANUAL_DEMAND=JSON.parse(snap.lm_manualDemand);
     if(snap.lm_palletCfg){const pc=JSON.parse(snap.lm_palletCfg);LM_palletCfg={};for(const[k,v]of Object.entries(pc))LM_palletCfg[k]={mode:v.mode||'dis',overrides:new Set(v.overrides||[])}}
-    if(snap.lm_stockSkus){STOCK_SKUS=new Set(JSON.parse(snap.lm_stockSkus));STOCK_REPORT_NAME=snap.lm_stockName||''}
+    if(snap.lm_stockSkus){STOCK_SKUS=new Set(JSON.parse(snap.lm_stockSkus));STOCK_QTYS=snap.lm_stockQtys?JSON.parse(snap.lm_stockQtys):{};STOCK_REPORT_NAME=snap.lm_stockName||''}
     _undoLastSnap=_undoSnap();
     // Rebuild LM if data present
     if(Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();numberAll()}
@@ -1129,7 +1132,7 @@ function _lpCustNom(sku){
     name:n.name||'',
     unitPrice:o.price!==undefined?o.price:(n.unitPrice||0),
     hsCode:o.hsCode||n.hsCode||'',
-    country:o.country||n.country||''
+    country:o.country||n.country||(o.hsCode||n.hsCode?'':'China')
   };
 }
 
@@ -1163,6 +1166,7 @@ async function LP_saveToSupabase(){
         dispatched:[...LP_dispatched],contDateOverrides:LP_contDateOverrides,
         lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
         arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
+        lockedRows:LP_STATE.lockedRows||[],
         stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME
       })
     ]);
@@ -1199,6 +1203,7 @@ async function LP_loadFromSupabase(){
       LP_excludeStaples=truck?.excludeStaples!==undefined?truck.excludeStaples:true;
       LP_arrivedConts=new Set(truck?.arrivedConts||[]);
       LP_holds=new Set(truck?.holds||[]);
+      if(truck?.lockedRows?.length)LP_STATE.lockedRows=truck.lockedRows;
       if(truck?.transitDays)LP_transitDays={...LP_TRANSIT_DEFAULTS,...truck.transitDays};
       if(truck?.stockSkus?.length&&STOCK_SKUS.size===0){
         STOCK_SKUS=new Set(truck.stockSkus);
@@ -1285,6 +1290,7 @@ function LP_render(){
   // Show/hide export button based on plan state
   const show=LP_STATE.planGenerated;
   const lpExp=document.getElementById('lpExportBtn');if(lpExp)lpExp.style.display=show?'':'none';
+  const lpNomBtn=document.getElementById('lpUpdateNomBtn');if(lpNomBtn)lpNomBtn.style.display=show&&ROLE==='admin'?'':'none';
   // Update subtitle with stats
   const sub=document.getElementById('lpSubtitle');
   if(sub&&LP_STATE.planGenerated){
@@ -1817,8 +1823,8 @@ function LP_showAddItem(){
     </div>
     <div id="lpAddPreview" style="margin-bottom:12px;font-size:11px;color:var(--ts)"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="rbtn" onclick="clM()" style="padding:6px 16px">Cancel</button>
-      <button class="rbtn" id="lpAddBtn" onclick="LP_addArrivalItem()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;padding:6px 16px;font-weight:700" disabled>+ Add to Arrivals</button>
+      <button class="mbtn" onclick="clM()">Cancel</button>
+      <button class="mbtn" id="lpAddBtn" onclick="LP_addArrivalItem()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA" disabled>+ Add to Arrivals</button>
     </div>
   </div>`;
   openModal(h,'680px');
@@ -2046,7 +2052,7 @@ function LP_renderDemand(el){
       ?'<input type="text" value="'+val+'" data-sku="'+s.sku+'" data-field="'+field+'" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="'+ph+'" style="width:'+w+'px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(isOvr2?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(isOvr2?'var(--pu)':'var(--tp)')+';outline:none;background:'+(isOvr2?'var(--ps)':'var(--sf)')+'">':String(val||'—');
     const _priceCell=ROLE!=='viewer'?('<input type="number" step="0.01" min="0" value="'+_priceVal+'" data-sku="'+s.sku+'" data-field="price" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="0.00" style="width:60px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_priceOvr?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_priceOvr?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_priceOvr?'var(--ps)':'var(--sf)')+'">'):String(_priceVal||'—');
     const _hsCell=_mkTxtIn('hsCode',_hsVal,_hsOvr,80,'0000.00.00');
-    const _cooCell=_mkTxtIn('country',_cooVal,_cooOvr,44,'USA');
+    const _cooCell=_mkTxtIn('country',_cooVal,_cooOvr,44,'China');
     html+=`<tr data-search="${s.sku} ${s.name} ${s.source}" data-source="${s.source}"${_sameNameGroup?' style="background:var(--sf)"':''}>
       <td class="mono"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${_arrSkus.has(s.sku)?'var(--gn)':'#EF4444'};margin-right:5px;flex-shrink:0;vertical-align:middle" title="${_arrSkus.has(s.sku)?'Has arrival date':'No arrival date'}"></span>${s.sku}${isOvr?'<span style="color:var(--pu);font-size:9px" title="Pallet override active"> ★</span>':''}</td>
       <td class="tcl"${_sameNameGroup?' style="color:var(--ts)"':''} title="${s.name||''}">${_sameNameGroup?'↳ ':''}${s.name||'—'}</td>
@@ -2658,7 +2664,7 @@ function LP_renderLate(el,opts){
   }
 
   // ── Full layout: left deliveries panel + right dynamic content ──
-  el.innerHTML=`<div style="display:grid;grid-template-columns:190px 1fr;height:100%;overflow:hidden">
+  el.innerHTML=`<div style="display:grid;grid-template-columns:190px 1fr;position:absolute;inset:0;overflow:hidden">
     <div style="overflow-y:auto;padding:14px 10px;border-right:1px solid var(--bd)">${leftH}</div>
     <div id="lpLateMain" style="overflow-y:auto;padding:14px 16px"></div>
   </div>`;
@@ -3002,8 +3008,8 @@ function LP_showCombinedCIModal(){
     </div>
     <div id="cciPreview" style="font-size:11px;color:var(--ts);margin-bottom:12px;padding:6px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:4px">Select destinations and sources above, then export.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="rbtn" onclick="LP_previewCombinedCI()" style="font-size:11px;padding:4px 12px">🔍 Preview</button>
-      <button class="rbtn" onclick="LP_exportCombinedCI()" style="font-size:11px;padding:4px 14px;background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-weight:600">📄 Export CI</button>
+      <button class="mbtn" onclick="LP_previewCombinedCI()">🔍 Preview</button>
+      <button class="mbtn" onclick="LP_exportCombinedCI()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📄 Export CI</button>
     </div>
   </div>
 </div></div>`;
@@ -4800,7 +4806,7 @@ async function masterBackupRestore(file){
         <div class="mdb" style="padding:20px">
           <p style="font-size:13px;color:var(--tp);margin-bottom:12px">Successfully restored from <strong>${file.name}</strong></p>
           <div style="font-size:11px;color:var(--ts);background:var(--bg);padding:10px;border-radius:8px;max-height:200px;overflow-y:auto">${log.map(l=>'<div>✓ '+l+'</div>').join('')}</div>
-          <button onclick="this.closest('.mo').remove();location.reload()" style="margin-top:14px;padding:10px 24px;border-radius:8px;border:none;background:var(--ac);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd);width:100%">Reload Page</button>
+          <button class="mbtn mbtn-primary mbtn-wide" onclick="this.closest('.mo').remove();location.reload()" style="margin-top:14px">Reload Page</button>
         </div>
       </div>
     </div>`;
@@ -4965,22 +4971,11 @@ function enterApp(){
         document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
       }
       if(lpOk){
-        document.getElementById("LP").classList.add("vis");
-        // But show Vision 2026 as default landing
-        document.getElementById("LP").classList.remove("vis");
-        document.getElementById("V26").classList.add("vis");
-        curMod="v26";
-        const rbv=document.getElementById('roleBadgeV26');
-        if(rbv)rbv.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
-        V26_render();
+        switchMod('v26');
         LP_switchTab('plan');// prep LP in background
       } else if(lmOk){
         // Only Last Mile data — show Vision 2026, and offer LP upload to admin
-        document.getElementById("V26").classList.add("vis");
-        curMod="v26";
-        const rbv=document.getElementById('roleBadgeV26');
-        if(rbv)rbv.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
-        V26_render();
+        switchMod('v26');
         rT();rVL();// prep LM in background
       }
       applyRole();
@@ -5019,7 +5014,7 @@ async function saveSharedData(fullSave){
       u('fm-vs',VS),
       u('fm-excl',[...LM_excluded]),
       u('fm-excl-ovr',LM_excludeUserOvr),
-      u('fm-stock',{skus:[...STOCK_SKUS],name:STOCK_REPORT_NAME})
+      u('fm-stock',{skus:[...STOCK_SKUS],qtys:STOCK_QTYS,name:STOCK_REPORT_NAME})
     ];
     // Only save heavy data (NOM, RW) on full save (initial generation / file upload)
     if(fullSave){
@@ -7159,7 +7154,7 @@ function LM_showCreateKit(prefillVenue){
         <div id="kit_items" style="max-height:300px;overflow-y:auto;border:1px solid var(--bl);border-radius:8px"></div>
         <div id="kit_summary" style="margin-top:8px;font-size:11px;color:var(--ts)"></div>
         <div id="kit_err" style="color:var(--rd);font-size:11px;margin-top:6px;display:none"></div>
-        <button onclick="_kitCreate()" style="margin-top:12px;width:100%;padding:10px;border-radius:8px;border:none;background:#43A047;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd)">📦 Create Kit</button>
+        <button class="mbtn mbtn-wide" onclick="_kitCreate()" style="margin-top:12px;background:#43A047;color:#fff;border-color:#43A047">📦 Create Kit</button>
       </div>
     </div>
   </div>`;
@@ -7254,7 +7249,7 @@ function LM_showKitDetail(kitId){
         </div>
         <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Src</th><th>Qty</th><th>Plt</th></tr></thead><tbody>${rows}</tbody></table>
         ${ROLE!=='viewer'?`<div style="margin-top:12px;display:flex;gap:8px">
-          <button onclick="LM_deleteKit('${kit.id}');this.closest('.mo').remove()" style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--rd);background:var(--rs);color:var(--rd);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--fd)">🗑 Delete Kit</button>
+          <button class="mbtn mbtn-danger mbtn-wide" onclick="LM_deleteKit('${kit.id}');this.closest('.mo').remove()">🗑 Delete Kit</button>
         </div>`:''}
       </div>
     </div>
@@ -7344,7 +7339,7 @@ function LM_showCreateStp(prefillVenue){
           </div>
         </div>
         <div id="stp_preview" style="max-height:200px;overflow-y:auto;border:1px solid var(--bl);border-radius:8px;margin-bottom:12px"></div>
-        <button onclick="_stpCreate()" style="width:100%;padding:10px;border-radius:8px;border:none;background:#EF6C00;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd)">🏪 Create STP Delivery</button>
+        <button class="mbtn mbtn-wide" onclick="_stpCreate()" style="background:#EF6C00;color:#fff;border-color:#EF6C00">🏪 Create STP Delivery</button>
       </div>
     </div>
   </div>`;
@@ -7405,7 +7400,7 @@ function LM_showStpDetail(venue){
           <div><label style="font-size:10px;font-weight:600;color:var(--ts)">Rate (USD)</label><input type="number" value="${del.rate||0}" min="0" onchange="LM_updateStp('${venue}','rate',+this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
         </div>`:''}
         <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Qty</th><th>Plt</th></tr></thead><tbody>${rows}</tbody></table>
-        ${ROLE!=='viewer'?`<button onclick="LM_deleteStp('${venue}');this.closest('.mo').remove()" style="margin-top:12px;width:100%;padding:8px;border-radius:6px;border:1px solid var(--rd);background:var(--rs);color:var(--rd);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--fd)">🗑 Delete STP Delivery</button>`:''}
+        ${ROLE!=='viewer'?`<button class="mbtn mbtn-danger mbtn-wide" onclick="LM_deleteStp('${venue}');this.closest('.mo').remove()" style="margin-top:12px">🗑 Delete STP Delivery</button>`:''}
       </div>
     </div>
   </div>`;
@@ -7493,7 +7488,7 @@ function LM_showAddDemand(prefillVenue){
           </details>
         </div>
         <div id="md_err" style="color:var(--rd);font-size:11px;margin-top:8px;display:none"></div>
-        <button id="md_btn" onclick="LM_addDemandItem()" style="margin-top:14px;width:100%;padding:10px;border-radius:8px;border:none;background:var(--gn);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd);display:none">+ Add to Demand</button>
+        <button id="md_btn" class="mbtn mbtn-wide" onclick="LM_addDemandItem()" style="margin-top:14px;background:var(--gn);color:#fff;border-color:var(--gn);display:none">+ Add to Demand</button>
       </div>
     </div>
   </div>`;
@@ -9228,8 +9223,8 @@ function systemReset(){
         <p style="font-size:13px;color:var(--tp);margin-bottom:16px">This will <strong>erase ALL data</strong> for both Load Plan and Last Mile, clear the database, and return to the file upload screen.</p>
         <p style="font-size:12px;color:var(--rd);font-weight:600;margin-bottom:20px">This affects all users and cannot be undone.</p>
         <div style="display:flex;gap:10px;justify-content:center">
-          <button onclick="this.closest('.mo').remove()" style="padding:10px 24px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts)">Cancel</button>
-          <button onclick="this.closest('.mo').remove();doSystemReset()" style="padding:10px 24px;border-radius:8px;border:none;background:var(--rd);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--fd)">Reset Everything</button>
+          <button class="mbtn" onclick="this.closest('.mo').remove()">Cancel</button>
+          <button class="mbtn mbtn-danger" onclick="this.closest('.mo').remove();doSystemReset()">Reset Everything</button>
         </div>
       </div>
     </div>
@@ -9488,8 +9483,13 @@ function doResetLP(){
 function doSoftResetLP(){
   if(ROLE==="viewer")return;
   // Only delete file/plan data from Supabase — keep truck-state (locked, LSR, transit, palletOvr, etc.)
+  // Capture manual arrivals before any state change
+  const _ma=(LP_STATE.arrivals||[]).filter(a=>a._manual);
   if(SB){
-    SB.from('shared_state').delete().in('id',['lp-state','lp-nom','lp-demand','lp-arrivals','lp-plan']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['lp-state','lp-nom','lp-demand','lp-arrivals','lp-plan']).then(()=>{
+      // Re-save manual arrivals so they survive the delete
+      if(_ma.length){const now2=new Date().toISOString();SB.from('shared_state').upsert({id:'lp-arrivals',value:JSON.stringify(_ma),updated_at:now2}).catch(()=>{});}
+    }).catch(()=>{});
     // Update config to mark plan as not generated, but keep engine settings
     const now=new Date().toISOString();
     SB.from('shared_state').upsert({id:'lp-config',value:JSON.stringify({
@@ -9500,11 +9500,12 @@ function doSoftResetLP(){
   }
   // Clear file data + generated plan, keep engine settings and truck-level overrides
   const _ta=LP_STATE.turnaround, _mp=LP_STATE.maxPallets, _mt=LP_STATE.maxTrucks, _md=LP_STATE.maxDests, _ric=LP_STATE.ricStartDate;
-  LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},
+  const _lr=LP_STATE.lockedRows||[];
+  LP_STATE={materialPlan:[],nomenclature:{},arrivals:_ma,loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},
     turnaround:_ta,maxPallets:_mp,maxTrucks:_mt,maxDests:_md,ricStartDate:_ric,
-    manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
+    manualArrivals:[],demandAdjustments:[],lockedRows:_lr,planGenerated:false,generatedPlan:[]};
   // LP_dispatched, LP_lsrNumbers, LP_palletOverrides, LP_arrivedConts, LP_transitDays,
-  // LP_contDateOverrides — all preserved
+  // LP_contDateOverrides, lockedRows, manual arrivals (_manual:true) — all preserved
   lpUf=[];lpRenderUpload();
   // Clear rendered content so upload overlay is visible
   const lpM2=document.getElementById('lpMain');if(lpM2)lpM2.innerHTML='';
@@ -9601,6 +9602,50 @@ async function goGenerateLP(){
   }
 }
 
+// ── LP Nom-only update (updates HS codes / country / prices without regenerating plan) ──
+function LP_updateNomPrompt(){
+  if(ROLE==='viewer'||!LP_STATE.planGenerated)return;
+  const inp=document.getElementById('lpNomFileInput');
+  if(!inp)return;
+  inp.onchange=async function(){
+    const f=this.files[0];this.value='';
+    if(!f)return;
+    try{
+      document.getElementById('pov').style.display='flex';
+      await new Promise(r=>setTimeout(r,30));
+      const buf=await f.arrayBuffer();
+      const newNom=LP_parseNomenclature(new Uint8Array(buf));
+      let updated=0;
+      for(const sku in newNom){
+        if(LP_STATE.nomenclature[sku]){
+          // Merge — update metadata fields, preserve palletQty/palletSpc from current nom
+          Object.assign(LP_STATE.nomenclature[sku],{
+            name:newNom[sku].name||LP_STATE.nomenclature[sku].name,
+            source:newNom[sku].source||LP_STATE.nomenclature[sku].source,
+            hsCode:newNom[sku].hsCode,
+            country:newNom[sku].country,
+            unitPrice:newNom[sku].unitPrice||LP_STATE.nomenclature[sku].unitPrice,
+          });
+        }else{
+          LP_STATE.nomenclature[sku]=newNom[sku];
+        }
+        updated++;
+      }
+      await LP_saveToSupabase();
+      document.getElementById('pov').style.display='none';
+      LP_render();
+      const msg=`Nomenclature updated: ${updated} SKUs refreshed (HS codes, country, prices). Plan unchanged.`;
+      const eb=document.getElementById('lp_eb');
+      if(eb){eb.textContent=msg;eb.style.color='var(--gn)';eb.style.display='block';setTimeout(()=>{eb.style.display='none';eb.style.color=''},4000);}
+    }catch(e){
+      document.getElementById('pov').style.display='none';
+      alert('Nom update failed: '+e.message);
+      console.error(e);
+    }
+  };
+  inp.click();
+}
+
 // ── Wire up LP upload panel events (called once on load) ──
 function initLPUpload(){
   const dz=document.getElementById('lp_dz');
@@ -9633,8 +9678,8 @@ function stockReportUpload(){
         <div style="font-size:11px;color:var(--ts);margin-top:4px">All items will show red dots until a report is uploaded</div>
       </div>`}
       <div style="display:flex;gap:10px">
-        <button onclick="document.getElementById('stockFileInput').click()" style="flex:1;padding:12px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--gn)">📤 Upload New Report</button>
-        ${hasStock?`<button onclick="stockReportReset()" style="padding:12px 16px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--rd)">✕ Reset</button>`:''}
+        <button class="mbtn" onclick="document.getElementById('stockFileInput').click()" style="flex:1;color:var(--gn)">📤 Upload New Report</button>
+        ${hasStock?`<button class="mbtn mbtn-danger" onclick="stockReportReset()">✕ Reset</button>`:''}
       </div>
     </div>
   </div></div>`;
