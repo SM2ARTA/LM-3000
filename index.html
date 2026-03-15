@@ -4595,7 +4595,8 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   p.getRow(6).height=6;
   p.getRow(7).height=28;['#','Nomenclature Code','Nomenclature Name','Qty','Pallets','HS Code','Country','Unit Price','Line Total'].forEach((h,i)=>{const cl=p.getRow(7).getCell(i+1);cl.value=h;cl.font=fHdr;cl.fill=fillDark;cl.border=brdMed;cl.alignment=alW});
   items.forEach((it,idx)=>{const nm=nomenclature[it.sku]||{};const co=LP_customsOverrides&&LP_customsOverrides[it.sku]||{};const rn=8+idx;p.getRow(rn).height=18;const bg=idx%2===1?fillL1:fillWh;
-    [idx+1,it.sku,co.customsName||nm.customsName||nm.name||it.name||it.sku,it.qty,+it.pallets.toFixed(3),nm.hsCode||'',nm.country||'',nm.unitPrice||0,(nm.unitPrice||0)*it.qty].forEach((v,i)=>{
+    const _up=co.price!==undefined?co.price:(nm.unitPrice||0);
+    [idx+1,it.sku,co.customsName||nm.customsName||nm.name||it.name||it.sku,it.qty,+it.pallets.toFixed(3),_hsNormalize(co.hsCode||nm.hsCode||''),co.country||nm.country||'',_up,_up*it.qty].forEach((v,i)=>{
       const al=i===0?alC:([7,8].includes(i)?alR:alL);const fmt=i===7?'#,##0.00':(i===8?'$ #,##0.00':null);
       pc(rn,i+1,v,fData,al,bg,brdThin,fmt);
     });
