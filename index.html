@@ -1123,7 +1123,12 @@ function LP_setCustomsOvr(sku,field,val){
   let v=field==='price'?(parseFloat(val)||0):String(val||'').trim();
   if(field==='hsCode'&&v)v=_hsNormalize(v);
   if(!v||v===0){
-    if(LP_customsOverrides[sku]){delete LP_customsOverrides[sku][field];if(!Object.keys(LP_customsOverrides[sku]).length)delete LP_customsOverrides[sku];}
+    if(LP_customsOverrides[sku]){
+      delete LP_customsOverrides[sku][field];
+      // Only delete the whole object if nothing meaningful remains (preserve hsConfirmed)
+      const remaining=Object.keys(LP_customsOverrides[sku]).filter(k=>k!=='hsConfirmed'||LP_customsOverrides[sku][k]);
+      if(!remaining.length)delete LP_customsOverrides[sku];
+    }
   }else{
     if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
     LP_customsOverrides[sku][field]=v;
