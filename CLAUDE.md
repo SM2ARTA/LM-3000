@@ -118,10 +118,53 @@ Fixed bar at `bottom:0`, `z-index:65`, `height:44px`. Always visible on desktop.
 - `LP_exportCombinedCI()` — calls `LP_exportCI_ExcelJS(..., partyOverride)`
 - Party logic: all GDL/CDMX/MTY → Mexico; all TOR/VAN → Canada; mixed → blank
 
+## HS Code Assistant
+3-step wizard in LP Demand tab (🔍 button next to each HS Code cell):
+
+### Step 0 — Siblings + AI
+- **Sibling SKU detection**: `_hsFindSiblings(sku)` extracts prefix (e.g., `CTBAR-001` from `CTBAR-001-002`), finds siblings with existing HS codes, groups by code, shows with description + source + product name
+- **AI Classification** (Claude or Gemini): sends product URL + name to AI, gets HS code + customs name + country of origin with confidence levels
+- **Country of origin**: AI returns `{primary, alternatives[], reasoning}` — shown as selectable buttons in accept dialog
+
+### AI Integration
+- **Providers**: Claude (Anthropic, `claude-haiku-4-5-20251001`) or Gemini (Google, `gemini-2.0-flash`)
+- **API keys in `localStorage`**: `hs-ai-provider`, `hs-ai-key` — browser only
+- **URL-first prompt**: when URL provided, AI is told to identify the product FROM the URL, not from internal name
+- **CORS**: Claude uses `anthropic-dangerous-direct-browser-access: true` header; Gemini is CORS-friendly natively
+- **Key persistence**: only 401 clears the key; 429/quota errors show friendly retry message
+
+### HS Code Normalization
+- `_hsNormalize(code)` → strips non-digits → formats as `XXXX.XX`
+- Applied in: `LP_setCustomsOvr`, `_lpCustNom`, Excel nom import, nom update merge
+- Edge cases: `""` → `""`, `"8301"` → `"8301"`, `"8301.40.0090"` → `"8301.40"`
+
+### Customs Name
+- Separate field from product name — stored in `LP_customsOverrides[sku].customsName`
+- Own column in demand table (editable, purple when overridden)
+- CI exports use `customsName || name` for DESCRIPTION field
+- `_lpCustNom(sku)` returns `{name, customsName, unitPrice, hsCode, country}`
+
+### Step 1 — Category Selection (manual path)
+- `_HS_CATS[]` — 17 categories with keywords and chapter mappings
+- Auto-detected from product name keywords, shown at top
+- Clicking a category → Step 2 (refine with material/usage)
+
+### Step 2 — Results
+- `_HS_DB[]` — ~200 HS codes across chapters 39–96
+- Filtered by selected category chapters, scored by all context keywords
+- Accept → saves HS code + customs name + country via `LP_setCustomsOvr`
+
+### Demand Table Destination Filter
+- Multi-select checkbox dropdown (`#lpDemDestDrop`) in demand tab toolbar
+- Each row has `data-dests="|Houston|Kansas City|..."` attribute
+- `LP_filterDemand()` checks text search + source + selected destinations
+- `_lpDemDestAll(check)` — select all / none helper
+
 ## CI Export
 - `LP_exportCI_ExcelJS(truckId, items, dest, date, totalPlt, nomenclature, partyOverride)` — 7th param optional
 - Rows 11 (headers) and 12–17 (party data) use merged cells: `A:D` (Shipper), `E:I` (Consignee), `J:O` (Broker)
 - `LP_getCIParties(dest)` — returns `{consignee:[], broker:[]}` arrays for MEX/CAN/RIC/blank
+- **Customs name in CI**: DESCRIPTION column uses `customsName || name` — both individual CI (`LP_exportCI_ExcelJS`) and combined CI (`LP_exportCombinedCI`)
 
 ## Stock Report Persistence (`STOCK_QTYS`)
 - **Global state**: `STOCK_SKUS` (Set), `STOCK_QTYS` (obj: sku→qty), `STOCK_REPORT_NAME` (string)
@@ -189,7 +232,7 @@ Four reset functions exist — any new state must be added to all that apply:
 
 **LP Supabase keys** (saved by `LP_saveToSupabase()`): `lp-config`, `lp-nom`, `lp-demand`, `lp-arrivals`, `lp-plan`, `lp-truck-state`
 **`lp-truck-state` contains**: dispatched, contDateOverrides, lsrNumbers, palletOverrides, customsOverrides, excludeStaples, arrivedConts, transitDays, holds, lockedRows (added 2026-03-15), stockSkus, stockReportName
-**`doSoftResetLP` preserves**: all LP_* globals + `lockedRows` + manual arrivals (`_manual:true` entries in `LP_STATE.arrivals`) — both fixed 2026-03-15
+**`doSoftResetLP` preserves**: all LP_* globals + `lockedRows` + `customsOverrides` + manual arrivals (`_manual:true` entries in `LP_STATE.arrivals`) — both fixed 2026-03-15
 **Manual arrivals**: pushed into `LP_STATE.arrivals` with `_manual:true` by `LP_addArrivalItem()`. `LP_STATE.manualArrivals` is unused/dead code.
 **LM/shared Supabase keys** (saved by `saveSharedData()` + dedicated fns): `fm-nom`, `fm-rw`, `fm-vs`, `fm-excl`, `fm-excl-ovr`, `fm-stock`, `fm-lm-dispatch`, `fm-manual-items`, `fm-lm-demand-adj`, `fm-lm-nom-ovr`, `fm-cluster-ta`, `fm-lm-manual-demand`, `fm-lm-kits`, `fm-lm-stp-deliveries`, `fm-dist-overrides`, `fm-pallet-cfg`
 
@@ -202,6 +245,14 @@ Four reset functions exist — any new state must be added to all that apply:
 - [ ] Colors use CSS vars from `:root` — no hardcoded hex except border colors for colored button variants
 - [ ] Module activation always via `switchMod(mod)` — never manual `classList.add("vis")`
 - [ ] New scrollable module containers explicitly set `padding-bottom:44px` (shorthand `padding` will override cascade)
+
+## Module Layout (viewport-locked)
+All three modules use `height:100vh;overflow:hidden` — no page-level scrollbar:
+- `#D` (LM): `.hd` sticky header → `.cnt` (flex:1, overflow:hidden) → sidebar + main scroll
+- `#LP`: `.hd` sticky header → `.lp-body` (flex:1, overflow:hidden) → `.lp-tabs` + `.lp-main` (flex:1, overflow-y:auto, position:relative)
+- `#V26`: `.hd` sticky header → `.v26-body` (flex:1, overflow-y:auto)
+- LP Late tab: uses `position:absolute;inset:0` inside `.lp-main` to avoid layout reflow
+- `.mod-sw` (module switcher): `flex-shrink:0`, each `.mod-btn` has `min-width:88px;text-align:center` for stable sizing
 
 ## Dev Environment Notes
 - **Shell**: Claude Code uses `C:\Users\vla8529\PortableGit-new\usr\bin\bash.exe`

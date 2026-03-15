@@ -31,7 +31,7 @@
 .erbox{background:var(--rs);border:1px solid #F5C6C7;border-radius:8px;padding:10px 14px;color:var(--rd);font-size:13px;margin-bottom:16px;text-align:left}
 .pov{position:fixed;inset:0;background:rgba(244,245,247,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999}
 .spn{width:40px;height:40px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
-#D{display:none;min-height:100vh;flex-direction:column}#D.vis{display:flex}
+#D{display:none;height:100vh;overflow:hidden;flex-direction:column}#D.vis{display:flex}
 .hd{background:var(--sf);border-bottom:1px solid var(--bd);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 2px rgba(0,0,0,.04);position:sticky;top:0;z-index:50}
 .hl{display:flex;align-items:center;gap:12px}
 .tbtn{background:transparent;border:1px solid transparent;border-radius:6px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts);text-transform:capitalize}.tbtn.on{background:var(--as);color:var(--ac);border-color:var(--ab)}
@@ -102,8 +102,8 @@
 .app-footer{padding:12px 20px;text-align:center;font-size:10px;color:var(--tt);border-top:1px solid var(--bl);background:var(--sf);margin-top:auto;white-space:nowrap}
 .app-footer span{font-weight:600}
 .sys-reset{font-size:11px;color:var(--tt);cursor:pointer;opacity:.4;transition:all .2s;vertical-align:middle;margin-left:2px}.sys-reset:hover{opacity:1;color:var(--rd)}
-.mod-sw{display:flex;gap:2px;margin-right:8px;background:var(--bl);border-radius:8px;padding:2px}
-.mod-btn{padding:5px 14px;border-radius:6px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts);background:transparent;transition:all .15s;white-space:nowrap}
+.mod-sw{display:flex;gap:2px;margin-right:8px;background:var(--bl);border-radius:8px;padding:2px;flex-shrink:0}
+.mod-btn{padding:5px 14px;border-radius:6px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--fd);color:var(--ts);background:transparent;transition:all .15s;white-space:nowrap;min-width:88px;text-align:center;box-sizing:border-box}
 .mod-btn.on{background:var(--sf);color:var(--ac);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 #LP{display:none;height:100vh;overflow:hidden;flex-direction:column;width:100%}#LP.vis{display:flex}
 .sb-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;margin-left:8px;padding:2px 8px;border-radius:4px}
@@ -425,7 +425,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
   .lp-card{padding:10px}
 }
 /* ── VISION 2026 DASHBOARD ── */
-#V26{display:none;min-height:100vh;flex-direction:column}#V26.vis{display:flex}
+#V26{display:none;height:100vh;overflow:hidden;flex-direction:column}#V26.vis{display:flex}
 .v26-body{flex:1;overflow-y:auto;padding:10px 20px 44px;max-width:1400px;margin:0 auto;width:100%;display:flex;flex-direction:column}
 .v26-hero{text-align:center;padding:20px 0 10px}
 .v26-hero h1{font-size:28px;font-weight:700;letter-spacing:-.5px}
@@ -952,13 +952,14 @@ let LP_contDateOverrides={};// container name -> new arrival date (YYYY-MM-DD)
 let LP_lsrNumbers={};// truckId -> LSR number string (e.g. "LSR625-001")
 let LP_palletOverrides={};// sku -> {palletQty, palletSpc} — manual overrides for pallet dimensions
 let LP_excludeStaples=true;// exclude STP USA items for HOU/KC/NY destinations
+let _lpDemFilterState={srcs:null,dests:null,search:''};// preserved across re-renders
 let LP_customsOverrides={};// sku -> {price, hsCode, country} — customs overrides for CI export
 let LP_holds=new Set();// "dest|sku" pairs put on hold — excluded from plan generation
 let LP_stockHolds=new Set();// auto-computed: dest|sku where stock qty < total demand — resets on new stock upload
 let LP_arrivedConts=new Set();// container keys marked as arrived
-const LP_TRANSIT_DEFAULTS={TOR:5,VAN:5,CDMX:7,GDL:7,MTY:7,KC:1,HOU:1,NY:3};
+const LP_TRANSIT_DEFAULTS={TOR:7,VAN:7,CDMX:7,GDL:7,MTY:7,KC:1,HOU:1,NY:3};
 let LP_transitDays={...LP_TRANSIT_DEFAULTS};// dest abbr -> transit days (editable)
-const LP_DEST_WHS_DEFAULTS={TOR:2,VAN:2,CDMX:2,GDL:2,MTY:2,KC:1,HOU:1,NY:1};
+const LP_DEST_WHS_DEFAULTS={TOR:3,VAN:3,CDMX:3,GDL:3,MTY:3,KC:3,HOU:3,NY:3};
 let LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};// dest abbr -> satellite WHS processing days
 // Match destination string to transit abbreviation (checks both abbr and full city name)
 function LP_matchTransitAbbr(dest){
@@ -1110,9 +1111,17 @@ function LP_setPalletOvr(sku,field,val){
   LP_render();
   LP_saveToSupabase();
 }
+// Normalize HS code to XXXX.XX format
+function _hsNormalize(code){
+  if(!code)return'';
+  const digits=code.replace(/[^0-9]/g,'');
+  if(digits.length<=4)return digits;
+  return digits.slice(0,4)+'.'+digits.slice(4,6);
+}
 function LP_setCustomsOvr(sku,field,val){
   if(ROLE==='viewer')return;
-  const v=field==='price'?(parseFloat(val)||0):String(val||'').trim();
+  let v=field==='price'?(parseFloat(val)||0):String(val||'').trim();
+  if(field==='hsCode'&&v)v=_hsNormalize(v);
   if(!v||v===0){
     if(LP_customsOverrides[sku]){delete LP_customsOverrides[sku][field];if(!Object.keys(LP_customsOverrides[sku]).length)delete LP_customsOverrides[sku];}
   }else{
@@ -1125,15 +1134,1016 @@ function LP_customsInput(el){
   if(ROLE==='viewer')return;
   LP_setCustomsOvr(el.dataset.sku,el.dataset.field,el.value);
 }
+function LP_toggleHSConfirm(sku){
+  if(ROLE==='viewer')return;
+  if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
+  LP_customsOverrides[sku].hsConfirmed=!LP_customsOverrides[sku].hsConfirmed;
+  LP_saveToSupabase();LP_render();
+}
 function _lpCustNom(sku){
   const n=LP_STATE.nomenclature[sku]||{};
   const o=LP_customsOverrides[sku]||{};
   return {
     name:n.name||'',
+    customsName:o.customsName||n.customsName||'',
     unitPrice:o.price!==undefined?o.price:(n.unitPrice||0),
-    hsCode:o.hsCode||n.hsCode||'',
+    hsCode:_hsNormalize(o.hsCode||n.hsCode||''),
     country:o.country||n.country||(o.hsCode||n.hsCode?'':'China')
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HS CODE LOOKUP — Smart tariff code assistant with customs name suggestions
+// ═══════════════════════════════════════════════════════════════════════════
+const _HS_DB=[
+// ── Ch.39 Plastics ──
+{c:'3917.40',d:'Plastic fittings (joints, elbows, flanges)',k:'plastic fitting joint elbow flange connector pipe tube'},
+{c:'3918.10',d:'Floor coverings of polymers of vinyl chloride',k:'vinyl floor covering mat pvc flooring'},
+{c:'3918.90',d:'Floor coverings of other plastics',k:'plastic floor covering mat rubber flooring turf'},
+{c:'3920.10',d:'Plates/sheets of polymers of ethylene',k:'polyethylene sheet film wrap plastic plate pe'},
+{c:'3920.49',d:'Plates/sheets of other polymers of vinyl chloride',k:'pvc sheet rigid plate panel'},
+{c:'3921.90',d:'Other plates/sheets/film of plastics',k:'plastic sheet plate film laminated acrylic polycarbonate'},
+{c:'3922.90',d:'Other sanitary ware of plastics',k:'plastic sanitary toilet portable restroom'},
+{c:'3923.10',d:'Boxes, cases, crates of plastics',k:'plastic box case crate container bin tote storage'},
+{c:'3923.21',d:'Sacks and bags of polymers of ethylene',k:'plastic bag sack polyethylene pe garbage trash'},
+{c:'3923.29',d:'Sacks and bags of other plastics',k:'plastic bag polypropylene pp woven sack'},
+{c:'3923.50',d:'Stoppers, lids, caps of plastics',k:'plastic cap lid stopper closure bottle top'},
+{c:'3924.10',d:'Tableware and kitchenware of plastics',k:'plastic plate cup bowl tableware kitchenware utensil cutlery disposable'},
+{c:'3924.90',d:'Other household articles of plastics',k:'plastic household tray organizer holder rack hook hanger'},
+{c:'3925.20',d:'Doors, windows and frames of plastics',k:'plastic door window frame partition'},
+{c:'3925.90',d:'Other builders\' ware of plastics',k:'plastic builder ware fixture fitting cable tray duct cover'},
+{c:'3926.20',d:'Articles of apparel/accessories of plastics',k:'plastic apparel glove apron raincoat vest bib wristband lanyard badge holder credential'},
+{c:'3926.30',d:'Fittings for furniture of plastics',k:'plastic furniture fitting handle knob'},
+{c:'3926.90',d:'Other articles of plastics',k:'plastic article sign display holder stand bracket clip tie strap cable barrier bollard cone stanchion'},
+// ── Ch.40 Rubber ──
+{c:'4008.21',d:'Plates/sheets of non-cellular vulcanized rubber',k:'rubber sheet plate mat non-cellular vulcanized'},
+{c:'4008.29',d:'Other non-cellular vulcanized rubber articles',k:'rubber gasket seal washer grommet bumper'},
+{c:'4010.12',d:'Conveyor belts of vulcanized rubber, reinforced',k:'conveyor belt rubber reinforced textile'},
+{c:'4016.10',d:'Articles of cellular rubber',k:'rubber foam padding cushion cell sponge'},
+{c:'4016.99',d:'Other articles of vulcanized rubber',k:'rubber article stopper pad foot wheel caster bumper'},
+// ── Ch.42 Leather / travel ──
+{c:'4202.12',d:'Trunks/cases with outer surface of plastics/textiles',k:'suitcase trunk case luggage travel bag hard shell'},
+{c:'4202.92',d:'Other containers with outer surface of plastics/textiles',k:'bag pouch case holder wallet credential sleeve'},
+// ── Ch.44 Wood ──
+{c:'4415.10',d:'Cases, boxes, crates of wood',k:'wood wooden box case crate pallet container'},
+{c:'4418.99',d:'Other builders\' joinery of wood',k:'wood panel wall ceiling floor plywood partition'},
+{c:'4421.99',d:'Other articles of wood',k:'wood article sign stake dowel block stand display'},
+// ── Ch.47-48 Paper ──
+{c:'4811.41',d:'Self-adhesive paper and paperboard',k:'sticker label decal adhesive paper self-adhesive vinyl wrap'},
+{c:'4819.10',d:'Cartons, boxes of corrugated paper/board',k:'cardboard box carton corrugated packaging shipping'},
+{c:'4819.20',d:'Folding cartons/boxes of non-corrugated paper',k:'paper box folding carton gift packaging'},
+{c:'4819.40',d:'Other sacks and bags of paper',k:'paper bag sack kraft'},
+{c:'4820.10',d:'Registers, notebooks, diaries',k:'notebook register diary notepad pad journal planner'},
+{c:'4821.10',d:'Printed labels of paper/paperboard',k:'paper label tag printed sticker ticket'},
+{c:'4823.90',d:'Other paper/paperboard articles',k:'paper article cup plate napkin tissue tablecloth'},
+// ── Ch.49 Printed ──
+{c:'4901.99',d:'Other printed books, brochures, leaflets',k:'book brochure leaflet booklet pamphlet printed publication manual guide program'},
+{c:'4905.10',d:'Globes — printed',k:'map globe atlas printed chart'},
+{c:'4908.90',d:'Other transfers (decalcomanias)',k:'transfer decal iron-on heat press'},
+{c:'4911.10',d:'Trade advertising material, catalogues',k:'poster flyer catalogue catalog brochure advertising promotional print menu'},
+{c:'4911.91',d:'Printed pictures, designs and photographs',k:'print picture photo photograph poster art graphic card postcard'},
+{c:'4911.99',d:'Other printed matter',k:'printed matter document form certificate credential accreditation ticket pass'},
+// ── Ch.56 Non-wovens, cordage ──
+{c:'5607.49',d:'Twine, cordage, ropes of polyethylene/polypropylene',k:'rope cord twine cordage line polyethylene polypropylene nylon'},
+{c:'5608.19',d:'Knotted netting of man-made textile materials',k:'net netting mesh goal net safety net barrier net sport'},
+{c:'5608.90',d:'Other made-up nets',k:'net netting mesh camouflage shade'},
+// ── Ch.57 Carpets ──
+{c:'5705.00',d:'Other carpets and textile floor coverings',k:'carpet rug mat floor covering textile turf artificial grass'},
+// ── Ch.59 Technical textiles ──
+{c:'5903.90',d:'Textile fabrics impregnated/coated with other plastics',k:'coated fabric tarpaulin tarp canvas laminated textile pvc coated'},
+{c:'5907.00',d:'Textile fabrics coated with gum',k:'fabric coated gum theatre stage scenery backdrop'},
+// ── Ch.61 Knitted apparel ──
+{c:'6109.10',d:'T-shirts, singlets of cotton, knitted',k:'tshirt t-shirt cotton knit crew neck tee shirt',comp:true,compQ:'Fiber composition? (e.g., 100% cotton, 60/40 cotton-polyester)'},
+{c:'6109.90',d:'T-shirts of other textile materials, knitted',k:'tshirt t-shirt polyester synthetic knit jersey dri-fit performance',comp:true,compQ:'Fiber composition?'},
+{c:'6110.20',d:'Jerseys, pullovers of cotton, knitted',k:'jersey pullover sweater hoodie cotton knit sweatshirt crew',comp:true,compQ:'Fiber composition?'},
+{c:'6110.30',d:'Jerseys, pullovers of man-made fibres, knitted',k:'jersey pullover sweater hoodie polyester synthetic fleece zip jacket track',comp:true,compQ:'Fiber composition?'},
+{c:'6114.20',d:'Other garments of cotton, knitted',k:'garment cotton knit uniform outfit costume vest',comp:true,compQ:'Fiber composition?'},
+{c:'6114.30',d:'Other garments of man-made fibres, knitted',k:'garment polyester synthetic knit uniform vest bib tabard',comp:true,compQ:'Fiber composition?'},
+{c:'6115.96',d:'Stockings/socks of synthetic fibres, knitted',k:'sock socks stocking synthetic polyester nylon'},
+{c:'6116.10',d:'Gloves impregnated with plastics/rubber, knitted',k:'glove work gloves rubber coated dipped knit'},
+{c:'6117.80',d:'Other knitted clothing accessories',k:'knit accessory scarf wristband headband armband sweatband'},
+// ── Ch.62 Woven apparel ──
+{c:'6201.13',d:'Men\'s overcoats of man-made fibres, woven',k:'jacket coat overcoat windbreaker raincoat men woven synthetic',comp:true,compQ:'Fiber composition?'},
+{c:'6203.43',d:'Men\'s trousers of synthetic fibres, woven',k:'pants trousers shorts men woven synthetic polyester',comp:true,compQ:'Fiber composition?'},
+{c:'6204.63',d:'Women\'s trousers of synthetic fibres, woven',k:'pants trousers shorts women woven synthetic',comp:true,compQ:'Fiber composition?'},
+{c:'6205.20',d:'Men\'s shirts of cotton, woven',k:'shirt cotton men woven button dress polo',comp:true,compQ:'Fiber composition?'},
+{c:'6205.30',d:'Men\'s shirts of man-made fibres, woven',k:'shirt polyester men woven button dress polo uniform',comp:true,compQ:'Fiber composition?'},
+{c:'6211.33',d:'Men\'s garments of man-made fibres, woven (other)',k:'vest bib tabard apron uniform woven men synthetic',comp:true,compQ:'Fiber composition?'},
+{c:'6211.43',d:'Women\'s garments of man-made fibres, woven (other)',k:'vest bib tabard apron uniform woven women synthetic',comp:true,compQ:'Fiber composition?'},
+{c:'6212.10',d:'Brassieres',k:'bra brassiere sport bra'},
+{c:'6214.30',d:'Scarves of synthetic fibres',k:'scarf scarves synthetic polyester satin fan scarf'},
+{c:'6215.20',d:'Ties, bow ties of man-made fibres',k:'tie necktie bow tie lanyard neck ribbon'},
+{c:'6216.00',d:'Gloves of textile materials (not knitted)',k:'glove work gloves woven textile cotton'},
+{c:'6217.10',d:'Clothing accessories, not knitted',k:'accessory woven belt strap armband badge patch'},
+// ── Ch.63 Made-up textiles ──
+{c:'6301.40',d:'Blankets of synthetic fibres',k:'blanket throw fleece synthetic polyester'},
+{c:'6302.53',d:'Table linen of man-made fibres',k:'tablecloth table cover runner placemat synthetic'},
+{c:'6302.93',d:'Toilet/kitchen linen of man-made fibres',k:'towel hand towel kitchen towel cloth wipe synthetic'},
+{c:'6303.92',d:'Curtains/drapes of synthetic fibres',k:'curtain drape valance window covering synthetic'},
+{c:'6304.93',d:'Other furnishing articles of synthetic fibres',k:'cushion cover pillow case decorative textile furnishing'},
+{c:'6305.33',d:'Sacks and bags of polyethylene/polypropylene strip',k:'bag sack woven pp polypropylene sandbag bulk bag'},
+{c:'6306.12',d:'Tarpaulins of synthetic fibres',k:'tarpaulin tarp cover shade sail canopy awning synthetic'},
+{c:'6306.22',d:'Tents of synthetic fibres',k:'tent canopy pavilion marquee gazebo shelter pop-up popup'},
+{c:'6306.40',d:'Pneumatic mattresses of textile materials',k:'inflatable mattress air bed pneumatic'},
+{c:'6307.10',d:'Floor cloths, dish cloths, dusters',k:'cloth cleaning rag duster mop pad wipe floor cloth'},
+{c:'6307.90',d:'Other made-up textile articles',k:'textile article strap webbing belt sleeve cover wrap banner flag bunting pennant armband wristband'},
+// ── Ch.68 Stone / concrete ──
+{c:'6810.99',d:'Other articles of cement/concrete',k:'concrete article barrier jersey barrier block bollard'},
+// ── Ch.70 Glass ──
+{c:'7010.90',d:'Glass containers (bottles, jars)',k:'glass bottle jar container carafe'},
+{c:'7013.49',d:'Glassware for table/kitchen of other glass',k:'glass cup tumbler mug drinkware'},
+{c:'7020.00',d:'Other articles of glass',k:'glass article panel pane sheet tempered laminated'},
+// ── Ch.73 Iron/Steel articles ──
+{c:'7308.90',d:'Other structures of iron/steel',k:'steel structure frame truss scaffolding tower mast pole stand support bracket'},
+{c:'7310.10',d:'Tanks/casks/containers >300L of iron/steel',k:'steel tank container drum barrel large vessel'},
+{c:'7310.29',d:'Other tanks/containers of iron/steel <300L',k:'steel container bin drum can pail bucket small tank'},
+{c:'7314.49',d:'Other cloth/grills of iron/steel wire',k:'steel mesh wire cloth grill fence panel grid screen'},
+{c:'7317.00',d:'Nails, tacks, staples of iron/steel',k:'nail screw bolt tack staple pin fastener steel iron'},
+{c:'7318.15',d:'Other screws and bolts of iron/steel',k:'screw bolt nut washer fastener steel iron hex'},
+{c:'7323.99',d:'Other table/kitchen/household articles of iron/steel',k:'steel stainless tray platter serving bowl container'},
+{c:'7324.90',d:'Other sanitary ware of iron/steel',k:'steel sink basin stand sanitary'},
+{c:'7325.99',d:'Other cast articles of iron/steel',k:'iron steel cast article manhole cover grate drain'},
+{c:'7326.20',d:'Articles of iron/steel wire',k:'steel wire article basket cage hook chain ring'},
+{c:'7326.90',d:'Other articles of iron or steel',k:'steel article bracket plate clamp clip anchor hook ring chain barrier rail guard fence post'},
+// ── Ch.76 Aluminium ──
+{c:'7604.29',d:'Aluminium alloy profiles',k:'aluminium aluminum profile extrusion channel bar rail track'},
+{c:'7606.12',d:'Aluminium alloy plates/sheets',k:'aluminium aluminum sheet plate panel flat alloy'},
+{c:'7610.90',d:'Other aluminium structures',k:'aluminium aluminum structure frame truss stand scaffold platform ramp'},
+{c:'7615.10',d:'Table/kitchen/household articles of aluminium',k:'aluminium aluminum tray pan container foil'},
+{c:'7616.99',d:'Other articles of aluminium',k:'aluminium aluminum article bracket plate clamp clip sign'},
+// ── Ch.83 Base metal misc ──
+{c:'8301.10',d:'Padlocks of base metal',k:'padlock pad lock base metal keyed combination'},
+{c:'8301.20',d:'Locks for motor vehicles of base metal',k:'lock vehicle car door trunk motor automobile base metal'},
+{c:'8301.30',d:'Locks for furniture of base metal',k:'lock furniture cabinet drawer desk locker cam lock base metal'},
+{c:'8301.40',d:'Other locks of base metal',k:'lock padlock latch bolt dead bolt combination keyed cable lock'},
+{c:'8301.50',d:'Clasps/frames with clasps incorporating locks',k:'clasp frame latch lock incorporated handbag bag purse'},
+{c:'8301.60',d:'Parts of locks of base metal',k:'lock part key blank cylinder core mechanism base metal'},
+{c:'8301.70',d:'Keys presented separately of base metal',k:'key blank cut key spare duplicate base metal'},
+{c:'8302.41',d:'Mountings/fittings for doors of base metal',k:'hinge bracket mount fitting door handle knob pull push bar closer'},
+{c:'8302.42',d:'Other mountings for furniture of base metal',k:'furniture fitting bracket mount hinge shelf support'},
+{c:'8302.50',d:'Hat-racks, coat-racks and similar of base metal',k:'rack hook coat hat stand wall mount hanger'},
+{c:'8305.90',d:'Office stapling machines, clips etc.',k:'stapler clip binder fastener office paper clip'},
+{c:'8306.29',d:'Other statuettes of base metal',k:'trophy award medal plaque figurine statue metallic'},
+{c:'8310.00',d:'Sign-plates, name-plates of base metal',k:'metal sign plate nameplate number letter plaque address directional wayfinding'},
+// ── Ch.84 Machinery ──
+{c:'8414.51',d:'Table/floor fans with motor ≤125W',k:'fan electric table floor standing desk pedestal portable cooling'},
+{c:'8414.59',d:'Other fans',k:'fan blower industrial ventilation exhaust axial centrifugal'},
+{c:'8415.10',d:'Window/wall air conditioning units, self-contained',k:'air conditioner ac unit portable window wall cooling hvac'},
+{c:'8418.50',d:'Chests, cabinets, showcases for frozen storage',k:'freezer chest cabinet cooler refrigerator display fridge cold storage'},
+{c:'8418.69',d:'Other refrigerating/freezing equipment',k:'refrigerator cooler cold room ice machine chiller'},
+{c:'8419.81',d:'Machines for hot drinks or cooking/heating food',k:'coffee machine espresso maker hot water heater food warmer'},
+{c:'8422.11',d:'Household dishwashing machines',k:'dishwasher dish washer washing machine'},
+{c:'8424.20',d:'Spray guns and similar appliances',k:'spray gun paint sprayer pressure washer nozzle'},
+{c:'8424.49',d:'Other mechanical spraying appliances',k:'sprayer misting fan water mist cooling system fogger'},
+{c:'8433.11',d:'Mowers for lawns, powered',k:'lawnmower mower grass cutter lawn powered'},
+{c:'8467.29',d:'Other electro-mechanical tools',k:'power tool drill driver saw grinder sander'},
+{c:'8471.30',d:'Portable digital data processing machines <10kg',k:'laptop computer notebook tablet portable pc'},
+{c:'8471.41',d:'Other digital data processing machines with display',k:'desktop computer workstation pc display monitor all-in-one'},
+{c:'8471.60',d:'Input/output units for data processing',k:'monitor display screen keyboard mouse printer scanner'},
+{c:'8471.80',d:'Other units of data processing machines',k:'server hub switch router network computer unit'},
+// ── Ch.85 Electrical ──
+{c:'8504.40',d:'Static converters (inverters, rectifiers)',k:'power supply inverter ups converter charger rectifier adapter transformer'},
+{c:'8506.10',d:'Manganese dioxide primary cells/batteries',k:'battery alkaline cell primary aa aaa d c 9v'},
+{c:'8507.60',d:'Lithium-ion accumulators',k:'lithium battery rechargeable li-ion power bank portable charger'},
+{c:'8513.10',d:'Portable electric lamps (flashlights)',k:'flashlight torch lamp portable electric light headlamp lantern'},
+{c:'8516.10',d:'Electric instantaneous/storage water heaters',k:'water heater electric instant boiler kettle'},
+{c:'8516.79',d:'Other electro-thermic appliances',k:'electric heater warmer hot plate heating appliance'},
+{c:'8517.62',d:'Machines for reception/transmission of data',k:'router modem switch access point wireless wifi network hub'},
+{c:'8517.69',d:'Other apparatus for transmission/reception',k:'walkie talkie radio two-way intercom communication transceiver'},
+{c:'8518.10',d:'Microphones and stands therefor',k:'microphone mic stand boom wireless lavalier condenser'},
+{c:'8518.21',d:'Single loudspeakers in enclosures',k:'speaker loudspeaker cabinet monitor pa public address'},
+{c:'8518.22',d:'Multiple loudspeakers in enclosures',k:'speaker array column line array pa system loudspeaker'},
+{c:'8518.40',d:'Audio-frequency electric amplifiers',k:'amplifier amp mixer audio power processor dsp'},
+{c:'8518.90',d:'Parts of microphones/speakers/amplifiers',k:'speaker part mount bracket cable connector audio'},
+{c:'8519.81',d:'Sound recording/reproducing apparatus',k:'media player recorder audio playback mp3 streaming sound'},
+{c:'8521.90',d:'Other video recording/reproducing apparatus',k:'video player recorder dvr nvr media player streaming'},
+{c:'8525.60',d:'Transmission apparatus with reception apparatus',k:'radio transmitter receiver transceiver broadcast wireless'},
+{c:'8525.81',d:'Television cameras and digital cameras',k:'camera video camera camcorder tv broadcast digital dslr'},
+{c:'8525.89',d:'Other television cameras and digital cameras',k:'camera action cam gopro webcam ip camera surveillance security cctv'},
+{c:'8527.99',d:'Other reception apparatus for radio',k:'radio receiver am fm dab portable'},
+{c:'8528.52',d:'Monitors capable of directly connecting to a data processing machine',k:'monitor screen display lcd led computer flatscreen'},
+{c:'8528.59',d:'Other monitors',k:'monitor display large format digital signage billboard'},
+{c:'8528.62',d:'Projectors capable of connecting to data processing machine',k:'projector video projector beamer data lcd dlp laser'},
+{c:'8528.72',d:'Other reception apparatus for television, colour',k:'television tv screen display set receiver'},
+{c:'8529.90',d:'Parts for televisions/monitors/projectors',k:'tv part mount bracket wall mount stand arm vesa clamp'},
+{c:'8531.10',d:'Burglar/fire alarms and similar',k:'alarm siren horn buzzer fire alarm security smoke detector'},
+{c:'8531.20',d:'Indicator panels with LCD/LED',k:'led sign display scoreboard indicator panel board digital clock countdown timer'},
+{c:'8531.80',d:'Other electric signaling apparatus',k:'signal light beacon strobe warning flash indicator'},
+{c:'8536.69',d:'Plugs and sockets',k:'plug socket outlet connector extension cord power strip electrical'},
+{c:'8536.90',d:'Other apparatus for switching electrical circuits',k:'switch relay contactor breaker circuit junction box electrical panel distribution'},
+{c:'8537.10',d:'Boards/panels for voltage ≤1000V',k:'switchboard panel board distribution power control cabinet electrical'},
+{c:'8539.52',d:'Light-emitting diode (LED) light sources',k:'led bulb light lamp tube strip light source'},
+{c:'8543.70',d:'Other electrical machines (not elsewhere specified)',k:'electronic device timer counter sensor proximity rfid reader scanner gate turnstile'},
+{c:'8544.42',d:'Electric conductors ≤1000V with connectors',k:'cable wire cord electric power extension lead connector patch cable ethernet data'},
+{c:'8544.49',d:'Other electric conductors ≤1000V',k:'cable wire power cord electrical wiring harness'},
+// ── Ch.87 Vehicles ──
+{c:'8703.80',d:'Other vehicles with electric motor',k:'electric vehicle car golf cart ev passenger'},
+{c:'8704.90',d:'Other motor vehicles for goods transport',k:'truck vehicle cargo van utility transport delivery'},
+{c:'8709.11',d:'Electric vehicles for transport of goods (factory/warehouse)',k:'electric cart forklift tow tractor warehouse factory pallet truck'},
+{c:'8709.19',d:'Other vehicles for short-distance goods transport',k:'utility cart golf cart turf vehicle gator mule hauler'},
+{c:'8716.40',d:'Other trailers and semi-trailers',k:'trailer semi-trailer flatbed lowboy'},
+{c:'8716.80',d:'Other non-mechanically propelled vehicles',k:'hand truck dolly trolley cart barrow push pull platform'},
+// ── Ch.90 Instruments ──
+{c:'9015.80',d:'Other surveying instruments',k:'survey instrument gps positioning total station'},
+{c:'9027.80',d:'Other instruments for physical/chemical analysis',k:'analyzer testing instrument measurement meter gauge sensor'},
+{c:'9029.20',d:'Speed indicators, tachometers, stroboscopes',k:'speed meter tachometer speedometer gauge indicator'},
+{c:'9031.80',d:'Other measuring/checking instruments',k:'measuring instrument tool level laser distance meter gauge'},
+// ── Ch.94 Furniture ──
+{c:'9401.20',d:'Seats for motor vehicles',k:'vehicle seat car seat bus seat passenger'},
+{c:'9401.30',d:'Swivel seats with variable height adjustment',k:'office chair swivel chair desk chair adjustable rolling'},
+{c:'9401.40',d:'Seats other than garden or camping, convertible',k:'chair sofa convertible multipurpose stackable'},
+{c:'9401.61',d:'Seats with wooden frames, upholstered',k:'chair wooden upholstered dining armchair bench wood'},
+{c:'9401.71',d:'Seats with metal frames, upholstered',k:'chair metal upholstered stacking banquet conference folding'},
+{c:'9401.79',d:'Other seats with metal frames',k:'chair metal folding stacking event plastic seat stadium bench bleacher'},
+{c:'9401.80',d:'Other seats',k:'chair seat stool bench plastic outdoor garden camping folding director bean bag'},
+{c:'9403.20',d:'Other metal furniture',k:'metal table desk shelf shelving rack stand cabinet locker bench frame'},
+{c:'9403.60',d:'Other wooden furniture',k:'wood table desk shelf cabinet counter podium lectern'},
+{c:'9403.70',d:'Furniture of plastics',k:'plastic table desk chair furniture outdoor stackable modular'},
+{c:'9403.89',d:'Other furniture of other materials',k:'furniture table desk counter bar stage platform riser modular event'},
+{c:'9403.91',d:'Parts of wooden furniture',k:'furniture part wood panel shelf drawer'},
+{c:'9403.99',d:'Parts of other furniture',k:'furniture part metal shelf bracket connector'},
+{c:'9405.11',d:'Chandeliers and ceiling lights',k:'chandelier ceiling light fixture pendant'},
+{c:'9405.21',d:'Electric table/desk/floor lamps',k:'lamp table desk floor standing light'},
+{c:'9405.41',d:'Other electric lamps and lighting fittings',k:'light fitting spotlight flood light work light temporary construction event lighting led panel bar strip'},
+{c:'9405.42',d:'Other electric lamps and lighting fittings, LED',k:'led light fixture panel strip flood spot event stage lighting'},
+{c:'9406.10',d:'Prefabricated buildings of wood',k:'prefab building wooden hut cabin shed kiosk booth'},
+{c:'9406.90',d:'Other prefabricated buildings',k:'prefab building container modular portable cabin kiosk booth tent structure temporary'},
+// ── Ch.95 Toys / Sport ──
+{c:'9503.00',d:'Toys (tricycles, puzzles, models)',k:'toy game puzzle model figure plush stuffed mascot doll'},
+{c:'9504.30',d:'Games operated by coins/tokens',k:'game machine arcade vending token coin'},
+{c:'9504.50',d:'Video game consoles and machines',k:'video game console playstation xbox gaming screen interactive'},
+{c:'9504.90',d:'Other games (billiards, table games)',k:'game table foosball ping pong table tennis air hockey'},
+{c:'9505.10',d:'Articles for Christmas festivities',k:'christmas decoration ornament festive holiday'},
+{c:'9505.90',d:'Other festive/carnival/entertainment articles',k:'party decoration confetti streamer balloon inflatable costume mascot head festive celebration event'},
+{c:'9506.11',d:'Skis (snow)',k:'ski snow ski alpine'},
+{c:'9506.12',d:'Ski bindings',k:'ski binding snow alpine'},
+{c:'9506.19',d:'Other snow-ski equipment',k:'snow ski equipment pole boot'},
+{c:'9506.21',d:'Sailboards and surfboards',k:'surfboard sailboard wakeboard paddleboard sup'},
+{c:'9506.29',d:'Other water sport equipment',k:'water sport kayak canoe paddle life vest jacket'},
+{c:'9506.31',d:'Golf clubs, complete',k:'golf club driver iron putter'},
+{c:'9506.32',d:'Golf balls',k:'golf ball'},
+{c:'9506.40',d:'Articles for table tennis',k:'table tennis ping pong paddle ball net'},
+{c:'9506.51',d:'Tennis rackets',k:'tennis racket racquet'},
+{c:'9506.59',d:'Other tennis/badminton equipment',k:'tennis badminton shuttlecock net ball'},
+{c:'9506.61',d:'Tennis balls',k:'tennis ball'},
+{c:'9506.62',d:'Inflatable balls',k:'ball inflatable football soccer basketball volleyball rugby beach ball'},
+{c:'9506.69',d:'Other balls',k:'ball hard baseball cricket hockey field'},
+{c:'9506.70',d:'Ice skates and roller skates',k:'skate ice roller inline blade'},
+{c:'9506.91',d:'Exercise/gymnasium/athletics equipment',k:'gym exercise fitness equipment weight bench treadmill dumbbell barbell'},
+{c:'9506.99',d:'Other sports/outdoor games equipment',k:'sport equipment goal post net whistle cone marker training aid hurdle agility ladder bibs pinnies scoreboard trophy medal podium'},
+// ── Ch.96 Misc manufactured ──
+{c:'9607.11',d:'Slide fasteners with metal teeth',k:'zipper metal slide fastener'},
+{c:'9608.10',d:'Ball point pens',k:'pen ballpoint biro writing instrument'},
+{c:'9608.20',d:'Felt-tipped pens and markers',k:'marker pen felt tip highlighter whiteboard dry erase'},
+{c:'9608.60',d:'Refills for ball point pens',k:'pen refill cartridge ink'},
+{c:'9609.10',d:'Pencils with leads encased in wood',k:'pencil wood graphite writing'},
+{c:'9610.00',d:'Writing/drawing slates and boards',k:'whiteboard blackboard chalkboard marker board writing surface dry erase flip chart'},
+{c:'9612.10',d:'Typewriter/printer ribbons',k:'ribbon ink cartridge printer toner'},
+{c:'9615.11',d:'Combs of hard rubber/plastics',k:'comb brush hair plastic'},
+{c:'9617.00',d:'Vacuum flasks and vessels',k:'thermos flask vacuum bottle insulated container cooler jug'},
+// ── Ch.48/49 extra — event-specific ──
+{c:'4901.10',d:'Printed matter in single sheets',k:'printed sheet handout flyer single page insert card'},
+{c:'4820.30',d:'Binders, folders, file covers',k:'binder folder file portfolio cover document organizer'},
+];
+
+// Customs-friendly name suggestions based on HS chapter
+const _HS_CUSTOMS_NAMES={
+'39':'Plastic articles','40':'Rubber articles','42':'Bags/cases of textile','44':'Wooden articles',
+'48':'Paper/cardboard articles','49':'Printed matter','56':'Cordage/netting','57':'Textile floor coverings',
+'59':'Technical textiles','61':'Knitted apparel','62':'Woven apparel','63':'Made-up textile articles',
+'68':'Concrete articles','70':'Glass articles','73':'Iron/steel articles','76':'Aluminium articles',
+'83':'Base metal articles','84':'Machinery/mechanical appliances','85':'Electrical equipment',
+'87':'Vehicles','90':'Measuring instruments','94':'Furniture/lighting/prefab','95':'Sports/toys/games','96':'Miscellaneous manufactured'
+};
+
+let _hsLookupSku=null;
+let _hsWiz={step:0,cats:[],selCat:null,material:'',usage:'',url:'',composition:'',urlKw:[]};
+
+// ── AI integration for HS code lookup (Claude + Gemini) ──
+function _hsGetAIProvider(){return localStorage.getItem('hs-ai-provider')||''}
+function _hsGetAIKey(){return localStorage.getItem('hs-ai-key')||''}
+function _hsSetAI(provider,key){localStorage.setItem('hs-ai-provider',provider);localStorage.setItem('hs-ai-key',(key||'').trim())}
+function _hsClearAI(){localStorage.removeItem('hs-ai-provider');localStorage.removeItem('hs-ai-key')}
+function _hsResetAI(){_hsClearAI();_hsRenderStep()}
+
+// URL preview — fetch OG meta via proxy
+let _hsUrlDebounce=null;
+function _hsUrlPreviewDebounce(){
+  clearTimeout(_hsUrlDebounce);
+  _hsUrlDebounce=setTimeout(_hsUrlPreview,600);
+}
+async function _hsUrlPreview(){
+  const url=(document.getElementById('hsUrlInput')?.value||'').trim();
+  const prev=document.getElementById('hsUrlPreview');
+  if(!prev)return;
+  if(!url||!url.startsWith('http')){prev.innerHTML='';_hsWiz._ogHtml='';_hsWiz._ogTitle='';return}
+  prev.innerHTML=`<div style="font-size:10px;color:var(--ts);padding:4px 0">Loading preview...</div>`;
+  try{
+    const r=await fetch(`https://opengraph.io/api/1.1/site/${encodeURIComponent(url)}?app_id=default`);
+    if(!r.ok)throw new Error('fetch failed');
+    const d=await r.json();
+    const og=d.hybridGraph||d.openGraph||{};
+    const title=og.title||'';
+    const img=og.image||'';
+    const desc=og.description||'';
+    _hsWiz._ogTitle=title;
+    let h='';
+    if(title||img){
+      h+=`<div style="display:flex;gap:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;align-items:center">`;
+      if(img)h+=`<img src="${img}" style="width:56px;height:56px;object-fit:contain;border-radius:4px;background:#fff;border:1px solid var(--bd);flex-shrink:0" onerror="this.style.display='none'">`;
+      h+=`<div style="min-width:0">`;
+      if(title)h+=`<div style="font-size:11px;font-weight:600;color:var(--tp);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>`;
+      if(desc)h+=`<div style="font-size:9px;color:var(--ts);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${desc}</div>`;
+      h+=`</div></div>`;
+    }
+    _hsWiz._ogHtml=h;
+    prev.innerHTML=h;
+  }catch(e){
+    // Fallback: just show URL domain
+    try{const host=new URL(url).hostname;prev.innerHTML=`<div style="font-size:10px;color:var(--ts);padding:4px 0">🔗 ${host}</div>`}
+    catch(e2){prev.innerHTML=''}
+    _hsWiz._ogHtml='';_hsWiz._ogTitle='';
+  }
+}
+
+// Build minimal prompt to save tokens
+function _hsBuildPrompt(productName,material,usage){
+  const url=_hsWiz.url||'';
+  const sys=`HS tariff classifier for customs declarations. Return JSON only:
+{"codes":[{"hs":"XXXX.XX","description":"heading name","confidence":"high/medium/low","customsName":"full customs declaration description including material composition, product type, dimensions/specs if known"}],"country":{"primary":"MANUFACTURING country (e.g. China, Taiwan, Mexico, Germany — NOT the destination country)","alternatives":["other likely manufacturing countries"],"reasoning":"why this origin"},"notes":"product identification and reasoning"}
+Rules: 1-2 codes max. 6-digit HS format. customsName MUST be detailed customs-ready description. Country = where product is MANUFACTURED/made, never USA/Canada unless actually made there.`;
+  let usr='';
+  if(url){
+    usr=`URL: ${url}\nIdentify the actual product from this URL using retailer catalog knowledge. What is it made of? Where is it manufactured?`;
+    usr+=`\nInternal ref (may be coded): ${productName}`;
+  }else{
+    usr=`Product: ${productName}`;
+  }
+  if(material)usr+=`\nMaterial: ${material}`;
+  if(usage)usr+=`\nUsage: ${usage}`;
+  return{sys,usr};
+}
+
+async function _hsAILookup(productName,material,usage,urlKw){
+  const provider=_hsGetAIProvider();
+  const key=_hsGetAIKey();
+  if(!key||!provider)return{error:'no_key'};
+  const{sys,usr}=_hsBuildPrompt(productName,material,usage);
+
+  try{
+    let text='';
+    if(provider==='claude'){
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'x-api-key':key,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true'
+        },
+        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:400,system:sys,messages:[{role:'user',content:usr}]})
+      });
+      if(!resp.ok){const err=await resp.text();console.warn('Claude error:',err);return{error:resp.status===401?'bad_key':'api_error',detail:err}}
+      const data=await resp.json();
+      text=data?.content?.[0]?.text||'';
+    }else if(provider==='openai'){
+      const resp=await fetch('https://api.openai.com/v1/chat/completions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+        body:JSON.stringify({model:'gpt-5-mini',
+          messages:[{role:'system',content:sys},{role:'user',content:usr}]})
+      });
+      if(!resp.ok){const err=await resp.text();console.warn('OpenAI error:',err);return{error:resp.status===401?'bad_key':'api_error',detail:err}}
+      const data=await resp.json();
+      text=data?.choices?.[0]?.message?.content||'';
+    }else{
+      const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}],generationConfig:{temperature:0.1,maxOutputTokens:400}})
+      });
+      if(!resp.ok){const err=await resp.text();console.warn('Gemini error:',err);return{error:resp.status===401?'bad_key':'api_error',detail:err}}
+      const data=await resp.json();
+      text=data?.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    }
+    const jsonStr=text.replace(/```json?\s*/g,'').replace(/```\s*/g,'').trim();
+    const result=JSON.parse(jsonStr);
+    if(result.codes)result.codes.forEach(c=>{c.hs=_hsNormalize(c.hs)});
+    return result;
+  }catch(e){console.warn('AI lookup error:',e);return{error:'parse_error',detail:String(e)}}
+}
+
+// Category definitions for step 1 — maps product keywords to HS categories
+const _HS_CATS=[
+  {id:'locks',name:'Locks & Security Hardware',icon:'🔒',kw:['lock','padlock','latch','bolt','deadbolt','key','keyed','combination','hasp','clasp','cam lock'],ch:['83']},
+  {id:'furniture',name:'Furniture & Seating',icon:'🪑',kw:['chair','table','desk','shelf','cabinet','bench','seat','stool','rack','locker','podium','lectern','counter','bar','riser','platform','furniture'],ch:['94']},
+  {id:'lighting',name:'Lighting & Lamps',icon:'💡',kw:['light','lamp','led','spotlight','flood','lantern','flashlight','torch','bulb','chandelier','lighting','illumin'],ch:['85','94']},
+  {id:'textiles',name:'Textiles & Apparel',icon:'👕',kw:['shirt','jersey','vest','jacket','pants','shorts','uniform','apparel','garment','hoodie','polo','tee','bib','tabard','scarf','glove','sock','hat','cap','wristband','headband','lanyard'],ch:['61','62','63']},
+  {id:'textile_made',name:'Made-up Textiles (Flags, Banners, Tents)',icon:'🏳️',kw:['flag','banner','bunting','pennant','tent','canopy','tarp','curtain','drape','cover','tablecloth','towel','blanket','net','netting','mesh','shade','awning','wrap','strap','webbing','sleeve'],ch:['56','57','59','63']},
+  {id:'signs',name:'Signs, Displays & Printed Matter',icon:'🪧',kw:['sign','signage','display','poster','print','printed','banner display','wayfinding','directional','board','scoreboard','billboard','graphic','decal','sticker','label','brochure','flyer','program','credential','ticket','pass','badge','accreditation','certificate'],ch:['49','83','85']},
+  {id:'plastic',name:'Plastic Articles',icon:'🧴',kw:['plastic','pvc','polyethylene','polypropylene','acrylic','polycarbonate','vinyl','cone','stanchion','bollard','barrier','bin','tote','container','cup','plate','cutlery','disposable','badge holder','credential holder','wristband','lanyard holder'],ch:['39']},
+  {id:'electronics',name:'Electronics & AV Equipment',icon:'📺',kw:['camera','monitor','screen','tv','television','projector','speaker','microphone','amplifier','mixer','radio','walkie','intercom','router','switch','wifi','cable','cord','wire','power','charger','battery','usb','hdmi','ethernet','led screen','digital'],ch:['85']},
+  {id:'steel',name:'Iron & Steel Articles',icon:'⚙️',kw:['steel','iron','metal','fence','rail','guard','post','bracket','clamp','bolt','screw','nail','chain','hook','wire','mesh','grate','frame','truss','scaffold','structure','barrier','jersey barrier','railing'],ch:['73']},
+  {id:'aluminium',name:'Aluminium Articles',icon:'🔩',kw:['aluminium','aluminum','alloy','profile','extrusion','channel','rail','track','truss','frame','scaffold','ramp','platform'],ch:['76']},
+  {id:'rubber',name:'Rubber Articles',icon:'⚫',kw:['rubber','foam','padding','cushion','mat','gasket','seal','bumper','grommet','conveyor'],ch:['40']},
+  {id:'paper',name:'Paper & Packaging',icon:'📦',kw:['cardboard','carton','box','packaging','paper','bag','envelope','folder','binder','notebook','pad','tissue','napkin'],ch:['48']},
+  {id:'sports',name:'Sports & Games Equipment',icon:'⚽',kw:['ball','football','soccer','basketball','goal','net','whistle','cone','marker','hurdle','training','agility','medal','trophy','podium','sport','game','exercise','gym','fitness','racket','bat'],ch:['95']},
+  {id:'vehicles',name:'Vehicles & Transport',icon:'🚛',kw:['cart','truck','dolly','trolley','trailer','forklift','golf cart','vehicle','pallet truck','hand truck','barrow'],ch:['87']},
+  {id:'machinery',name:'Machinery & Appliances',icon:'🏗️',kw:['machine','generator','pump','fan','air conditioner','cooler','freezer','refrigerator','heater','tool','drill','saw','compressor','blower','misting'],ch:['84']},
+  {id:'wood',name:'Wooden Articles',icon:'🪵',kw:['wood','wooden','plywood','timber','pallet','crate','box'],ch:['44']},
+  {id:'glass',name:'Glass Articles',icon:'🥃',kw:['glass','bottle','jar','tumbler','mug','pane','tempered','laminated'],ch:['70']},
+  {id:'base_metal',name:'Base Metal Hardware',icon:'🔧',kw:['hinge','handle','knob','mount','fitting','hook','bracket','clip','stapler','trophy','medal','plaque','nameplate'],ch:['83']},
+];
+
+// Extract meaningful keywords from a product name (strip noise)
+function _hsParseProductName(name){
+  const noise=['hold','fifa','generic','standard','custom','wc26','fwc','2026','the','and','for','with','set','kit','pcs','each','per','lot','size','color','colour'];
+  return name.toLowerCase().replace(/[–—\-_()[\]{}.,;:!?'"]/g,' ').split(/\s+/).filter(w=>w.length>1&&!noise.includes(w));
+}
+
+// Extract keywords from a URL
+function _hsParseURL(url){
+  if(!url)return[];
+  // Extract the path part, split on slashes and hyphens
+  try{const u=new URL(url);return u.pathname.replace(/\.[^.]+$/,'').split(/[\/-]+/).filter(w=>w.length>2&&!/^\d+$/.test(w));}
+  catch(e){return url.split(/[\/-]+/).filter(w=>w.length>2&&!/^\d+$/.test(w))}
+}
+
+function LP_showHSLookup(sku){
+  if(!sku)return;
+  _hsLookupSku=sku;
+  _hsWiz={step:0,cats:[],selCat:null,material:'',usage:'',url:'',composition:'',urlKw:[]};
+  const nom=LP_STATE.nomenclature[sku]||{};
+  const ovr=LP_customsOverrides[sku]||{};
+  const curHS=ovr.hsCode||nom.hsCode||'';
+  const curCN=ovr.customsName||nom.customsName||'';
+  const curName=nom.name||sku;
+  // Auto-detect categories from product name
+  const nameKw=_hsParseProductName(curName);
+  const catScores=_HS_CATS.map(cat=>{
+    let sc=0;
+    for(const t of nameKw){for(const k of cat.kw){if(k.includes(t)||t.includes(k))sc+=2;if(k.startsWith(t)||t.startsWith(k))sc+=1}}
+    return{...cat,sc};
+  }).filter(c=>c.sc>0).sort((a,b)=>b.sc-a.sc);
+  _hsWiz.cats=catScores;
+  _hsRenderModal(sku,curName,curHS,curCN);
+}
+
+function _hsRenderModal(sku,curName,curHS,curCN){
+  let h=`<div style="padding:24px;max-width:600px;width:92vw;max-height:85vh;display:flex;flex-direction:column">`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">`;
+  h+=`<div><div style="font-size:16px;font-weight:700">🔍 HS Code Assistant</div>`;
+  h+=`<div style="font-size:11px;color:var(--ts);margin-top:2px"><span style="font-family:var(--fm);font-weight:600">${sku}</span> · ${curName}</div></div>`;
+  h+=`<button onclick="this.closest('.modal-overlay').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--tt)">✕</button></div>`;
+  if(curHS||curCN){
+    h+=`<div style="background:var(--bg);padding:6px 10px;border-radius:6px;margin-bottom:10px;font-size:10px">`;
+    if(curHS)h+=`<span style="color:var(--pu);background:var(--ps);padding:2px 6px;border-radius:4px;font-family:var(--fm);margin-right:6px">HS: ${curHS}</span>`;
+    if(curCN)h+=`<span style="color:var(--gn)">Customs: ${curCN}</span>`;
+    h+=`</div>`;
+  }
+  h+=`<div id="hsWizBody" style="flex:1;overflow-y:auto"></div></div>`;
+  // Remove existing modal
+  document.querySelector('.modal-overlay.hs-modal')?.remove();
+  const ov=document.createElement('div');
+  ov.className='modal-overlay hs-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:999';
+  ov.innerHTML=`<div style="background:var(--sf);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.2)">${h}</div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove()});
+  _hsRenderStep();
+}
+
+function _hsRenderStep(){
+  const body=document.getElementById('hsWizBody');if(!body)return;
+  if(_hsWiz.step===0)_hsStep0(body);
+  else if(_hsWiz.step===1)_hsStep1(body);
+  else if(_hsWiz.step===2)_hsStep2(body);
+}
+
+// Step 0: Category selection
+// Find sibling SKUs (same prefix) that already have HS codes
+function _hsFindSiblings(sku){
+  // Match only immediate parent prefix: FNTBL-006-003 → FNTBL-006
+  const parts=sku.split(/[-_]/);
+  if(parts.length<3)return[];// need at least 3 segments (e.g., XXX-YYY-ZZZ)
+  const prefixes=[parts.slice(0,parts.length-1).join('-')];// only one level up
+  // Only check SKUs that exist in LP demand
+  const demandSkus=new Set((LP_STATE.materialPlan||[]).map(d=>d.sku));
+  const siblings=[];const seen=new Set();
+  for(const prefix of prefixes){
+    for(const [s,nom] of Object.entries(LP_STATE.nomenclature||{})){
+      if(s===sku||seen.has(s)||!demandSkus.has(s))continue;
+      if(s.startsWith(prefix+'-')||s.startsWith(prefix+'_')){
+        const ovr=LP_customsOverrides[s]||{};
+        const hs=ovr.hsCode||nom.hsCode||'';
+        const cn=ovr.customsName||nom.customsName||'';
+        const confirmed=!!ovr.hsConfirmed;
+        if(hs&&confirmed){siblings.push({sku:s,name:nom.name||s,hsCode:hs,customsName:cn,source:nom.source||''});seen.add(s)}
+      }
+    }
+    if(siblings.length)break;// Found matches at this prefix level
+  }
+  return siblings;
+}
+
+// Step 0: Siblings + URL (primary entry point)
+function _hsStep0(el){
+  const siblings=_hsFindSiblings(_hsLookupSku);
+  let h='';
+  // Sibling suggestions — shown first
+  if(siblings.length){
+    h+=`<div style="background:var(--ps);border:1px solid #D4C5FE;border-radius:8px;padding:12px;margin-bottom:14px">`;
+    h+=`<div style="font-size:11px;font-weight:700;color:var(--pu);margin-bottom:6px">⚡ Same product family — use existing HS code?</div>`;
+    h+=`<div style="font-size:10px;color:var(--ts);margin-bottom:8px">These sibling SKUs already have HS codes assigned:</div>`;
+    const byHS={};
+    for(const s of siblings){if(!byHS[s.hsCode])byHS[s.hsCode]={hs:s.hsCode,cn:s.customsName,skus:[]};byHS[s.hsCode].skus.push(s)}
+    for(const g of Object.values(byHS)){
+      h+=`<div onclick="_hsUseSibling('${g.hs}','${(g.cn||'').replace(/'/g,"\\'")}')" style="padding:8px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:4px;cursor:pointer;transition:all .15s" onmouseenter="this.style.borderColor='var(--pu)'" onmouseleave="this.style.borderColor='var(--bd)'">`;
+      const _hsClean=g.hs.replace(/\.$/,'');
+      const _hsDesc=_HS_DB.find(i=>i.c===_hsClean||_hsClean.startsWith(i.c)||i.c.startsWith(_hsClean));
+      const _hsCat=_HS_CUSTOMS_NAMES[_hsClean.slice(0,2)]||'';
+      h+=`<div style="display:flex;align-items:center;gap:8px">`;
+      h+=`<span style="font-family:var(--fm);font-size:13px;font-weight:700;color:var(--pu)">${g.hs}</span>`;
+      h+=`<span style="font-size:10px;font-weight:600;color:var(--tp);flex:1">${_hsDesc?_hsDesc.d:_hsCat}</span>`;
+      h+=`<span style="font-size:9px;color:#fff;background:var(--pu);padding:1px 5px;border-radius:3px;flex-shrink:0">Use this</span></div>`;
+      if(_hsCat)h+=`<div style="font-size:9px;color:var(--tt);margin-top:2px">${_hsCat}</div>`;
+      if(g.cn)h+=`<div style="font-size:10px;color:var(--gn);font-weight:600;margin-top:2px">${g.cn}</div>`;
+      h+=`<div style="font-size:9px;color:var(--ts);margin-top:3px;font-family:var(--fm)">${g.skus.map(s=>s.sku+' · '+(s.name||'')+(s.source?' <span style="color:var(--tt)">['+s.source+']</span>':'')).join(' | ')}</div>`;
+      h+=`</div>`;
+    }
+    h+=`</div>`;
+  }
+  // URL + AI lookup
+  const hasAIKey=!!_hsGetAIKey();
+  const aiProv=_hsGetAIProvider();
+  const _provNames={claude:'Claude',openai:'ChatGPT',gemini:'Gemini'};
+  const _provColors={claude:'linear-gradient(135deg,#d97706,#b45309)',openai:'linear-gradient(135deg,#10a37f,#0d8c6d)',gemini:'linear-gradient(135deg,#667eea,#764ba2)'};
+  const aiLabel=hasAIKey?'✨ '+(_provNames[aiProv]||'AI')+' Classify':'✨ Setup AI';
+  h+=`<div style="margin-bottom:14px">`;
+  h+=`<div style="font-size:12px;font-weight:700;color:var(--tp);margin-bottom:4px">Step 1 · AI Classification</div>`;
+  h+=`<div style="font-size:10px;color:var(--ts);margin-bottom:8px">Paste a product URL — AI will analyze the product from the link to determine HS code</div>`;
+  h+=`<input id="hsUrlInput" type="text" value="${_hsWiz.url}" placeholder="https://www.uline.com/Product/... or any supplier/retail URL" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px">`;
+  h+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+  h+=`<button class="mbtn" onclick="_hsAIDetect()" style="padding:8px 16px;font-size:11px;flex:1;background:${_provColors[aiProv]||_provColors.gemini};color:#fff;border-color:transparent">${aiLabel}</button>`;
+  if(hasAIKey)h+=`<button class="mbtn" onclick="_hsClearAI();_hsRenderStep()" style="padding:8px 10px;font-size:11px;color:var(--ts);border-color:var(--bd)" title="Change AI provider">⟳</button>`;
+  h+=`</div>`;
+  h+=`<div id="hsAIStatus"></div>`;
+  h+=`</div>`;
+  // Skip — manual category selection
+  h+=`<div style="border-top:1px solid var(--bd);padding-top:12px">`;
+  h+=`<div style="font-size:10px;font-weight:600;color:var(--ts);margin-bottom:8px">Or select category manually:</div>`;
+  // Auto-detected categories
+  const cats=_hsWiz.cats;
+  if(cats.length){
+    h+=`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">`;
+    for(const c of cats.slice(0,4)){
+      const chCodes=c.ch.map(ch=>ch.padEnd(2,'0')).join(', ');
+      const chName=c.ch.map(ch=>_HS_CUSTOMS_NAMES[ch]||'').filter(Boolean).join(' / ');
+      h+=`<div onclick="_hsPickCat('${c.id}')" style="padding:6px 10px;border:1px solid var(--ab);background:var(--as);border-radius:6px;cursor:pointer;font-size:10px;font-weight:600;transition:all .15s;display:flex;align-items:center;gap:4px" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--ab)'">`;
+      h+=`<span>${c.icon}</span><span>${c.name}`;
+      if(chName)h+=`<span style="font-weight:400;color:var(--ts);font-size:9px;display:block">${chName}</span>`;
+      h+=`<span style="font-family:var(--fm);font-weight:400;color:var(--tt);font-size:8px;display:block">Ch. ${chCodes}</span>`;
+      h+=`</span></div>`;
+    }
+    h+=`</div>`;
+  }
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">`;
+  for(const c of _HS_CATS){
+    const isDetected=cats.some(dc=>dc.id===c.id);
+    if(isDetected&&cats.length)continue;
+    const chCodes=c.ch.map(ch=>ch.padEnd(2,'0')).join(', ');
+    const chName=c.ch.map(ch=>_HS_CUSTOMS_NAMES[ch]||'').filter(Boolean).join(' / ');
+    h+=`<div onclick="_hsPickCat('${c.id}')" style="padding:5px 8px;border:1px solid var(--bd);border-radius:5px;cursor:pointer;font-size:9px;transition:all .1s" onmouseenter="this.style.background='var(--bg)'" onmouseleave="this.style.background=''">`;
+    h+=`<span style="margin-right:3px">${c.icon}</span><span style="font-weight:600">${c.name}</span>`;
+    if(chName)h+=`<span style="display:block;color:var(--ts);font-size:8px;margin-top:1px;margin-left:18px">${chName}</span>`;
+    h+=`<span style="display:block;font-family:var(--fm);color:var(--tt);font-size:8px;margin-left:18px">Ch. ${chCodes}</span>`;
+    h+=`</div>`;
+  }
+  h+=`</div></div>`;
+  el.innerHTML=h;
+  setTimeout(()=>document.getElementById('hsUrlInput')?.focus(),50);
+}
+
+// Process URL → extract keywords → auto-detect category → jump to results
+function _hsFromUrl(){
+  _hsWiz.url=(document.getElementById('hsUrlInput')?.value||'').trim();
+  if(!_hsWiz.url){return}// no url, stay on step 0
+  _hsWiz.urlKw=_hsParseURL(_hsWiz.url);
+  if(!_hsWiz.urlKw.length){return}
+  // Combine URL keywords + product name keywords to auto-detect best category
+  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  const nameKw=_hsParseProductName(origName);
+  const allKw=[...nameKw,..._hsWiz.urlKw.map(w=>w.toLowerCase())];
+  // Score categories
+  const catScores=_HS_CATS.map(cat=>{
+    let sc=0;
+    for(const t of allKw){for(const k of cat.kw){if(k.includes(t)||t.includes(k))sc+=2;if(k===t)sc+=3}}
+    return{...cat,sc};
+  }).filter(c=>c.sc>0).sort((a,b)=>b.sc-a.sc);
+  if(catScores.length){
+    _hsWiz.selCat=catScores[0];// Auto-select best category
+    _hsWiz.step=2;// Skip to results
+    _hsRenderStep();
+  }else{
+    // Can't detect — show step 1 with URL pre-filled
+    _hsWiz.step=1;
+    _hsRenderStep();
+  }
+}
+
+// AI-powered HS classification (Claude or Gemini)
+async function _hsAIDetect(){
+  const key=_hsGetAIKey();
+  const statusEl=document.getElementById('hsAIStatus');
+  if(!statusEl)return;
+  if(!key){
+    statusEl.innerHTML=`<div style="background:var(--bg);padding:12px;border-radius:8px;border:1px solid var(--bd);margin-top:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--tp);margin-bottom:8px">✨ Setup AI Classification</div>
+      <div style="font-size:10px;color:var(--ts);margin-bottom:10px">Choose your AI provider and paste your API key</div>
+      <div style="display:flex;gap:4px;margin-bottom:8px">
+        <button id="hsProvClaude" class="mbtn" onclick="_hsPickProvider('claude')" style="flex:1;padding:7px;font-size:10px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border-color:transparent;opacity:1">Claude</button>
+        <button id="hsProvOpenai" class="mbtn" onclick="_hsPickProvider('openai')" style="flex:1;padding:7px;font-size:10px;background:linear-gradient(135deg,#10a37f,#0d8c6d);color:#fff;border-color:transparent;opacity:.5">ChatGPT</button>
+        <button id="hsProvGemini" class="mbtn" onclick="_hsPickProvider('gemini')" style="flex:1;padding:7px;font-size:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-color:transparent;opacity:.5">Gemini</button>
+      </div>
+      <div id="hsProvInfo" style="font-size:10px;color:var(--ts);margin-bottom:6px">Get an API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--ac)">console.anthropic.com</a> · Haiku (fast & cheap)</div>
+      <input type="hidden" id="hsProviderChoice" value="claude">
+      <div style="display:flex;gap:6px">
+        <input id="hsAIKeyInput" type="password" placeholder="Paste your API key" style="flex:1;padding:7px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);outline:none">
+        <button class="mbtn" onclick="_hsSaveAIKey()" style="padding:7px 14px;font-size:11px;background:var(--gn);color:#fff;border-color:var(--gn)">Save & Classify</button>
+      </div>
+      <div style="font-size:9px;color:var(--tt);margin-top:4px">Key stored locally in your browser — never sent to our servers</div>
+    </div>`;
+    return;
+  }
+  _hsWiz.url=(document.getElementById('hsUrlInput')?.value||'').trim();
+  _hsWiz.urlKw=_hsParseURL(_hsWiz.url);
+  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  const prov=_hsGetAIProvider();
+  const _pn={claude:'Claude',openai:'ChatGPT',gemini:'Gemini'};
+  statusEl.innerHTML=`<div style="padding:16px;text-align:center"><div class="spn" style="width:24px;height:24px;margin:0 auto 8px"></div><div style="font-size:11px;color:var(--ts)">${_pn[prov]||'AI'} is classifying "${origName}"...</div></div>`;
+  const result=await _hsAILookup(origName,_hsWiz.material,_hsWiz.usage,_hsWiz.urlKw);
+  if(result.error){
+    if(result.error==='bad_key'){_hsClearAI();statusEl.innerHTML=`<div style="background:var(--rs);padding:8px 10px;border-radius:6px;font-size:10px;color:var(--rd)">Invalid API key. Click the AI button to re-setup.</div>`}
+    else{
+      const detail=result.detail||'';
+      const msg=detail.includes('429')||detail.includes('quota')||detail.includes('rate')?'Rate limit exceeded — wait a moment and try again'
+        :detail.includes('CORS')||detail.includes('blocked')?'Browser blocked the request — try a different AI provider'
+        :'API error — try again or switch provider';
+      // Show raw detail on click for debugging
+      const safeDetail=detail.replace(/</g,'&lt;').replace(/>/g,'&gt;').slice(0,300);
+      statusEl.innerHTML=`<div style="background:var(--os);padding:8px 10px;border-radius:6px;font-size:10px;color:var(--or)">${msg}<button onclick="_hsClearAI();_hsRenderStep()" style="margin-left:8px;font-size:9px;color:var(--ts);background:none;border:1px solid var(--bd);border-radius:3px;padding:1px 6px;cursor:pointer">Switch provider</button><div onclick="this.style.display='none'" style="margin-top:4px;font-size:9px;color:var(--tt);font-family:var(--fm);cursor:pointer;word-break:break-all" title="Click to dismiss">${safeDetail}</div></div>`
+    }
+    return;
+  }
+  _hsShowAIResults(statusEl,result,origName);
+}
+
+function _hsPickProvider(prov){
+  document.getElementById('hsProviderChoice').value=prov;
+  ['hsProvClaude','hsProvOpenai','hsProvGemini'].forEach(id=>{
+    const b=document.getElementById(id);if(b)b.style.opacity=id.toLowerCase().includes(prov)?'1':'.5';
+  });
+  const info=document.getElementById('hsProvInfo');
+  if(info){
+    if(prov==='claude')info.innerHTML='<a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--ac)">console.anthropic.com</a> · Haiku (fast & cheap)';
+    else if(prov==='openai')info.innerHTML='<a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--ac)">platform.openai.com</a> · GPT-5 mini (fast & cost-efficient)';
+    else info.innerHTML='<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--ac)">Google AI Studio</a> · Gemini Flash (free tier)';
+  }
+}
+
+function _hsSaveAIKey(){
+  const key=(document.getElementById('hsAIKeyInput')?.value||'').trim();
+  const prov=(document.getElementById('hsProviderChoice')?.value)||'claude';
+  if(!key)return;
+  _hsSetAI(prov,key);
+  _hsAIDetect();
+}
+
+// Store AI country result for use in accept dialog
+let _hsAICountryResult=null;
+
+function _hsShowAIResults(el,result,origName){
+  // Normalize country result (handle both string and object formats)
+  const cObj=typeof result.country==='object'&&result.country?result.country:{primary:result.country||'',alternatives:[],reasoning:''};
+  _hsAICountryResult=cObj;
+  let h=`<div style="background:linear-gradient(135deg,#f0ebfe,#ede7fb);border:1px solid #D4C5FE;border-radius:8px;padding:12px;margin-top:4px">`;
+  h+=`<div style="font-size:11px;font-weight:700;color:var(--pu);margin-bottom:6px">✨ AI Classification Results</div>`;
+  if(result.notes)h+=`<div style="font-size:9px;color:var(--ts);margin-bottom:6px;font-style:italic">${result.notes}</div>`;
+  if(cObj.primary){
+    h+=`<div style="font-size:9px;color:var(--ts);margin-bottom:6px">Origin: <b>${cObj.primary}</b>`;
+    if(cObj.alternatives&&cObj.alternatives.length)h+=` · also: ${cObj.alternatives.join(', ')}`;
+    if(cObj.reasoning)h+=` <span style="color:var(--tt)">(${cObj.reasoning})</span>`;
+    h+=`</div>`;
+  }
+  for(const c of (result.codes||[])){
+    const conf=c.confidence||'medium';
+    const confColor=conf==='high'?'var(--gn)':conf==='medium'?'var(--or)':'var(--tt)';
+    const confBg=conf==='high'?'var(--gs)':conf==='medium'?'var(--os)':'var(--bg)';
+    h+=`<div onclick="_hsAcceptAI('${c.hs}','${(c.customsName||'').replace(/'/g,"\\'")}')" style="padding:8px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:4px;cursor:pointer;transition:all .15s" onmouseenter="this.style.borderColor='var(--pu)'" onmouseleave="this.style.borderColor='var(--bd)'">`;
+    h+=`<div style="display:flex;align-items:center;gap:8px">`;
+    h+=`<span style="font-family:var(--fm);font-size:14px;font-weight:700;color:var(--pu)">${c.hs}</span>`;
+    h+=`<span style="font-size:10px;font-weight:600;color:var(--tp);flex:1">${c.description||''}</span>`;
+    h+=`<span style="font-size:8px;color:${confColor};background:${confBg};padding:1px 6px;border-radius:3px;font-weight:600">${conf}</span>`;
+    h+=`<span style="font-size:9px;color:#fff;background:var(--pu);padding:1px 5px;border-radius:3px">Use</span>`;
+    h+=`</div>`;
+    if(c.customsName)h+=`<div style="font-size:10px;color:var(--gn);margin-top:2px">→ ${c.customsName}</div>`;
+    h+=`</div>`;
+  }
+  h+=`<div style="display:flex;gap:6px;margin-top:6px;justify-content:space-between;align-items:center">`;
+  h+=`<button onclick="document.getElementById('hsAIStatus').innerHTML=''" style="font-size:9px;color:var(--ts);background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;cursor:pointer">Dismiss</button>`;
+  h+=`<button onclick="_hsClearAI();document.getElementById('hsAIStatus').innerHTML='';_hsRenderStep()" style="font-size:9px;color:var(--tt);background:none;border:none;cursor:pointer">Change AI provider</button>`;
+  h+=`</div></div>`;
+  el.innerHTML=h;
+}
+
+function _hsAcceptAI(code,custName){
+  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  const cn=custName||origName;
+  const cObj=_hsAICountryResult||{primary:'',alternatives:[]};
+  const allCountries=[cObj.primary,...(cObj.alternatives||[])].filter(Boolean);
+  const body=document.getElementById('hsWizBody');if(!body)return;
+  let h=`<div style="background:var(--gs);padding:14px;border-radius:8px;border:1px solid #B8DFCA">`;
+  h+=`<div style="font-size:13px;font-weight:700;color:var(--gn);margin-bottom:4px">✨ AI-suggested HS Code</div>`;
+  h+=`<div style="font-family:var(--fm);font-size:16px;font-weight:700;color:var(--pu);margin-bottom:8px">${code}</div>`;
+  h+=`<div style="margin-bottom:6px">`;
+  h+=`<label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Customs description</label>`;
+  h+=`<input id="hsCustNameEdit" type="text" value="${cn.replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd);outline:none;box-sizing:border-box">`;
+  h+=`</div>`;
+  // Country of origin — selectable buttons
+  h+=`<div style="margin-bottom:8px">`;
+  h+=`<label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:4px">Country of Origin — select one:</label>`;
+  if(allCountries.length){
+    h+=`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">`;
+    for(let i=0;i<allCountries.length;i++){
+      const c=allCountries[i];
+      const isPrimary=i===0;
+      h+=`<button onclick="document.getElementById('hsCountryEdit').value='${c.replace(/'/g,"\\'")}';document.querySelectorAll('.hs-coo-btn').forEach(b=>b.style.opacity='.5');this.style.opacity='1'" class="hs-coo-btn" style="padding:5px 12px;font-size:11px;font-weight:${isPrimary?'700':'500'};border:1px solid ${isPrimary?'var(--gn)':'var(--bd)'};border-radius:6px;background:${isPrimary?'var(--gs)':'var(--sf)'};color:${isPrimary?'var(--gn)':'var(--tp)'};cursor:pointer;opacity:${isPrimary?'1':'.5'};transition:all .15s">${c}${isPrimary?' ✓':''}</button>`;
+    }
+    h+=`</div>`;
+  }
+  if(cObj.reasoning)h+=`<div style="font-size:9px;color:var(--ts);font-style:italic;margin-bottom:4px">${cObj.reasoning}</div>`;
+  h+=`<input id="hsCountryEdit" type="text" value="${cObj.primary||''}" placeholder="Or type country manually" style="width:100%;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box">`;
+  h+=`</div>`;
+  h+=`<div style="display:flex;gap:6px">`;
+  h+=`<button class="mbtn mbtn-primary" onclick="_hsAcceptAIFinal('${code}')" style="padding:9px 24px;font-size:12px;background:var(--gn);border-color:var(--gn)">✓ Accept & Save</button>`;
+  h+=`<button class="mbtn" onclick="_hsWiz.step=0;_hsRenderStep()" style="padding:9px 20px;font-size:12px">← Back</button>`;
+  h+=`</div></div>`;
+  body.innerHTML=h;
+}
+
+function _hsAcceptAIFinal(code){
+  const sku=_hsLookupSku;if(!sku)return;
+  const custName=(document.getElementById('hsCustNameEdit')?.value||'').trim();
+  const country=(document.getElementById('hsCountryEdit')?.value||'').trim();
+  LP_setCustomsOvr(sku,'hsCode',code);
+  if(custName)LP_setCustomsOvr(sku,'customsName',custName);
+  if(country)LP_setCustomsOvr(sku,'country',country);
+  document.querySelector('.modal-overlay.hs-modal')?.remove();
+  LP_render();
+  LP_saveToSupabase();
+}
+
+function _hsPickCat(catId){
+  _hsWiz.selCat=_HS_CATS.find(c=>c.id===catId);
+  _hsWiz.selHeading=null;
+  _hsWiz.step=1;
+  _hsRenderStep();
+}
+
+// Step 1: Pick 4-digit heading within selected category chapters
+function _hsStep1(el){
+  const cat=_hsWiz.selCat;
+  const chSet=new Set(cat.ch);
+  const catItems=_HS_DB.filter(item=>chSet.has(item.c.slice(0,2)));
+  // Group by 4-digit heading
+  const headings={};
+  for(const item of catItems){
+    const h4=item.c.slice(0,4);
+    if(!headings[h4])headings[h4]={code:h4,items:[],desc:''};
+    headings[h4].items.push(item);
+    // Use shortest description as heading label
+    if(!headings[h4].desc||item.d.length<headings[h4].desc.length)headings[h4].desc=item.d;
+  }
+  // Build heading descriptions from items
+  for(const [code,hd] of Object.entries(headings)){
+    // Find common prefix in descriptions
+    const descs=hd.items.map(i=>i.d);
+    if(descs.length===1){hd.label=descs[0]}
+    else{
+      // Extract the key noun from descriptions
+      const words=descs.map(d=>d.replace(/^Other\s+/i,'').replace(/\s*\(.*\)\s*/g,'').split(/[,\/]/)[0].trim());
+      const unique=[...new Set(words)];
+      hd.label=unique.length<=3?unique.join(', '):hd.desc.replace(/^Other\s+/i,'').split(',')[0];
+    }
+  }
+  const sorted=Object.values(headings).sort((a,b)=>a.code.localeCompare(b.code));
+  // Score headings by product name keywords
+  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  const nameKw=_hsParseProductName(origName);
+  for(const hd of sorted){
+    hd.score=0;
+    for(const item of hd.items){
+      for(const t of nameKw){
+        if(item.k.includes(t))hd.score+=3;
+        if(item.d.toLowerCase().includes(t))hd.score+=2;
+      }
+    }
+  }
+  sorted.sort((a,b)=>b.score-a.score||a.code.localeCompare(b.code));
+
+  let h=`<div style="margin-bottom:10px">`;
+  h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">`;
+  h+=`<span style="font-size:14px">${cat.icon}</span><span style="font-size:12px;font-weight:700;color:var(--tp)">${cat.name}</span>`;
+  h+=`<button onclick="_hsWiz.step=0;_hsRenderStep()" style="font-size:9px;color:var(--ts);background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;cursor:pointer;margin-left:auto">← Back</button></div>`;
+  h+=`<div style="font-size:12px;font-weight:700;color:var(--tp);margin-top:4px">Step 2 · Select heading</div>`;
+  h+=`<div style="font-size:10px;color:var(--ts);margin-bottom:8px">Choose the 4-digit HS heading that best describes the product</div></div>`;
+  for(const hd of sorted){
+    const isBest=hd.score>4;
+    h+=`<div onclick="_hsPickHeading('${hd.code}')" style="padding:8px 10px;border:1px solid ${isBest?'var(--ab)':'var(--bd)'};background:${isBest?'var(--as)':'var(--sf)'};border-radius:6px;margin-bottom:4px;cursor:pointer;transition:all .15s" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='${isBest?'var(--ab)':'var(--bd)'}'" >`;
+    h+=`<div style="display:flex;align-items:center;gap:8px">`;
+    h+=`<span style="font-family:var(--fm);font-size:13px;font-weight:700;color:var(--ac)">${hd.code}</span>`;
+    h+=`<span style="font-size:11px;font-weight:600;color:var(--tp);flex:1">${hd.label}</span>`;
+    h+=`<span style="font-size:9px;color:var(--tt)">${hd.items.length} codes</span>`;
+    if(isBest)h+=`<span style="font-size:8px;color:#fff;background:var(--gn);padding:1px 5px;border-radius:3px">Match</span>`;
+    h+=`</div>`;
+    h+=`<div style="font-size:9px;color:var(--ts);margin-top:2px">${hd.items.map(i=>i.c).join(' · ')}</div>`;
+    h+=`</div>`;
+  }
+  el.innerHTML=h;
+}
+
+function _hsPickHeading(code){
+  _hsWiz.selHeading=code;
+  _hsWiz.step=2;
+  _hsRenderStep();
+}
+
+// Step 2: Pick 6-digit subheading within selected heading
+function _hsStep2(el){
+  const cat=_hsWiz.selCat;
+  const heading=_hsWiz.selHeading;
+  const items=_HS_DB.filter(item=>item.c.startsWith(heading));
+  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  // Score by product name keywords
+  const nameKw=_hsParseProductName(origName);
+  const scored=items.map(item=>{
+    let score=0;const kw=item.k;const desc=item.d.toLowerCase();
+    for(const t of nameKw){
+      if(kw.includes(t))score+=3;
+      if(desc.includes(t))score+=2;
+      const parts=kw.split(' ');
+      for(const p of parts){if(p.startsWith(t)&&t.length>=3)score+=1}
+    }
+    return{...item,score};
+  }).sort((a,b)=>b.score-a.score||a.c.localeCompare(b.c));
+
+  let h=`<div style="margin-bottom:10px">`;
+  h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">`;
+  h+=`<span style="font-size:14px">${cat.icon}</span>`;
+  h+=`<span style="font-family:var(--fm);font-size:12px;font-weight:700;color:var(--ac)">${heading}</span>`;
+  h+=`<span style="font-size:11px;color:var(--tp);font-weight:600">${cat.name}</span>`;
+  h+=`<button onclick="_hsWiz.step=1;_hsRenderStep()" style="font-size:9px;color:var(--ts);background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;cursor:pointer;margin-left:auto">← Headings</button>`;
+  h+=`<button onclick="_hsWiz.step=0;_hsRenderStep()" style="font-size:9px;color:var(--ts);background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;cursor:pointer">↩ Start</button></div>`;
+  h+=`<div style="font-size:12px;font-weight:700;color:var(--tp);margin-top:4px">Step 3 · Select subheading</div>`;
+  h+=`<div style="font-size:10px;color:var(--ts);margin-bottom:8px">Pick the 6-digit code — click to accept</div></div>`;
+  h+=`<div id="hsCompArea" style="display:none;margin-bottom:8px"></div>`;
+
+  for(const r of scored){
+    const custName=_hsBuildCustomsName2(origName,r);
+    const isBest=r.score>4;
+    h+=`<div style="padding:10px 12px;border:1px solid ${isBest?'var(--ab)':'var(--bd)'};border-radius:8px;margin-bottom:6px;cursor:pointer;background:${isBest?'var(--as)':'var(--sf)'};transition:all .15s" onmouseenter="this.style.borderColor='var(--gn)';this.style.background='var(--gs)'" onmouseleave="this.style.borderColor='${isBest?'var(--ab)':'var(--bd)'}';this.style.background='${isBest?'var(--as)':'var(--sf)'}'" data-hscode="${r.c}" data-custname="${custName.replace(/"/g,'&quot;')}" data-comp="${r.comp?'1':'0'}" data-compq="${r.compQ||''}" onclick="_hsSelectResult2(this)">`;
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">`;
+    h+=`<span style="font-family:var(--fm);font-size:14px;font-weight:700;color:var(--ac)">${r.c}</span>`;
+    h+=`<span style="font-size:11px;font-weight:600;color:var(--tp);flex:1">${r.d}</span>`;
+    if(isBest)h+=`<span style="font-size:8px;color:#fff;background:var(--gn);padding:1px 5px;border-radius:3px">Best match</span>`;
+    h+=`</div>`;
+    h+=`<div style="font-size:10px;color:var(--gn)">→ ${custName}</div>`;
+    if(r.comp&&!_hsWiz.material)h+=`<div style="font-size:9px;color:var(--or);margin-top:2px">⚠ Composition info recommended</div>`;
+    h+=`</div>`;
+  }
+  el.innerHTML=h;
+}
+
+function _hsBuildCustomsName2(origName,item){
+  // Build customs-compliant description: product, material, HS description, usage
+  const parts=[];
+  // 1. Clean product name — remove internal codes (FELCK-xxx etc.)
+  let name=origName.replace(/\b[A-Z]{2,}-\d{3}(-\d{3})?\b/g,'').replace(/\s{2,}/g,' ').trim();
+  parts.push(name);
+  // 2. Material/composition
+  const mat=_hsWiz.material||_hsWiz.composition||'';
+  if(mat&&!name.toLowerCase().includes(mat.toLowerCase()))parts.push(mat);
+  // 3. HS tariff description (adds specificity customs requires)
+  if(item.d){
+    const descLow=item.d.toLowerCase();
+    const nameLow=name.toLowerCase();
+    // Only add if it provides info not already in the name
+    const descWords=item.d.split(/[\s,;()]+/).filter(w=>w.length>3);
+    const newInfo=descWords.filter(w=>!nameLow.includes(w.toLowerCase()));
+    if(newInfo.length>=2)parts.push(item.d);
+  }
+  // 4. Usage context
+  const usage=_hsWiz.usage||'';
+  if(usage&&!name.toLowerCase().includes(usage.toLowerCase()))parts.push('for '+usage);
+  // 5. Customs category from chapter
+  const ch=item.c.slice(0,2);
+  const custCat=_HS_CUSTOMS_NAMES[ch]||'';
+  if(custCat){
+    const catLow=custCat.toLowerCase();
+    if(!parts.some(p=>p.toLowerCase().includes(catLow)))parts.push('('+custCat+')');
+  }
+  return parts.join(', ');
+}
+
+function _hsSelectResult2(el){
+  const code=el.dataset.hscode;
+  const needsComp=el.dataset.comp==='1';
+  const compQ=el.dataset.compq;
+  const custName=el.dataset.custname;
+  if(needsComp&&!_hsWiz.composition&&!_hsWiz.material){
+    const area=document.getElementById('hsCompArea');
+    if(!area)return;
+    area.style.display='block';
+    area.innerHTML=`<div style="background:var(--os);padding:10px 12px;border-radius:8px;border:1px solid #F5D6B8">
+      <div style="font-size:11px;font-weight:600;color:var(--or);margin-bottom:4px">⚠ ${compQ||'What is the fiber/material composition?'}</div>
+      <div style="font-size:10px;color:var(--ts);margin-bottom:6px">Required on customs documents for textiles. Affects HS classification.</div>
+      <div style="display:flex;gap:6px">
+        <input id="hsCompInput" type="text" placeholder="e.g., 100% polyester, 80/20 cotton-poly" style="flex:1;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none">
+        <button class="mbtn" onclick="_hsApplyComp2('${code}')" style="padding:6px 12px;font-size:10px;background:var(--or);color:#fff;border-color:var(--or)">Apply</button>
+        <button class="mbtn" onclick="_hsSkipComp2('${code}')" style="padding:6px 12px;font-size:10px">Skip</button>
+      </div>
+    </div>`;
+    setTimeout(()=>document.getElementById('hsCompInput')?.focus(),50);
+    return;
+  }
+  _hsShowAccept(code,custName);
+}
+
+function _hsApplyComp2(code){
+  _hsWiz.composition=(document.getElementById('hsCompInput')?.value||'').trim();
+  document.getElementById('hsCompArea').style.display='none';
+  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  const item=_HS_DB.find(i=>i.c===code);
+  _hsShowAccept(code,item?_hsBuildCustomsName2(origName,item):origName);
+}
+
+function _hsSkipComp2(code){
+  document.getElementById('hsCompArea').style.display='none';
+  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  const item=_HS_DB.find(i=>i.c===code);
+  _hsShowAccept(code,item?_hsBuildCustomsName2(origName,item):origName);
+}
+
+function _hsShowAccept(code,custName){
+  const area=document.getElementById('hsCompArea');
+  if(!area)return;
+  area.style.display='block';
+  area.innerHTML=`<div style="background:var(--gs);padding:12px;border-radius:8px;border:1px solid #B8DFCA">
+    <div style="font-size:13px;font-weight:700;color:var(--gn);margin-bottom:6px">✓ HS Code: <span style="font-family:var(--fm)">${code}</span></div>
+    <div style="margin-bottom:8px">
+      <label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Customs description (editable before saving)</label>
+      <input id="hsCustNameEdit" type="text" value="${custName.replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd);outline:none;box-sizing:border-box">
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="mbtn mbtn-primary" onclick="_hsAccept('${code}')" style="padding:9px 24px;font-size:12px;background:var(--gn);border-color:var(--gn)">✓ Accept & Save</button>
+      <button class="mbtn" onclick="_hsReject()" style="padding:9px 20px;font-size:12px">✗ Try another</button>
+    </div>
+  </div>`;
+}
+
+function _hsUseSibling(hsCode,custName){
+  // Use sibling's HS code — show accept dialog with editable customs name
+  const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
+  const cn=custName||origName;
+  const body=document.getElementById('hsWizBody');if(!body)return;
+  let h=`<div style="background:var(--gs);padding:14px;border-radius:8px;border:1px solid #B8DFCA">`;
+  h+=`<div style="font-size:13px;font-weight:700;color:var(--gn);margin-bottom:4px">⚡ Using HS code from product family</div>`;
+  h+=`<div style="font-family:var(--fm);font-size:16px;font-weight:700;color:var(--pu);margin-bottom:8px">${hsCode}</div>`;
+  h+=`<div style="margin-bottom:8px">`;
+  h+=`<label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Customs description (editable)</label>`;
+  h+=`<input id="hsCustNameEdit" type="text" value="${cn.replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd);outline:none;box-sizing:border-box">`;
+  h+=`</div>`;
+  h+=`<div style="display:flex;gap:6px">`;
+  h+=`<button class="mbtn mbtn-primary" onclick="_hsAccept('${hsCode}')" style="padding:9px 24px;font-size:12px;background:var(--gn);border-color:var(--gn)">✓ Accept & Save</button>`;
+  h+=`<button class="mbtn" onclick="_hsWiz.step=0;_hsRenderStep()" style="padding:9px 20px;font-size:12px">← Back to search</button>`;
+  h+=`</div></div>`;
+  body.innerHTML=h;
+}
+
+function _hsAccept(code){
+  const sku=_hsLookupSku;if(!sku)return;
+  const custName=(document.getElementById('hsCustNameEdit')?.value||'').trim();
+  LP_setCustomsOvr(sku,'hsCode',code);
+  if(custName)LP_setCustomsOvr(sku,'customsName',custName);
+  document.querySelector('.modal-overlay.hs-modal')?.remove();
+  LP_render();
+  LP_saveToSupabase();
+}
+
+function _hsReject(){
+  _hsWiz.composition='';
+  const area=document.getElementById('hsCompArea');
+  if(area){area.style.display='none';area.innerHTML=''}
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1205,6 +2215,7 @@ async function LP_loadFromSupabase(){
       LP_holds=new Set(truck?.holds||[]);
       if(truck?.lockedRows?.length)LP_STATE.lockedRows=truck.lockedRows;
       if(truck?.transitDays)LP_transitDays={...LP_TRANSIT_DEFAULTS,...truck.transitDays};
+      if(LP_transitDays.TOR===5)LP_transitDays.TOR=7;if(LP_transitDays.VAN===5)LP_transitDays.VAN=7;
       if(truck?.stockSkus?.length&&STOCK_SKUS.size===0){
         STOCK_SKUS=new Set(truck.stockSkus);
         STOCK_REPORT_NAME=truck.stockReportName||'';
@@ -1240,6 +2251,7 @@ async function LP_loadFromSupabase(){
     LP_arrivedConts=new Set(p.arrivedConts||[]);
     LP_holds=new Set(p.holds||[]);
     if(p.transitDays)LP_transitDays={...LP_TRANSIT_DEFAULTS,...p.transitDays};
+    if(LP_transitDays.TOR===5)LP_transitDays.TOR=7;if(LP_transitDays.VAN===5)LP_transitDays.VAN=7;
     if(p.stockSkus&&p.stockSkus.length&&STOCK_SKUS.size===0){
       STOCK_SKUS=new Set(p.stockSkus);
       STOCK_REPORT_NAME=p.stockReportName||'';
@@ -1973,15 +2985,32 @@ function LP_renderDemand(el){
   ${pltOvrCount?'<div class="note note-pu" style="margin-bottom:10px">Pallet qty overrides active (★). <strong>Regenerate</strong> the plan to apply new pallet dimensions to unlocked trucks.</div>':''}
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
     <input type="text" class="lp-search" placeholder="Search by SKU, name, source..." id="lpDemSearch" oninput="LP_filterDemand()" style="flex:1;min-width:180px;margin-bottom:0">
-    <select id="lpDemSrcFilter" onchange="LP_filterDemand()" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd);height:32px">
-      <option value="">All Sources</option>
-      ${allSources.map(s=>'<option value="'+s+'">'+s+'</option>').join('')}
-    </select>
+    <div style="position:relative;display:inline-block">
+      <button id="lpDemSrcBtn" onclick="document.getElementById('lpDemSrcDrop').style.display=document.getElementById('lpDemSrcDrop').style.display==='none'?'block':'none'" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd);background:var(--sf);cursor:pointer;height:32px;white-space:nowrap;color:var(--tp)">All Sources ▾</button>
+      <div id="lpDemSrcDrop" style="display:none;position:absolute;top:34px;left:0;z-index:90;background:var(--sf);border:1px solid var(--bd);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);padding:6px;min-width:160px;max-height:260px;overflow-y:auto">
+        <div style="display:flex;gap:4px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--bd)">
+          <button onclick="_lpDemSrcAll(true)" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;background:var(--gs);color:var(--gn);cursor:pointer">All</button>
+          <button onclick="_lpDemSrcAll(false)" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;background:var(--rs);color:var(--rd);cursor:pointer">None</button>
+        </div>
+        ${allSources.map(s=>'<label style="display:flex;align-items:center;gap:5px;padding:3px 4px;font-size:10px;cursor:pointer;border-radius:3px;white-space:nowrap" onmouseenter="this.style.background=\'var(--bg)\'" onmouseleave="this.style.background=\'\'"><input type="checkbox" checked class="lp-src-chk" value="'+s+'" onchange="LP_filterDemand()"> '+s+'</label>').join('')}
+      </div>
+    </div>
+    <div style="position:relative;display:inline-block">
+      <button id="lpDemDestBtn" onclick="document.getElementById('lpDemDestDrop').style.display=document.getElementById('lpDemDestDrop').style.display==='none'?'block':'none'" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd);background:var(--sf);cursor:pointer;height:32px;white-space:nowrap;color:var(--tp)">All Destinations ▾</button>
+      <div id="lpDemDestDrop" style="display:none;position:absolute;top:34px;left:0;z-index:90;background:var(--sf);border:1px solid var(--bd);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);padding:6px;min-width:180px;max-height:260px;overflow-y:auto">
+        <div style="display:flex;gap:4px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--bd)">
+          <button onclick="_lpDemDestAll(true)" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;background:var(--gs);color:var(--gn);cursor:pointer">All</button>
+          <button onclick="_lpDemDestAll(false)" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;background:var(--rs);color:var(--rd);cursor:pointer">None</button>
+        </div>
+        ${[...totalDests].sort().map(d=>'<label style="display:flex;align-items:center;gap:5px;padding:3px 4px;font-size:10px;cursor:pointer;border-radius:3px;white-space:nowrap" onmouseenter="this.style.background=\'var(--bg)\'" onmouseleave="this.style.background=\'\'"><input type="checkbox" checked class="lp-dest-chk" value="'+clDisp(d)+'" onchange="LP_filterDemand()"> '+clDisp(d)+'</label>').join('')}
+      </div>
+    </div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ts);white-space:nowrap;cursor:pointer;user-select:none"><input type="checkbox" ${LP_excludeStaples?'checked':''} onchange="LP_excludeStaples=this.checked;LP_saveToSupabase();LP_render()"> Exclude STAPLES USA</label>
   </div>
-  ${ROLE!=='viewer'?'<div style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:8px;flex-wrap:wrap">'
-    +'<span style="font-size:11px;font-weight:600;color:var(--ts);white-space:nowrap">Hold by source:</span>'
-    +'<select id="lpDemSrcSel" style="font-size:11px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd)">'
+  ${ROLE!=='viewer'?'<div style="padding:8px 12px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:8px">'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<span style="font-size:11px;font-weight:600;color:var(--ts);white-space:nowrap">⏸ Hold by source:</span>'
+    +'<select id="lpDemSrcSel" onchange="_lpHoldSrcChanged()" style="font-size:11px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd)">'
     +'<option value="">-- Source --</option>'
     +allSources.map(s=>'<option value="'+s+'">'+s+'</option>').join('')
     +'</select>'
@@ -1989,13 +3018,15 @@ function LP_renderDemand(el){
     +'<option value="">All Destinations</option>'
     +[...totalDests].sort().map(d=>'<option value="'+d+'">'+clDisp(d)+'</option>').join('')
     +'</select>'
-    +'<button class="rbtn" onclick="LP_holdBySource(false)" style="font-size:10px;padding:3px 8px;background:#FEF3EB;color:#C4550A;border-color:#F5D6B8">&#9208; Hold all</button>'
-    +'<button class="rbtn" onclick="LP_holdBySource(true)" style="font-size:10px;padding:3px 8px;background:var(--gs);color:var(--gn);border-color:#B8DFCA">&#9654; Release all</button>'
+    +'<button class="rbtn" onclick="LP_holdBySource(false)" style="font-size:10px;padding:3px 8px;background:#FEF3EB;color:#C4550A;border-color:#F5D6B8">⏸ Hold</button>'
+    +'<button class="rbtn" onclick="LP_holdBySource(true)" style="font-size:10px;padding:3px 8px;background:var(--gs);color:var(--gn);border-color:#B8DFCA">▶ Release</button>'
     +'<div style="flex:1"></div>'
     +'<button class="rbtn" onclick="LP_showCombinedCIModal()" style="font-size:10px;padding:3px 10px;background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-weight:600">📄 Combined CI</button>'
+    +'</div>'
+    +'<div id="lpHoldDestStatus" style="display:none;margin-top:6px"></div>'
     +'</div>':''}
   <div class="csf" id="lpDemBody"><table class="dtb"><thead><tr>
-    <th>SKU</th><th>Name</th><th>Source</th><th>Total Qty</th><th style="color:var(--gn)" title="Available qty from stock report">Stock Qty</th><th title="Unit price for CI/customs">Price</th><th title="HS Tariff Code">HS Code</th><th title="Country of Origin">COO</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
+    <th>SKU</th><th>Name</th><th>Source</th><th>Total Qty</th><th style="color:var(--gn)" title="Available qty from stock report">Stock Qty</th><th title="Unit price for CI/customs">Price</th><th title="HS Tariff Code">HS Code</th><th title="Country of Origin">COO</th><th title="Customs description for CI docs" style="min-width:100px">Customs Name</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
   </tr></thead><tbody>`;
   let _prevName='';
   for(const s of skus){
@@ -2051,17 +3082,23 @@ function LP_renderDemand(el){
     const _mkTxtIn=(field,val,isOvr2,w,ph)=>ROLE!=='viewer'
       ?'<input type="text" value="'+val+'" data-sku="'+s.sku+'" data-field="'+field+'" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="'+ph+'" style="width:'+w+'px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(isOvr2?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(isOvr2?'var(--pu)':'var(--tp)')+';outline:none;background:'+(isOvr2?'var(--ps)':'var(--sf)')+'">':String(val||'—');
     const _priceCell=ROLE!=='viewer'?('<input type="number" step="0.01" min="0" value="'+_priceVal+'" data-sku="'+s.sku+'" data-field="price" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="0.00" style="width:60px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_priceOvr?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_priceOvr?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_priceOvr?'var(--ps)':'var(--sf)')+'">'):String(_priceVal||'—');
-    const _hsCell=_mkTxtIn('hsCode',_hsVal,_hsOvr,80,'0000.00.00');
+    const _hsConf=!!_cOvr.hsConfirmed;
+    const _hsConfBtn=ROLE!=='viewer'&&_hsVal?`<span onclick="LP_toggleHSConfirm('${s.sku}')" title="${_hsConf?'HS confirmed — click to unconfirm':'Click to confirm HS code'}" style="cursor:pointer;font-size:10px;margin-left:2px;${_hsConf?'color:var(--gn)':'color:var(--tt);opacity:.5'}" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=${_hsConf?'1':'.5'}">${_hsConf?'✓':'○'}</span>`:'';
+    const _hsCell=_mkTxtIn('hsCode',_hsVal,_hsOvr,80,'0000.00.00')+_hsConfBtn+(ROLE!=='viewer'?'<span onclick="LP_showHSLookup(\''+s.sku+'\')" title="HS Code Lookup" style="cursor:pointer;font-size:12px;margin-left:2px;opacity:.5" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.5">🔍</span>':'');
     const _cooCell=_mkTxtIn('country',_cooVal,_cooOvr,44,'China');
-    html+=`<tr data-search="${s.sku} ${s.name} ${s.source}" data-source="${s.source}"${_sameNameGroup?' style="background:var(--sf)"':''}>
+    const _cnVal=_cOvr.customsName||_nom.customsName||'';const _cnOvr=!!_cOvr.customsName;
+    const _cnCell=_mkTxtIn('customsName',_cnVal,_cnOvr,100,'Customs description');
+    const _rowDests=Object.keys(s.dests||{}).map(d=>clDisp(d)).join('|');
+    html+=`<tr data-search="${s.sku} ${s.name} ${s.source}" data-source="${s.source}" data-dests="|${_rowDests}|"${_sameNameGroup?' style="background:var(--sf)"':''}>
       <td class="mono"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${_arrSkus.has(s.sku)?'var(--gn)':'#EF4444'};margin-right:5px;flex-shrink:0;vertical-align:middle" title="${_arrSkus.has(s.sku)?'Has arrival date':'No arrival date'}"></span>${s.sku}${isOvr?'<span style="color:var(--pu);font-size:9px" title="Pallet override active"> ★</span>':''}</td>
       <td class="tcl"${_sameNameGroup?' style="color:var(--ts)"':''} title="${s.name||''}">${_sameNameGroup?'↳ ':''}${s.name||'—'}</td>
       <td style="font-size:10px;color:var(--ts);white-space:nowrap">${s.source||'—'}</td>
       <td class="mono fw7">${s.totalQty.toLocaleString()}</td>
       <td class="mono">${_sqCell}</td>
       <td class="mono" style="${_priceOvr?'color:var(--pu);font-weight:700':''}">${_priceCell}</td>
-      <td class="mono" style="${_hsOvr?'color:var(--pu);font-weight:700':''}">${_hsCell}</td>
+      <td class="mono" style="${_hsConf?'color:var(--gn);font-weight:700;background:var(--gs)':(_hsOvr?'color:var(--pu);font-weight:700':'')}">${_hsCell}</td>
       <td class="mono" style="${_cooOvr?'color:var(--pu);font-weight:700':''}">${_cooCell}</td>
+      <td style="${_cnOvr?'color:var(--pu);font-weight:700':''}">${_cnCell}</td>
       <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<input type="number" value="${pq||''}" min="1" step="1" data-sku="${s.sku}" data-field="palletQty" data-orig="${origPq}" onchange="LP_palletInput(this)" onkeydown="if(event.key==='Enter')this.blur()" style="width:55px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${isOvr?'var(--pu)':'var(--bd)'};border-radius:4px;color:${isOvr?'var(--pu)':'var(--tp)'};outline:none;background:${isOvr?'var(--ps)':'var(--sf)'}" ${isOvr?'title="Original: '+origPq+'"':''}>`:`${pq||'—'}`}</td>
       <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<input type="number" value="${ps||''}" min="1" step="1" data-sku="${s.sku}" data-field="palletSpc" data-orig="${origPs}" onchange="LP_palletInput(this)" onkeydown="if(event.key==='Enter')this.blur()" style="width:45px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${isOvr?'var(--pu)':'var(--bd)'};border-radius:4px;color:${isOvr?'var(--pu)':'var(--tp)'};outline:none;background:${isOvr?'var(--ps)':'var(--sf)'}" ${isOvr?'title="Original: '+origPs+'"':''}>`:`${ps||'—'}`}</td>
       <td class="mono">${s.totalPlt>0?s.totalPlt.toFixed(1):'—'}</td>
@@ -2070,16 +3107,92 @@ function LP_renderDemand(el){
   }
   html+=`</tbody></table></div>`;
   el.innerHTML=html;
+  setTimeout(_lpDemRestoreFilters,0);
 }
 
 function LP_filterDemand(){
   const txt=(document.getElementById('lpDemSearch')?.value||'').toLowerCase();
-  const src=document.getElementById('lpDemSrcFilter')?.value||'';
+  // Sources — multi-select checkboxes
+  const srcChks=document.querySelectorAll('.lp-src-chk');
+  const selSrcs=new Set();let allSrcsChecked=true;
+  srcChks.forEach(cb=>{if(cb.checked)selSrcs.add(cb.value);else allSrcsChecked=false});
+  const srcBtn=document.getElementById('lpDemSrcBtn');
+  if(srcBtn)srcBtn.textContent=allSrcsChecked?'All Sources ▾':selSrcs.size+' Source'+(selSrcs.size!==1?'s':'')+' ▾';
+  // Destinations — multi-select checkboxes
+  const destChks=document.querySelectorAll('.lp-dest-chk');
+  const selDests=new Set();let allDestsChecked=true;
+  destChks.forEach(cb=>{if(cb.checked)selDests.add(cb.value);else allDestsChecked=false});
+  const destBtn=document.getElementById('lpDemDestBtn');
+  if(destBtn)destBtn.textContent=allDestsChecked?'All Destinations ▾':selDests.size+' Destination'+(selDests.size!==1?'s':'')+' ▾';
   document.querySelectorAll('#lpDemBody .dtb tbody tr').forEach(tr=>{
     const matchTxt=!txt||(tr.dataset.search||'').toLowerCase().includes(txt);
-    const matchSrc=!src||tr.dataset.source===src;
-    tr.style.display=(matchTxt&&matchSrc)?'':'none';
+    const matchSrc=allSrcsChecked||selSrcs.has(tr.dataset.source||'');
+    let matchDest=allDestsChecked;
+    if(!matchDest){
+      const rowDests=tr.dataset.dests||'';
+      for(const d of selDests){if(rowDests.includes('|'+d+'|')){matchDest=true;break}}
+    }
+    tr.style.display=(matchTxt&&matchSrc&&matchDest)?'':'none';
   });
+  // Save filter state for restoration after re-render
+  _lpDemFilterState={search:txt,srcs:allSrcsChecked?null:[...selSrcs],dests:allDestsChecked?null:[...selDests]};
+}
+function _lpDemRestoreFilters(){
+  const st=_lpDemFilterState;if(!st)return;
+  const searchEl=document.getElementById('lpDemSearch');
+  if(searchEl&&st.search){searchEl.value=st.search}
+  if(st.srcs){document.querySelectorAll('.lp-src-chk').forEach(cb=>{cb.checked=st.srcs.includes(cb.value)})}
+  if(st.dests){document.querySelectorAll('.lp-dest-chk').forEach(cb=>{cb.checked=st.dests.includes(cb.value)})}
+  if(st.srcs||st.dests||st.search)LP_filterDemand();
+}
+function _lpDemSrcAll(check){
+  document.querySelectorAll('.lp-src-chk').forEach(cb=>{cb.checked=check});
+  LP_filterDemand();
+}
+function _lpDemDestAll(check){
+  document.querySelectorAll('.lp-dest-chk').forEach(cb=>{cb.checked=check});
+  LP_filterDemand();
+}
+// Close filter dropdowns on outside click
+document.addEventListener('click',e=>{
+  const srcDrop=document.getElementById('lpDemSrcDrop');
+  const destDrop=document.getElementById('lpDemDestDrop');
+  if(srcDrop&&srcDrop.style.display!=='none'&&!e.target.closest('#lpDemSrcDrop')&&!e.target.closest('#lpDemSrcBtn'))srcDrop.style.display='none';
+  if(destDrop&&destDrop.style.display!=='none'&&!e.target.closest('#lpDemDestDrop')&&!e.target.closest('#lpDemDestBtn'))destDrop.style.display='none';
+});
+function _lpHoldSrcChanged(){
+  const src=(document.getElementById('lpDemSrcSel')?.value||'').trim();
+  const statusEl=document.getElementById('lpHoldDestStatus');
+  if(!statusEl)return;
+  if(!src){statusEl.style.display='none';return}
+  // Count holds per LP destination (grouped by transit abbr) for this source
+  const nom=LP_STATE.nomenclature||{};
+  const destStats={};// abbr -> {total, held, label}
+  for(const d of (LP_STATE.materialPlan||[])){
+    const s=(nom[d.sku]?.source||'').trim();
+    if(s!==src)continue;
+    const abbr=LP_matchTransitAbbr(d.destination);
+    if(!abbr)continue;// skip non-LP destinations
+    const label=CITY_ABBR[abbr]||abbr;
+    if(!destStats[abbr])destStats[abbr]={total:0,held:0,label};
+    destStats[abbr].total++;
+    if(LP_holds.has(d.destination+'|'+d.sku))destStats[abbr].held++;
+  }
+  if(!Object.keys(destStats).length){statusEl.style.display='none';return}
+  let h='<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">';
+  h+='<span style="font-size:9px;color:var(--ts)">Destinations:</span>';
+  for(const [dd,st] of Object.entries(destStats).sort((a,b)=>a[0].localeCompare(b[0]))){
+    const allHeld=st.held===st.total;
+    const someHeld=st.held>0&&!allHeld;
+    const icon=allHeld?'⏸':someHeld?'⚠':'▶';
+    const bg=allHeld?'#FEF3EB':someHeld?'#FFF8E1':'var(--gs)';
+    const clr=allHeld?'#C4550A':someHeld?'#F57F17':'var(--gn)';
+    const bdr=allHeld?'#F5D6B8':someHeld?'#FFE082':'#B8DFCA';
+    h+=`<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:${bg};color:${clr};border:1px solid ${bdr};white-space:nowrap" title="${st.held}/${st.total} SKU-dest pairs held">${icon} ${st.label} <span style="font-family:var(--fm);font-size:8px">${st.held}/${st.total}</span></span>`;
+  }
+  h+='</div>';
+  statusEl.style.display='block';
+  statusEl.innerHTML=h;
 }
 function LP_holdBySource(release){
   if(ROLE==='viewer')return;
@@ -2096,6 +3209,7 @@ function LP_holdBySource(release){
     if(release)LP_holds.delete(k);else{LP_holds.add(k);count++;}
   }
   LP_saveToSupabase();LP_render();
+  setTimeout(_lpHoldSrcChanged,100);// refresh hold indicators after re-render
 }
 function LP_toggleHold(el){
   if(ROLE==='viewer')return;
@@ -3104,7 +4218,7 @@ async function LP_exportCombinedCI(){
   // SheetJS fallback
   const wb=XLSX.utils.book_new();let tQ=0,tV=0;
   const rows=items.map(it=>{const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
-    return{'QTY':it.qty,'DESCRIPTION':nm.name||it.name||it.sku,'ITEM #':it.sku,'HS CODE':nm.hsCode,'COUNTRY':nm.country,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
+    return{'QTY':it.qty,'DESCRIPTION':nm.customsName||nm.name||it.name||it.sku,'ITEM #':it.sku,'HS CODE':nm.hsCode,'COUNTRY':nm.country,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
   rows.push({'QTY':tQ,'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV,'Pallets':+totalPlt.toFixed(2)});
   const pty=_cciGetParty(selDests);
   const ciData=[['COMBINED INVOICE AND PACKING LIST'],[''],['DATE:',date,'','INVOICE #:',truckId],['DELIVERY LOCATION:',destLabel],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Mode of Transport:','Road'],[''],
@@ -3156,7 +4270,7 @@ async function LP_exportCI(truckId){
 function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   const wb=XLSX.utils.book_new();let tQ=0,tV=0;
   const rows=agg.map(it=>{const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
-    return{'QTY':it.qty,'DESCRIPTION':nm.name||it.name||it.sku,'ITEM #':it.sku,'HS CODE':nm.hsCode,'COUNTRY':nm.country,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
+    return{'QTY':it.qty,'DESCRIPTION':nm.customsName||nm.name||it.name||it.sku,'ITEM #':it.sku,'HS CODE':nm.hsCode,'COUNTRY':nm.country,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
   rows.push({'QTY':tQ,'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV,'Pallets':+totalPlt.toFixed(2)});
   const pty=LP_getCIParties(dest);
   const ciData=[['COMBINED INVOICE AND PACKING LIST'],[''],['DATE:',date,'','INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Mode of Transport:','Road'],[''],['SHIPPER:','FWC2026 US, Inc, 396 Alhambra Circle, Ste# 400, Coral Gables, FL 33134, USA'],['CONSIGNEE:',pty.consignee.filter(Boolean).join(', ')],['CUSTOMS BROKER:',pty.broker.filter(Boolean).join(', ')],['']];
@@ -3164,7 +4278,7 @@ function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   ws['!cols']=[{wch:8},{wch:36},{wch:22},{wch:16},{wch:20},{wch:8},{wch:12},{wch:14},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Commercial Invoice');
   const plData=[['PACKING LIST'],[''],['Truck:','LP-'+truckId,'Date:',date,'Destination:',dest],['Items:',tQ,'Pallets:',+totalPlt.toFixed(2),'Total Value:',tV],['']];
-  const plRows=agg.map((it,i)=>{const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;return{'#':i+1,'Code':it.sku,'Name':nm.name||it.name||it.sku,'Qty':it.qty,'Pallets':+it.pallets.toFixed(3),'HS Code':nm.hsCode,'Country':nm.country,'Unit Price':up,'Line Total':up*it.qty}});
+  const plRows=agg.map((it,i)=>{const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;return{'#':i+1,'Code':it.sku,'Name':nm.customsName||nm.name||it.name||it.sku,'Qty':it.qty,'Pallets':+it.pallets.toFixed(3),'HS Code':nm.hsCode,'Country':nm.country,'Unit Price':up,'Line Total':up*it.qty}});
   plRows.push({'#':'','Code':'','Name':'TOTAL','Qty':tQ,'Pallets':+totalPlt.toFixed(2),'HS Code':'','Country':'','Unit Price':'','Line Total':tV});
   const ps=XLSX.utils.aoa_to_sheet(plData);XLSX.utils.sheet_add_json(ps,plRows,{origin:'A6'});
   ps['!cols']=[{wch:4},{wch:22},{wch:36},{wch:8},{wch:10},{wch:16},{wch:14},{wch:10},{wch:14}];
@@ -3305,7 +4419,7 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
     const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
     const rn=DS+idx;ws.getRow(rn).height=19;
     const bg=idx%2===1?fillL1:fillWh;
-    const vals=[it.qty,nm.name||it.name||it.sku,it.sku,nm.hsCode,nm.country,'','','','','','','USD',up,tv,'Re-Export (Temporary Imported)'];
+    const vals=[it.qty,nm.customsName||nm.name||it.name||it.sku,it.sku,nm.hsCode,nm.country,'','','','','','','USD',up,tv,'Re-Export (Temporary Imported)'];
     vals.forEach((v,i)=>{
       const al=i===0?alC:(i===11?alC:([12,13].includes(i)?alR:alL));
       const fmt=i===12?'#,##0.00':(i===13?'$ #,##0.00':null);
@@ -3355,8 +4469,8 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   p.getRow(5).height=22;[[1,'Items:',fLabel,null],[2,tQ,fValB,null],[4,'Pallets:',fLabel,null],[5,tPal,fValB,null],[7,'Total Value:',fLabel,null],[8,tV,fValB,'$ #,##0.00']].forEach(([c,v,f,fm])=>pc(5,c,v,f,alL,null,brdThin,fm));
   p.getRow(6).height=6;
   p.getRow(7).height=28;['#','Nomenclature Code','Nomenclature Name','Qty','Pallets','HS Code','Country','Unit Price','Line Total'].forEach((h,i)=>{const cl=p.getRow(7).getCell(i+1);cl.value=h;cl.font=fHdr;cl.fill=fillDark;cl.border=brdMed;cl.alignment=alW});
-  items.forEach((it,idx)=>{const nm=nomenclature[it.sku]||{};const rn=8+idx;p.getRow(rn).height=18;const bg=idx%2===1?fillL1:fillWh;
-    [idx+1,it.sku,nm.name||it.name||it.sku,it.qty,+it.pallets.toFixed(3),nm.hsCode||'',nm.country||'',nm.unitPrice||0,(nm.unitPrice||0)*it.qty].forEach((v,i)=>{
+  items.forEach((it,idx)=>{const nm=nomenclature[it.sku]||{};const co=LP_customsOverrides&&LP_customsOverrides[it.sku]||{};const rn=8+idx;p.getRow(rn).height=18;const bg=idx%2===1?fillL1:fillWh;
+    [idx+1,it.sku,co.customsName||nm.customsName||nm.name||it.name||it.sku,it.qty,+it.pallets.toFixed(3),nm.hsCode||'',nm.country||'',nm.unitPrice||0,(nm.unitPrice||0)*it.qty].forEach((v,i)=>{
       const al=i===0?alC:([7,8].includes(i)?alR:alL);const fmt=i===7?'#,##0.00':(i===8?'$ #,##0.00':null);
       pc(rn,i+1,v,fData,al,bg,brdThin,fmt);
     });
@@ -4496,6 +5610,8 @@ function masterBackupExport(){
     Object.entries(LP_palletOverrides).forEach(([sku,ov])=>rows.push({Setting:'Pallet Override: '+sku,Value:JSON.stringify(ov)}));
     // LSR numbers
     Object.entries(LP_lsrNumbers).forEach(([id,lsr])=>rows.push({Setting:'LSR: LP-'+id,Value:lsr}));
+    // Customs overrides (HS code, country, price, customsName)
+    Object.entries(LP_customsOverrides).forEach(([sku,ov])=>rows.push({Setting:'Customs Override: '+sku,Value:JSON.stringify(ov)}));
     const ws=XLSX.utils.json_to_sheet(rows);
     ws['!cols']=[{wch:40},{wch:60}];
     XLSX.utils.book_append_sheet(wb,ws,'LP Config');
@@ -4653,7 +5769,7 @@ async function masterBackupRestore(file){
     const lpNomRows=getSheet('LP Nomenclature');
     if(lpNomRows&&lpNomRows.length){
       LP_STATE.nomenclature={};
-      for(const r of lpNomRows){if(!r.SKU)continue;LP_STATE.nomenclature[r.SKU]={name:r.Name||'',source:r.Source||'',palletQty:r['Pallet Qty']||0,palletSpc:r['Pallet Spc']||0,hsCode:r['HS Code']||'',country:r.Country||'',unitPrice:r['Unit Price']||0}}
+      for(const r of lpNomRows){if(!r.SKU)continue;LP_STATE.nomenclature[r.SKU]={name:r.Name||'',source:r.Source||'',palletQty:r['Pallet Qty']||0,palletSpc:r['Pallet Spc']||0,hsCode:_hsNormalize(r['HS Code']||''),country:r.Country||'',unitPrice:r['Unit Price']||0}}
       log.push('LP Nom: '+Object.keys(LP_STATE.nomenclature).length);
     }
 
@@ -4685,7 +5801,7 @@ async function masterBackupRestore(file){
     // ── 13. LP Config → engine settings + transit + overrides ──
     const cfgRows=getSheet('LP Config');
     if(cfgRows){
-      LP_contDateOverrides={};LP_palletOverrides={};
+      LP_contDateOverrides={};LP_palletOverrides={};LP_customsOverrides={};
       for(const r of cfgRows){
         const s=r.Setting,v=r.Value;
         if(s==='Turnaround')LP_STATE.turnaround=+v||6;
@@ -4700,6 +5816,7 @@ async function masterBackupRestore(file){
         else if(s.startsWith('Container Date Override: '))LP_contDateOverrides[s.replace('Container Date Override: ','')]=v;
         else if(s.startsWith('Pallet Override: ')){try{LP_palletOverrides[s.replace('Pallet Override: ','')]=JSON.parse(v)}catch(e){}}
         else if(s.startsWith('LSR: LP-')){const id=+s.replace('LSR: LP-','');if(id)LP_lsrNumbers[id]=v}
+        else if(s.startsWith('Customs Override: ')){try{LP_customsOverrides[s.replace('Customs Override: ','')]=JSON.parse(v)}catch(e){}}
       }
       log.push('LP Config restored');
     }
@@ -7987,12 +9104,17 @@ function showHelp(){
   4. <strong>Split Handling</strong> — if stock is short, the engine allocates proportionally across destinations so no single venue gets starved.</p>
   <p><strong>Tabs:</strong><br>
   <strong>📥 Arrivals</strong> — view the container arrival schedule, see what's coming and when.<br>
-  <strong>📋 Demand</strong> — destination-level demand summary showing required quantities per SKU. Includes Hold by Source tool to hold/release SKU groups from planning, and <strong>📄 Combined CI</strong> button to export a multi-destination customs invoice.<br>
+  <strong>📋 Demand</strong> — destination-level demand summary showing required quantities per SKU. Filter by source, destination (multi-select), or search. Each row shows inline-editable fields: Price, HS Code (with 🔍 AI lookup), Country of Origin, Customs Name, and Pallet dimensions. Includes Hold by Source tool to hold/release SKU groups, and <strong>📄 Combined CI</strong> button for multi-destination customs invoice.<br>
   <strong>🚛 Plan</strong> — the generated truck plan. Each truck card shows destination, date, SKU manifest, and pallet utilization. Trucks can be marked as "locked" (checkbox) — locked trucks won't change on re-generation. New trucks start after the last locked date.<br>
   <strong>⚠ Late</strong> — analysis of containers that may arrive too late for their LM dispatch window. Shows which SKUs at which destinations have LP arrival dates after the LM truck departs. Sidebar lets you exclude destinations from analysis. Live-updates when LM truck dates change.</p>
   <p><strong>Lock:</strong> Check the box on a truck to lock it. When you regenerate the plan (e.g., after new arrivals data), locked trucks are preserved exactly as-is, and the engine only replans the remaining unlocked inventory. This lets you lock in shipments as they go out the door while keeping the future plan flexible.</p>
   <p><strong>Commercial Invoice (CI):</strong> Each LP truck has a 📄 button that generates a formatted Excel with Combined Invoice & Packing List — includes shipper details, HS codes, country of origin, unit values, and total values. Ready for customs clearance.<br>
   <strong>📄 Combined CI:</strong> In the Demand tab, the Combined CI button opens a modal where you pick any combination of the 8 LP destinations and sources. Sources auto-filter based on selected destinations. Export generates a single CI summing all demand quantities across your selection — useful for multi-destination customs filings.</p>
+  <p><strong>🔍 HS Code Assistant:</strong> Click the 🔍 icon next to any HS Code field in the Demand table. The wizard offers three ways to classify:
+  <br>1. <strong>Sibling SKUs</strong> — if other SKUs in the same family (e.g., CTBAR-001-xxx) already have HS codes, they're suggested at the top
+  <br>2. <strong>AI Classification</strong> (Claude or Gemini) — paste a product URL and click the AI button. The AI analyzes the product from the URL to suggest HS code, customs name, and country of origin with confidence levels. Setup requires a free API key.
+  <br>3. <strong>Manual Category</strong> — select a product category, refine with material/usage, browse matching HS codes from the built-in database
+  <br>All methods let you edit the customs description and country before saving. HS codes are normalized to XXXX.XX format.</p>
 
   <h4 style="color:var(--tp);margin:16px 0 8px">🚛 Last Mile — Venue Distribution</h4>
   <p>Final mile delivery from regional hubs to individual venues. Takes a Nomenclature file (SKU master with pallet dimensions) and Material Plan (what goes where and when), then generates an optimized truck loading plan.</p>
@@ -9504,8 +10626,8 @@ function doSoftResetLP(){
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:_ma,loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},
     turnaround:_ta,maxPallets:_mp,maxTrucks:_mt,maxDests:_md,ricStartDate:_ric,
     manualArrivals:[],demandAdjustments:[],lockedRows:_lr,planGenerated:false,generatedPlan:[]};
-  // LP_dispatched, LP_lsrNumbers, LP_palletOverrides, LP_arrivedConts, LP_transitDays,
-  // LP_contDateOverrides, lockedRows, manual arrivals (_manual:true) — all preserved
+  // LP_dispatched, LP_lsrNumbers, LP_palletOverrides, LP_customsOverrides, LP_arrivedConts,
+  // LP_transitDays, LP_contDateOverrides, lockedRows, manual arrivals (_manual:true) — all preserved
   lpUf=[];lpRenderUpload();
   // Clear rendered content so upload overlay is visible
   const lpM2=document.getElementById('lpMain');if(lpM2)lpM2.innerHTML='';
@@ -9622,7 +10744,7 @@ function LP_updateNomPrompt(){
           Object.assign(LP_STATE.nomenclature[sku],{
             name:newNom[sku].name||LP_STATE.nomenclature[sku].name,
             source:newNom[sku].source||LP_STATE.nomenclature[sku].source,
-            hsCode:newNom[sku].hsCode,
+            hsCode:_hsNormalize(newNom[sku].hsCode),
             country:newNom[sku].country,
             unitPrice:newNom[sku].unitPrice||LP_STATE.nomenclature[sku].unitPrice,
           });
