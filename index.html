@@ -1137,14 +1137,28 @@ function LP_setCustomsOvr(sku,field,val){
 }
 function LP_customsInput(el){
   if(ROLE==='viewer')return;
-  LP_setCustomsOvr(el.dataset.sku,el.dataset.field,el.value);
+  const sku=el.dataset.sku,field=el.dataset.field;
+  LP_setCustomsOvr(sku,field,el.value);
   // Update visual style to show override (purple) without full re-render
-  const hasOvr=!!(LP_customsOverrides[el.dataset.sku]||{})[el.dataset.field];
+  const hasOvr=!!(LP_customsOverrides[sku]||{})[field];
   el.style.borderColor=hasOvr?'var(--pu)':'var(--bd)';
   el.style.color=hasOvr?'var(--pu)':'var(--tp)';
   el.style.background=hasOvr?'var(--ps)':'var(--sf)';
-  // Normalize displayed value for HS codes
-  if(el.dataset.field==='hsCode'){el.value=_hsNormalize(el.value)}
+  if(field==='hsCode'){
+    // Normalize displayed value
+    el.value=_hsNormalize(el.value);
+    // Show/hide confirm button
+    const confBtn=document.querySelector('.hs-conf[data-sku="'+sku+'"]');
+    if(confBtn)confBtn.style.display=el.value?'':'none';
+    // Update parent td styling based on confirmed status
+    const td=el.closest('td');
+    const isConf=!!(LP_customsOverrides[sku]||{}).hsConfirmed;
+    if(td){
+      td.style.color=isConf?'var(--gn)':(hasOvr?'var(--pu)':'');
+      td.style.fontWeight=isConf||hasOvr?'700':'';
+      td.style.background=isConf?'var(--gs)':'';
+    }
+  }
 }
 function LP_toggleHSConfirm(sku,el){
   if(ROLE==='viewer')return;
@@ -3189,7 +3203,7 @@ function LP_renderDemand(el){
       ?'<input type="text" value="'+val+'" data-sku="'+s.sku+'" data-field="'+field+'" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="'+ph+'" style="width:'+w+'px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(isOvr2?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(isOvr2?'var(--pu)':'var(--tp)')+';outline:none;background:'+(isOvr2?'var(--ps)':'var(--sf)')+'">':String(val||'—');
     const _priceCell=ROLE!=='viewer'?('<input type="number" step="0.01" min="0" value="'+_priceVal+'" data-sku="'+s.sku+'" data-field="price" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="0.00" style="width:60px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_priceOvr?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_priceOvr?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_priceOvr?'var(--ps)':'var(--sf)')+'">'):String(_priceVal||'—');
     const _hsConf=!!_cOvr.hsConfirmed;
-    const _hsConfBtn=ROLE!=='viewer'&&_hsVal?`<span onclick="event.stopPropagation();LP_toggleHSConfirm('${s.sku}',this)" title="${_hsConf?'HS confirmed — click to unconfirm':'Click to confirm HS code'}" style="cursor:pointer;font-size:10px;margin-left:2px;${_hsConf?'color:var(--gn)':'color:var(--tt);opacity:.5'}" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=${_hsConf?'1':'.5'}">${_hsConf?'✓':'○'}</span>`:'';
+    const _hsConfBtn=ROLE!=='viewer'?`<span class="hs-conf" data-sku="${s.sku}" onclick="event.stopPropagation();LP_toggleHSConfirm('${s.sku}',this)" title="${_hsConf?'HS confirmed — click to unconfirm':'Click to confirm HS code'}" style="cursor:pointer;font-size:10px;margin-left:2px;${!_hsVal?'display:none;':''}${_hsConf?'color:var(--gn)':'color:var(--tt);opacity:.5'}" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=${_hsConf?'1':'.5'}">${_hsConf?'✓':'○'}</span>`:'';
     const _hsCell=_mkTxtIn('hsCode',_hsVal,_hsOvr,80,'0000.00.00')+_hsConfBtn+(ROLE!=='viewer'?'<span onclick="LP_showHSLookup(\''+s.sku+'\')" title="HS Code Lookup" style="cursor:pointer;font-size:12px;margin-left:2px;opacity:.5" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.5">🔍</span>':'');
     const _cooCell=_mkTxtIn('country',_cooVal,_cooOvr,44,'China');
     const _cnVal=_cOvr.customsName||_nom.customsName||'';const _cnOvr=!!_cOvr.customsName;
