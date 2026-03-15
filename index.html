@@ -615,6 +615,7 @@ function _undoSnap(){
     lp_excludeStaples:LP_excludeStaples,
     lp_holds:JSON.stringify([...(LP_holds||[])]),
     lp_arrived:JSON.stringify([...(LP_arrivedConts||[])]),
+    lp_lockedRows:JSON.stringify(LP_STATE.lockedRows||[]),
     lp_turnaround:LP_STATE.turnaround,
     lp_maxPallets:LP_STATE.maxPallets,
     lp_maxTrucks:LP_STATE.maxTrucks,
@@ -671,6 +672,7 @@ function UNDO_restore(){
     LP_excludeStaples=snap.lp_excludeStaples!==undefined?snap.lp_excludeStaples:true;
     LP_holds=new Set(JSON.parse(snap.lp_holds||'[]'));
     LP_arrivedConts=new Set(JSON.parse(snap.lp_arrived));
+    if(snap.lp_lockedRows)LP_STATE.lockedRows=JSON.parse(snap.lp_lockedRows);
     LP_STATE.turnaround=snap.lp_turnaround;
     LP_STATE.maxPallets=snap.lp_maxPallets;
     LP_STATE.maxTrucks=snap.lp_maxTrucks;
@@ -1920,7 +1922,16 @@ function _hsAcceptAI(code,custName){
   const origName=(LP_STATE.nomenclature[_hsLookupSku]||{}).name||_hsLookupSku;
   const cn=custName||origName;
   const cObj=_hsAICountryResult||{primary:'',alternatives:[]};
-  const allCountries=[cObj.primary,...(cObj.alternatives||[])].filter(Boolean);
+  // Get current country from overrides or nomenclature
+  const curOvr=LP_customsOverrides[_hsLookupSku]||{};
+  const curNom=LP_STATE.nomenclature[_hsLookupSku]||{};
+  const curCountry=curOvr.country||curNom.country||'';
+  // Build country list: current first (if set), then AI suggestions (deduped)
+  const aiCountries=[cObj.primary,...(cObj.alternatives||[])].filter(Boolean);
+  const allCountries=[];const _seen=new Set();
+  if(curCountry){allCountries.push({name:curCountry,isCurrent:true});_seen.add(curCountry.toLowerCase())}
+  for(const c of aiCountries){if(!_seen.has(c.toLowerCase())){allCountries.push({name:c,isCurrent:false});_seen.add(c.toLowerCase())}}
+  const defaultCountry=curCountry||cObj.primary||'';
   const body=document.getElementById('hsWizBody');if(!body)return;
   let h=`<div style="background:var(--gs);padding:14px;border-radius:8px;border:1px solid #B8DFCA">`;
   h+=`<div style="font-size:13px;font-weight:700;color:var(--gn);margin-bottom:4px">✨ AI-suggested HS Code</div>`;
@@ -1929,20 +1940,19 @@ function _hsAcceptAI(code,custName){
   h+=`<label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Customs description</label>`;
   h+=`<input id="hsCustNameEdit" type="text" value="${cn.replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fd);outline:none;box-sizing:border-box">`;
   h+=`</div>`;
-  // Country of origin — selectable buttons
+  // Country of origin — current value first, then AI suggestions
   h+=`<div style="margin-bottom:8px">`;
   h+=`<label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:4px">Country of Origin — select one:</label>`;
   if(allCountries.length){
     h+=`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">`;
-    for(let i=0;i<allCountries.length;i++){
-      const c=allCountries[i];
-      const isPrimary=i===0;
-      h+=`<button onclick="document.getElementById('hsCountryEdit').value='${c.replace(/'/g,"\\'")}';document.querySelectorAll('.hs-coo-btn').forEach(b=>b.style.opacity='.5');this.style.opacity='1'" class="hs-coo-btn" style="padding:5px 12px;font-size:11px;font-weight:${isPrimary?'700':'500'};border:1px solid ${isPrimary?'var(--gn)':'var(--bd)'};border-radius:6px;background:${isPrimary?'var(--gs)':'var(--sf)'};color:${isPrimary?'var(--gn)':'var(--tp)'};cursor:pointer;opacity:${isPrimary?'1':'.5'};transition:all .15s">${c}${isPrimary?' ✓':''}</button>`;
+    for(const c of allCountries){
+      const isSelected=c.name.toLowerCase()===defaultCountry.toLowerCase();
+      h+=`<button onclick="document.getElementById('hsCountryEdit').value='${c.name.replace(/'/g,"\\'")}';document.querySelectorAll('.hs-coo-btn').forEach(b=>{b.style.opacity='.5';b.style.borderColor='var(--bd)';b.style.background='var(--sf)';b.style.color='var(--tp)'});this.style.opacity='1';this.style.borderColor='var(--gn)';this.style.background='var(--gs)';this.style.color='var(--gn)'" class="hs-coo-btn" style="padding:5px 12px;font-size:11px;font-weight:${isSelected?'700':'500'};border:1px solid ${isSelected?'var(--gn)':'var(--bd)'};border-radius:6px;background:${isSelected?'var(--gs)':'var(--sf)'};color:${isSelected?'var(--gn)':'var(--tp)'};cursor:pointer;opacity:${isSelected?'1':'.5'};transition:all .15s">${c.name}${c.isCurrent?' (current)':''}</button>`;
     }
     h+=`</div>`;
   }
   if(cObj.reasoning)h+=`<div style="font-size:9px;color:var(--ts);font-style:italic;margin-bottom:4px">${cObj.reasoning}</div>`;
-  h+=`<input id="hsCountryEdit" type="text" value="${cObj.primary||''}" placeholder="Or type country manually" style="width:100%;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box">`;
+  h+=`<input id="hsCountryEdit" type="text" value="${defaultCountry}" placeholder="Or type country manually" style="width:100%;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box">`;
   h+=`</div>`;
   h+=`<div style="display:flex;gap:6px">`;
   h+=`<button class="mbtn mbtn-primary" onclick="_hsAcceptAIFinal('${code}')" style="padding:9px 24px;font-size:12px;background:var(--gn);border-color:var(--gn)">✓ Accept & Save</button>`;
@@ -5738,6 +5748,11 @@ function masterBackupExport(){
     Object.entries(LP_lsrNumbers).forEach(([id,lsr])=>rows.push({Setting:'LSR: LP-'+id,Value:lsr}));
     // Customs overrides (HS code, country, price, customsName)
     Object.entries(LP_customsOverrides).forEach(([sku,ov])=>rows.push({Setting:'Customs Override: '+sku,Value:JSON.stringify(ov)}));
+    // Holds, excludeStaples, lockedRows, destWhsDays
+    rows.push({Setting:'Holds',Value:JSON.stringify([...LP_holds])});
+    rows.push({Setting:'Exclude Staples',Value:LP_excludeStaples?'true':'false'});
+    rows.push({Setting:'Locked Rows',Value:JSON.stringify(LP_STATE.lockedRows||[])});
+    Object.entries(LP_destWhsDays).forEach(([k,v])=>rows.push({Setting:'Dest WHS Days: '+(CITY_ABBR[k]||k),Value:v}));
     const ws=XLSX.utils.json_to_sheet(rows);
     ws['!cols']=[{wch:40},{wch:60}];
     XLSX.utils.book_append_sheet(wb,ws,'LP Config');
@@ -5745,7 +5760,8 @@ function masterBackupExport(){
 
   // 14. Stock Report
   if(STOCK_SKUS.size>0){
-    const rows=[...STOCK_SKUS].sort().map(sku=>({SKU:sku,Name:NOM[sku]?.nm||LP_STATE.nomenclature[sku]?.name||''}));
+    const rows=[...STOCK_SKUS].sort().map(sku=>({SKU:sku,Name:NOM[sku]?.nm||LP_STATE.nomenclature[sku]?.name||'',Qty:STOCK_QTYS[sku]!==undefined?STOCK_QTYS[sku]:''}));
+    rows.push({SKU:'__REPORT_NAME__',Name:STOCK_REPORT_NAME||''});
     const ws=XLSX.utils.json_to_sheet(rows);
     ws['!cols']=[{wch:20},{wch:36}];
     XLSX.utils.book_append_sheet(wb,ws,'Stock Report');
@@ -5943,13 +5959,27 @@ async function masterBackupRestore(file){
         else if(s.startsWith('Pallet Override: ')){try{LP_palletOverrides[s.replace('Pallet Override: ','')]=JSON.parse(v)}catch(e){}}
         else if(s.startsWith('LSR: LP-')){const id=+s.replace('LSR: LP-','');if(id)LP_lsrNumbers[id]=v}
         else if(s.startsWith('Customs Override: ')){try{LP_customsOverrides[s.replace('Customs Override: ','')]=JSON.parse(v)}catch(e){}}
+        else if(s==='Holds'&&v){try{LP_holds=new Set(JSON.parse(v))}catch(e){}}
+        else if(s==='Exclude Staples')LP_excludeStaples=v==='true'
+        else if(s==='Locked Rows'&&v){try{LP_STATE.lockedRows=JSON.parse(v)}catch(e){}}
+        else if(s.startsWith('Dest WHS Days: ')){const city=s.replace('Dest WHS Days: ','');const abbr=Object.entries(CITY_ABBR).find(([k,n])=>n===city);if(abbr)LP_destWhsDays[abbr[0]]=+v||0}
       }
       log.push('LP Config restored');
     }
 
     // ── 14. Stock Report → STOCK_SKUS ──
     const stockRows=getSheet('Stock Report');
-    if(stockRows){STOCK_SKUS=new Set(stockRows.map(r=>r.SKU).filter(Boolean));STOCK_REPORT_NAME='Restored from backup';log.push('Stock: '+STOCK_SKUS.size+' SKUs')}
+    if(stockRows){
+      STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';
+      for(const r of stockRows){
+        if(r.SKU==='__REPORT_NAME__'){STOCK_REPORT_NAME=r.Name||'';continue}
+        if(!r.SKU)continue;
+        STOCK_SKUS.add(r.SKU);
+        if(r.Qty!==undefined&&r.Qty!=='')STOCK_QTYS[r.SKU]=+r.Qty;
+      }
+      if(!STOCK_REPORT_NAME)STOCK_REPORT_NAME='Restored from backup';
+      log.push('Stock: '+STOCK_SKUS.size+' SKUs, '+Object.keys(STOCK_QTYS).length+' with qty');
+    }
 
     // ── 15. Manual Items → MANUAL_ITEMS ──
     const miRows=getSheet('Manual Items');
