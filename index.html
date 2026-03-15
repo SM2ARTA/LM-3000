@@ -1133,6 +1133,13 @@ function LP_setCustomsOvr(sku,field,val){
 function LP_customsInput(el){
   if(ROLE==='viewer')return;
   LP_setCustomsOvr(el.dataset.sku,el.dataset.field,el.value);
+  // Update visual style to show override (purple) without full re-render
+  const hasOvr=!!(LP_customsOverrides[el.dataset.sku]||{})[el.dataset.field];
+  el.style.borderColor=hasOvr?'var(--pu)':'var(--bd)';
+  el.style.color=hasOvr?'var(--pu)':'var(--tp)';
+  el.style.background=hasOvr?'var(--ps)':'var(--sf)';
+  // Normalize displayed value for HS codes
+  if(el.dataset.field==='hsCode'){el.value=_hsNormalize(el.value)}
 }
 function LP_toggleHSConfirm(sku,el){
   if(ROLE==='viewer')return;
