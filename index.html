@@ -1128,7 +1128,7 @@ function LP_setCustomsOvr(sku,field,val){
     if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
     LP_customsOverrides[sku][field]=v;
   }
-  LP_saveToSupabase();
+  LP_saveTruckStateDebounced();
 }
 function LP_customsInput(el){
   if(ROLE==='viewer')return;
@@ -1145,7 +1145,7 @@ function LP_toggleHSConfirm(sku,el){
   if(ROLE==='viewer')return;
   if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
   const conf=LP_customsOverrides[sku].hsConfirmed=!LP_customsOverrides[sku].hsConfirmed;
-  LP_saveToSupabase();
+  LP_saveTruckStateDebounced();
   // Update UI in place without full re-render
   if(el){
     el.textContent=conf?'✓':'○';
@@ -2196,6 +2196,31 @@ function _hsReject(){
 // Migration: reads legacy lp-state blob if new keys missing, then writes new keys
 const LP_KEYS={config:'lp-config',nom:'lp-nom',demand:'lp-demand',arr:'lp-arrivals',plan:'lp-plan',truck:'lp-truck-state'};
 
+// Debounced save — batches rapid edits into one write (saves Disk IO)
+let _lpSaveTimer=null;
+function LP_saveToSupabaseDebounced(){
+  if(_lpSaveTimer)clearTimeout(_lpSaveTimer);
+  _lpSaveTimer=setTimeout(()=>{_lpSaveTimer=null;LP_saveToSupabase()},1500);
+}
+// Save only truck-state key (for customs/hold/pallet edits — much lighter than full save)
+async function LP_saveTruckState(){
+  if(ROLE==='viewer'||!SB)return;
+  try{
+    const now=new Date().toISOString();
+    await SB.from('shared_state').upsert({id:LP_KEYS.truck,value:JSON.stringify({
+      dispatched:[...LP_dispatched],contDateOverrides:LP_contDateOverrides,
+      lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
+      arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
+      lockedRows:LP_STATE.lockedRows||[],
+      stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME
+    }),updated_at:now});
+  }catch(e){console.warn('Truck state save error:',e)}
+}
+let _lpTruckSaveTimer=null;
+function LP_saveTruckStateDebounced(){
+  if(_lpTruckSaveTimer)clearTimeout(_lpTruckSaveTimer);
+  _lpTruckSaveTimer=setTimeout(LP_saveTruckState,1500);
+}
 async function LP_saveToSupabase(){
   if(ROLE==="viewer")return;
   if(!SB)return;
@@ -3011,7 +3036,7 @@ function LP_renderDemand(el){
   const pltOvrCount=Object.keys(LP_palletOverrides).length;
   const holdsCount=LP_holds.size;
   const stockHoldsCount=LP_stockHolds.size;
-  const _mHoldBadge=holdsCount?'<span class="bg" style="background:#F3F4F6;color:#6B7280;border:1px solid #D1D5DB">&#9208; '+holdsCount+' manual hold'+(holdsCount>1?'s':'')+'</span>'+'<button class="rbtn" onclick="LP_holds=new Set();LP_saveToSupabase();LP_render()" style="font-size:9px;padding:2px 6px" title="Clear all manual holds">&#8635; Clear</button>':'';
+  const _mHoldBadge=holdsCount?'<span class="bg" style="background:#F3F4F6;color:#6B7280;border:1px solid #D1D5DB">&#9208; '+holdsCount+' manual hold'+(holdsCount>1?'s':'')+'</span>'+'<button class="rbtn" onclick="LP_holds=new Set();LP_saveTruckStateDebounced();LP_render()" style="font-size:9px;padding:2px 6px" title="Clear all manual holds">&#8635; Clear</button>':'';
   const _sHoldBadge=stockHoldsCount?'<span class="bg" style="background:#FEF3EB;color:#C4550A;border:1px solid #F5D6B8" title="Stock qty insufficient vs remaining demand for these dest+SKU pairs">&#128683; '+stockHoldsCount+' stock hold'+(stockHoldsCount>1?'s':'')+'</span>':'';
   const _holdsBadge=_mHoldBadge+_sHoldBadge;
   const _pltBadge=pltOvrCount
@@ -3046,7 +3071,7 @@ function LP_renderDemand(el){
         ${[...totalDests].sort().map(d=>'<label style="display:flex;align-items:center;gap:5px;padding:3px 4px;font-size:10px;cursor:pointer;border-radius:3px;white-space:nowrap" onmouseenter="this.style.background=\'var(--bg)\'" onmouseleave="this.style.background=\'\'"><input type="checkbox" checked class="lp-dest-chk" value="'+clDisp(d)+'" onchange="LP_filterDemand()"> '+clDisp(d)+'</label>').join('')}
       </div>
     </div>
-    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ts);white-space:nowrap;cursor:pointer;user-select:none"><input type="checkbox" ${LP_excludeStaples?'checked':''} onchange="LP_excludeStaples=this.checked;LP_saveToSupabase();LP_render()"> Exclude STAPLES USA</label>
+    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ts);white-space:nowrap;cursor:pointer;user-select:none"><input type="checkbox" ${LP_excludeStaples?'checked':''} onchange="LP_excludeStaples=this.checked;LP_saveTruckStateDebounced();LP_render()"> Exclude STAPLES USA</label>
   </div>
   ${ROLE!=='viewer'?'<div style="padding:8px 12px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:8px">'
     +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
@@ -3254,7 +3279,7 @@ function LP_holdBySource(release){
     const k=d.destination+'|'+d.sku;
     if(release)LP_holds.delete(k);else{LP_holds.add(k);count++;}
   }
-  LP_saveToSupabase();LP_render();
+  LP_saveTruckStateDebounced();LP_render();
   setTimeout(_lpHoldSrcChanged,100);// refresh hold indicators after re-render
 }
 function LP_toggleHold(el){
@@ -3262,7 +3287,7 @@ function LP_toggleHold(el){
   const dest=el?.dataset?.dest||el;const sku=el?.dataset?.sku||arguments[1];
   const k=dest+'|'+sku;
   if(LP_holds.has(k))LP_holds.delete(k);else LP_holds.add(k);
-  LP_saveToSupabase();LP_render();
+  LP_saveTruckStateDebounced();LP_render();
 }
 function LP_palletInput(el){
   if(ROLE==='viewer')return;
@@ -3371,7 +3396,7 @@ function LP_renderPlan(el){
     <details style="margin-top:10px">
       <summary style="font-size:11px;font-weight:600;color:var(--ts);cursor:pointer;user-select:none">🚚 Transit Times (days)</summary>
       <div class="lp-grid4" style="margin-top:6px">
-        ${Object.entries(LP_transitDays).map(([k,v])=>`<div class="lp-field"><label>${CITY_ABBR[k]||k}</label><input type="number" value="${v}" min="0" max="30"${isViewer?' disabled':''} onchange="LP_transitDays['${k}']=+this.value;LP_saveToSupabase();LP_render()"></div>`).join('')}
+        ${Object.entries(LP_transitDays).map(([k,v])=>`<div class="lp-field"><label>${CITY_ABBR[k]||k}</label><input type="number" value="${v}" min="0" max="30"${isViewer?' disabled':''} onchange="LP_transitDays['${k}']=+this.value;LP_saveTruckStateDebounced();LP_render()"></div>`).join('')}
       </div>
     </details>
     <details style="margin-top:6px">
