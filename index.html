@@ -1069,8 +1069,8 @@ function LP_setContDate(container,newDate){
   if(!newDate){delete LP_contDateOverrides[container]}
   else{LP_contDateOverrides[container]=newDate}
   LP_applyContDateOverrides();
-  LP_render();// re-render so button activates and dates update
-  LP_saveToSupabase();
+  LP_render();
+  LP_saveTruckStateDebounced();
 }
 
 // ── LP Pallet Dimension Overrides ──
@@ -1109,7 +1109,7 @@ function LP_setPalletOvr(sku,field,val){
   }
   LP_applyPalletOverrides();
   LP_render();
-  LP_saveToSupabase();
+  LP_saveTruckStateDebounced();
 }
 // Normalize HS code to XXXX.XX format
 function _hsNormalize(code){
@@ -1941,7 +1941,8 @@ function _hsAcceptAIFinal(code){
   if(country)LP_setCustomsOvr(sku,'country',country);
   document.querySelector('.modal-overlay.hs-modal')?.remove();
   LP_render();
-  LP_saveToSupabase();
+  LP_saveTruckState();// immediate save on modal close (LP_setCustomsOvr already debounced, cancel it)
+  if(_lpTruckSaveTimer){clearTimeout(_lpTruckSaveTimer);_lpTruckSaveTimer=null}
 }
 
 function _hsPickCat(catId){
@@ -2178,7 +2179,8 @@ function _hsAccept(code){
   if(custName)LP_setCustomsOvr(sku,'customsName',custName);
   document.querySelector('.modal-overlay.hs-modal')?.remove();
   LP_render();
-  LP_saveToSupabase();
+  LP_saveTruckState();
+  if(_lpTruckSaveTimer){clearTimeout(_lpTruckSaveTimer);_lpTruckSaveTimer=null}
 }
 
 function _hsReject(){
@@ -3387,11 +3389,11 @@ function LP_renderPlan(el){
       <button class="rbtn" onclick="LP_regenerate()" style="font-size:10px;padding:4px 10px;background:var(--as);color:var(--ac);border-color:var(--ab);${regenDisabled}">${regenLabel}</button>
     </div>
     <div class="lp-grid4" style="margin-top:8px">
-      <div class="lp-field"><label>Truck Capacity (plt)</label><input type="number" value="${LP_STATE.maxPallets}" min="1"${isViewer?' disabled':''} onchange="LP_STATE.maxPallets=+this.value;LP_saveToSupabase();LP_render()"></div>
-      <div class="lp-field"><label>Max Trucks / Day</label><input type="number" value="${LP_STATE.maxTrucks}" min="1"${isViewer?' disabled':''} onchange="LP_STATE.maxTrucks=+this.value;LP_saveToSupabase();LP_render()"></div>
-      <div class="lp-field"><label>Max Dests / Day</label><input type="number" value="${LP_STATE.maxDests}" min="1"${isViewer?' disabled':''} onchange="LP_STATE.maxDests=+this.value;LP_saveToSupabase();LP_render()"></div>
-      <div class="lp-field"><label>WH Turnaround (days)</label><input type="number" value="${LP_STATE.turnaround}" min="0"${isViewer?' disabled':''} onchange="LP_STATE.turnaround=+this.value;LP_recalcReadyDates();LP_saveToSupabase();LP_render()"></div>
-      <div class="lp-field"><label>RIC Start Date</label><input type="date" value="${LP_STATE.ricStartDate}"${isViewer?' disabled':''} onchange="LP_STATE.ricStartDate=this.value;LP_saveToSupabase();LP_render()" style="font-family:var(--fd)"></div>
+      <div class="lp-field"><label>Truck Capacity (plt)</label><input type="number" value="${LP_STATE.maxPallets}" min="1"${isViewer?' disabled':''} onchange="LP_STATE.maxPallets=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
+      <div class="lp-field"><label>Max Trucks / Day</label><input type="number" value="${LP_STATE.maxTrucks}" min="1"${isViewer?' disabled':''} onchange="LP_STATE.maxTrucks=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
+      <div class="lp-field"><label>Max Dests / Day</label><input type="number" value="${LP_STATE.maxDests}" min="1"${isViewer?' disabled':''} onchange="LP_STATE.maxDests=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
+      <div class="lp-field"><label>WH Turnaround (days)</label><input type="number" value="${LP_STATE.turnaround}" min="0"${isViewer?' disabled':''} onchange="LP_STATE.turnaround=+this.value;LP_recalcReadyDates();LP_saveToSupabaseDebounced();LP_render()"></div>
+      <div class="lp-field"><label>RIC Start Date</label><input type="date" value="${LP_STATE.ricStartDate}"${isViewer?' disabled':''} onchange="LP_STATE.ricStartDate=this.value;LP_saveToSupabaseDebounced();LP_render()" style="font-family:var(--fd)"></div>
     </div>
     <details style="margin-top:10px">
       <summary style="font-size:11px;font-weight:600;color:var(--ts);cursor:pointer;user-select:none">🚚 Transit Times (days)</summary>
@@ -3403,7 +3405,7 @@ function LP_renderPlan(el){
       <summary style="font-size:11px;font-weight:600;color:var(--ts);cursor:pointer;user-select:none">🏭 Satellite WHS Processing (days)</summary>
       <div style="font-size:10px;color:var(--tt);margin:4px 0 6px">Time for destination warehouse to process inbound goods before bump-in. Used to calculate required container arrival date.</div>
       <div class="lp-grid4">
-        ${Object.entries(LP_destWhsDays).map(([k,v])=>`<div class="lp-field"><label>${CITY_ABBR[k]||k}</label><input type="number" value="${v}" min="0" max="30"${isViewer?' disabled':''} onchange="LP_destWhsDays['${k}']=+this.value;LP_saveToSupabase();LP_render()"></div>`).join('')}
+        ${Object.entries(LP_destWhsDays).map(([k,v])=>`<div class="lp-field"><label>${CITY_ABBR[k]||k}</label><input type="number" value="${v}" min="0" max="30"${isViewer?' disabled':''} onchange="LP_destWhsDays['${k}']=+this.value;LP_saveTruckStateDebounced();LP_render()"></div>`).join('')}
       </div>
     </details>
   </div>`;
