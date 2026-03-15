@@ -2210,24 +2210,57 @@ function LP_saveToSupabaseDebounced(){
   _lpSaveTimer=setTimeout(()=>{_lpSaveTimer=null;LP_saveToSupabase()},1500);
 }
 // Save only truck-state key (for customs/hold/pallet edits — much lighter than full save)
+let _lpSavePending=false;// true when a debounced save hasn't fired yet
 async function LP_saveTruckState(){
   if(ROLE==='viewer'||!SB)return;
+  _lpSavePending=false;
   try{
     const now=new Date().toISOString();
-    await SB.from('shared_state').upsert({id:LP_KEYS.truck,value:JSON.stringify({
+    const{error}=await SB.from('shared_state').upsert({id:LP_KEYS.truck,value:JSON.stringify({
       dispatched:[...LP_dispatched],contDateOverrides:LP_contDateOverrides,
       lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
       arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
       lockedRows:LP_STATE.lockedRows||[],
       stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME
     }),updated_at:now});
-  }catch(e){console.warn('Truck state save error:',e)}
+    if(error){console.warn('Truck state save error:',error);_lpSaveRetry()}
+  }catch(e){console.warn('Truck state save error:',e);_lpSaveRetry()}
+}
+// Retry failed saves after 5 seconds
+let _lpRetryTimer=null;
+function _lpSaveRetry(){
+  _lpSavePending=true;
+  if(_lpRetryTimer)clearTimeout(_lpRetryTimer);
+  _lpRetryTimer=setTimeout(()=>{_lpRetryTimer=null;LP_saveTruckState()},5000);
 }
 let _lpTruckSaveTimer=null;
 function LP_saveTruckStateDebounced(){
+  _lpSavePending=true;
   if(_lpTruckSaveTimer)clearTimeout(_lpTruckSaveTimer);
-  _lpTruckSaveTimer=setTimeout(LP_saveTruckState,1500);
+  _lpTruckSaveTimer=setTimeout(()=>{_lpTruckSaveTimer=null;LP_saveTruckState()},1500);
 }
+// Flush pending saves before page unload
+window.addEventListener('beforeunload',e=>{
+  if(_lpSavePending||_lpTruckSaveTimer||_lpSaveTimer){
+    if(_lpTruckSaveTimer){clearTimeout(_lpTruckSaveTimer);_lpTruckSaveTimer=null}
+    if(_lpSaveTimer){clearTimeout(_lpSaveTimer);_lpSaveTimer=null}
+    // Fire immediate save with keepalive so it survives page close
+    if(SB&&ROLE!=='viewer'){
+      const truckData={
+        dispatched:[...LP_dispatched],contDateOverrides:LP_contDateOverrides,
+        lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
+        arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
+        lockedRows:LP_STATE.lockedRows||[],
+        stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME
+      };
+      fetch(SUPABASE_URL+'/rest/v1/shared_state?on_conflict=id',{
+        method:'POST',keepalive:true,
+        headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Prefer':'resolution=merge-duplicates'},
+        body:JSON.stringify({id:LP_KEYS.truck,value:JSON.stringify(truckData),updated_at:new Date().toISOString()})
+      }).catch(()=>{});
+    }
+  }
+});
 async function LP_saveToSupabase(){
   if(ROLE==="viewer")return;
   if(!SB)return;
