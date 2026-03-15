@@ -1747,14 +1747,15 @@ function _hsStep0(el){
   const _searchQ=encodeURIComponent(_prodName.replace(/\b(HOLD|FIFA|GENERIC|WC26)\b/gi,'').replace(/[-_]/g,' ').replace(/\s{2,}/g,' ').trim());
   h+=`<div style="margin-bottom:14px">`;
   h+=`<div style="font-size:12px;font-weight:700;color:var(--tp);margin-bottom:4px">Step 1 · Find product & classify with AI</div>`;
-  h+=`<div style="font-size:10px;color:var(--ts);margin-bottom:8px">Search for the product online, copy the URL, paste it below — AI will classify from the link</div>`;
-  h+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-  h+=`<button class="mbtn" onclick="window.open('https://www.google.com/search?q='+encodeURIComponent(document.getElementById('hsSearchQ')?.value||'${_searchQ}'),'_blank')" style="padding:7px 14px;font-size:11px;flex:1;background:#fff;color:#4285F4;border:1px solid #4285F4"><span style="font-weight:700">G</span>oogle Search</button>`;
-  h+=`<button class="mbtn" onclick="window.open('https://www.uline.com/BL/'+encodeURIComponent(document.getElementById('hsSearchQ')?.value||'${_searchQ}'),'_blank')" style="padding:7px 14px;font-size:11px;background:#fff;color:#333;border:1px solid #ccc">Uline</button>`;
-  h+=`<button class="mbtn" onclick="window.open('https://www.amazon.com/s?k='+encodeURIComponent(document.getElementById('hsSearchQ')?.value||'${_searchQ}'),'_blank')" style="padding:7px 14px;font-size:11px;background:#fff;color:#ff9900;border:1px solid #ff9900">Amazon</button>`;
-  h+=`</div>`;
+  h+=`<div style="font-size:10px;color:var(--ts);margin-bottom:8px">Search for the product, copy the URL — it will auto-paste here when you switch back</div>`;
   h+=`<input id="hsSearchQ" type="text" value="${_prodName.replace(/"/g,'&quot;')}" style="width:100%;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:10px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px;color:var(--ts)" placeholder="Edit search query...">`;
-  h+=`<input id="hsUrlInput" type="text" value="${_hsWiz.url}" placeholder="Paste product URL here after finding it" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px">`;
+  h+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=')" style="padding:7px 12px;font-size:10px;flex:1;background:#fff;color:#4285F4;border:1px solid #4285F4"><b>G</b>oogle</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.uline.com/BL/')" style="padding:7px 12px;font-size:10px;flex:1;background:#fff;color:#333;border:1px solid #ccc">Uline</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.staples.com/s?searchTerm=')" style="padding:7px 12px;font-size:10px;flex:1;background:#fff;color:#CC0000;border:1px solid #CC0000">Staples</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.homedepot.com/s/')" style="padding:7px 12px;font-size:10px;flex:1;background:#fff;color:#F96302;border:1px solid #F96302">THD</button>`;
+  h+=`</div>`;
+  h+=`<input id="hsUrlInput" type="text" value="${_hsWiz.url}" placeholder="URL will auto-paste when you copy and switch back" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px">`;
   h+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
   h+=`<button class="mbtn" onclick="_hsAIDetect()" style="padding:8px 16px;font-size:11px;flex:1;background:${_provColors[aiProv]||_provColors.gemini};color:#fff;border-color:transparent">${aiLabel}</button>`;
   if(hasAIKey)h+=`<button class="mbtn" onclick="_hsClearAI();_hsRenderStep()" style="padding:8px 10px;font-size:11px;color:var(--ts);border-color:var(--bd)" title="Change AI provider">⟳</button>`;
@@ -1797,6 +1798,29 @@ function _hsStep0(el){
 }
 
 // Process URL → extract keywords → auto-detect category → jump to results
+function _hsOpenSearch(baseUrl){
+  const q=document.getElementById('hsSearchQ')?.value||'';
+  window.open(baseUrl+encodeURIComponent(q),'_blank');
+  // Auto-paste: when user copies a URL and switches back, read clipboard
+  _hsWaitingForPaste=true;
+}
+let _hsWaitingForPaste=false;
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState!=='visible'||!_hsWaitingForPaste)return;
+  _hsWaitingForPaste=false;
+  try{
+    const text=await navigator.clipboard.readText();
+    if(text&&text.startsWith('http')&&text.length>10){
+      const urlInput=document.getElementById('hsUrlInput');
+      if(urlInput){
+        urlInput.value=text;
+        urlInput.style.borderColor='var(--gn)';urlInput.style.background='var(--gs)';
+        _hsWiz.url=text;
+        setTimeout(()=>{urlInput.style.borderColor='var(--bd)';urlInput.style.background='var(--sf)'},2000);
+      }
+    }
+  }catch(e){/* clipboard permission denied — user can paste manually */}
+});
 function _hsFromUrl(){
   _hsWiz.url=(document.getElementById('hsUrlInput')?.value||'').trim();
   if(!_hsWiz.url){return}// no url, stay on step 0
