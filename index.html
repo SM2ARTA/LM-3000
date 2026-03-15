@@ -1747,15 +1747,16 @@ function _hsStep0(el){
   const _searchQ=encodeURIComponent(_prodName.replace(/\b(HOLD|FIFA|GENERIC|WC26)\b/gi,'').replace(/[-_]/g,' ').replace(/\s{2,}/g,' ').trim());
   h+=`<div style="margin-bottom:14px">`;
   h+=`<div style="font-size:12px;font-weight:700;color:var(--tp);margin-bottom:4px">Step 1 · Find product & classify with AI</div>`;
-  h+=`<div style="font-size:10px;color:var(--ts);margin-bottom:8px">Search for the product, copy the URL — it will auto-paste here when you switch back</div>`;
   h+=`<input id="hsSearchQ" type="text" value="${_prodName.replace(/"/g,'&quot;')}" style="width:100%;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-size:10px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px;color:var(--ts)" placeholder="Edit search query...">`;
   h+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=')" style="padding:7px 12px;font-size:10px;flex:1;background:#fff;color:#4285F4;border:1px solid #4285F4"><b>G</b>oogle</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.uline.com/BL/')" style="padding:7px 12px;font-size:10px;flex:1;background:#fff;color:#333;border:1px solid #ccc">Uline</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.staples.com/s?searchTerm=')" style="padding:7px 12px;font-size:10px;flex:1;background:#fff;color:#CC0000;border:1px solid #CC0000">Staples</button>`;
-  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.homedepot.com/s/')" style="padding:7px 12px;font-size:10px;flex:1;background:#fff;color:#F96302;border:1px solid #F96302">THD</button>`;
+  if(hasAIKey)h+=`<button class="mbtn" onclick="_hsAIFindUrls()" style="padding:7px 12px;font-size:10px;flex:1;background:${_provColors[aiProv]||_provColors.gemini};color:#fff;border-color:transparent">🔍 AI Find Product</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.google.com/search?q=')" style="padding:7px 10px;font-size:10px;background:#fff;color:#4285F4;border:1px solid #4285F4"><b>G</b>oogle</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.uline.com/BL/')" style="padding:7px 10px;font-size:10px;background:#fff;color:#333;border:1px solid #ccc">Uline</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.staples.com/s?searchTerm=')" style="padding:7px 10px;font-size:10px;background:#fff;color:#CC0000;border:1px solid #CC0000">Staples</button>`;
+  h+=`<button class="mbtn" onclick="_hsOpenSearch('https://www.homedepot.com/s/')" style="padding:7px 10px;font-size:10px;background:#fff;color:#F96302;border:1px solid #F96302">THD</button>`;
   h+=`</div>`;
-  h+=`<input id="hsUrlInput" type="text" value="${_hsWiz.url}" placeholder="URL will auto-paste when you copy and switch back" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px">`;
+  h+=`<div id="hsUrlResults" style="margin-bottom:6px"></div>`;
+  h+=`<input id="hsUrlInput" type="text" value="${_hsWiz.url}" placeholder="Paste product URL or click AI Find Product above" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);outline:none;box-sizing:border-box;margin-bottom:6px">`;
   h+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
   h+=`<button class="mbtn" onclick="_hsAIDetect()" style="padding:8px 16px;font-size:11px;flex:1;background:${_provColors[aiProv]||_provColors.gemini};color:#fff;border-color:transparent">${aiLabel}</button>`;
   if(hasAIKey)h+=`<button class="mbtn" onclick="_hsClearAI();_hsRenderStep()" style="padding:8px 10px;font-size:11px;color:var(--ts);border-color:var(--bd)" title="Change AI provider">⟳</button>`;
@@ -1798,6 +1799,45 @@ function _hsStep0(el){
 }
 
 // Process URL → extract keywords → auto-detect category → jump to results
+// AI-powered product URL finder — asks AI to suggest retailer URLs
+async function _hsAIFindUrls(){
+  const provider=_hsGetAIProvider();const key=_hsGetAIKey();
+  if(!key||!provider)return;
+  const q=(document.getElementById('hsSearchQ')?.value||'').trim();
+  if(!q)return;
+  const el=document.getElementById('hsUrlResults');
+  if(!el)return;
+  el.innerHTML=`<div style="padding:10px;text-align:center"><div class="spn" style="width:20px;height:20px;margin:0 auto 6px"></div><div style="font-size:10px;color:var(--ts)">Finding product URLs...</div></div>`;
+  const sys='Return JSON only: {"urls":[{"url":"full product page URL","title":"product name","retailer":"store name"}]}. 3-5 results from real retailer product pages. Must be direct product URLs, not search pages.';
+  const usr=`Find product page URLs for: ${q}\nSearch retailers: Uline, Staples, Home Depot, Grainger, Global Industrial, Amazon. Return real product page URLs from your knowledge.`;
+  try{
+    let text='';
+    if(provider==='claude'){
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,system:sys,messages:[{role:'user',content:usr}]})});
+      if(!r.ok)throw new Error('API error');
+      text=(await r.json())?.content?.[0]?.text||'';
+    }else if(provider==='openai'){
+      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-5-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}]})});
+      if(!r.ok)throw new Error('API error');
+      text=(await r.json())?.choices?.[0]?.message?.content||'';
+    }else{
+      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}],generationConfig:{maxOutputTokens:600}})});
+      if(!r.ok)throw new Error('API error');
+      text=(await r.json())?.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    }
+    const json=JSON.parse(text.replace(/```json?\s*/g,'').replace(/```\s*/g,'').trim());
+    if(!json.urls||!json.urls.length){el.innerHTML=`<div style="font-size:10px;color:var(--tt);padding:4px">No URLs found. Try manual search.</div>`;return}
+    let h='';
+    for(const u of json.urls){
+      h+=`<div onclick="document.getElementById('hsUrlInput').value='${u.url.replace(/'/g,"\\'")}';_hsWiz.url='${u.url.replace(/'/g,"\\'")}';document.querySelectorAll('.hs-url-pick').forEach(d=>d.style.borderColor='var(--bd)');this.style.borderColor='var(--gn)'" class="hs-url-pick" style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;margin-bottom:3px;cursor:pointer;transition:all .15s" onmouseenter="this.style.background='var(--bg)'" onmouseleave="this.style.background=''">`;
+      h+=`<div style="font-size:10px;font-weight:600;color:var(--tp)">${u.title||'Product'}</div>`;
+      h+=`<div style="font-size:9px;color:var(--ts);display:flex;align-items:center;gap:4px"><span style="color:var(--ac);font-weight:600">${u.retailer||''}</span><span style="color:var(--tt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.url}</span></div>`;
+      h+=`</div>`;
+    }
+    h+=`<div style="font-size:8px;color:var(--tt);margin-top:2px;font-style:italic">URLs from AI knowledge — click to select, then verify with AI Classify</div>`;
+    el.innerHTML=h;
+  }catch(e){el.innerHTML=`<div style="font-size:10px;color:var(--or);padding:4px">Could not find URLs. Try manual search.</div>`}
+}
 function _hsOpenSearch(baseUrl){
   const q=document.getElementById('hsSearchQ')?.value||'';
   window.open(baseUrl+encodeURIComponent(q),'_blank');
