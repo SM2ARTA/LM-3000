@@ -171,12 +171,26 @@ Fixed bar at `bottom:0`, `z-index:65`, `height:44px`. Always visible on desktop.
 
 ### LP Customs Overrides (`LP_customsOverrides`)
 - **Structure**: `{sku: {hsCode, country, price, customsName, hsConfirmed}}`
-- **Saved in**: `lp-truck-state` via `LP_saveToSupabase()`
-- **Loaded from**: `LP_loadFromSupabase()` (both new and legacy paths)
+- **Saved in**: `lp-truck-state` via `LP_saveTruckState()` (debounced) or `LP_saveToSupabase()` (full)
+- **Loaded from**: `LP_loadFromSupabase()` (both new `lp-truck-state` and legacy `lp-state` paths)
 - **Undo**: included in `_undoSnap()` / `UNDO_restore()`
 - **Backup**: exported as `Customs Override: SKU` rows in LP Config sheet, restored via `JSON.parse`
 - **Hard reset** (`doResetLP`): clears to `{}`
 - **Soft reset** (`doSoftResetLP`): **preserved** (not cleared)
+- **Nom update** (`LP_updateNomPrompt`): does NOT touch overrides. Nom-level HS/country/price only updated if new file has values AND no override exists for that field
+- **`goGenerate`** (initial plan from files): clears to `{}` — correct for first-time generation
+- **`LP_regenerate`**: does NOT touch overrides — correct
+- **Field name**: `customsOverrides` (camelCase) — consistent across all 3 save paths and both load paths
+- **`LP_setCustomsOvr` cleanup**: when clearing a field, preserves the override object if `hsConfirmed` is still true
+
+### Supabase Save Optimization
+Three save functions, all write identical `lp-truck-state` payloads:
+- **`LP_saveTruckState()`** — saves only `lp-truck-state` key (1 write). Has auto-retry on failure (5s delay)
+- **`LP_saveTruckStateDebounced()`** — debounced by 1.5s. Used for: customs edits, holds, transit days, pallet overrides, confirms
+- **`LP_saveToSupabase()`** — full 6-key save. Used for: plan generation, file upload, undo restore, backup restore
+- **`LP_saveToSupabaseDebounced()`** — debounced full save. Used for: engine settings inputs
+- **`beforeunload` handler** — flushes pending debounced saves via `fetch({keepalive:true})` with raw Supabase REST API
+- **`_lpSavePending` flag** — tracks unsaved state; `_lpSaveRetry()` retries failed saves after 5s
 
 ## Demand Table Filters
 - **Source filter**: multi-select checkbox dropdown (`#lpDemSrcDrop`, `.lp-src-chk`)
@@ -198,7 +212,9 @@ Fixed bar at `bottom:0`, `z-index:65`, `height:44px`. Always visible on desktop.
 - `LP_exportCI_ExcelJS(truckId, items, dest, date, totalPlt, nomenclature, partyOverride)` — 7th param optional
 - Rows 11 (headers) and 12–17 (party data) use merged cells: `A:D` (Shipper), `E:I` (Consignee), `J:O` (Broker)
 - `LP_getCIParties(dest)` — returns `{consignee:[], broker:[]}` arrays for MEX/CAN/RIC/blank
-- **Customs name in CI**: DESCRIPTION column uses `customsName || name` — both individual CI (`LP_exportCI_ExcelJS`) and combined CI (`LP_exportCombinedCI`)
+- **All customs overrides used in CI exports**: DESCRIPTION (`customsName||name`), HS Code (`co.hsCode||nm.hsCode`), Country (`co.country||nm.country`), Unit Price (`co.price||nm.unitPrice`) — applies to both CI sheet (via `_lpCustNom`) and Packing List sheet (via `LP_customsOverrides` direct lookup)
+- **CI sheet rows** use `_lpCustNom(sku)` which reads from `LP_customsOverrides` first, then `LP_STATE.nomenclature`
+- **Packing List sheet rows** read `LP_customsOverrides[sku]` directly alongside `nomenclature[sku]` param
 
 ## Stock Report Persistence (`STOCK_QTYS`)
 - **Global state**: `STOCK_SKUS` (Set), `STOCK_QTYS` (obj: sku→qty), `STOCK_REPORT_NAME` (string)
@@ -218,6 +234,9 @@ After any feature or function change, verify the following:
 - [ ] If saving to `fm-stock`, include `qtys` — never save `{skus, name}` only
 - [ ] New Supabase keys added to the full-reset delete list in the reset/clear functions (~line 9410)
 - [ ] Viewer role check: all save functions guard with `if(ROLE==="viewer")return`
+- [ ] Inline edits use `LP_saveTruckStateDebounced()` (1 key, debounced) — NOT `LP_saveToSupabase()` (6 keys, immediate)
+- [ ] If adding fields to `lp-truck-state`, update ALL 3 save functions: `LP_saveTruckState`, `LP_saveToSupabase`, and `beforeunload` handler — payloads must match exactly
+- [ ] Nom update (`LP_updateNomPrompt`) must NOT overwrite fields that have manual overrides in `LP_customsOverrides`
 
 ### Undo (`_undoSnap` / `UNDO_restore`)
 - [ ] New state variables included in `_undoSnap()` snapshot object
@@ -235,6 +254,8 @@ After any feature or function change, verify the following:
 - [ ] Party rows 12–17 in CI export maintain merges: `A:D`, `E:I`, `J:O`
 - [ ] `partyOverride` param passed through when calling `LP_exportCI_ExcelJS` for Combined CI
 - [ ] ExcelJS async functions awaited; errors caught and surfaced to user
+- [ ] CI exports use customs overrides for ALL fields: `co.hsCode||nm.hsCode`, `co.country||nm.country`, `co.price||nm.unitPrice`, `co.customsName||nm.name`
+- [ ] Both CI sheet (via `_lpCustNom`) and Packing List sheet (via direct `LP_customsOverrides` lookup) must use overrides
 
 ### Bottom Support Bar (`#global-supp-bar`)
 - [ ] New module-specific buttons placed inside `#gsb-lm`, `#gsb-lp`, or `#gsb-v26` — not in module headers
@@ -282,6 +303,8 @@ Four reset functions exist — any new state must be added to all that apply:
 - [ ] New scrollable module containers explicitly set `padding-bottom:44px` (shorthand `padding` will override cascade)
 - [ ] Inline edits (HS confirm, customs fields) should update DOM in-place — avoid `LP_render()` for single-cell changes to prevent scroll jumping
 - [ ] If `LP_render()` is unavoidable, `_lpDemRestoreFilters()` runs via `setTimeout(...,0)` to restore filter state + scroll position
+- [ ] HS confirm button (`.hs-conf`) is ALWAYS rendered in DOM (with `display:none` when HS empty) — `LP_customsInput` shows it when HS code entered
+- [ ] `LP_customsInput` must update: input styles (purple), confirm button visibility, and parent `<td>` background (green if confirmed)
 
 ## Module Layout (viewport-locked)
 All three modules use `height:100vh;overflow:hidden` — no page-level scrollbar:
