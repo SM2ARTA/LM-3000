@@ -275,8 +275,8 @@ Four reset functions exist — any new state must be added to all that apply:
 | `doSystemReset()` | Full app | All Supabase (`.neq('id','')`) + all JS globals |
 | `doResetLM()` | LM hard | LM Supabase keys + all LM/stock JS globals |
 | `doSoftResetLM()` | LM soft | Only `fm-nom`, `fm-rw` from Supabase; keeps overrides/settings |
-| `doResetLP()` | LP hard | LP Supabase keys (`lp-config/nom/demand/arrivals/plan/truck-state`) + all LP JS globals |
-| `doSoftResetLP()` | LP soft | Only file/plan keys; keeps dispatched, LSR numbers, pallet overrides, transit days |
+| `doResetLP()` | LP hard | LP Supabase keys (`lp-config/nom/demand/arrivals/plan/truck-state`) + all LP JS globals (incl. excludeStaples, destWhsDays) |
+| `doSoftResetLP()` | LP soft | Only file/plan keys; keeps dispatched, LSR numbers, pallet overrides, customs overrides, transit days, destWhsDays, excludeStaples, holds |
 
 **For any new state variable, check:**
 - [ ] `doSystemReset` — add JS global clear
@@ -286,7 +286,7 @@ Four reset functions exist — any new state must be added to all that apply:
 - [ ] `doSoftResetLP` — decide: clear or preserve? Add comment to the "preserved" list in code
 
 **LP Supabase keys** (saved by `LP_saveToSupabase()`): `lp-config`, `lp-nom`, `lp-demand`, `lp-arrivals`, `lp-plan`, `lp-truck-state`
-**`lp-truck-state` contains**: dispatched, contDateOverrides, lsrNumbers, palletOverrides, customsOverrides, excludeStaples, arrivedConts, transitDays, holds, lockedRows (added 2026-03-15), stockSkus, stockReportName
+**`lp-truck-state` contains**: dispatched, contDateOverrides, lsrNumbers, palletOverrides, customsOverrides, excludeStaples, arrivedConts, transitDays, holds, lockedRows, stockSkus, stockReportName, destWhsDays
 **`doSoftResetLP` preserves**: all LP_* globals + `lockedRows` + `customsOverrides` + manual arrivals (`_manual:true` entries in `LP_STATE.arrivals`) — both fixed 2026-03-15
 **Manual arrivals**: pushed into `LP_STATE.arrivals` with `_manual:true` by `LP_addArrivalItem()`. `LP_STATE.manualArrivals` is unused/dead code.
 **LM/shared Supabase keys** (saved by `saveSharedData()` + dedicated fns): `fm-nom`, `fm-rw`, `fm-vs`, `fm-excl`, `fm-excl-ovr`, `fm-stock`, `fm-lm-dispatch`, `fm-manual-items`, `fm-lm-demand-adj`, `fm-lm-nom-ovr`, `fm-cluster-ta`, `fm-lm-manual-demand`, `fm-lm-kits`, `fm-lm-stp-deliveries`, `fm-dist-overrides`, `fm-pallet-cfg`
@@ -305,6 +305,29 @@ Four reset functions exist — any new state must be added to all that apply:
 - [ ] If `LP_render()` is unavoidable, `_lpDemRestoreFilters()` runs via `setTimeout(...,0)` to restore filter state + scroll position
 - [ ] HS confirm button (`.hs-conf`) is ALWAYS rendered in DOM (with `display:none` when HS empty) — `LP_customsInput` shows it when HS code entered
 - [ ] `LP_customsInput` must update: input styles (purple), confirm button visibility, and parent `<td>` background (green if confirmed)
+
+## System Audit (2026-03-15)
+Comprehensive audit with dummy data tracing. All findings fixed in commit `0d10c4d`.
+
+### Bugs Found & Fixed
+1. **`LP_destWhsDays` not persisted** (HIGH) — was missing from all 3 truck-state save payloads and both load paths. Changes lost on reload. Fixed: added to `LP_saveTruckState`, `LP_saveToSupabase`, `beforeunload`, and both `LP_loadFromSupabase` paths.
+2. **`doResetLP`/`doSystemReset` incomplete** — `LP_excludeStaples` and `LP_destWhsDays` not reset. Fixed: added to all reset lines.
+3. **`goGenerate` incomplete** — same missing resets. Fixed.
+4. **Backup restore loses `STOCK_QTYS`** — `fm-stock` save after restore was `{skus, name}` without `qtys`. Fixed: added `qtys:STOCK_QTYS`.
+5. **Backup export missing Stock qty column** — Stock Report sheet only had SKU+Name. Fixed: added Qty column and `__REPORT_NAME__` marker row.
+6. **CI Packing List ignored overrides** (fixed earlier) — `nm.hsCode/country/unitPrice` used directly instead of `co.hsCode||nm.hsCode` etc.
+7. **HS confirm button not in DOM for empty HS** (fixed earlier) — now always rendered with `display:none`.
+
+### Known Acceptable Behaviors
+- `_hsNormalize` truncates beyond 6 digits (e.g., `8301.40.0090` → `8301.40`) — intentional for 6-digit HS level
+- Price of `$0.00` cannot be stored as override (`parseFloat('0')||0` = 0, treated as "clear") — acceptable for this domain
+- `LP_saveTruckStateDebounced` timer not cancelled by `LP_saveToSupabase` — causes redundant write but no data loss
+- Undo does not capture `LP_STATE.nomenclature/materialPlan/arrivals` — intentional (undo covers mutations, not file imports)
+- `hs-ai-config` excluded from backup — intentional security measure (API keys)
+
+### Destination Filter Quick-Select
+- `_lpDemDestGroup(region)` — selects destinations by country: `can` (Toronto, Vancouver), `mex` (Mexico City, Guadalajara, Monterrey), `usa` (Houston, Kansas City, New York)
+- Buttons with country flags in the destination dropdown: 🇨🇦 CAN, 🇲🇽 MEX, 🇺🇸 USA
 
 ## Module Layout (viewport-locked)
 All three modules use `height:100vh;overflow:hidden` — no page-level scrollbar:
