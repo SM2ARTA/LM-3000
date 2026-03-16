@@ -9714,7 +9714,7 @@ function LM_renderDemand(el){
       const kitAlQty=_kitAlMap[v.name+'|'+s.sku]||0;
       const kitPct=kitAlQty>0&&s.origQty>0?Math.round(kitAlQty/s.origQty*100):0;
       const _isStp=venueStp&&isStp(s.sku);
-      html+=`<tr style="${_isStp?'background:#FFF8F0;opacity:0.6':isMnl?'background:var(--gs)':s.isAdj?'background:var(--ps)':''}">
+      html+=`<tr class="lm-dem-row" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}" style="${_isStp?'background:#FFF8F0;opacity:0.6':isMnl?'background:var(--gs)':s.isAdj?'background:var(--ps)':''}">
         <td class="mono">${s.sku}${isMnl?' <span style="color:var(--gn);font-size:8px;font-weight:700">✏</span>':''}${kitAlQty>0?' <span style="color:#43A047;font-size:8px;font-weight:700">📦</span>':''}${_isStp?' <span style="color:#EF6C00;font-size:8px;font-weight:700">🏪</span>':''}</td>
         <td class="tcl">${s.name}</td>
         <td style="font-size:10px;color:var(--tt)">${s.src}</td>
@@ -9738,8 +9738,17 @@ function LM_renderDemand(el){
 function LM_filterDemand(){
   const q=(document.getElementById('lmDemSearch')?.value||'').toLowerCase().trim();
   document.querySelectorAll('.lm-dem-venue').forEach(c=>{
-    if(!q){c.style.display='';return}
-    c.style.display=(c.dataset.search||'').includes(q)?'':'none';
+    if(!q){c.style.display='';c.querySelectorAll('.lm-dem-row').forEach(r=>r.style.display='');return}
+    // Filter individual rows within each venue
+    let matchCount=0;
+    c.querySelectorAll('.lm-dem-row').forEach(r=>{
+      const match=(r.dataset.search||'').includes(q);
+      r.style.display=match?'':'none';
+      if(match)matchCount++;
+    });
+    c.style.display=matchCount>0?'':'none';
+    // Auto-expand venues with matches
+    if(matchCount>0){const body=c.querySelector('.lm-dem-body');if(body)body.classList.add('lm-dem-open')}
   });
 }
 
