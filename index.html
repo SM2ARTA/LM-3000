@@ -606,6 +606,7 @@ let _undoLastSnap=null;// holds the LAST known good state (pre-mutation)
 
 function _undoSnap(){
   return{
+    lp_demand:JSON.stringify(LP_STATE.materialPlan||[]),
     lp_plan:JSON.stringify(LP_STATE.generatedPlan||[]),
     lp_dispatched:JSON.stringify([...(LP_dispatched||[])]),
     lp_contOvr:JSON.stringify(LP_contDateOverrides||{}),
@@ -663,6 +664,7 @@ function UNDO_restore(){
   try{
     const snap=UNDO_stack.pop();
     // Restore LP
+    if(snap.lp_demand)LP_STATE.materialPlan=JSON.parse(snap.lp_demand);
     LP_STATE.generatedPlan=JSON.parse(snap.lp_plan);
     LP_dispatched=new Set(JSON.parse(snap.lp_dispatched));
     LP_contDateOverrides=JSON.parse(snap.lp_contOvr);
@@ -3301,7 +3303,7 @@ function LP_renderDemand(el){
     const _dgrp={};
     for(const [d,q] of Object.entries(s.dests)){const dd=clDisp(d);if(!_dgrp[dd]){_dgrp[dd]={rawDests:[],qty:0};}_dgrp[dd].rawDests.push(d);_dgrp[dd].qty+=q;}
     const destBadges=Object.entries(_dgrp).map(([dd,grp])=>{
-      const allRaw=grp.rawDests;const q=grp.qty;
+      const allRaw=grp.rawDests;const q=grp.qty;const rawQ=allRaw.reduce((sum,r)=>sum+(s.rawDests[r]||0),0);
       const held=allRaw.some(r=>LP_holds.has(r+'|'+s.sku));
       const sHeld=allRaw.some(r=>LP_stockHolds.has(r+'|'+s.sku));
       const dispQ=allRaw.reduce((sum,r)=>sum+(dispByDS[r+'|'+s.sku]||0),0);
@@ -3309,18 +3311,18 @@ function LP_renderDemand(el){
       const qLabel=dispQ>0?('<span style="font-weight:700">Rem '+remQ.toLocaleString()+'</span>'+(dispQ?' / Dis '+dispQ.toLocaleString():'')):'<span style="font-weight:700">'+q.toLocaleString()+'</span>';
       const d0=allRaw[0];const c=LP_destColor(d0);
       let bs,extra,prefix;
+      const clickAction=ROLE!=='viewer'?'onclick="event.stopPropagation();LP_editDestQty(this,\''+d0.replace(/'/g,"\\'")+'\',\''+s.sku+'\','+rawQ+')"':'';
       if(sHeld){
         bs='background:#FEF3EB;color:#C4550A;border:1px solid #F5D6B8;opacity:0.85';
-        const ttl='Stock hold: '+(stockQty!==undefined?stockQty:'?')+' in stock < '+remQ+' remaining';
-        extra=' style="'+bs+'" title="'+ttl+'"';
+        extra=' '+clickAction+' style="'+bs+';cursor:pointer" title="'+rawQ+' raw · Click to edit"';
         prefix='&#128683; ';
       }else if(held){
         bs='background:#F3F4F6;color:#6B7280;border:1px solid #D1D5DB;text-decoration:line-through;opacity:0.7';
-        extra=ROLE!=='viewer'?' onclick="LP_toggleHold(this.dataset.dest,this.dataset.sku)" data-dest="'+d0+'" data-sku="'+s.sku+'" style="'+bs+';cursor:pointer" title="Remove manual hold"':' style="'+bs+'"';
+        extra=' '+clickAction+' data-dest="'+d0+'" data-sku="'+s.sku+'" style="'+bs+';cursor:pointer" title="On hold · Click to edit"';
         prefix='&#9208; ';
       }else{
         bs='background:'+c.bg+';color:'+c.color+';border:1px solid '+c.border;
-        extra=ROLE!=='viewer'?' onclick="LP_toggleHold(this.dataset.dest,this.dataset.sku)" data-dest="'+d0+'" data-sku="'+s.sku+'" style="'+bs+';cursor:pointer" title="Put on manual hold"':' style="'+bs+'"';
+        extra=' '+clickAction+' data-dest="'+d0+'" data-sku="'+s.sku+'" style="'+bs+';cursor:pointer" title="Click to edit qty or hold"';
         prefix='';
       }
       return '<span class="lp-dest-badge"'+extra+'>'+prefix+dd+' '+qLabel+'</span>';
@@ -3481,6 +3483,67 @@ function LP_holdBySource(release){
   }
   LP_saveTruckStateDebounced();LP_render();
   setTimeout(_lpHoldSrcChanged,100);// refresh hold indicators after re-render
+}
+function LP_editDestQty(badge,dest,sku,rawQty){
+  if(ROLE==='viewer')return;
+  // Remove any existing popup
+  document.getElementById('lpDestQtyPop')?.remove();
+  const nom=LP_STATE.nomenclature[sku]||{};
+  const dd=clDisp(dest);
+  const held=LP_holds.has(dest+'|'+sku);
+  const ppu=_lpPPU(sku);
+  const effQty=_lpEffQty(sku,rawQty);
+  const pop=document.createElement('div');
+  pop.id='lpDestQtyPop';
+  pop.style.cssText='position:fixed;z-index:200;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px 12px;min-width:200px';
+  const r=badge.getBoundingClientRect();
+  pop.style.left=Math.min(r.left,window.innerWidth-240)+'px';
+  pop.style.top=(r.bottom+4)+'px';
+  pop.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--tp);margin-bottom:2px">${dd}</div>
+    <div style="font-size:10px;color:var(--ts);margin-bottom:8px">${sku} · ${nom.name||''}</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+      <label style="font-size:10px;color:var(--ts);white-space:nowrap">Raw Qty</label>
+      <input id="lpDestQtyIn" type="number" min="0" value="${rawQty}" style="width:70px;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:12px;font-family:var(--fm);outline:none" onkeydown="if(event.key==='Enter')document.getElementById('lpDestQtySave').click()">
+      ${ppu>1?'<span style="font-size:9px;color:var(--tt)">÷'+ppu+' = <strong>'+effQty+'</strong></span>':''}
+    </div>
+    <div style="display:flex;gap:6px">
+      <button id="lpDestQtySave" class="mbtn mbtn-primary" onclick="LP_saveDestQty('${dest.replace(/'/g,"\\'")}','${sku}',+document.getElementById('lpDestQtyIn').value)" style="padding:5px 14px;font-size:11px">Save</button>
+      <button class="mbtn" onclick="LP_toggleHold('${dest.replace(/'/g,"\\'")}','${sku}');document.getElementById('lpDestQtyPop')?.remove()" style="padding:5px 10px;font-size:11px;${held?'background:var(--gs);color:var(--gn);border-color:#B8DFCA':'background:#F3F4F6;color:#6B7280;border-color:#D1D5DB'}">${held?'▶ Release':'⏸ Hold'}</button>
+      <button class="mbtn" onclick="document.getElementById('lpDestQtyPop')?.remove()" style="padding:5px 10px;font-size:11px">✕</button>
+    </div>`;
+  document.body.appendChild(pop);
+  document.getElementById('lpDestQtyIn').select();
+  // Close on outside click
+  const _close=e=>{if(!pop.contains(e.target)&&e.target!==badge){pop.remove();document.removeEventListener('mousedown',_close)}};
+  setTimeout(()=>document.addEventListener('mousedown',_close),0);
+}
+function LP_saveDestQty(dest,sku,newRawQty){
+  if(ROLE==='viewer')return;
+  document.getElementById('lpDestQtyPop')?.remove();
+  UNDO_capture();
+  // Find all materialPlan entries for this dest+sku
+  const entries=LP_STATE.materialPlan.filter(d=>d.destination===dest&&d.sku===sku);
+  if(!entries.length&&newRawQty>0){
+    // No existing entry — create one
+    LP_STATE.materialPlan.push({uid:'MAN-'+dest+'-'+sku,destination:dest,sku,name:(LP_STATE.nomenclature[sku]||{}).name||sku,requiredQty:newRawQty,rawPallets:0,inputMode:'qty'});
+  }else{
+    const curTotal=entries.reduce((s,e)=>s+(e.requiredQty||0),0);
+    if(newRawQty<=0){
+      // Remove all entries for this dest+sku
+      LP_STATE.materialPlan=LP_STATE.materialPlan.filter(d=>!(d.destination===dest&&d.sku===sku));
+    }else if(entries.length===1){
+      entries[0].requiredQty=newRawQty;
+    }else{
+      // Multiple entries — set first to new total, rest to 0
+      const delta=newRawQty-curTotal;
+      entries[0].requiredQty=Math.max(0,entries[0].requiredQty+delta);
+      // Redistribute if first went negative
+      if(entries[0].requiredQty<=0){entries[0].requiredQty=newRawQty;for(let i=1;i<entries.length;i++)entries[i].requiredQty=0;}
+    }
+  }
+  LP_saveToSupabase();
+  LP_render();
+  UNDO_updateBtn();
 }
 function LP_toggleHold(el){
   if(ROLE==='viewer')return;
