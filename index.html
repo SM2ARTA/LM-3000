@@ -4342,7 +4342,8 @@ function LP_showCombinedCIModal(){
       </div>
     </div>
     <div id="cciPreview" style="font-size:11px;color:var(--ts);margin-bottom:12px;padding:6px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:4px">Select destinations and sources above, then export.</div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
+    <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center">
+      <label id="cciSepLabel" style="display:none;font-size:11px;color:var(--ts);cursor:pointer;margin-right:auto;user-select:none"><input type="checkbox" id="cciSepTabs" style="margin-right:4px;vertical-align:middle">Separate tabs per destination</label>
       <button class="mbtn" onclick="LP_previewCombinedCI()">🔍 Preview</button>
       <button class="mbtn" onclick="LP_exportCombinedCI()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📄 Export CI</button>
     </div>
@@ -4370,6 +4371,8 @@ function LP_updateCCISources(){
   srcSel.innerHTML=srcs.map(s=>`<option value="${s}" ${prevSel.size===0||prevSel.has(s)?'selected':''}>${s}</option>`).join('');
   const lbl=document.getElementById('cciSrcsLabel');
   if(lbl)lbl.textContent=`SOURCES (${srcs.length})`;
+  const sepLbl=document.getElementById('cciSepLabel');
+  if(sepLbl)sepLbl.style.display=selAbbrs.size>1?'':'none';
 }
 function _cciGetSelections(){
   const destSel=document.getElementById('cciDests');
@@ -4425,6 +4428,8 @@ async function LP_exportCombinedCI(){
   const{selDests,selSrcs}=_cciGetSelections();
   if(!selDests.length){alert('Select at least one destination.');return;}
   if(!selSrcs.length){alert('Select at least one source.');return;}
+  const sepChk=document.getElementById('cciSepTabs');
+  const separateTabs=sepChk&&sepChk.checked&&selDests.length>1;
   const items=_cciAggregateItems(selDests,selSrcs);
   if(!items.length){alert('No demand items match the selection.');return;}
   const totalPlt=items.reduce((s,it)=>s+it.pallets,0);
@@ -4434,7 +4439,23 @@ async function LP_exportCombinedCI(){
   const truckId='COMB-'+date;
   clM();
   if(typeof ExcelJS!=='undefined'){
-    try{await LP_exportCI_ExcelJS(truckId,items,destLabel,date,totalPlt,LP_STATE.nomenclature,_cciGetParty(selDests));return}catch(e){console.warn('ExcelJS CI failed:',e);}
+    try{
+      if(separateTabs){
+        // Separate CI+PL tabs per destination in one workbook
+        const wb=new ExcelJS.Workbook();
+        for(const abbr of selDests){
+          const dItems=_cciAggregateItems([abbr],selSrcs);
+          if(!dItems.length)continue;
+          const dPlt=dItems.reduce((s,it)=>s+it.pallets,0);
+          const dLabel=_abbrToLabel[abbr]||abbr;
+          const party=_cciGetParty([abbr]);
+          await LP_exportCI_ExcelJS(truckId,dItems,dLabel,date,dPlt,LP_STATE.nomenclature,party,wb);
+        }
+        const buf=await wb.xlsx.writeBuffer();const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CI_Combined_SepTabs_'+date+'.xlsx';a.click();URL.revokeObjectURL(url);
+        return;
+      }
+      await LP_exportCI_ExcelJS(truckId,items,destLabel,date,totalPlt,LP_STATE.nomenclature,_cciGetParty(selDests));return;
+    }catch(e){console.warn('ExcelJS CI failed:',e);}
   }
   // SheetJS fallback
   const wb=XLSX.utils.book_new();let tQ=0,tV=0;
@@ -4506,9 +4527,10 @@ function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   XLSX.utils.book_append_sheet(wb,ps,'Packing List');
   XLSX.writeFile(wb,'CI_T'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
 }
-async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature,partyOverride){
-  const wb=new ExcelJS.Workbook();
-  const ws=wb.addWorksheet('Commercial Invoice',{pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature,partyOverride,existingWb){
+  const wb=existingWb||new ExcelJS.Workbook();
+  const sheetSuffix=existingWb?' - '+dest.replace(/[^a-zA-Z0-9 ]/g,'').substring(0,20):'';
+  const ws=wb.addWorksheet('Commercial Invoice'+sheetSuffix,{pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
 
   // ── Column widths ──
   ws.columns=[{width:7},{width:36},{width:18},{width:18},{width:22},{width:8},{width:8},{width:8},{width:11},{width:11},{width:11},{width:10},{width:11},{width:14},{width:28}];
@@ -4676,7 +4698,7 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
 
   // ══════════════════════════════════════════════════════════
   // PACKING LIST SHEET
-  const p=wb.addWorksheet('Packing List',{pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+  const p=wb.addWorksheet('Packing List'+sheetSuffix,{pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
   p.columns=[{width:5},{width:22},{width:38},{width:10},{width:10},{width:18},{width:16},{width:12},{width:14}];
   const pc=(r,c,val,font,align,fill,border,fmt)=>{const cl=p.getRow(r).getCell(c);cl.value=val!=null?val:'';if(font)cl.font=font;if(align)cl.alignment=align;if(fill)cl.fill=fill;if(border)cl.border=border;if(fmt)cl.numFmt=fmt};
   const pfr=(r,c1,c2,fill,border)=>{for(let c=c1;c<=c2;c++){const cl=p.getRow(r).getCell(c);cl.value='';cl.fill=fill;if(border)cl.border=border}};
@@ -4701,7 +4723,8 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   ['','','TOTAL:',tQ,tPal,'','','',tV].forEach((v,i)=>{const al=i===8?alR:(i===3?alC:alL);const fmt=i===8?'$ #,##0.00':null;pc(pTR,i+1,v,v?fTotal:fData,al,fillTB,brdMed,fmt)});
   p.getRow(pTR+1).height=2;
 
-  // ── Write file ──
+  // ── Write file (skip if adding to existing workbook) ──
+  if(existingWb)return wb;
   const buf=await wb.xlsx.writeBuffer();const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CI_T'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx';a.click();URL.revokeObjectURL(url);
 }
 
