@@ -4778,7 +4778,7 @@ function LP_exportAllCI(){
     const totalPlt=t.items.reduce((s,r)=>s+(r.pallets||0),0);
     const totalQty=agg.reduce((s,it)=>s+it.qty,0);
     let totalVal=0;
-    for(const s of agg){const n=LP_STATE.nomenclature[s.sku]||{};totalVal+=(n.unitPrice||0)*s.qty}
+    for(const s of agg){totalVal+=(_lpCustNom(s.sku).unitPrice||0)*s.qty}
     summaryRows.push({'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'SKUs':agg.length,'Pieces':totalQty,'Pallets':+totalPlt.toFixed(1),'Total Value (USD)':totalVal?+totalVal.toFixed(2):''});
   }
   const ws1=XLSX.utils.json_to_sheet(summaryRows);
@@ -4792,8 +4792,8 @@ function LP_exportAllCI(){
     const totalPlt=t.items.reduce((s,r)=>s+(r.pallets||0),0);
     let lineNo=0;
     const rows=agg.map(s=>{
-      lineNo++;const n=LP_STATE.nomenclature[s.sku]||{};const uv=n.unitPrice||0;
-      return{'Line':lineNo,'SKU':s.sku,'Description':s.name||n.name||'','HS Code':n.hsCode||'','Country':n.country||'','Qty':s.qty,'Unit Price':uv?+uv.toFixed(2):'','Total Value':uv?+(uv*s.qty).toFixed(2):'','Pallets':+s.pallets.toFixed(2)};
+      lineNo++;const nm=_lpCustNom(s.sku);const uv=nm.unitPrice||0;
+      return{'Line':lineNo,'SKU':s.sku,'Description':nm.customsName||nm.name||s.name||'','HS Code':nm.hsCode,'Country':nm.country,'Qty':s.qty,'Unit Price':uv?+uv.toFixed(2):'','Total Value':uv?+(uv*s.qty).toFixed(2):'','Pallets':+s.pallets.toFixed(2)};
     });
     // Append manual items
     for(const mi of MI_get(MI_lpKey(t.id))){
@@ -5598,7 +5598,7 @@ function V26_export(){
   if(!trucks.length&&!cortAll.length)return;
   const wb=XLSX.utils.book_new();
   const lmNom=NOM||{};const lpNom=LP_STATE.nomenclature||{};
-  const getNom=sku=>{const lp=lpNom[sku]||{};const lm=lmNom[sku]||{};const co=LP_customsOverrides[sku]||{};return{name:lm.nm||lp.name||sku,pq:lm.pq||0,ps:lm.ps||0,src:lp.source||lm.src||'',uom:lm.uom||'pc',ppu:co.ppu||lp.ppu||lm.ppu||1,hsCode:lp.hsCode||'',country:lp.country||'',unitPrice:lp.unitPrice||0}};
+  const getNom=sku=>{const lp=lpNom[sku]||{};const lm=lmNom[sku]||{};const co=LP_customsOverrides[sku]||{};const cn=_lpCustNom(sku);return{name:lm.nm||lp.name||sku,customsName:cn.customsName,pq:lm.pq||0,ps:lm.ps||0,src:lp.source||lm.src||'',uom:lm.uom||'pc',ppu:co.ppu||lp.ppu||lm.ppu||1,hsCode:cn.hsCode,country:cn.country,unitPrice:cn.unitPrice}};
   
   // Sheet 1: All Trucks Summary
   const summary=trucks.map(t=>({'Truck':t.id,'Date':t.date,'Source':t.source,'Destination':t.destDisplay,'SKUs':t.skus,'Qty':t.items.reduce((s,it)=>s+_lpEffQty(it.sku,it.qty),0),'Pallets':+t.pallets.toFixed(1)}));
@@ -5613,7 +5613,7 @@ function V26_export(){
       const n=getNom(it.sku);
       detailRows.push({
         'Truck':t.id,'Date':t.date,'Source':t.source,'Destination':t.destDisplay,
-        'Nomenclature Code':it.sku,'Nomenclature Name':n.name,
+        'Nomenclature Code':it.sku,'Nomenclature Name':n.customsName||n.name,
         'Qty':_lpEffQty(it.sku,it.qty),'Pallets':+it.pallets.toFixed(2),
         'HS Code':n.hsCode,'Country':n.country,
         'Unit Price':n.unitPrice||'','Line Value':n.unitPrice?+(n.unitPrice*_lpEffQty(it.sku,it.qty)).toFixed(2):''
@@ -5643,7 +5643,7 @@ function V26_export(){
         const n=getNom(it.sku);
         cortRows.push({
           'CORT ID':c.id,'Date':c.date,'Destination':c.destDisplay,
-          'Nomenclature Code':it.sku,'Nomenclature Name':n.name,
+          'Nomenclature Code':it.sku,'Nomenclature Name':n.customsName||n.name,
           'Qty':_lpEffQty(it.sku,it.qty),'Source':n.src
         });
       });
@@ -5663,7 +5663,7 @@ function V26_export(){
         const n=getNom(it.sku);
         stpRows.push({
           'STP ID':t.id,'Date':t.date,'Destination':t.destDisplay,
-          'Nomenclature Code':it.sku,'Nomenclature Name':n.name,
+          'Nomenclature Code':it.sku,'Nomenclature Name':n.customsName||n.name,
           'Qty':_lpEffQty(it.sku,it.qty),'Pallets':+it.pallets.toFixed(2),'Source':n.src,
           'Rate':del?del.rate:''
         });
@@ -5719,7 +5719,7 @@ function V26_export(){
     trucks.forEach(t=>t.items.forEach(it=>{if(it.sku===sku)totalQty+=it.qty}));
     cortAll.forEach(c=>c.items.forEach(it=>{if(it.sku===sku)totalQty+=it.qty}));
     return{
-      'Nomenclature Code':sku,'Nomenclature Name':n.name,'Source':n.src,
+      'Nomenclature Code':sku,'Nomenclature Name':n.customsName||n.name,'Source':n.src,
 
       'HS Code':n.hsCode,'Country':n.country,'Unit Price':n.unitPrice||'',
       'Total Qty Shipped':totalQty,'Total Value':n.unitPrice?+(n.unitPrice*totalQty).toFixed(2):''
