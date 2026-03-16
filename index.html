@@ -1141,6 +1141,10 @@ function LP_setCustomsOvr(sku,field,val){
 function LP_customsInput(el){
   if(ROLE==='viewer')return;
   const sku=el.dataset.sku,field=el.dataset.field;
+  // Skip if value unchanged (prevents double-fire from onchange+onblur)
+  const cur=(LP_customsOverrides[sku]||{})[field];
+  const newVal=field==='hsCode'?_hsNormalize(el.value):el.value.trim();
+  if(newVal===String(cur||''))return;
   LP_setCustomsOvr(sku,field,el.value);
   // Update visual style to show override (purple) without full re-render
   const hasOvr=!!(LP_customsOverrides[sku]||{})[field];
@@ -1181,6 +1185,21 @@ function LP_toggleHSConfirm(sku,el){
   if(ROLE==='viewer')return;
   if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
   const conf=LP_customsOverrides[sku].hsConfirmed=!LP_customsOverrides[sku].hsConfirmed;
+  // When confirming, capture HS code from input if not already in override
+  if(conf&&el){
+    const td=el.closest('td');
+    const hsInput=td?.querySelector('input[data-field="hsCode"]');
+    const hsVal=hsInput?_hsNormalize(hsInput.value):'';
+    if(hsVal&&!LP_customsOverrides[sku].hsCode)LP_customsOverrides[sku].hsCode=hsVal;
+    // Also capture country and customs name from their inputs in the same row
+    const tr=td?.closest('tr');
+    if(tr){
+      const cooInput=tr.querySelector('input[data-field="country"]');
+      const cnInput=tr.querySelector('input[data-field="customsName"]');
+      if(cooInput?.value?.trim()&&!LP_customsOverrides[sku].country)LP_customsOverrides[sku].country=cooInput.value.trim();
+      if(cnInput?.value?.trim()&&!LP_customsOverrides[sku].customsName)LP_customsOverrides[sku].customsName=cnInput.value.trim();
+    }
+  }
   LP_saveTruckStateDebounced();
   // Update UI in place without full re-render
   if(el){
@@ -3309,7 +3328,7 @@ function LP_renderDemand(el){
     const _hsVal=_cOvr.hsCode||_nom.hsCode||'';
     const _cooVal=_cOvr.country||_nom.country||'';
     const _mkTxtIn=(field,val,isOvr2,w,ph)=>ROLE!=='viewer'
-      ?'<input type="text" value="'+val+'" data-sku="'+s.sku+'" data-field="'+field+'" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="'+ph+'" style="width:'+w+'px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(isOvr2?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(isOvr2?'var(--pu)':'var(--tp)')+';outline:none;background:'+(isOvr2?'var(--ps)':'var(--sf)')+'">':String(val||'—');
+      ?'<input type="text" value="'+val+'" data-sku="'+s.sku+'" data-field="'+field+'" onchange="LP_customsInput(this)" onblur="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="'+ph+'" style="width:'+w+'px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(isOvr2?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(isOvr2?'var(--pu)':'var(--tp)')+';outline:none;background:'+(isOvr2?'var(--ps)':'var(--sf)')+'">':String(val||'—');
     const _priceCell=ROLE!=='viewer'?('<input type="number" step="0.01" min="0" value="'+_priceVal+'" data-sku="'+s.sku+'" data-field="price" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="0.00" style="width:60px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_priceOvr?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_priceOvr?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_priceOvr?'var(--ps)':'var(--sf)')+'">'):String(_priceVal||'—');
     const _hsConf=!!_cOvr.hsConfirmed;
     const _hsConfBtn=ROLE!=='viewer'?`<span class="hs-conf" data-sku="${s.sku}" onclick="event.stopPropagation();LP_toggleHSConfirm('${s.sku}',this)" title="${_hsConf?'HS confirmed — click to unconfirm':'Click to confirm HS code'}" style="cursor:pointer;font-size:10px;margin-left:2px;${!_hsVal?'display:none;':''}${_hsConf?'color:var(--gn)':'color:var(--tt);opacity:.5'}" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=${_hsConf?'1':'.5'}">${_hsConf?'✓':'○'}</span>`:'';
