@@ -2075,9 +2075,11 @@ function _hsAcceptAIFinal(code){
   LP_setCustomsOvr(sku,'hsCode',code);
   if(custName)LP_setCustomsOvr(sku,'customsName',custName);
   if(country)LP_setCustomsOvr(sku,'country',country);
+  if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
+  LP_customsOverrides[sku].hsConfirmed=true;
   document.querySelector('.modal-overlay.hs-modal')?.remove();
   LP_render();
-  LP_saveTruckState();// immediate save on modal close (LP_setCustomsOvr already debounced, cancel it)
+  LP_saveTruckState();
   if(_lpTruckSaveTimer){clearTimeout(_lpTruckSaveTimer);_lpTruckSaveTimer=null}
 }
 
@@ -2313,6 +2315,8 @@ function _hsAccept(code){
   const custName=(document.getElementById('hsCustNameEdit')?.value||'').trim();
   LP_setCustomsOvr(sku,'hsCode',code);
   if(custName)LP_setCustomsOvr(sku,'customsName',custName);
+  if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
+  LP_customsOverrides[sku].hsConfirmed=true;
   document.querySelector('.modal-overlay.hs-modal')?.remove();
   LP_render();
   LP_saveTruckState();
