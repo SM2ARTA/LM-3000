@@ -818,9 +818,10 @@ function LP_parseNomenclature(buf){
   const hsCodeCol=gc("hs code","harmonized code","tariff code","hts code","hs");
   const countryCol=gc("country of origin","country of manufacture","country","origin","made in");
   const priceCol=gc("unit price","price","unit value","value","cost","unit cost");
+  const ppuCol=gc("pieces per uom","pcs per uom","qty per uom","ppu");
   if(skuCol<0)throw new Error("Cannot find Nomenclature code column.");
   const nomen={};
-  for(let i=hr+1;i<rows.length;i++){const row=rows[i];const sku=String(row[skuCol]||"").trim();if(!sku)continue;nomen[sku]={name:nameCol>=0?String(row[nameCol]||"").trim():"",source:sourceCol>=0?String(row[sourceCol]||"").trim():"",palletQty:palletQtyCol>=0?(parseFloat(row[palletQtyCol])||0):0,palletSpc:palletSpcCol>=0?(parseFloat(row[palletSpcCol])||0):0,hsCode:hsCodeCol>=0?String(row[hsCodeCol]||"").trim():"",country:countryCol>=0?String(row[countryCol]||"").trim():"",unitPrice:priceCol>=0?(parseFloat(row[priceCol])||0):0}}
+  for(let i=hr+1;i<rows.length;i++){const row=rows[i];const sku=String(row[skuCol]||"").trim();if(!sku)continue;nomen[sku]={name:nameCol>=0?String(row[nameCol]||"").trim():"",source:sourceCol>=0?String(row[sourceCol]||"").trim():"",palletQty:palletQtyCol>=0?(parseFloat(row[palletQtyCol])||0):0,palletSpc:palletSpcCol>=0?(parseFloat(row[palletSpcCol])||0):0,hsCode:hsCodeCol>=0?String(row[hsCodeCol]||"").trim():"",country:countryCol>=0?String(row[countryCol]||"").trim():"",unitPrice:priceCol>=0?(parseFloat(row[priceCol])||0):0,ppu:ppuCol>=0?(parseFloat(row[ppuCol])||1):1}}
   return nomen;
 }
 
@@ -1122,7 +1123,7 @@ function _hsNormalize(code){
 }
 function LP_setCustomsOvr(sku,field,val){
   if(ROLE==='viewer')return;
-  let v=field==='price'?(parseFloat(val)||0):String(val||'').trim();
+  let v=(field==='price'||field==='ppu')?(parseFloat(val)||0):String(val||'').trim();
   if(field==='hsCode'&&v)v=_hsNormalize(v);
   if(!v||v===0){
     if(LP_customsOverrides[sku]){
@@ -1160,6 +1161,35 @@ function LP_customsInput(el){
       td.style.fontWeight=isConf||hasOvr?'700':'';
       td.style.background=isConf?'var(--gs)':'';
     }
+  }
+}
+function LP_ppuInput(el){
+  if(ROLE==='viewer')return;
+  const sku=el.dataset.sku;
+  const val=parseInt(el.value)||1;
+  if(val<=1){
+    // Clear override (1 = default)
+    if(LP_customsOverrides[sku]){delete LP_customsOverrides[sku].ppu;if(!Object.keys(LP_customsOverrides[sku]).filter(k=>k!=='hsConfirmed'||LP_customsOverrides[sku][k]).length)delete LP_customsOverrides[sku];}
+    el.value='1';
+  }else{
+    if(!LP_customsOverrides[sku])LP_customsOverrides[sku]={};
+    LP_customsOverrides[sku].ppu=val;
+  }
+  LP_saveTruckStateDebounced();
+  const hasOvr=!!(LP_customsOverrides[sku]||{}).ppu;
+  el.style.borderColor=hasOvr?'var(--pu)':'var(--bd)';
+  el.style.color=hasOvr?'var(--pu)':'var(--tp)';
+  el.style.background=hasOvr?'var(--ps)':'var(--sf)';
+  // Update Eff Qty cell (next sibling td)
+  const effTd=el.closest('td').nextElementSibling;
+  if(effTd){
+    const tr=el.closest('tr');const qtyTd=tr.querySelector('td:nth-child(4)');
+    const rawQty=parseInt((qtyTd?.textContent||'').replace(/,/g,''))||0;
+    const eff=Math.ceil(rawQty/val);
+    effTd.textContent=val>1?eff.toLocaleString():'—';
+    effTd.style.color=val>1?'var(--ac)':'';
+    effTd.style.fontWeight=val>1?'700':'';
+    effTd.title=val>1?rawQty+' ÷ '+val+' = '+eff:'';
   }
 }
 function LP_toggleHSConfirm(sku,el){
@@ -3232,7 +3262,7 @@ function LP_renderDemand(el){
     +'<div id="lpHoldDestStatus" style="display:none;margin-top:6px"></div>'
     +'</div>':''}
   <div class="csf" id="lpDemBody"><table class="dtb"><thead><tr>
-    <th>SKU</th><th>Name</th><th>Source</th><th>Total Qty</th><th style="color:var(--gn)" title="Available qty from stock report">Stock Qty</th><th title="Unit price for CI/customs">Price</th><th title="HS Tariff Code">HS Code</th><th title="Country of Origin">COO</th><th title="Customs description for CI docs" style="min-width:100px">Customs Name</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
+    <th>SKU</th><th>Name</th><th>Source</th><th>Total Qty</th><th title="Pieces per Unit of Measure — divides raw qty to get effective qty">PPU</th><th title="Effective qty = Total Qty ÷ PPU">Eff Qty</th><th style="color:var(--gn)" title="Available qty from stock report">Stock Qty</th><th title="Unit price for CI/customs">Price</th><th title="HS Tariff Code">HS Code</th><th title="Country of Origin">COO</th><th title="Customs description for CI docs" style="min-width:100px">Customs Name</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
   </tr></thead><tbody>`;
   let _prevName='';
   for(const s of skus){
@@ -3294,12 +3324,18 @@ function LP_renderDemand(el){
     const _cooCell=_mkTxtIn('country',_cooVal,_cooOvr,44,'China');
     const _cnVal=_cOvr.customsName||_nom.customsName||'';const _cnOvr=!!_cOvr.customsName;
     const _cnCell=_mkTxtIn('customsName',_cnVal,_cnOvr,100,'Customs description');
+    const _ppuNom=_nom.ppu||(NOM[s.sku]||{}).ppu||1;
+    const _ppuVal=_cOvr.ppu||_ppuNom;const _ppuOvr=!!_cOvr.ppu;
+    const _effQty=Math.ceil(s.totalQty/_ppuVal);
+    const _ppuCell=ROLE!=='viewer'?'<input type="number" step="1" min="1" value="'+_ppuVal+'" data-sku="'+s.sku+'" data-field="ppu" onchange="LP_ppuInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" style="width:45px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_ppuOvr?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_ppuOvr?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_ppuOvr?'var(--ps)':'var(--sf)')+'">':String(_ppuVal);
     const _rowDests=Object.keys(s.dests||{}).map(d=>clDisp(d)).join('|');
     html+=`<tr data-search="${s.sku} ${s.name} ${s.source}" data-source="${s.source}" data-dests="|${_rowDests}|"${_sameNameGroup?' style="background:var(--sf)"':''}>
       <td class="mono"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${_arrSkus.has(s.sku)?'var(--gn)':'#EF4444'};margin-right:5px;flex-shrink:0;vertical-align:middle" title="${_arrSkus.has(s.sku)?'Has arrival date':'No arrival date'}"></span>${s.sku}${isOvr?'<span style="color:var(--pu);font-size:9px" title="Pallet override active"> ★</span>':''}</td>
       <td class="tcl"${_sameNameGroup?' style="color:var(--ts)"':''} title="${s.name||''}">${_sameNameGroup?'↳ ':''}${s.name||'—'}</td>
       <td style="font-size:10px;color:var(--ts);white-space:nowrap">${s.source||'—'}</td>
       <td class="mono fw7">${s.totalQty.toLocaleString()}</td>
+      <td class="mono" style="${_ppuOvr?'color:var(--pu);font-weight:700':''}">${_ppuCell}</td>
+      <td class="mono${_ppuVal>1?' fw7':''}" style="${_ppuVal>1?'color:var(--ac)':''}" title="${_ppuVal>1?s.totalQty+' ÷ '+_ppuVal+' = '+_effQty:''}">${_ppuVal>1?_effQty.toLocaleString():'—'}</td>
       <td class="mono">${_sqCell}</td>
       <td class="mono" style="${_priceOvr?'color:var(--pu);font-weight:700':''}">${_priceCell}</td>
       <td class="mono" style="${_hsConf?'color:var(--gn);font-weight:700;background:var(--gs)':(_hsOvr?'color:var(--pu);font-weight:700':'')}">${_hsCell}</td>
@@ -4270,7 +4306,7 @@ function LP_exportSingleTruck(truckId){
   const rows=agg.map(s=>{
     const lpNom=LP_STATE.nomenclature[s.sku]||{};
     const lmNom=NOM[s.sku]||{};
-    const ppu=lmNom.ppu||1;
+    const ppu=(LP_customsOverrides[s.sku]||{}).ppu||lpNom.ppu||lmNom.ppu||1;
     return{
       'Nomenclature code':s.sku,
       'Nomenclature name':lmNom.nm||lpNom.name||s.name||s.sku,
@@ -5565,7 +5601,7 @@ function V26_export(){
   if(!trucks.length&&!cortAll.length)return;
   const wb=XLSX.utils.book_new();
   const lmNom=NOM||{};const lpNom=LP_STATE.nomenclature||{};
-  const getNom=sku=>{const lp=lpNom[sku]||{};const lm=lmNom[sku]||{};return{name:lm.nm||lp.name||sku,pq:lm.pq||0,ps:lm.ps||0,src:lp.source||lm.src||'',uom:lm.uom||'pc',ppu:lm.ppu||1,hsCode:lp.hsCode||'',country:lp.country||'',unitPrice:lp.unitPrice||0}};
+  const getNom=sku=>{const lp=lpNom[sku]||{};const lm=lmNom[sku]||{};const co=LP_customsOverrides[sku]||{};return{name:lm.nm||lp.name||sku,pq:lm.pq||0,ps:lm.ps||0,src:lp.source||lm.src||'',uom:lm.uom||'pc',ppu:co.ppu||lp.ppu||lm.ppu||1,hsCode:lp.hsCode||'',country:lp.country||'',unitPrice:lp.unitPrice||0}};
   
   // Sheet 1: All Trucks Summary
   const summary=trucks.map(t=>({'Truck':t.id,'Date':t.date,'Source':t.source,'Destination':t.destDisplay,'SKUs':t.skus,'Qty':t.qty,'Pallets':+t.pallets.toFixed(1)}));
