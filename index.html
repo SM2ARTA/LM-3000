@@ -3903,7 +3903,7 @@ function LP_showTruckModal(truckId){
   let mh=modalHeader(
     `${isDisp?'🔒':'🚛'} LP-${truckId}${_lsr?' <span class="mono" style="color:var(--pu);font-size:12px;background:var(--ps);padding:1px 6px;border-radius:3px;margin-left:6px">'+_lsr+'</span>':''}${isDisp?' <span style="color:var(--gn);font-size:12px">Locked</span>':''}`,
     `${first.date} · <span style="color:${dc.color}">${clDisp(first.destination)}</span> · <span style="color:var(--ac)">📍 Arrives ${_mArrDisp} (${_mTransit}d)</span>`,
-    `<button class="rbtn" onclick="LP_exportSingleTruck(${truckId})" style="background:var(--as);color:var(--ac);border-color:var(--ab);font-size:11px">⬇ Excel</button><button class="rbtn" onclick="LP_exportCI(${truckId})" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-size:11px">📄 CI</button>`
+    `<button class="rbtn" onclick="LP_exportSingleTruck(${truckId})" style="background:var(--as);color:var(--ac);border-color:var(--ab);font-size:11px">⬇ Excel</button><button class="rbtn" onclick="LP_exportCI(${truckId})" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-size:11px">📄 CI</button>${_a10IsMex(first.destination)?'<button class="rbtn" onclick="LP_exportA10('+truckId+')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:11px">📋 A10</button>':''}`
   );
   mh+=`<div class="mdb">
         <div class="mst">
@@ -4614,6 +4614,121 @@ function LP_getCIParties(dest){
     broker:['','','','','','']
   };
   return{consignee:['','','','','',''],broker:['','','','','','']};
+}
+// ── A10 Mexican Customs Temporary Import Form ──
+async function _a10TranslateToSpanish(items){
+  const provider=_hsGetAIProvider();const key=_hsGetAIKey();
+  if(!key||!provider)return items.map(it=>({...it,spanishName:it.customsName||it.name}));
+  const names=items.map(it=>it.customsName||it.name);
+  const sys='Translate product names to Spanish for Mexican customs declarations. Return JSON array of translations in same order. Short, formal customs language. Example: "Steel padlock keyed" → "Candado de acero con llave". Return ONLY a JSON array of strings.';
+  const usr=JSON.stringify(names);
+  try{
+    let text='';
+    if(provider==='claude'){
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:2000,system:sys,messages:[{role:'user',content:usr}]})});
+      if(!r.ok)throw new Error('API '+r.status);const d=await r.json();text=d?.content?.[0]?.text||'';
+    }else if(provider==='openai'){
+      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-5-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}]})});
+      if(!r.ok)throw new Error('API '+r.status);const d=await r.json();text=d?.choices?.[0]?.message?.content||'';
+    }else{
+      const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}],generationConfig:{temperature:0.1,maxOutputTokens:2000}})});
+      if(!r.ok)throw new Error('API '+r.status);const d=await r.json();text=d?.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    }
+    const arr=JSON.parse(text.replace(/```json?\s*/g,'').replace(/```\s*/g,'').trim());
+    return items.map((it,i)=>({...it,spanishName:arr[i]||it.customsName||it.name}));
+  }catch(e){console.warn('A10 translation error:',e);return items.map(it=>({...it,spanishName:it.customsName||it.name}));}
+}
+function _a10IsMex(dest){return(dest||'').toUpperCase().includes('MEX')}
+async function LP_exportA10(truckId){
+  const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
+  if(!rawPlan.length)return;
+  const first=rawPlan[0];const dest=first.destination;const date=first.date;
+  const agg=LP_aggregateTruck(rawPlan);
+  agg.forEach(it=>{it.qty=_lpEffQty(it.sku,it.qty)});
+  // Build items with customs data
+  const items=agg.map(s=>{
+    const nm=_lpCustNom(s.sku);
+    return{sku:s.sku,name:nm.name,customsName:nm.customsName||nm.name||s.name,hsCode:nm.hsCode,qty:s.qty,unitPrice:nm.unitPrice||0};
+  }).filter(it=>it.qty>0);
+  if(!items.length){alert('No items on this truck.');return;}
+  // Show loading
+  const pov=document.getElementById('pov');if(pov)pov.style.display='flex';
+  // Translate to Spanish
+  const translated=await _a10TranslateToSpanish(items);
+  const totalValue=translated.reduce((s,it)=>s+(it.qty*(it.unitPrice||0)),0);
+  // Build Word HTML
+  const tableRows=translated.map(it=>`<tr>
+    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial">${it.spanishName}</td>
+    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial;text-align:center">${it.hsCode.replace('.','')}</td>
+    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial;text-align:center">${it.qty.toLocaleString()}</td>
+    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial;text-align:center">PIEZA</td>
+    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial;text-align:right">${(it.unitPrice||0).toFixed(2)}</td>
+  </tr>`).join('');
+  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><style>
+body{font-family:Arial,sans-serif;font-size:11pt;margin:40px 50px}
+h2{text-align:center;font-size:14pt;margin-bottom:4px}
+h3{text-align:center;font-size:11pt;font-weight:normal;margin-top:2px}
+table{border-collapse:collapse;width:100%}
+th{border:1px solid #000;padding:4px 6px;font-size:10pt;background:#f0f0f0;text-align:center}
+.info-table td{border:none;padding:2px 4px;font-size:11pt;vertical-align:top}
+.sig-line{border-bottom:1px solid #000;width:250px;display:inline-block;margin-top:30px}
+</style></head><body>
+<h2>A10.</h2>
+<h3>Importaci\u00f3n temporal de las mercanc\u00edas destinadas a la CMF 2026 y sus eventos relacionados</h3>
+<p style="text-align:right;font-size:10pt">No. de Folio: ________________</p>
+<p style="font-size:10pt">Antes de llenar este formato, lea las instrucciones al reverso.</p>
+<table class="info-table" style="margin-bottom:6px"><tr>
+<td>Fecha de ingreso: ____/____/________</td>
+<td style="text-align:right">Fecha de vencimiento: ____/____/________</td>
+</tr><tr>
+<td colspan="2">Aduana/secci\u00f3n aduanera: ________________________________ Clave: ________________</td>
+</tr></table>
+<h3 style="text-align:left;font-weight:bold;font-size:11pt;margin-top:12px">1. Informaci\u00f3n General.</h3>
+<p style="font-size:10pt;font-weight:bold">1.1. Datos del importador:</p>
+<p style="font-size:10pt"><b>Nombre completo, raz\u00f3n o denominaci\u00f3n social:</b><br>FWC2026 MEXICO, S. DE R.L. DE C.V.</p>
+<p style="font-size:10pt"><b>Domicilio:</b><br>Paseo De La Reforma 350, Interior 12, Col. Ju\u00e1rez, C.P. 06600, Alcald\u00eda Cuauht\u00e9moc, Ciudad De M\u00e9xico, M\u00e9xico.</p>
+<p style="font-size:10pt"><b>Folio de autorizaci\u00f3n emitida por la DGJA:</b> 500-00-00-00-00-2026-1264 del 26 de Febrero de 2026 - Anexo \u00fanico (parcial)</p>
+<p style="font-size:10pt"><span class="sig-line"></span><br>Firma<br>Kim Dexter Soto Castro (R.F.C.: SOCK 930129 LK7)<br>Representante legal de: FWC2026 MEXICO, S. DE R.L. DE C.V.</p>
+<p style="font-size:10pt;font-weight:bold">1.2. Domicilio para o\u00edr y recibir notificaciones:</p>
+<table class="info-table" style="font-size:10pt">
+<tr><td>Calle: Paseo de la Reforma</td><td>No. exterior: 350</td><td>No. interior: 12</td></tr>
+<tr><td>Colonia: Ju\u00e1rez</td><td>C\u00f3digo postal: 06600</td><td></td></tr>
+<tr><td>Municipio o Alcald\u00eda: Cuauht\u00e9moc</td><td colspan="2">Localidad: Ciudad de M\u00e9xico</td></tr>
+<tr><td>Entidad Federativa: Ciudad de M\u00e9xico, M\u00e9xico</td><td colspan="2">Tel\u00e9fonos: 55 4609 5623</td></tr>
+</table>
+<p style="font-size:9pt"><b>Personas autorizadas para o\u00edr y recibir notificaciones:</b><br>
+Nicolas Cucidis, nicolas.cucidis@rockitcargo.com, +52 1 55 4368 2314<br>
+Sofia Escalante Acedo, sofia.escalante@fwc2026.org, +52 1 55 7970 2358<br>
+Gloria Johanna Romero Bernal, sportsmx@rockitcargo.com, +52 1 55 5959 8242<br>
+Cruz Salinas Galicia, cruz.salinas@rockitcargo.com, +52 1 55 2920 0809</p>
+<h3 style="text-align:left;font-weight:bold;font-size:11pt;margin-top:16px">2. Informaci\u00f3n relacionada con el tr\u00e1mite.</h3>
+<p style="font-size:10pt;font-weight:bold">2.1. Mercanc\u00edas a importar:</p>
+<table style="margin-bottom:8px">
+<thead><tr>
+<th>Descripci\u00f3n detallada</th><th>Fracci\u00f3n arancelaria</th><th>Cantidad</th><th>Unidad de medida</th><th>Valor unitario</th>
+</tr></thead>
+<tbody>${tableRows}</tbody>
+</table>
+<p style="font-size:8pt;font-style:italic">No se entender\u00e1 que la fracci\u00f3n arancelaria declarada es aceptada por la autoridad o que existe resoluci\u00f3n favorable al particular.</p>
+<p style="font-size:10pt"><b>2.2. Valor total de las mercanc\u00edas:</b> $${totalValue.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} d\u00f3lares de los Estados Unidos de Am\u00e9rica.</p>
+<p style="font-size:10pt;font-style:italic">Declaro, bajo protesta de decir verdad, que los datos asentados en el presente formato son ciertos.</p>
+<h3 style="text-align:left;font-weight:bold;font-size:11pt;margin-top:16px">3. Conformidad de la aduana/secci\u00f3n aduanera:</h3>
+<p style="font-size:10pt">Nombre: ______________________________________________________<br>
+No. de gafete del empleado: ______________________________________<br><br>
+<span class="sig-line"></span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sello Aduana/Secci\u00f3n aduanera<br>Firma</p>
+<h3 style="text-align:left;font-weight:bold;font-size:11pt;margin-top:16px">4. Datos del retorno:</h3>
+<p style="font-size:10pt">Fecha: ____/____/________<br>
+Aduana/secci\u00f3n aduanera: ________________________________________<br>
+Clave: _________________________________________________________<br>
+Lugar: _________________________________________________________</p>
+<p style="font-size:9pt;text-align:center;margin-top:12px">Este aviso se presentar\u00e1 por duplicado: el original para la aduana y la copia para el importador.</p>
+</body></html>`;
+  if(pov)pov.style.display='none';
+  const blob=new Blob(['\ufeff'+html],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download='A10_LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_'+date+'.doc';a.click();
+  URL.revokeObjectURL(url);
 }
 async function LP_exportCI(truckId){
   const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
