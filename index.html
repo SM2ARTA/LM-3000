@@ -9700,8 +9700,9 @@ function LM_renderDemand(el){
     const raw=parseInt(r["Required"])||0;if(raw<=0)continue;
     const s=r["Nomenclature"]||"?";if(!NOM[s])continue;
     if(!byVenue[v])byVenue[v]={name:v,skus:{},totalOrig:0,totalAdj:0};
-    if(!byVenue[v].skus[s])byVenue[v].skus[s]={sku:s,name:NOM[s]?.nm||s,origQty:0,src:NOM[s]?.src||'',isManual:!!r._manual};
-    byVenue[v].skus[s].origQty+=raw;
+    if(!byVenue[v].skus[s])byVenue[v].skus[s]={sku:s,name:NOM[s]?.nm||s,origQty:0,rawOrigQty:0,src:NOM[s]?.src||'',isManual:!!r._manual};
+    byVenue[v].skus[s].rawOrigQty+=raw;
+    byVenue[v].skus[s].origQty+=_lpEffQty(s,raw);
     if(r._manual)byVenue[v].skus[s].isManual=true;
   }
 
@@ -9717,7 +9718,7 @@ function LM_renderDemand(el){
     v.skuList=skuList;
     for(const s of skuList){
       const k=v.name+'|'+s.sku;
-      s.adjQty=LM_demandAdj[k]!==undefined?LM_demandAdj[k]:s.origQty;
+      s.adjQty=LM_demandAdj[k]!==undefined?_lpEffQty(s.sku,LM_demandAdj[k]):s.origQty;
       s.isAdj=LM_demandAdj[k]!==undefined;
       s.manualIndices=manualIdx[k]||[];
       if(s.isAdj)adjItems++;
@@ -9838,11 +9839,15 @@ function LM_filterDemand(){
   });
 }
 
-function LM_setDemand(venue,sku,newQty,origQty){
+function LM_setDemand(venue,sku,newEffQty,origEffQty){
   if(ROLE==='viewer')return;
   const k=venue+'|'+sku;
-  if(newQty===origQty){delete LM_demandAdj[k]}
-  else{LM_demandAdj[k]=newQty}
+  const ppu=_lpPPU(sku);
+  // Convert effective qty back to raw for storage (engine uses raw)
+  const newRaw=newEffQty*ppu;
+  const origRaw=origEffQty*ppu;
+  if(newRaw===origRaw){delete LM_demandAdj[k]}
+  else{LM_demandAdj[k]=newRaw}
   // Rebuild venue stats and trucks (clear cache, renumber)
   bV();PLAN_CACHE={};numberAll();
   LM_saveDemandAdj();
