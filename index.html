@@ -2604,13 +2604,15 @@ function LP_settingsChanged(){
     LP_lastGenSettings.maxDests!==LP_STATE.maxDests||
     LP_lastGenSettings.turnaround!==LP_STATE.turnaround||
     LP_lastGenSettings.ricStartDate!==LP_STATE.ricStartDate||
+    LP_lastGenSettings.gapTolerance!==(LP_STATE.gapTolerance??2)||
+    LP_lastGenSettings.fillThreshold!==(LP_STATE.fillThreshold||0)||
     LP_lastGenSettings.contDateHash!==_contDateHash()||
     LP_lastGenSettings.palletOvrHash!==_palletOvrHash()||
     LP_lastGenSettings.holdsHash!==_holdsHash()||
     LP_lastGenSettings.arrDateHash!==_arrDateHash();
 }
 function LP_snapshotSettings(){
-  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash()};
+  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,gapTolerance:LP_STATE.gapTolerance??2,fillThreshold:LP_STATE.fillThreshold||0,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash()};
 }
 
 // ── Helpers ──
