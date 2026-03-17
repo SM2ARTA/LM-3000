@@ -850,6 +850,8 @@ function LP_parseArrivals(buf,turnaround){
 function LP_buildLoadPlan(demand,arrivals,cfg){
   cfg=cfg||{};
   const MAX_PALLETS=cfg.maxPallets||LP_DEFAULT_MAX_PALLETS;
+  const GAP_TOLERANCE=cfg.gapTolerance??2;
+  const FILL_THRESHOLD=cfg.fillThreshold||Math.ceil(MAX_PALLETS*0.8);
   const MAX_TRUCKS_DAY=cfg.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
   const MAX_DESTS_DAY=cfg.maxDests||LP_DEFAULT_MAX_DESTS;
   const START_TRUCK_ID=cfg.startTruckId||0;
@@ -900,7 +902,7 @@ function LP_buildLoadPlan(demand,arrivals,cfg){
         const skus=Object.keys(demandQueue[dest]).filter(sku=>(remainDemand[dest][sku]||0)>0&&(stock[sku]||0)>0).sort((a,b)=>{const fa=invEvents.find(e=>e.sku===a)?.readyDate||'9999';const fb=invEvents.find(e=>e.sku===b)?.readyDate||'9999';return fa.localeCompare(fb)});
         let spacesAvail=0;for(const sku of skus)spacesAvail+=floorPallets(sku,Math.min(remainDemand[dest][sku]||0,stock[sku]||0));
         if(spacesAvail<1)continue;
-        if(spacesAvail<MAX_PALLETS){const hasFuture=invEvents.some(a=>{if(a.readyDate<=date)return false;const rem=remainDemand[dest]?.[a.sku]||0;return rem>0&&a.qty>0});if(hasFuture)continue;const futureUncov=invEvents.reduce((s,a)=>{if(a.readyDate<=date)return s;const rem=remainDemand[dest]?.[a.sku]||0;if(rem<=0)return s;const uncov=Math.max(0,rem-Math.min(rem,stock[a.sku]||0));return s+floorPallets(a.sku,Math.min(a.qty,uncov))},0);if(futureUncov<1)continue}
+        if(spacesAvail<MAX_PALLETS&&(MAX_PALLETS-spacesAvail>GAP_TOLERANCE)&&spacesAvail<FILL_THRESHOLD){const hasFuture=invEvents.some(a=>{if(a.readyDate<=date)return false;const rem=remainDemand[dest]?.[a.sku]||0;return rem>0&&a.qty>0});if(hasFuture)continue;const futureUncov=invEvents.reduce((s,a)=>{if(a.readyDate<=date)return s;const rem=remainDemand[dest]?.[a.sku]||0;if(rem<=0)return s;const uncov=Math.max(0,rem-Math.min(rem,stock[a.sku]||0));return s+floorPallets(a.sku,Math.min(a.qty,uncov))},0);if(futureUncov<1)continue}
         truckId++;const rows=[];let spacesLoaded=0;
         for(const sku of skus){if(spacesLoaded>=MAX_PALLETS)break;const pq=nomMap[sku]?.palletQty||0;const spacesLeft=MAX_PALLETS-spacesLoaded;const canUse=Math.min(remainDemand[dest][sku]||0,stock[sku]||0);const wholeSpc=Math.min(floorPallets(sku,canUse),spacesLeft);if(wholeSpc<1)continue;const targetUnits=wholeSpc*upp(sku);const idList=demandQueue[dest][sku];const available=[...idList].sort((a,b)=>b.remain-a.remain);let picked=[];let pickedUnits=0;
           for(const item of available){if(pickedUnits>=targetUnits-0.001)break;if(item.remain<=targetUnits-pickedUnits+0.001){picked.push({item,take:item.remain,split:false});pickedUnits+=item.remain}}
@@ -948,7 +950,7 @@ let LP_STATE={
   materialPlan:[],nomenclature:{},arrivals:[],
   loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},
   turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,
-  ricStartDate:'2026-04-01',
+  ricStartDate:'2026-04-01',gapTolerance:2,fillThreshold:0,
   manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]
 };
 let LP_TAB='plan';
@@ -2409,7 +2411,8 @@ async function LP_saveToSupabase(){
       u(LP_KEYS.config,{
         turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,
         maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,
-        ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated
+        ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,
+        gapTolerance:LP_STATE.gapTolerance,fillThreshold:LP_STATE.fillThreshold
       }),
       u(LP_KEYS.nom,LP_STATE.nomenclature),
       u(LP_KEYS.demand,LP_STATE.materialPlan),
@@ -2443,6 +2446,8 @@ async function LP_loadFromSupabase(){
       LP_STATE.maxTrucks=cfg.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
       LP_STATE.maxDests=cfg.maxDests||LP_DEFAULT_MAX_DESTS;
       LP_STATE.ricStartDate=cfg.ricStartDate||'2026-04-01';
+      LP_STATE.gapTolerance=cfg.gapTolerance??2;
+      LP_STATE.fillThreshold=cfg.fillThreshold||0;
       LP_STATE.planGenerated=true;
       LP_STATE.nomenclature=nom||{};
       LP_STATE.materialPlan=demand||[];
@@ -2484,6 +2489,8 @@ async function LP_loadFromSupabase(){
     LP_STATE.maxTrucks=p.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
     LP_STATE.maxDests=p.maxDests||LP_DEFAULT_MAX_DESTS;
     LP_STATE.ricStartDate=p.ricStartDate||'2026-04-01';
+    LP_STATE.gapTolerance=p.gapTolerance??2;
+    LP_STATE.fillThreshold=p.fillThreshold||0;
     LP_STATE.planGenerated=true;
     LP_STATE.generatedPlan=p.generatedPlan;
     LP_dispatched=new Set(p.dispatched||[]);
@@ -2635,7 +2642,7 @@ function LP_regenerate(){
       // Nothing dispatched — full regenerate
       LP_STATE.generatedPlan=LP_buildLoadPlan(
         LP_STATE.materialPlan,LP_STATE.arrivals,
-        {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples}
+        {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples,gapTolerance:LP_STATE.gapTolerance,fillThreshold:LP_STATE.fillThreshold}
       );
       LP_STATE.planGenerated=true;
       LP_snapshotSettings();
@@ -2694,7 +2701,7 @@ function LP_regenerate(){
     const newRows=LP_buildLoadPlan(
       remainDemand,remainArrivals,
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,
-       startTruckId:maxDispatchedId,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples}
+       startTruckId:maxDispatchedId,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples,gapTolerance:LP_STATE.gapTolerance,fillThreshold:LP_STATE.fillThreshold}
     );
     
     // ── Merge: dispatched (frozen) + new plan ──
@@ -3599,8 +3606,6 @@ function LP_renderPlan(el){
   const _truckInStock=t=>STOCK_SKUS.size>0&&LP_aggregateTruck(t.items).every(s=>_skuInStk(s.sku,t.dest));
   const truckList=Object.values(trucks).sort((a,b)=>{
     const dc=a.date.localeCompare(b.date);if(dc)return dc;
-    const ai=_truckInStock(a)?0:1,bi=_truckInStock(b)?0:1;
-    if(ai!==bi)return ai-bi;
     return a.id-b.id;
   });
 
@@ -3655,6 +3660,8 @@ function LP_renderPlan(el){
       <div class="lp-field"><label>Max Dests / Day</label><input type="number" value="${LP_STATE.maxDests}" min="1"${isViewer?' disabled':''} onchange="LP_STATE.maxDests=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
       <div class="lp-field"><label>WH Turnaround (days)</label><input type="number" value="${LP_STATE.turnaround}" min="0"${isViewer?' disabled':''} onchange="LP_STATE.turnaround=+this.value;LP_recalcReadyDates();LP_saveToSupabaseDebounced();LP_render()"></div>
       <div class="lp-field"><label>RIC Start Date</label><input type="date" value="${LP_STATE.ricStartDate}"${isViewer?' disabled':''} onchange="LP_STATE.ricStartDate=this.value;LP_saveToSupabaseDebounced();LP_render()" style="font-family:var(--fd)"></div>
+      <div class="lp-field"><label title="Ship if within N pallets of full (0=off)">Gap Tolerance (plt)</label><input type="number" value="${LP_STATE.gapTolerance}" min="0" max="10"${isViewer?' disabled':''} onchange="LP_STATE.gapTolerance=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
+      <div class="lp-field"><label title="Ship if buildable pallets >= this (0=auto 80%)">Min Fill to Ship</label><input type="number" value="${LP_STATE.fillThreshold||Math.ceil(LP_STATE.maxPallets*0.8)}" min="0"${isViewer?' disabled':''} onchange="LP_STATE.fillThreshold=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
     </div>
     <details style="margin-top:10px">
       <summary style="font-size:11px;font-weight:600;color:var(--ts);cursor:pointer;user-select:none">🚚 Transit Times (days)</summary>
