@@ -945,7 +945,7 @@ function LP_buildLoadPlan(demand,arrivals,cfg){
   return plan;
 }
 
-// ── LP Engine V2: stock-on-hand first, forecast second ──
+// ── LP Engine V2: anchor-SKU, stock-on-hand first, forecast second ──
 function LP_buildLoadPlanV2(demand,arrivals,cfg){
   cfg=cfg||{};
   const MAX_PALLETS=cfg.maxPallets||LP_DEFAULT_MAX_PALLETS;
@@ -972,6 +972,7 @@ function LP_buildLoadPlanV2(demand,arrivals,cfg){
   if(!invEvents.length)return[];
   const stockDelta={};
   for(const a of invEvents){if(!stockDelta[a.readyDate])stockDelta[a.readyDate]={};stockDelta[a.readyDate][a.sku]=(stockDelta[a.readyDate][a.sku]||0)+a.qty}
+  const lastInvDate=invEvents[invEvents.length-1].readyDate;
   const isTruck=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
   const pri=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')?0:u.includes('CAN')?1:2};
   const nomRef=cfg.nomenclature||{};
@@ -985,79 +986,116 @@ function LP_buildLoadPlanV2(demand,arrivals,cfg){
   const stock={};
   const plan=[];let truckId=START_TRUCK_ID;
   const totalRemain=()=>Object.values(remainDemand).reduce((s,d)=>s+Object.values(d).reduce((a,b)=>a+b,0),0);
-  // ── Shared truck-building helper (used by Phase A and Phase B) ──
-  const buildTruck=(date,dest,skus)=>{
-    truckId++;const rows=[];let spacesLoaded=0;
-    for(const sku of skus){if(spacesLoaded>=MAX_PALLETS)break;const pq=nomMap[sku]?.palletQty||0;const spacesLeft=MAX_PALLETS-spacesLoaded;const canUse=Math.min(remainDemand[dest][sku]||0,stock[sku]||0);const skuFullPot=floorPallets(sku,canUse);if(spacesLoaded>0&&skuFullPot>spacesLeft&&skuFullPot>=FILL_THRESHOLD&&(spacesLoaded>=FILL_THRESHOLD||spacesLeft<=GAP_TOLERANCE))continue;const wholeSpc=Math.min(skuFullPot,spacesLeft);if(wholeSpc<1)continue;const targetUnits=wholeSpc*upp(sku);const idList=demandQueue[dest][sku];const available=[...idList].sort((a,b)=>b.remain-a.remain);let picked=[];let pickedUnits=0;
-      for(const item of available){if(pickedUnits>=targetUnits-0.001)break;if(item.remain<=targetUnits-pickedUnits+0.001){picked.push({item,take:item.remain,split:false});pickedUnits+=item.remain}}
-      if(pickedUnits<targetUnits-0.001){const stillNeed=targetUnits-pickedUnits;const pickedSet=new Set(picked.map(p=>p.item));const candidates=available.filter(i=>!pickedSet.has(i)).sort((a,b)=>a.remain-b.remain);const exact=candidates.find(c=>Math.abs(c.remain-stillNeed)<0.001);const covering=candidates.find(c=>c.remain>=stillNeed-0.001);const splitItem=exact||covering||candidates[candidates.length-1];if(splitItem){const take=Math.min(splitItem.remain,stillNeed);picked.push({item:splitItem,take,split:Math.abs(take-splitItem.remain)>0.001});pickedUnits+=take}}
-      if(!picked.length)continue;
-      for(const{item,take,split}of picked){rows.push({date,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:split||Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;stock[sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=idList.indexOf(item);if(idx>=0)idList.splice(idx,1)}}
-      spacesLoaded+=wholeSpc}
-    if(!rows.length){truckId--;return null}
-    return{rows,spacesLoaded};
+  // ── Shared: pick demand items for a SKU allocation ──
+  const pickItems=(dest,sku,targetUnits)=>{
+    const idList=demandQueue[dest][sku];if(!idList||!idList.length)return[];
+    const available=[...idList].sort((a,b)=>b.remain-a.remain);let picked=[];let pickedUnits=0;
+    for(const item of available){if(pickedUnits>=targetUnits-0.001)break;if(item.remain<=targetUnits-pickedUnits+0.001){picked.push({item,take:item.remain,split:false});pickedUnits+=item.remain}}
+    if(pickedUnits<targetUnits-0.001){const stillNeed=targetUnits-pickedUnits;const pickedSet=new Set(picked.map(p=>p.item));const candidates=available.filter(i=>!pickedSet.has(i)).sort((a,b)=>a.remain-b.remain);const exact=candidates.find(c=>Math.abs(c.remain-stillNeed)<0.001);const covering=candidates.find(c=>c.remain>=stillNeed-0.001);const splitItem=exact||covering||candidates[candidates.length-1];if(splitItem){const take=Math.min(splitItem.remain,stillNeed);picked.push({item:splitItem,take,split:Math.abs(take-splitItem.remain)>0.001});pickedUnits+=take}}
+    return picked;
   };
-  const getSkus=(dest)=>Object.keys(demandQueue[dest]).filter(sku=>(remainDemand[dest][sku]||0)>0&&(stock[sku]||0)>0).sort((a,b)=>{const fa=invEvents.find(e=>e.sku===a)?.readyDate||'9999';const fb=invEvents.find(e=>e.sku===b)?.readyDate||'9999';return fa.localeCompare(fb)});
-  const getSpacesAvail=(dest)=>{let s=0;for(const sku of Object.keys(demandQueue[dest]||{})){const rem=remainDemand[dest]?.[sku]||0;if(rem<=0)continue;s+=floorPallets(sku,Math.min(rem,stock[sku]||0))}return s};
+  const commitPicks=(dest,sku,picked,date,truckIdRef,rows)=>{
+    for(const{item,take,split}of picked){
+      rows.push({date,truckId:truckIdRef,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:split||Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});
+      remainDemand[dest][sku]-=take;stock[sku]-=take;item.remain-=take;
+      if(item.remain<0.001){const idx=demandQueue[dest][sku].indexOf(item);if(idx>=0)demandQueue[dest][sku].splice(idx,1)}
+    }
+  };
   // ══════════════════════════════════════════════════════════
-  // PHASE A — Ready trucks from stock on hand
+  // PHASE A — Anchor-SKU ready trucks from stock on hand
   // ══════════════════════════════════════════════════════════
   const today=new Date().toISOString().slice(0,10);
-  // Apply all stockDelta up to and including today (capture on-hand inventory)
   for(const[dt,skuMap]of Object.entries(stockDelta)){if(dt>today)continue;for(const[sku,qty]of Object.entries(skuMap))stock[sku]=(stock[sku]||0)+qty}
-  // Snapshot on-hand inventory — Phase A must not consume future arrivals even as dates advance
   const onHandSnap={};for(const[sku,qty]of Object.entries(stock))if(qty>0)onHandSnap[sku]=qty;
-  // Phase A date iteration — start today, advance through working days
-  let phaseADate=LP_nextWorkday(today);
-  let phaseADone=false;
-  while(!phaseADone){
-    if(totalRemain()<=0)break;if(BLOCKED_DATES.has(phaseADate)){phaseADate=LP_nextWorkday(LP_addDays(phaseADate,1));continue}
-    // Cap stock to on-hand snapshot (never exceed what was physically available at run time)
+  const skippedPairs=new Set();
+  let aDate=LP_nextWorkday(today);let aTrucksOnDay=0;let aDestsOnDay=new Set();
+  const advanceADay=()=>{aDate=LP_nextWorkday(LP_addDays(aDate,1));aTrucksOnDay=0;aDestsOnDay=new Set();while(BLOCKED_DATES.has(aDate))aDate=LP_nextWorkday(LP_addDays(aDate,1))};
+  let phaseAActive=true;
+  while(phaseAActive){
+    // Cap stock to on-hand snapshot
     for(const sku of Object.keys(stock)){const cap=onHandSnap[sku]||0;if(stock[sku]>cap)stock[sku]=cap}
-    let trucksToday=0;let madeProgress=true;
-    const allScored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,phaseADate)).map(dest=>({dest,score:getSpacesAvail(dest)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
-    const allowedDests=new Set();for(const{dest}of allScored){if(allowedDests.size>=MAX_DESTS_DAY)break;allowedDests.add(dest)}
-    if(!allScored.length){phaseADone=true;break}
-    let anyBuiltOnDay=false;
-    while(madeProgress&&trucksToday<MAX_TRUCKS_DAY){madeProgress=false;
-      const scored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,phaseADate)).map(dest=>({dest,score:getSpacesAvail(dest)})).filter(x=>x.score>0&&allowedDests.has(x.dest)).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
-      for(const{dest,score}of scored){if(trucksToday>=MAX_TRUCKS_DAY)break;
-        const spacesAvail=score;
-        if(spacesAvail<1)continue;
-        // Phase A shipping decision — no future-arrival deferral, only fill thresholds
-        if(spacesAvail<MAX_PALLETS&&(MAX_PALLETS-spacesAvail>GAP_TOLERANCE)&&spacesAvail<FILL_THRESHOLD)continue;
-        const skus=getSkus(dest);
-        const result=buildTruck(phaseADate,dest,skus);
-        if(result){for(const r of result.rows)plan.push({...r,truckTotal:result.spacesLoaded,_phase:'A'});trucksToday++;madeProgress=true;anyBuiltOnDay=true}
+    // Score all (dest, SKU) pairs
+    const pairs=[];
+    for(const dest of Object.keys(demandQueue)){
+      if(!destAllowedOnDate(dest,aDate))continue;
+      for(const sku of Object.keys(demandQueue[dest])){
+        const rem=remainDemand[dest]?.[sku]||0;if(rem<=0)continue;
+        const avail=Math.min(rem,stock[sku]||0);const spc=floorPallets(sku,avail);
+        if(spc>=1)pairs.push({dest,sku,spc});
       }
     }
-    if(!anyBuiltOnDay){phaseADone=true;break}
-    phaseADate=LP_nextWorkday(LP_addDays(phaseADate,1));
+    pairs.sort((a,b)=>b.spc-a.spc||pri(a.dest)-pri(b.dest)||(remainDemand[b.dest]?.[b.sku]||0)-(remainDemand[a.dest]?.[a.sku]||0));
+    let builtAny=false;
+    for(const anchor of pairs){
+      if(skippedPairs.has(anchor.dest+'|'+anchor.sku))continue;
+      // Day caps
+      if(aTrucksOnDay>=MAX_TRUCKS_DAY){advanceADay();if(!destAllowedOnDate(anchor.dest,aDate))continue}
+      if(!aDestsOnDay.has(anchor.dest)&&aDestsOnDay.size>=MAX_DESTS_DAY)continue;
+      // Snapshot demand/stock for rollback on fail
+      const snapRemDest={};for(const[sk,v]of Object.entries(remainDemand[anchor.dest]||{}))snapRemDest[sk]=v;
+      const snapStock={};for(const[sk,v]of Object.entries(stock))snapStock[sk]=v;
+      const snapQueues={};for(const sk of Object.keys(demandQueue[anchor.dest]||{}))snapQueues[sk]=demandQueue[anchor.dest][sk].map(it=>({...it}));
+      // Build truck: anchor first
+      truckId++;const rows=[];let spacesLoaded=0;
+      const anchorAvail=Math.min(remainDemand[anchor.dest][anchor.sku]||0,stock[anchor.sku]||0);
+      const anchorSpc=Math.min(floorPallets(anchor.sku,anchorAvail),MAX_PALLETS);
+      if(anchorSpc>=1){
+        const targetUnits=anchorSpc*upp(anchor.sku);
+        const picked=pickItems(anchor.dest,anchor.sku,targetUnits);
+        if(picked.length){commitPicks(anchor.dest,anchor.sku,picked,aDate,truckId,rows);spacesLoaded+=anchorSpc}
+      }
+      // Top-off: same dest, smallest-first, skip strong standalone SKUs
+      if(spacesLoaded>0&&spacesLoaded<MAX_PALLETS&&(MAX_PALLETS-spacesLoaded>GAP_TOLERANCE)){
+        const topCands=Object.keys(demandQueue[anchor.dest]).filter(sk=>sk!==anchor.sku&&(remainDemand[anchor.dest][sk]||0)>0&&(stock[sk]||0)>0)
+          .map(sk=>({sku:sk,spc:floorPallets(sk,Math.min(remainDemand[anchor.dest][sk]||0,stock[sk]||0))}))
+          .filter(c=>c.spc>=1&&c.spc<FILL_THRESHOLD).sort((a,b)=>a.spc-b.spc);
+        for(const cand of topCands){
+          if(spacesLoaded>=MAX_PALLETS)break;
+          const spacesLeft=MAX_PALLETS-spacesLoaded;
+          const fillSpc=Math.min(cand.spc,spacesLeft);if(fillSpc<1)continue;
+          const targetUnits=fillSpc*upp(cand.sku);
+          const picked=pickItems(anchor.dest,cand.sku,targetUnits);
+          if(picked.length){commitPicks(anchor.dest,cand.sku,picked,aDate,truckId,rows);spacesLoaded+=fillSpc}
+        }
+      }
+      // Ship decision
+      const goodEnough=spacesLoaded>=FILL_THRESHOLD||(MAX_PALLETS-spacesLoaded<=GAP_TOLERANCE);
+      if(rows.length&&goodEnough){
+        for(const r of rows)plan.push({...r,truckTotal:spacesLoaded,_phase:'A'});
+        aTrucksOnDay++;aDestsOnDay.add(anchor.dest);builtAny=true;
+      }else{
+        // Rollback: restore demand/stock/queues
+        truckId--;
+        for(const[sk,v]of Object.entries(snapRemDest))remainDemand[anchor.dest][sk]=v;
+        for(const[sk,v]of Object.entries(snapStock))stock[sk]=v;
+        for(const sk of Object.keys(snapQueues))demandQueue[anchor.dest][sk]=snapQueues[sk];
+        skippedPairs.add(anchor.dest+'|'+anchor.sku);
+      }
+    }
+    if(!builtAny)phaseAActive=false;
   }
   // ══════════════════════════════════════════════════════════
-  // PHASE B — Forecast trucks from future arrivals
+  // PHASE B — Forecast trucks from future arrivals (V1 main loop)
   // ══════════════════════════════════════════════════════════
-  // Build date iteration from first future arrival onward
   const phaseBStart=LP_nextWorkday(LP_addDays(today,1));
   const iterDates=[];{let cur=invEvents[0].readyDate<phaseBStart?phaseBStart:invEvents[0].readyDate;for(let i=0;i<365;i++){if(!LP_isNonWorkday(cur))iterDates.push(cur);cur=LP_addDays(cur,1)}}
   for(const date of iterDates){
-    // Apply future stockDelta for this date (only dates > today that weren't consumed in Phase A)
     if(date>today&&stockDelta[date])for(const[sku,qty]of Object.entries(stockDelta[date]))stock[sku]=(stock[sku]||0)+qty;
     if(totalRemain()<=0)break;if(BLOCKED_DATES.has(date))continue;
     let trucksToday=0;let madeProgress=true;
-    const allScored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,date)).map(dest=>({dest,score:getSpacesAvail(dest)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
+    const allScored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,date)).map(dest=>{let s=0;for(const sku of Object.keys(demandQueue[dest]||{})){const rem=remainDemand[dest]?.[sku]||0;if(rem<=0)continue;s+=floorPallets(sku,Math.min(rem,stock[sku]||0))}return{dest,score:s}}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
     const allowedDests=new Set();for(const{dest}of allScored){if(allowedDests.size>=MAX_DESTS_DAY)break;allowedDests.add(dest)}
     while(madeProgress&&trucksToday<MAX_TRUCKS_DAY){madeProgress=false;
-      const scored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,date)).map(dest=>({dest,score:getSpacesAvail(dest)})).filter(x=>x.score>0&&allowedDests.has(x.dest)).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
+      const scored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,date)).map(dest=>{let s=0;for(const sku of Object.keys(demandQueue[dest]||{})){const rem=remainDemand[dest]?.[sku]||0;if(rem<=0)continue;s+=floorPallets(sku,Math.min(rem,stock[sku]||0))}return{dest,score:s}}).filter(x=>x.score>0&&allowedDests.has(x.dest)).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
       for(const{dest}of scored){if(trucksToday>=MAX_TRUCKS_DAY)break;
-        const skus=getSkus(dest);
+        const skus=Object.keys(demandQueue[dest]).filter(sku=>(remainDemand[dest][sku]||0)>0&&(stock[sku]||0)>0).sort((a,b)=>{const fa=invEvents.find(e=>e.sku===a)?.readyDate||'9999';const fb=invEvents.find(e=>e.sku===b)?.readyDate||'9999';return fa.localeCompare(fb)});
         let spacesAvail=0;for(const sku of skus)spacesAvail+=floorPallets(sku,Math.min(remainDemand[dest][sku]||0,stock[sku]||0));
         if(spacesAvail<1)continue;
-        // Phase B deferral — same as V1 with all patches
         if(spacesAvail<MAX_PALLETS&&(MAX_PALLETS-spacesAvail>GAP_TOLERANCE)&&spacesAvail<FILL_THRESHOLD){const hasFuture=invEvents.some(a=>{if(a.readyDate<=date)return false;const rem=remainDemand[dest]?.[a.sku]||0;return rem>0&&a.qty>0});if(hasFuture)continue;const futureUncov=invEvents.reduce((s,a)=>{if(a.readyDate<=date)return s;const rem=remainDemand[dest]?.[a.sku]||0;if(rem<=0)return s;const uncov=Math.max(0,rem-Math.min(rem,stock[a.sku]||0));return s+floorPallets(a.sku,Math.min(a.qty,uncov))},0);if(futureUncov<1)continue}
-        const result=buildTruck(date,dest,skus);
-        if(result){for(const r of result.rows)plan.push({...r,truckTotal:result.spacesLoaded,_phase:'B'});trucksToday++;madeProgress=true}
-      }
+        truckId++;const rows=[];let spacesLoaded=0;
+        for(const sku of skus){if(spacesLoaded>=MAX_PALLETS)break;const spacesLeft=MAX_PALLETS-spacesLoaded;const canUse=Math.min(remainDemand[dest][sku]||0,stock[sku]||0);const skuFullPot=floorPallets(sku,canUse);if(spacesLoaded>0&&skuFullPot>spacesLeft&&skuFullPot>=FILL_THRESHOLD&&(spacesLoaded>=FILL_THRESHOLD||spacesLeft<=GAP_TOLERANCE))continue;const wholeSpc=Math.min(skuFullPot,spacesLeft);if(wholeSpc<1)continue;const targetUnits=wholeSpc*upp(sku);
+          const picked=pickItems(dest,sku,targetUnits);if(!picked.length)continue;commitPicks(dest,sku,picked,date,truckId,rows);spacesLoaded+=wholeSpc}
+        if(!rows.length){truckId--;continue}for(const r of rows)plan.push({...r,truckTotal:spacesLoaded,_phase:'B'});trucksToday++;madeProgress=true}
     }
   }
   // ── Flush remaining demand (identical to V1) ──
@@ -1079,12 +1117,9 @@ function LP_buildLoadPlanV2(demand,arrivals,cfg){
       const skus=getSortedSkus();if(!skus.length)break;truckId++;const rows=[];let spacesLoaded=0;keepGoing=false;
       for(const sku of skus){if(spacesLoaded>=MAX_PALLETS)break;const rem=remainDemand[dest][sku]||0;if(rem<0.001)continue;const pq=nomMap[sku]?.palletQty||0;const spacesLeft=MAX_PALLETS-spacesLoaded;
         const wholeSpc=Math.min(floorPallets(sku,rem),spacesLeft);const partialUnits=rem%pq;const includePartial=partialUnits>0.001&&u2spc(sku,partialUnits)<=spacesLeft-wholeSpc*(nomMap[sku]?.palletSpc||0);const targetUnits=wholeSpc*upp(sku)+(includePartial?partialUnits:0);
-        if(targetUnits<0.001)continue;const idList=demandQueue[dest][sku];const available=[...idList].sort((a,b)=>b.remain-a.remain);let picked=[];let pickedUnits=0;
-        for(const item of available){if(pickedUnits>=targetUnits-0.001)break;if(item.remain<=targetUnits-pickedUnits+0.001){picked.push({item,take:item.remain,split:false});pickedUnits+=item.remain}}
-        if(pickedUnits<targetUnits-0.001){const stillNeed=targetUnits-pickedUnits;const pickedSet=new Set(picked.map(p=>p.item));const candidates=available.filter(i=>!pickedSet.has(i)).sort((a,b)=>a.remain-b.remain);const splitItem=candidates.find(c=>Math.abs(c.remain-stillNeed)<0.001)||candidates.find(c=>c.remain>=stillNeed-0.001)||candidates[candidates.length-1];if(splitItem){const take=Math.min(splitItem.remain,stillNeed);picked.push({item:splitItem,take,split:Math.abs(take-splitItem.remain)>0.001});pickedUnits+=take}}
-        if(!picked.length)continue;
-        for(const{item,take,split}of picked){rows.push({date:flushDate,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:split||Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=idList.indexOf(item);if(idx>=0)idList.splice(idx,1)}}
-        spacesLoaded+=u2spc(sku,pickedUnits);if((remainDemand[dest][sku]||0)>0.001)keepGoing=true}
+        if(targetUnits<0.001)continue;const picked=pickItems(dest,sku,targetUnits);if(!picked.length)continue;
+        for(const{item,take,split}of picked){rows.push({date:flushDate,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:split||Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=demandQueue[dest][sku].indexOf(item);if(idx>=0)demandQueue[dest][sku].splice(idx,1)}}
+        spacesLoaded+=u2spc(sku,rem>targetUnits?targetUnits:rem);if((remainDemand[dest][sku]||0)>0.001)keepGoing=true}
       if(rows.length&&spacesLoaded<MAX_PALLETS){const leftoverSkus=getSortedSkus();for(const sku of leftoverSkus){if(spacesLoaded>=MAX_PALLETS)break;const rem=remainDemand[dest][sku]||0;if(rem<0.001)continue;const idList=demandQueue[dest][sku];const available=[...idList].sort((a,b)=>b.remain-a.remain);let pickedUnits=0;for(const item of available){if(pickedUnits>=rem-0.001)break;const take=Math.min(item.remain,rem-pickedUnits);rows.push({date:flushDate,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=idList.indexOf(item);if(idx>=0)idList.splice(idx,1)}pickedUnits+=take}spacesLoaded+=u2spc(sku,rem)}}
       if(!rows.length){truckId--;break}const total=rows.reduce((s,r)=>s+r.pallets,0);for(const r of rows)plan.push({...r,truckTotal:+total.toFixed(4),_phase:'flush'});flushTrucksToday++}
   }
