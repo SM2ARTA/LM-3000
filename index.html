@@ -985,7 +985,13 @@ function LP_buildLoadPlanV2(demand,arrivals,cfg){
   for(const d of demand){if(!isTruck(d.destination))continue;if(isExcludedSrc(d.sku,d.destination))continue;if(holdsSet.has(d.destination+'|'+d.sku))continue;if(!arrivedSkus.has(d.sku))continue;if(!remainDemand[d.destination])remainDemand[d.destination]={};remainDemand[d.destination][d.sku]=(remainDemand[d.destination][d.sku]||0)+(d.requiredQty||0)}
   // Demand rationing when inventory < demand
   const totalInv={};for(const a of invEvents)totalInv[a.sku]=(totalInv[a.sku]||0)+a.qty;
-  for(const sku of arrivedSkus){const cap=totalInv[sku]||0;let totalDem=0;for(const dest of Object.keys(remainDemand))totalDem+=remainDemand[dest]?.[sku]||0;if(totalDem<=cap)continue;const ratio=cap/totalDem;for(const dest of Object.keys(remainDemand)){if(!remainDemand[dest][sku])continue;const pq=nomMap[sku]?.palletQty||0;remainDemand[dest][sku]=pq>0?Math.floor(remainDemand[dest][sku]*ratio/pq)*pq:0}}
+  for(const sku of arrivedSkus){const cap=totalInv[sku]||0;let totalDem=0;for(const dest of Object.keys(remainDemand))totalDem+=remainDemand[dest]?.[sku]||0;if(totalDem<=cap)continue;const ratio=cap/totalDem;const pq=nomMap[sku]?.palletQty||0;
+    // First pass: floor to pallet multiples
+    let allocated=0;const destAllocs={};
+    for(const dest of Object.keys(remainDemand)){if(!remainDemand[dest][sku])continue;const raw=remainDemand[dest][sku]*ratio;const floored=pq>0?Math.floor(raw/pq)*pq:0;destAllocs[dest]=floored;allocated+=floored}
+    // Second pass: distribute remaining capacity to destinations that got zeroed but deserve at least 1 pallet
+    if(pq>0&&allocated<cap){for(const dest of Object.keys(destAllocs)){if(allocated+pq>cap)break;if(destAllocs[dest]===0&&remainDemand[dest][sku]>=pq){destAllocs[dest]=pq;allocated+=pq}}}
+    for(const dest of Object.keys(destAllocs)){remainDemand[dest][sku]=destAllocs[dest]}}
   const stock={};
   const plan=[];let truckId=START_TRUCK_ID;
   const totalRemain=()=>Object.values(remainDemand).reduce((s,d)=>s+Object.values(d).reduce((a,b)=>a+b,0),0);
@@ -1009,11 +1015,17 @@ function LP_buildLoadPlanV2(demand,arrivals,cfg){
     if(total>=1)destScores.push({dest,score:total});
   }
   destScores.sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
+  console.log('[V2 Pass1] Destinations scored:',destScores.map(d=>d.dest+':'+d.score.toFixed(1)+'plt').join(', '));
   // Build ready trucks per destination
   let p1Date=LP_nextWorkday(today);let p1TrucksOnDay=0;let p1DestsOnDay=new Set();
   for(const{dest}of destScores){
     if(!destAllowedOnDate(dest,p1Date))continue;
-    if(!p1DestsOnDay.has(dest)&&p1DestsOnDay.size>=MAX_DESTS_DAY){continue}
+    // If dest cap reached, advance to next day
+    if(!p1DestsOnDay.has(dest)&&p1DestsOnDay.size>=MAX_DESTS_DAY){
+      p1Date=LP_nextWorkday(LP_addDays(p1Date,1));while(BLOCKED_DATES.has(p1Date))p1Date=LP_nextWorkday(LP_addDays(p1Date,1));
+      p1TrucksOnDay=0;p1DestsOnDay=new Set();
+      if(!destAllowedOnDate(dest,p1Date))continue;
+    }
     p1DestsOnDay.add(dest);
     // Sort this destination's SKUs by on-hand pallet potential descending (biggest first)
     let keepBuilding=true;
@@ -1025,6 +1037,7 @@ function LP_buildLoadPlanV2(demand,arrivals,cfg){
         .map(sku=>({sku,spc:floorPallets(sku,Math.min(remainDemand[dest][sku]||0,stock[sku]||0))}))
         .filter(s=>s.spc>=1).sort((a,b)=>b.spc-a.spc);
       if(!skuList.length)break;
+      console.log('[V2 Pass1]',dest,'truck attempt:',skuList.map(s=>s.sku+':'+s.spc+'spc').join(', '));
       if(p1TrucksOnDay>=MAX_TRUCKS_DAY){p1Date=LP_nextWorkday(LP_addDays(p1Date,1));while(BLOCKED_DATES.has(p1Date))p1Date=LP_nextWorkday(LP_addDays(p1Date,1));p1TrucksOnDay=0;p1DestsOnDay=new Set();p1DestsOnDay.add(dest);if(!destAllowedOnDate(dest,p1Date))break}
       // Build one truck: load SKUs largest-first
       truckId++;const rows=[];let spacesLoaded=0;
