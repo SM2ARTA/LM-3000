@@ -11238,7 +11238,7 @@ function stockReportParse(file){
       for(const row of rows){
         const v=String(row[skuCol]||'').trim();if(!v||v.toLowerCase()==='total')continue;
         skus.add(v);
-        if(qtyCol){const q=parseFloat(String(row[qtyCol]||'').replace(/,/g,''));if(!isNaN(q)&&q>0)qtys[v]=q;}
+        if(qtyCol){const q=parseFloat(String(row[qtyCol]||'').replace(/,/g,''));if(!isNaN(q)&&q>0)qtys[v]=(qtys[v]||0)+q;}
       }
       window._LP_STOCK_PARSE_INFO={skuCol,qtyCol,hdrs,skuCount:skus.size,qtyCount:Object.keys(qtys).length};
       STOCK_SKUS=skus;STOCK_QTYS=qtys;
