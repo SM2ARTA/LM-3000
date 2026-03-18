@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script async src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#F4F5F7;--sf:#FFF;--bd:#E2E4E9;--bl:#EDEEF1;--tp:#111318;--ts:#60646C;--tt:#9CA0AA;--ac:#CF5D5D;--as:#FDF0F0;--ab:#E8A5A5;--gn:#12804A;--gs:#E6F5ED;--or:#C4550A;--os:#FEF3EB;--rd:#C62A2F;--rs:#FDEBED;--pu:#6E3FF3;--ps:#F0EBFE;--fd:'DM Sans',system-ui,sans-serif;--fm:'IBM Plex Mono',monospace;--r:10px}
@@ -505,6 +506,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
 <button class="tbtn" onclick="LP_switchTab('demand')">📋 Demand</button>
 <button class="tbtn on" onclick="LP_switchTab('plan')">🚛 Plan</button>
 <button class="tbtn" onclick="LP_switchTab('late')">⚠ Late</button>
+<button class="tbtn" onclick="LP_switchTab('status')">📊 Status</button>
 </div>
 <div class="lp-main" id="lpMain"></div>
 </div>
@@ -616,7 +618,6 @@ function _undoSnap(){
     lp_excludeStaples:LP_excludeStaples,
     lp_holds:JSON.stringify([...(LP_holds||[])]),
     lp_arrived:JSON.stringify([...(LP_arrivedConts||[])]),
-    lp_lockedRows:JSON.stringify(LP_STATE.lockedRows||[]),
     lp_turnaround:LP_STATE.turnaround,
     lp_maxPallets:LP_STATE.maxPallets,
     lp_maxTrucks:LP_STATE.maxTrucks,
@@ -674,7 +675,6 @@ function UNDO_restore(){
     LP_excludeStaples=snap.lp_excludeStaples!==undefined?snap.lp_excludeStaples:true;
     LP_holds=new Set(JSON.parse(snap.lp_holds||'[]'));
     LP_arrivedConts=new Set(JSON.parse(snap.lp_arrived));
-    if(snap.lp_lockedRows)LP_STATE.lockedRows=JSON.parse(snap.lp_lockedRows);
     LP_STATE.turnaround=snap.lp_turnaround;
     LP_STATE.maxPallets=snap.lp_maxPallets;
     LP_STATE.maxTrucks=snap.lp_maxTrucks;
@@ -845,295 +845,254 @@ function LP_parseArrivals(buf,turnaround){
   return arrivals;
 }
 
-// ── LP Planning Engine ──
-// WAREHOUSE MODEL: Stock accumulates from arrivals, trucks dispatched greedily when full loads possible
-function LP_buildLoadPlan(demand,arrivals,cfg){
+// ── LP Planning Engine V3: three-bucket, parallel streams ──
+// Bucket 1: Ready full MEX/CAN → earliest dates
+// Bucket 2: Non-ready MEX/CAN (forecast) → after bucket 1
+// Bucket 3: USA (RIC) → from RIC start date, own constraints, parallel
+// Locked truck handling is done in LP_regenerate before calling this.
+function LP_buildPlanV3(demand,arrivals,cfg){
   cfg=cfg||{};
-  const MAX_PALLETS=cfg.maxPallets||LP_DEFAULT_MAX_PALLETS;
-  const GAP_TOLERANCE=cfg.gapTolerance??2;
-  const FILL_THRESHOLD=cfg.fillThreshold||Math.ceil(MAX_PALLETS*0.8);
-  const MAX_TRUCKS_DAY=cfg.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
-  const MAX_DESTS_DAY=cfg.maxDests||LP_DEFAULT_MAX_DESTS;
-  const START_TRUCK_ID=cfg.startTruckId||0;
-  const BLOCKED_DATES=new Set(cfg.blockedDates||[]);
+  const MAX_PLT=cfg.maxPallets||LP_DEFAULT_MAX_PALLETS;
+  const MAX_TRK=cfg.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
+  const MAX_DST=cfg.maxDests||LP_DEFAULT_MAX_DESTS;
+  const START_ID=cfg.startTruckId||0;
+  const BLOCKED=new Set(cfg.blockedDates||[]);
   const RIC_START=cfg.ricStartDate||'2026-04-01';
   const isRic=d=>(d||'').toUpperCase().includes('RIC');
-  const destAllowedOnDate=(dest,date)=>isRic(dest)?date>=RIC_START:true;
   if(!demand.length||!arrivals.length)return[];
-  const nomMap={};
-  const _cfgNom=cfg?.nomenclature||{};
-  for(const d of demand){if(!nomMap[d.sku]){const cn=_cfgNom[d.sku];nomMap[d.sku]={palletQty:cn?.palletQty||d.palletQty||0,palletSpc:cn?.palletSpc||d.palletSpc||0,name:cn?.name||d.name}}}
-  const upp=sku=>{const m=nomMap[sku]||{};return(m.palletQty>0&&m.palletSpc>0)?m.palletQty/m.palletSpc:0};
-  const u2spc=(sku,qty)=>{const u=upp(sku);return u>0?qty/u:0};
-  const floorPallets=(sku,qty)=>{const pq=nomMap[sku]?.palletQty||0;const ps=nomMap[sku]?.palletSpc||0;if(!pq||!ps)return 0;return Math.floor(qty/pq)*ps};
-  // In-stock SKUs are available from plan day 1 (pull readyDate to earliest arrival)
-  const stockSkusSet=new Set(cfg.stockSkus||[]);
-  const _rawArr=arrivals.filter(a=>a.qty>0);
-  const _earliestReady=_rawArr.length?_rawArr.reduce((m,a)=>a.readyDate&&a.readyDate<m?a.readyDate:m,'9999'):'';
-  const invEvents=(stockSkusSet.size&&_earliestReady!=='9999'?_rawArr.map(a=>stockSkusSet.has(a.sku)&&a.readyDate>_earliestReady?{...a,readyDate:_earliestReady}:a):_rawArr).sort((a,b)=>a.readyDate.localeCompare(b.readyDate));
-  if(!invEvents.length)return[];
-  const stockDelta={};
-  for(const a of invEvents){if(!stockDelta[a.readyDate])stockDelta[a.readyDate]={};stockDelta[a.readyDate][a.sku]=(stockDelta[a.readyDate][a.sku]||0)+a.qty}
-  const lastInvDate=invEvents[invEvents.length-1].readyDate;
-  const isTruck=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
-  const pri=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')?0:u.includes('CAN')?1:2};// RIC = 2 (lowest)
-  const nomRef=cfg.nomenclature||{};
-  const isExcludedSrc=(sku,dest)=>{const s=(nomRef[sku]?.source||'').toUpperCase().trim();if(s==='STP CAN'||s==='STP MEX')return true;if(s==='STP USA'&&(cfg.excludeStaples!==false)){const a=LP_matchTransitAbbr(dest);return a==='HOU'||a==='KC'||a==='NY';}return false;};
-  const holdsSet=new Set(cfg.holds||[]);
-  const arrivedSkus=new Set(invEvents.map(a=>a.sku));
-  const demandQueue={};const remainDemand={};
-  for(const d of demand){if(!isTruck(d.destination))continue;if(isExcludedSrc(d.sku,d.destination))continue;if(holdsSet.has(d.destination+'|'+d.sku))continue;if(!arrivedSkus.has(d.sku))continue;if(!demandQueue[d.destination])demandQueue[d.destination]={};if(!demandQueue[d.destination][d.sku])demandQueue[d.destination][d.sku]=[];if(!remainDemand[d.destination])remainDemand[d.destination]={};if(!remainDemand[d.destination][d.sku])remainDemand[d.destination][d.sku]=0;for(const src of(d.sourceIds||[])){demandQueue[d.destination][d.sku].push({id:src.id,qty:src.qty,remain:src.qty});remainDemand[d.destination][d.sku]+=src.qty}}
-  const totalInv={};for(const a of invEvents)totalInv[a.sku]=(totalInv[a.sku]||0)+a.qty;
-  for(const sku of arrivedSkus){const cap=totalInv[sku]||0;let totalDem=0;for(const dest of Object.keys(remainDemand))totalDem+=remainDemand[dest]?.[sku]||0;if(totalDem<=cap)continue;const ratio=cap/totalDem;for(const dest of Object.keys(demandQueue)){if(!demandQueue[dest][sku])continue;let destAlloc=Math.floor((remainDemand[dest][sku]||0)*ratio);const pq=nomMap[sku]?.palletQty||0;destAlloc=Math.floor(destAlloc/pq)*pq;remainDemand[dest][sku]=destAlloc;let keep=destAlloc;demandQueue[dest][sku]=demandQueue[dest][sku].filter(item=>{if(keep<=0)return false;if(item.qty<=keep){keep-=item.qty;return true}item.remain=keep;item.qty=keep;keep=0;return true})}}
-  const stock={};
-  const iterDates=[];let cur=invEvents[0].readyDate;for(let i=0;i<365;i++){if(!LP_isNonWorkday(cur))iterDates.push(cur);cur=LP_addDays(cur,1)}
-  const plan=[];let truckId=START_TRUCK_ID;
-  const totalRemain=()=>Object.values(remainDemand).reduce((s,d)=>s+Object.values(d).reduce((a,b)=>a+b,0),0);
-  for(const date of iterDates){
-    if(stockDelta[date])for(const[sku,qty]of Object.entries(stockDelta[date]))stock[sku]=(stock[sku]||0)+qty;
-    if(totalRemain()<=0)break;if(BLOCKED_DATES.has(date))continue;
-    const destScores={};for(const dest of Object.keys(demandQueue)){if(!destAllowedOnDate(dest,date))continue;let score=0;for(const[sku,items]of Object.entries(demandQueue[dest])){const rem=remainDemand[dest][sku]||0;if(rem<=0)continue;const avail=Math.min(rem,stock[sku]||0);score+=floorPallets(sku,avail)}if(score>0)destScores[dest]=score}
-    let trucksToday=0;let madeProgress=true;
-    const allScored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,date)).map(dest=>{let s=0;for(const sku of Object.keys(demandQueue[dest]||{})){const rem=remainDemand[dest]?.[sku]||0;if(rem<=0)continue;s+=floorPallets(sku,Math.min(rem,stock[sku]||0))}return{dest,score:s}}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
-    const allowedDests=new Set();for(const{dest}of allScored){if(allowedDests.size>=MAX_DESTS_DAY)break;allowedDests.add(dest)}
-    while(madeProgress&&trucksToday<MAX_TRUCKS_DAY){madeProgress=false;
-      const scored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,date)).map(dest=>{let s=0;for(const sku of Object.keys(demandQueue[dest]||{})){const rem=remainDemand[dest]?.[sku]||0;if(rem<=0)continue;s+=floorPallets(sku,Math.min(rem,stock[sku]||0))}return{dest,score:s}}).filter(x=>x.score>0&&allowedDests.has(x.dest)).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
-      for(const{dest}of scored){if(trucksToday>=MAX_TRUCKS_DAY)break;
-        const skus=Object.keys(demandQueue[dest]).filter(sku=>(remainDemand[dest][sku]||0)>0&&(stock[sku]||0)>0).sort((a,b)=>{const fa=invEvents.find(e=>e.sku===a)?.readyDate||'9999';const fb=invEvents.find(e=>e.sku===b)?.readyDate||'9999';return fa.localeCompare(fb)});
-        let spacesAvail=0;for(const sku of skus)spacesAvail+=floorPallets(sku,Math.min(remainDemand[dest][sku]||0,stock[sku]||0));
-        if(spacesAvail<1)continue;
-        if(spacesAvail<MAX_PALLETS&&(MAX_PALLETS-spacesAvail>GAP_TOLERANCE)&&spacesAvail<FILL_THRESHOLD){const hasFuture=invEvents.some(a=>{if(a.readyDate<=date)return false;const rem=remainDemand[dest]?.[a.sku]||0;return rem>0&&a.qty>0});if(hasFuture)continue;const futureUncov=invEvents.reduce((s,a)=>{if(a.readyDate<=date)return s;const rem=remainDemand[dest]?.[a.sku]||0;if(rem<=0)return s;const uncov=Math.max(0,rem-Math.min(rem,stock[a.sku]||0));return s+floorPallets(a.sku,Math.min(a.qty,uncov))},0);if(futureUncov<1)continue}
-        truckId++;const rows=[];let spacesLoaded=0;
-        for(const sku of skus){if(spacesLoaded>=MAX_PALLETS)break;const pq=nomMap[sku]?.palletQty||0;const spacesLeft=MAX_PALLETS-spacesLoaded;const canUse=Math.min(remainDemand[dest][sku]||0,stock[sku]||0);const skuFullPot=floorPallets(sku,canUse);if(spacesLoaded>0&&skuFullPot>spacesLeft&&skuFullPot>=FILL_THRESHOLD&&(spacesLoaded>=FILL_THRESHOLD||spacesLeft<=GAP_TOLERANCE))continue;const wholeSpc=Math.min(skuFullPot,spacesLeft);if(wholeSpc<1)continue;const targetUnits=wholeSpc*upp(sku);const idList=demandQueue[dest][sku];const available=[...idList].sort((a,b)=>b.remain-a.remain);let picked=[];let pickedUnits=0;
-          for(const item of available){if(pickedUnits>=targetUnits-0.001)break;if(item.remain<=targetUnits-pickedUnits+0.001){picked.push({item,take:item.remain,split:false});pickedUnits+=item.remain}}
-          if(pickedUnits<targetUnits-0.001){const stillNeed=targetUnits-pickedUnits;const pickedSet=new Set(picked.map(p=>p.item));const candidates=available.filter(i=>!pickedSet.has(i)).sort((a,b)=>a.remain-b.remain);const exact=candidates.find(c=>Math.abs(c.remain-stillNeed)<0.001);const covering=candidates.find(c=>c.remain>=stillNeed-0.001);const splitItem=exact||covering||candidates[candidates.length-1];if(splitItem){const take=Math.min(splitItem.remain,stillNeed);picked.push({item:splitItem,take,split:Math.abs(take-splitItem.remain)>0.001});pickedUnits+=take}}
-          if(!picked.length)continue;
-          for(const{item,take,split}of picked){rows.push({date,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:split||Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;stock[sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=idList.indexOf(item);if(idx>=0)idList.splice(idx,1)}}
-          spacesLoaded+=wholeSpc}
-        if(!rows.length){truckId--;continue}for(const r of rows)plan.push({...r,truckTotal:spacesLoaded});trucksToday++;madeProgress=true}}
-  }
-  // ── Flush remaining demand ──
-  const advancePastBlocked=d=>{let dt=d;while(BLOCKED_DATES.has(dt))dt=LP_nextWorkday(LP_addDays(dt,1));return dt};
-  const lastDate=plan.length?plan[plan.length-1].date:iterDates[0];
-  const trucksOnLastDate=new Set(plan.filter(r=>r.date===lastDate).map(r=>r.truckId)).size;
-  let flushDate=advancePastBlocked(lastDate);let flushTrucksToday=flushDate===lastDate?trucksOnLastDate:0;
-  if(flushTrucksToday>=MAX_TRUCKS_DAY){flushDate=advancePastBlocked(LP_nextWorkday(LP_addDays(flushDate,1)));flushTrucksToday=0}
-  const flushDests=Object.keys(demandQueue).filter(dest=>Object.values(remainDemand[dest]||{}).some(v=>v>0.001)).sort((a,b)=>pri(a)-pri(b));
-  let flushDestsToday=new Set();
-  for(const dest of flushDests){
-    // RIC destinations cannot flush before ricStartDate
-    if(isRic(dest)&&flushDate<RIC_START){flushDate=advancePastBlocked(RIC_START>LP_nextWorkday(flushDate)?RIC_START:LP_nextWorkday(LP_addDays(flushDate,1)));flushTrucksToday=0;flushDestsToday=new Set();if(flushDate<RIC_START)flushDate=RIC_START}
-    if(!flushDestsToday.has(dest)&&flushDestsToday.size>=MAX_DESTS_DAY){flushDate=advancePastBlocked(LP_nextWorkday(LP_addDays(flushDate,1)));flushTrucksToday=0;flushDestsToday=new Set()}
-    flushDestsToday.add(dest);
-    const getSortedSkus=()=>Object.keys(demandQueue[dest]).filter(sku=>(remainDemand[dest][sku]||0)>0.001).sort((a,b)=>(invEvents.find(e=>e.sku===a)?.readyDate||'9999').localeCompare(invEvents.find(e=>e.sku===b)?.readyDate||'9999'));
-    let keepGoing=true;
-    while(keepGoing){
-      if(flushTrucksToday>=MAX_TRUCKS_DAY){flushDate=advancePastBlocked(LP_nextWorkday(LP_addDays(flushDate,1)));flushTrucksToday=0;flushDestsToday=new Set();flushDestsToday.add(dest)}
-      const skus=getSortedSkus();if(!skus.length)break;truckId++;const rows=[];let spacesLoaded=0;keepGoing=false;
-      for(const sku of skus){if(spacesLoaded>=MAX_PALLETS)break;const rem=remainDemand[dest][sku]||0;if(rem<0.001)continue;const pq=nomMap[sku]?.palletQty||0;const spacesLeft=MAX_PALLETS-spacesLoaded;
-        const wholeSpc=Math.min(floorPallets(sku,rem),spacesLeft);const partialUnits=rem%pq;const includePartial=partialUnits>0.001&&u2spc(sku,partialUnits)<=spacesLeft-wholeSpc*(nomMap[sku]?.palletSpc||0);const targetUnits=wholeSpc*upp(sku)+(includePartial?partialUnits:0);
-        if(targetUnits<0.001)continue;const idList=demandQueue[dest][sku];const available=[...idList].sort((a,b)=>b.remain-a.remain);let picked=[];let pickedUnits=0;
-        for(const item of available){if(pickedUnits>=targetUnits-0.001)break;if(item.remain<=targetUnits-pickedUnits+0.001){picked.push({item,take:item.remain,split:false});pickedUnits+=item.remain}}
-        if(pickedUnits<targetUnits-0.001){const stillNeed=targetUnits-pickedUnits;const pickedSet=new Set(picked.map(p=>p.item));const candidates=available.filter(i=>!pickedSet.has(i)).sort((a,b)=>a.remain-b.remain);const splitItem=candidates.find(c=>Math.abs(c.remain-stillNeed)<0.001)||candidates.find(c=>c.remain>=stillNeed-0.001)||candidates[candidates.length-1];if(splitItem){const take=Math.min(splitItem.remain,stillNeed);picked.push({item:splitItem,take,split:Math.abs(take-splitItem.remain)>0.001});pickedUnits+=take}}
-        if(!picked.length)continue;
-        for(const{item,take,split}of picked){rows.push({date:flushDate,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:split||Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=idList.indexOf(item);if(idx>=0)idList.splice(idx,1)}}
-        spacesLoaded+=u2spc(sku,pickedUnits);if((remainDemand[dest][sku]||0)>0.001)keepGoing=true}
-      // Fill sub-pallet remainders
-      if(rows.length&&spacesLoaded<MAX_PALLETS){const leftoverSkus=getSortedSkus();for(const sku of leftoverSkus){if(spacesLoaded>=MAX_PALLETS)break;const rem=remainDemand[dest][sku]||0;if(rem<0.001)continue;const idList=demandQueue[dest][sku];const available=[...idList].sort((a,b)=>b.remain-a.remain);let pickedUnits=0;for(const item of available){if(pickedUnits>=rem-0.001)break;const take=Math.min(item.remain,rem-pickedUnits);rows.push({date:flushDate,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=idList.indexOf(item);if(idx>=0)idList.splice(idx,1)}pickedUnits+=take}spacesLoaded+=u2spc(sku,rem)}}
-      if(!rows.length){truckId--;break}const total=rows.reduce((s,r)=>s+r.pallets,0);for(const r of rows)plan.push({...r,truckTotal:+total.toFixed(4)});flushTrucksToday++}
-  }
-  return plan;
-}
 
-// ── LP Engine V2: simple stock-first, whole-SKU-first, forecast-second ──
-// Pass 1: build trucks from on-hand stock. Whole SKUs fill own trucks. Remainders on last truck.
-// Pass 2: forecast future trucks by arrival date for unmet demand.
-// No gap tolerance, no fill threshold, no deferral in Pass 1. Just fill and ship.
-function LP_buildLoadPlanV2(demand,arrivals,cfg){
-  cfg=cfg||{};
-  const MAX_PALLETS=cfg.maxPallets||LP_DEFAULT_MAX_PALLETS;
-  const MAX_TRUCKS_DAY=cfg.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
-  const MAX_DESTS_DAY=cfg.maxDests||LP_DEFAULT_MAX_DESTS;
-  const START_TRUCK_ID=cfg.startTruckId||0;
-  const BLOCKED_DATES=new Set(cfg.blockedDates||[]);
-  const RIC_START=cfg.ricStartDate||'2026-04-01';
-  const isRic=d=>(d||'').toUpperCase().includes('RIC');
-  const destAllowedOnDate=(dest,date)=>isRic(dest)?date>=RIC_START:true;
-  if(!demand.length||!arrivals.length)return[];
-  // ── Setup ──
-  const nomMap={};const _cfgNom=cfg?.nomenclature||{};
-  for(const d of demand){if(!nomMap[d.sku]){const cn=_cfgNom[d.sku];nomMap[d.sku]={palletQty:cn?.palletQty||d.palletQty||0,palletSpc:cn?.palletSpc||d.palletSpc||0,name:cn?.name||d.name}}}
-  const upp=sku=>{const m=nomMap[sku]||{};return(m.palletQty>0&&m.palletSpc>0)?m.palletQty/m.palletSpc:0};
-  const u2spc=(sku,qty)=>{const u=upp(sku);return u>0?qty/u:0};
-  const floorPallets=(sku,qty)=>{const pq=nomMap[sku]?.palletQty||0;const ps=nomMap[sku]?.palletSpc||0;if(!pq||!ps)return 0;return Math.floor(qty/pq)*ps};
-  const floorUnits=(sku,qty)=>{const pq=nomMap[sku]?.palletQty||0;if(!pq)return 0;return Math.floor(qty/pq)*pq};
-  const stockSkusSet=new Set(cfg.stockSkus||[]);
-  const _rawArr=arrivals.filter(a=>a.qty>0);
-  const _earliestReady=_rawArr.length?_rawArr.reduce((m,a)=>a.readyDate&&a.readyDate<m?a.readyDate:m,'9999'):'';
-  const invEvents=(stockSkusSet.size&&_earliestReady!=='9999'?_rawArr.map(a=>stockSkusSet.has(a.sku)&&a.readyDate>_earliestReady?{...a,readyDate:_earliestReady}:a):_rawArr).sort((a,b)=>a.readyDate.localeCompare(b.readyDate));
-  if(!invEvents.length)return[];
-  const stockDelta={};
-  for(const a of invEvents){if(!stockDelta[a.readyDate])stockDelta[a.readyDate]={};stockDelta[a.readyDate][a.sku]=(stockDelta[a.readyDate][a.sku]||0)+a.qty}
-  const isTruck=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
-  const pri=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')?0:u.includes('CAN')?1:2};
+  // ── Nomenclature map ──
+  const nom={};const _cn=cfg.nomenclature||{};
+  for(const d of demand){if(!nom[d.sku]){const n=_cn[d.sku];nom[d.sku]={pq:n?.palletQty||d.palletQty||0,ps:n?.palletSpc||d.palletSpc||0,nm:n?.name||d.name||''}}}
+
+  // ── Pallet math ──
+  const floorFullPallets=(sku,units)=>{const n=nom[sku];return(n&&n.pq>0)?Math.floor(units/n.pq):0};
+  const floorSpaces=(sku,units)=>{const n=nom[sku];return(n&&n.pq>0&&n.ps>0)?Math.floor(units/n.pq)*n.ps:0};
+
+  // ── Preprocessing ──
   const nomRef=cfg.nomenclature||{};
-  const isExcludedSrc=(sku,dest)=>{const s=(nomRef[sku]?.source||'').toUpperCase().trim();if(s==='STP CAN'||s==='STP MEX')return true;if(s==='STP USA'&&(cfg.excludeStaples!==false)){const a=LP_matchTransitAbbr(dest);return a==='HOU'||a==='KC'||a==='NY';}return false;};
-  const holdsSet=new Set(cfg.holds||[]);
-  const arrivedSkus=new Set(invEvents.map(a=>a.sku));
-  // ── Demand pool: simple sum by dest+sku (no IDs) ──
-  const remainDemand={};
-  for(const d of demand){if(!isTruck(d.destination))continue;if(isExcludedSrc(d.sku,d.destination))continue;if(holdsSet.has(d.destination+'|'+d.sku))continue;if(!arrivedSkus.has(d.sku))continue;if(!remainDemand[d.destination])remainDemand[d.destination]={};remainDemand[d.destination][d.sku]=(remainDemand[d.destination][d.sku]||0)+(d.requiredQty||0)}
-  // Demand rationing when inventory < demand
-  const totalInv={};for(const a of invEvents)totalInv[a.sku]=(totalInv[a.sku]||0)+a.qty;
-  for(const sku of arrivedSkus){const cap=totalInv[sku]||0;let totalDem=0;for(const dest of Object.keys(remainDemand))totalDem+=remainDemand[dest]?.[sku]||0;if(totalDem<=cap)continue;const ratio=cap/totalDem;const pq=nomMap[sku]?.palletQty||0;
-    // First pass: floor to pallet multiples
-    let allocated=0;const destAllocs={};
-    for(const dest of Object.keys(remainDemand)){if(!remainDemand[dest][sku])continue;const raw=remainDemand[dest][sku]*ratio;const floored=pq>0?Math.floor(raw/pq)*pq:0;destAllocs[dest]=floored;allocated+=floored}
-    // Second pass: distribute remaining capacity to destinations that got zeroed but deserve at least 1 pallet
-    if(pq>0&&allocated<cap){for(const dest of Object.keys(destAllocs)){if(allocated+pq>cap)break;if(destAllocs[dest]===0&&remainDemand[dest][sku]>=pq){destAllocs[dest]=pq;allocated+=pq}}}
-    for(const dest of Object.keys(destAllocs)){remainDemand[dest][sku]=destAllocs[dest]}}
-  const stock={};
-  const plan=[];let truckId=START_TRUCK_ID;
-  const totalRemain=()=>Object.values(remainDemand).reduce((s,d)=>s+Object.values(d).reduce((a,b)=>a+b,0),0);
-  // ══════════════════════════════════════════════════════════
-  // PASS 1 — Ready trucks from stock on hand
-  // Per destination: sort SKUs by pallet potential desc, fill trucks
-  // Whole SKUs first, whole pallets, last truck gets remainder
-  // ══════════════════════════════════════════════════════════
+  const isTruck=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
+  const isMC=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')};
+  const priMC=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')?0:1};// MEX before CAN (tiebreaker only)
+  const isExcl=(sku,dest)=>{const s=(nomRef[sku]?.source||'').toUpperCase().trim();if(s==='STP CAN'||s==='STP MEX')return true;if(s==='STP USA'&&(cfg.excludeStaples!==false)){const a=LP_matchTransitAbbr(dest);return a==='HOU'||a==='KC'||a==='NY';}return false};
+  const holds=new Set(cfg.holds||[]);
+
+  // ── Stock timeline ──
+  const rawArr=arrivals.filter(a=>a.qty>0);
+  const stockSet=new Set(cfg.stockSkus||[]);
   const today=new Date().toISOString().slice(0,10);
-  // Apply all arrived inventory
-  for(const[dt,skuMap]of Object.entries(stockDelta)){if(dt>today)continue;for(const[sku,qty]of Object.entries(skuMap))stock[sku]=(stock[sku]||0)+qty}
-  const onHandSnap={};for(const[sku,qty]of Object.entries(stock))if(qty>0)onHandSnap[sku]=qty;
-  // Score destinations by total on-hand pallet potential
-  const destScores=[];
-  for(const dest of Object.keys(remainDemand)){
-    let total=0;
-    for(const sku of Object.keys(remainDemand[dest])){
-      const rem=remainDemand[dest][sku]||0;if(rem<=0)continue;
-      total+=floorPallets(sku,Math.min(rem,stock[sku]||0));
-    }
-    if(total>=1)destScores.push({dest,score:total});
+  const inv=(stockSet.size?rawArr.map(a=>stockSet.has(a.sku)?{...a,readyDate:today}:a):rawArr).sort((a,b)=>a.readyDate.localeCompare(b.readyDate));
+  if(!inv.length)return[];
+  const delta={};
+  for(const a of inv){if(!delta[a.readyDate])delta[a.readyDate]={};delta[a.readyDate][a.sku]=(delta[a.readyDate][a.sku]||0)+a.qty}
+  const arrivedSkus=new Set(inv.map(a=>a.sku));
+
+  // ── Aggregate open demand ──
+  const open={};
+  for(const d of demand){
+    if(!isTruck(d.destination))continue;
+    if(isExcl(d.sku,d.destination))continue;
+    if(holds.has(d.destination+'|'+d.sku))continue;
+    if(!arrivedSkus.has(d.sku))continue;
+    if(!open[d.destination])open[d.destination]={};
+    open[d.destination][d.sku]=(open[d.destination][d.sku]||0)+(d.requiredQty||0);
   }
-  destScores.sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
-  console.log('[V2 Pass1] Destinations scored:',destScores.map(d=>d.dest+':'+d.score.toFixed(1)+'plt').join(', '));
-  // Build ready trucks per destination
-  let p1Date=LP_nextWorkday(today);let p1TrucksOnDay=0;let p1DestsOnDay=new Set();
-  for(const{dest}of destScores){
-    if(!destAllowedOnDate(dest,p1Date))continue;
-    // If dest cap reached, advance to next day
-    if(!p1DestsOnDay.has(dest)&&p1DestsOnDay.size>=MAX_DESTS_DAY){
-      p1Date=LP_nextWorkday(LP_addDays(p1Date,1));while(BLOCKED_DATES.has(p1Date))p1Date=LP_nextWorkday(LP_addDays(p1Date,1));
-      p1TrucksOnDay=0;p1DestsOnDay=new Set();
-      if(!destAllowedOnDate(dest,p1Date))continue;
+  console.log('[V3] demand:',demand.length,'rows, arrivals:',arrivals.length,'rows, dests:',Object.keys(open).length);
+
+  // ── Demand rationing ──
+  const totalInv={};for(const a of inv)totalInv[a.sku]=(totalInv[a.sku]||0)+a.qty;
+  const rationed=[];
+  for(const sku of arrivedSkus){
+    const cap=totalInv[sku]||0;
+    let totalDem=0;for(const dest of Object.keys(open))totalDem+=open[dest]?.[sku]||0;
+    if(totalDem<=cap)continue;
+    const ratio=cap/totalDem;const pq=nom[sku]?.pq||0;
+    let allocated=0;const allocs={};
+    for(const dest of Object.keys(open)){
+      if(!open[dest][sku])continue;
+      const floored=pq>0?Math.floor(open[dest][sku]*ratio/pq)*pq:0;
+      allocs[dest]=floored;allocated+=floored;
     }
-    p1DestsOnDay.add(dest);
-    // Sort this destination's SKUs by on-hand pallet potential descending (biggest first)
-    let keepBuilding=true;
-    while(keepBuilding){
-      keepBuilding=false;
-      // Cap stock to on-hand snapshot
-      for(const sku of Object.keys(stock)){const cap=onHandSnap[sku]||0;if(stock[sku]>cap)stock[sku]=cap}
-      const skuList=Object.keys(remainDemand[dest]||{}).filter(sku=>(remainDemand[dest][sku]||0)>0&&(stock[sku]||0)>0)
-        .map(sku=>({sku,spc:floorPallets(sku,Math.min(remainDemand[dest][sku]||0,stock[sku]||0))}))
-        .filter(s=>s.spc>=1).sort((a,b)=>b.spc-a.spc);
-      if(!skuList.length)break;
-      console.log('[V2 Pass1]',dest,'truck attempt:',skuList.map(s=>s.sku+':'+s.spc+'spc').join(', '));
-      if(p1TrucksOnDay>=MAX_TRUCKS_DAY){p1Date=LP_nextWorkday(LP_addDays(p1Date,1));while(BLOCKED_DATES.has(p1Date))p1Date=LP_nextWorkday(LP_addDays(p1Date,1));p1TrucksOnDay=0;p1DestsOnDay=new Set();p1DestsOnDay.add(dest);if(!destAllowedOnDate(dest,p1Date))break}
-      // Build one truck: load SKUs largest-first
-      truckId++;const rows=[];let spacesLoaded=0;
-      for(const{sku}of skuList){
-        if(spacesLoaded>=MAX_PALLETS)break;
-        const rem=remainDemand[dest][sku]||0;const avail=Math.min(rem,stock[sku]||0);
-        const spc=Math.min(floorPallets(sku,avail),MAX_PALLETS-spacesLoaded);
-        if(spc<1)continue;
-        const units=floorUnits(sku,spc*upp(sku));if(units<1)continue;
-        remainDemand[dest][sku]-=units;stock[sku]-=units;
-        rows.push({date:p1Date,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:'',qty:Math.round(units),originalQty:Math.round(units),isSplit:false,pallets:u2spc(sku,units)});
-        spacesLoaded+=spc;
+    if(pq>0&&allocated<cap){for(const dest of Object.keys(allocs)){if(allocated+pq>cap)break;if(allocs[dest]===0&&open[dest][sku]>=pq){allocs[dest]=pq;allocated+=pq}}}
+    for(const dest of Object.keys(allocs))open[dest][sku]=allocs[dest];
+    rationed.push(sku);
+  }
+  if(rationed.length)console.log('[V3] Rationed SKUs:',rationed.join(', '));
+
+  // ── Stock pool — shared across all streams ──
+  const stock={};
+  const plan=[];let truckId=START_ID;
+  const advBlk=d=>{let dt=d;while(BLOCKED.has(dt))dt=LP_nextWorkday(LP_addDays(dt,1));return dt};
+  const READY_MIN=Math.ceil(MAX_PLT*0.9);// 90% threshold
+
+  // Pre-load on-hand stock (readyDate <= today)
+  for(const dt of Object.keys(delta)){
+    if(dt>today)continue;
+    for(const[sku,qty]of Object.entries(delta[dt]))stock[sku]=(stock[sku]||0)+qty;
+    delete delta[dt];
+  }
+  console.log('[V3] On-hand stock:',Object.values(stock).reduce((s,v)=>s+v,0),'units');
+
+  // ── Shared helpers ──
+  const scoreDest=dest=>{let s=0;for(const sku of Object.keys(open[dest]||{})){const q=open[dest][sku]||0;if(q<=0)continue;s+=floorSpaces(sku,Math.min(q,stock[sku]||0))}return s};
+
+  const buildOneTruck=(dest,date)=>{
+    const skus=[];
+    for(const sku of Object.keys(open[dest]||{})){
+      const q=open[dest][sku]||0;if(q<=0)continue;
+      const spc=floorSpaces(sku,Math.min(q,stock[sku]||0));
+      if(spc>=1)skus.push({sku,spc});
+    }
+    if(!skus.length)return null;
+    skus.sort((a,b)=>b.spc-a.spc);
+    truckId++;const rows=[];let loaded=0;
+    for(const{sku}of skus){
+      if(loaded>=MAX_PLT)break;
+      const avail=Math.min(open[dest][sku]||0,stock[sku]||0);
+      const fullPlt=floorFullPallets(sku,avail);
+      const ps=nom[sku]?.ps||1;
+      const maxFit=Math.floor((MAX_PLT-loaded)/ps);
+      const plt=Math.min(fullPlt,maxFit);
+      if(plt<1)continue;
+      const units=plt*(nom[sku]?.pq||0);const spc=plt*ps;
+      if(units<1||spc<1)continue;
+      open[dest][sku]-=units;stock[sku]-=units;
+      rows.push({date,truckId,destination:dest,sku,name:nom[sku]?.nm||sku,qty:Math.round(units),pallets:spc});
+      loaded+=spc;
+    }
+    if(!rows.length){truckId--;return null}
+    const tt=+loaded.toFixed(4);
+    for(const r of rows)r.truckTotal=tt;
+    return rows;
+  };
+
+  const destIsReady=dest=>{
+    for(const sku of Object.keys(open[dest]||{})){if((open[dest][sku]||0)>0&&!stockSet.has(sku))return false}
+    return Object.keys(open[dest]||{}).some(sku=>(open[dest][sku]||0)>0);
+  };
+
+  // Future dates (sorted, pointer-based) — shared across streams
+  const futDates=Object.keys(delta).sort();
+  let fPtr=0;
+  const destHasFuture=dest=>{
+    if(fPtr>=futDates.length)return false;
+    for(const sku of Object.keys(open[dest]||{})){
+      if((open[dest][sku]||0)<=0)continue;
+      for(let i=fPtr;i<futDates.length;i++){if(delta[futDates[i]]?.[sku]>0)return true}
+    }
+    return false;
+  };
+
+  // ── Generic day-by-day planner for a filtered set of destinations ──
+  // destFilter: function(dest) => boolean
+  // priSort: function(a,b) => sort comparator for dests
+  // startDate: first date to plan from
+  // maxDst/maxTrk: caps for this stream
+  // opts: { readyOnly, markReady, deferNonFull }
+  const planStream=(destFilter,priSort,startDate,maxDst,maxTrk,opts)=>{
+    const streamPlan=[];
+    const genWorkdays=from=>{const wd=[];let c=LP_nextWorkday(from);for(let i=0;i<365;i++){wd.push(c);c=LP_addDays(c,1);while(LP_isNonWorkday(c)&&i<365){c=LP_addDays(c,1);i++}}return wd};
+    const workdays=genWorkdays(opts.startBefore||today);
+
+    for(const date of workdays){
+      if(date<startDate)continue;// skip until start date
+      // Add future stock arriving on or before this workday
+      while(fPtr<futDates.length&&futDates[fPtr]<=date){
+        for(const[sku,qty]of Object.entries(delta[futDates[fPtr]]))stock[sku]=(stock[sku]||0)+qty;
+        fPtr++;
       }
-      if(!rows.length){truckId--;break}
-      for(const r of rows)plan.push({...r,truckTotal:+spacesLoaded.toFixed(4),_phase:'A'});
-      p1TrucksOnDay++;
-      // Check if more on-hand stock remains for this destination
-      const moreAvail=Object.keys(remainDemand[dest]||{}).some(sku=>(remainDemand[dest][sku]||0)>0&&(stock[sku]||0)>0&&floorPallets(sku,Math.min(remainDemand[dest][sku],stock[sku]))>=1);
-      if(moreAvail)keepBuilding=true;
+      if(BLOCKED.has(date))continue;
+
+      // Score filtered destinations
+      const scored=[];
+      for(const dest of Object.keys(open)){
+        if(!destFilter(dest))continue;
+        if(opts.readyOnly&&!destIsReady(dest))continue;
+        const s=scoreDest(dest);
+        if(opts.readyOnly){if(s>=READY_MIN||s>=MAX_PLT)scored.push({dest,score:s})}
+        else{if(s>=1)scored.push({dest,score:s})}
+      }
+      if(!scored.length){
+        // Check if ANY filtered dest still has open demand
+        let anyOpen=false;
+        for(const dest of Object.keys(open)){if(destFilter(dest)&&Object.values(open[dest]||{}).some(v=>v>0)){anyOpen=true;break}}
+        if(!anyOpen)break;
+        continue;
+      }
+      scored.sort(priSort);
+
+      const allowed=new Set();
+      for(const{dest}of scored){if(allowed.size>=maxDst)break;allowed.add(dest)}
+
+      let trucksToday=0,progress=true;
+      while(progress&&trucksToday<maxTrk){
+        progress=false;
+        const rs=[];
+        for(const dest of allowed){
+          if(opts.readyOnly&&!destIsReady(dest))continue;
+          const s=scoreDest(dest);
+          if(opts.readyOnly){if(s>=READY_MIN||s>=MAX_PLT)rs.push({dest,score:s})}
+          else{if(s>=1)rs.push({dest,score:s})}
+        }
+        rs.sort(priSort);
+
+        for(const{dest,score}of rs){
+          if(trucksToday>=maxTrk)break;
+          // Deferral for non-full trucks in forecast mode
+          if(opts.deferNonFull&&score<MAX_PLT&&destHasFuture(dest))continue;
+          const rows=buildOneTruck(dest,date);
+          if(!rows)continue;
+          if(opts.markReady){
+            const truckPlt=rows.reduce((s,r)=>s+r.pallets,0);
+            const isFull=Math.round((truckPlt/MAX_PLT)*100)>=95;
+            const isLastForDest=scoreDest(dest)<1;// nothing left for this dest after building
+            if(isFull||isLastForDest)for(const r of rows)r._ready=true;
+          }
+          for(const r of rows)streamPlan.push(r);
+          trucksToday++;progress=true;
+          break;// re-score
+        }
+      }
+      if(opts.readyOnly&&trucksToday===0)break;// no more ready trucks above threshold
     }
-  }
-  // ══════════════════════════════════════════════════════════
-  // PASS 2 — Forecast trucks from future arrivals
-  // ══════════════════════════════════════════════════════════
-  // Rebuild demandQueue from remainDemand for Phase B (needs per-line IDs)
-  const demandQueue={};
-  for(const d of demand){if(!isTruck(d.destination))continue;if(isExcludedSrc(d.sku,d.destination))continue;if(holdsSet.has(d.destination+'|'+d.sku))continue;if(!arrivedSkus.has(d.sku))continue;
-    const rem=remainDemand[d.destination]?.[d.sku]||0;if(rem<=0)continue;
-    if(!demandQueue[d.destination])demandQueue[d.destination]={};if(!demandQueue[d.destination][d.sku])demandQueue[d.destination][d.sku]=[];
-    for(const src of(d.sourceIds||[])){const take=Math.min(src.qty,rem);if(take>0.001){demandQueue[d.destination][d.sku].push({id:src.id,qty:take,remain:take});remainDemand[d.destination][d.sku]-=take;if(remainDemand[d.destination][d.sku]<=0.001)break}}
-  }
-  for(const dest of Object.keys(demandQueue))for(const sku of Object.keys(demandQueue[dest])){remainDemand[dest][sku]=demandQueue[dest][sku].reduce((s,it)=>s+it.remain,0)}
-  // Pick/commit helpers for ID-based queue
-  const pickItems=(dest,sku,targetUnits)=>{
-    const idList=demandQueue[dest]?.[sku];if(!idList||!idList.length)return[];
-    const available=[...idList].sort((a,b)=>b.remain-a.remain);let picked=[];let pickedUnits=0;
-    for(const item of available){if(pickedUnits>=targetUnits-0.001)break;if(item.remain<=targetUnits-pickedUnits+0.001){picked.push({item,take:item.remain,split:false});pickedUnits+=item.remain}}
-    if(pickedUnits<targetUnits-0.001){const stillNeed=targetUnits-pickedUnits;const pickedSet=new Set(picked.map(p=>p.item));const candidates=available.filter(i=>!pickedSet.has(i)).sort((a,b)=>a.remain-b.remain);const exact=candidates.find(c=>Math.abs(c.remain-stillNeed)<0.001);const covering=candidates.find(c=>c.remain>=stillNeed-0.001);const splitItem=exact||covering||candidates[candidates.length-1];if(splitItem){const take=Math.min(splitItem.remain,stillNeed);picked.push({item:splitItem,take,split:Math.abs(take-splitItem.remain)>0.001});pickedUnits+=take}}
-    return picked;
+    return streamPlan;
   };
-  const commitPicks=(dest,sku,picked,date,tid,rows)=>{
-    for(const{item,take,split}of picked){
-      rows.push({date,truckId:tid,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:split||Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});
-      remainDemand[dest][sku]-=take;stock[sku]-=take;item.remain-=take;
-      if(item.remain<0.001){const idx=demandQueue[dest][sku].indexOf(item);if(idx>=0)demandQueue[dest][sku].splice(idx,1)}
-    }
-  };
-  // Forecast loop — same structure as V1 with filler guard
-  const GAP_TOLERANCE=cfg.gapTolerance??2;const FILL_THRESHOLD=cfg.fillThreshold||Math.ceil(MAX_PALLETS*0.8);
-  const phaseBStart=LP_nextWorkday(LP_addDays(today,1));
-  const iterDates=[];{let cur=invEvents[0].readyDate<phaseBStart?phaseBStart:invEvents[0].readyDate;for(let i=0;i<365;i++){if(!LP_isNonWorkday(cur))iterDates.push(cur);cur=LP_addDays(cur,1)}}
-  for(const date of iterDates){
-    if(date>today&&stockDelta[date])for(const[sku,qty]of Object.entries(stockDelta[date]))stock[sku]=(stock[sku]||0)+qty;
-    if(totalRemain()<=0)break;if(BLOCKED_DATES.has(date))continue;
-    let trucksToday=0;let madeProgress=true;
-    const allScored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,date)).map(dest=>{let s=0;for(const sku of Object.keys(demandQueue[dest]||{})){const rem=remainDemand[dest]?.[sku]||0;if(rem<=0)continue;s+=floorPallets(sku,Math.min(rem,stock[sku]||0))}return{dest,score:s}}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
-    const allowedDests=new Set();for(const{dest}of allScored){if(allowedDests.size>=MAX_DESTS_DAY)break;allowedDests.add(dest)}
-    while(madeProgress&&trucksToday<MAX_TRUCKS_DAY){madeProgress=false;
-      const scored=Object.keys(demandQueue).filter(dest=>destAllowedOnDate(dest,date)).map(dest=>{let s=0;for(const sku of Object.keys(demandQueue[dest]||{})){const rem=remainDemand[dest]?.[sku]||0;if(rem<=0)continue;s+=floorPallets(sku,Math.min(rem,stock[sku]||0))}return{dest,score:s}}).filter(x=>x.score>0&&allowedDests.has(x.dest)).sort((a,b)=>b.score-a.score||pri(a.dest)-pri(b.dest));
-      for(const{dest}of scored){if(trucksToday>=MAX_TRUCKS_DAY)break;
-        const skus=Object.keys(demandQueue[dest]).filter(sku=>(remainDemand[dest][sku]||0)>0&&(stock[sku]||0)>0).sort((a,b)=>{const fa=invEvents.find(e=>e.sku===a)?.readyDate||'9999';const fb=invEvents.find(e=>e.sku===b)?.readyDate||'9999';return fa.localeCompare(fb)});
-        let spacesAvail=0;for(const sku of skus)spacesAvail+=floorPallets(sku,Math.min(remainDemand[dest][sku]||0,stock[sku]||0));
-        if(spacesAvail<1)continue;
-        // Deferral: wait if under-fill and future arrivals exist
-        if(spacesAvail<MAX_PALLETS){const hasFuture=invEvents.some(a=>{if(a.readyDate<=date)return false;const rem=remainDemand[dest]?.[a.sku]||0;return rem>0&&a.qty>0});if(hasFuture)continue}
-        truckId++;const rows=[];let spacesLoaded=0;
-        for(const sku of skus){if(spacesLoaded>=MAX_PALLETS)break;const spacesLeft=MAX_PALLETS-spacesLoaded;const canUse=Math.min(remainDemand[dest][sku]||0,stock[sku]||0);const skuFullPot=floorPallets(sku,canUse);const wholeSpc=Math.min(skuFullPot,spacesLeft);if(wholeSpc<1)continue;const targetUnits=wholeSpc*upp(sku);
-          const picked=pickItems(dest,sku,targetUnits);if(!picked.length)continue;commitPicks(dest,sku,picked,date,truckId,rows);spacesLoaded+=wholeSpc}
-        if(!rows.length){truckId--;continue}for(const r of rows)plan.push({...r,truckTotal:spacesLoaded,_phase:'B'});trucksToday++;madeProgress=true}
-    }
-  }
-  // ── Flush remaining demand ──
-  const advancePastBlocked=d=>{let dt=d;while(BLOCKED_DATES.has(dt))dt=LP_nextWorkday(LP_addDays(dt,1));return dt};
-  const lastDate=plan.length?plan[plan.length-1].date:LP_nextWorkday(today);
-  const trucksOnLastDate=new Set(plan.filter(r=>r.date===lastDate).map(r=>r.truckId)).size;
-  let flushDate=advancePastBlocked(lastDate);let flushTrucksToday=flushDate===lastDate?trucksOnLastDate:0;
-  if(flushTrucksToday>=MAX_TRUCKS_DAY){flushDate=advancePastBlocked(LP_nextWorkday(LP_addDays(flushDate,1)));flushTrucksToday=0}
-  const flushDests=Object.keys(demandQueue).filter(dest=>Object.values(remainDemand[dest]||{}).some(v=>v>0.001)).sort((a,b)=>pri(a)-pri(b));
-  let flushDestsToday=new Set();
-  for(const dest of flushDests){
-    if(isRic(dest)&&flushDate<RIC_START){flushDate=advancePastBlocked(RIC_START>LP_nextWorkday(flushDate)?RIC_START:LP_nextWorkday(LP_addDays(flushDate,1)));flushTrucksToday=0;flushDestsToday=new Set();if(flushDate<RIC_START)flushDate=RIC_START}
-    if(!flushDestsToday.has(dest)&&flushDestsToday.size>=MAX_DESTS_DAY){flushDate=advancePastBlocked(LP_nextWorkday(LP_addDays(flushDate,1)));flushTrucksToday=0;flushDestsToday=new Set()}
-    flushDestsToday.add(dest);
-    const getSortedSkus=()=>Object.keys(demandQueue[dest]).filter(sku=>(remainDemand[dest][sku]||0)>0.001).sort((a,b)=>(invEvents.find(e=>e.sku===a)?.readyDate||'9999').localeCompare(invEvents.find(e=>e.sku===b)?.readyDate||'9999'));
-    let keepGoing=true;
-    while(keepGoing){
-      if(flushTrucksToday>=MAX_TRUCKS_DAY){flushDate=advancePastBlocked(LP_nextWorkday(LP_addDays(flushDate,1)));flushTrucksToday=0;flushDestsToday=new Set();flushDestsToday.add(dest)}
-      const skus=getSortedSkus();if(!skus.length)break;truckId++;const rows=[];let spacesLoaded=0;keepGoing=false;
-      for(const sku of skus){if(spacesLoaded>=MAX_PALLETS)break;const rem=remainDemand[dest][sku]||0;if(rem<0.001)continue;const pq=nomMap[sku]?.palletQty||0;const spacesLeft=MAX_PALLETS-spacesLoaded;
-        const wholeSpc=Math.min(floorPallets(sku,rem),spacesLeft);const partialUnits=rem%pq;const includePartial=partialUnits>0.001&&u2spc(sku,partialUnits)<=spacesLeft-wholeSpc*(nomMap[sku]?.palletSpc||0);const targetUnits=wholeSpc*upp(sku)+(includePartial?partialUnits:0);
-        if(targetUnits<0.001)continue;const picked=pickItems(dest,sku,targetUnits);if(!picked.length)continue;
-        for(const{item,take,split}of picked){rows.push({date:flushDate,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:split||Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=demandQueue[dest][sku].indexOf(item);if(idx>=0)demandQueue[dest][sku].splice(idx,1)}}
-        spacesLoaded+=u2spc(sku,rem>targetUnits?targetUnits:rem);if((remainDemand[dest][sku]||0)>0.001)keepGoing=true}
-      if(rows.length&&spacesLoaded<MAX_PALLETS){const leftoverSkus=getSortedSkus();for(const sku of leftoverSkus){if(spacesLoaded>=MAX_PALLETS)break;const rem=remainDemand[dest][sku]||0;if(rem<0.001)continue;const idList=demandQueue[dest][sku];const available=[...idList].sort((a,b)=>b.remain-a.remain);let pickedUnits=0;for(const item of available){if(pickedUnits>=rem-0.001)break;const take=Math.min(item.remain,rem-pickedUnits);rows.push({date:flushDate,truckId,destination:dest,sku,name:nomMap[sku]?.name||sku,id:item.id,qty:Math.round(take),originalQty:item.qty,isSplit:Math.abs(take-item.qty)>0.001,pallets:u2spc(sku,take)});remainDemand[dest][sku]-=take;item.remain-=take;if(item.remain<0.001){const idx=idList.indexOf(item);if(idx>=0)idList.splice(idx,1)}pickedUnits+=take}spacesLoaded+=u2spc(sku,rem)}}
-      if(!rows.length){truckId--;break}const total=rows.reduce((s,r)=>s+r.pallets,0);for(const r of rows)plan.push({...r,truckTotal:+total.toFixed(4),_phase:'flush'});flushTrucksToday++}
-  }
+
+  // MEX/CAN sort: score desc (equal priority within MEX/CAN)
+  const mcSort=(a,b)=>b.score-a.score||priMC(a.dest)-priMC(b.dest);
+  // USA sort: score desc
+  const usSort=(a,b)=>b.score-a.score;
+
+  // ════════════════════════════════════════════════════════
+  // BUCKET 1: Ready full MEX/CAN → start after latest locked truck
+  // ════════════════════════════════════════════════════════
+  const _lastLocked=cfg.lastLockedDate||'';
+  const b1Start=_lastLocked?advBlk(LP_nextWorkday(LP_addDays(_lastLocked,1))):advBlk(LP_nextWorkday(today));
+  console.log('[V3-B1] Start date:',b1Start,_lastLocked?'(day after locked '+_lastLocked+')':'(first workday)');
+  const b1=planStream(d=>isMC(d), mcSort, b1Start, MAX_DST, MAX_TRK,
+    {readyOnly:true, markReady:true, deferNonFull:false, startBefore:today});
+  for(const r of b1)plan.push(r);
+  console.log('[V3-B1] Ready MEX/CAN:',new Set(b1.map(r=>r.truckId)).size,'trucks');
+
+  // ════════════════════════════════════════════════════════
+  // BUCKET 2: Non-ready MEX/CAN (forecast) → after bucket 1
+  // ════════════════════════════════════════════════════════
+  const b2=planStream(d=>isMC(d), mcSort, b1Start, MAX_DST, MAX_TRK,
+    {readyOnly:false, markReady:false, deferNonFull:true, startBefore:today});
+  for(const r of b2)plan.push(r);
+  console.log('[V3-B2] Forecast MEX/CAN:',new Set(b2.map(r=>r.truckId)).size,'trucks');
+
+  // ════════════════════════════════════════════════════════
+  // BUCKET 3: USA (RIC) → from RIC start date, parallel constraints
+  // ════════════════════════════════════════════════════════
+  // Reset fPtr for USA stream (USA may need stock arriving before RIC_START)
+  fPtr=0;// re-scan — future dates already consumed are in stock pool
+  const b3=planStream(d=>isRic(d), usSort, RIC_START, MAX_DST, MAX_TRK,
+    {readyOnly:false, markReady:false, deferNonFull:true, startBefore:today});
+  for(const r of b3)plan.push(r);
+  console.log('[V3-B3] USA:',new Set(b3.map(r=>r.truckId)).size,'trucks');
+
+  console.log('[V3] Done:',plan.length,'rows,',new Set(plan.map(r=>r.truckId)).size,'trucks');
   return plan;
 }
 
@@ -1142,8 +1101,7 @@ let LP_STATE={
   materialPlan:[],nomenclature:{},arrivals:[],
   loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},
   turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,
-  ricStartDate:'2026-04-01',gapTolerance:2,fillThreshold:0,engineVersion:'v1',
-  manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]
+  ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]
 };
 let LP_TAB='plan';
 let LP_dispatched=new Set();// truck IDs marked as dispatched
@@ -1153,6 +1111,99 @@ let LP_palletOverrides={};// sku -> {palletQty, palletSpc} — manual overrides 
 let LP_excludeStaples=true;// exclude STP USA items for HOU/KC/NY destinations
 let _lpDemFilterState={srcs:null,dests:null,search:''};// preserved across re-renders
 let LP_customsOverrides={};// sku -> {price, hsCode, country} — customs overrides for CI export
+
+// ── MX Approved Customs Items (from FF&E A10 list) ──
+const _MX_APPROVED=[
+{d:"Mesa de futbolito",hs:"95043099",ni:"00",p:528},
+{d:"Saco de arena",hs:"25059099",ni:"00",p:59.4},
+{d:"Base de acero para sombrilla",hs:"73269099",ni:"99",p:165},
+{d:"Sombrilla exterior",hs:"66019999",ni:"00",p:451},
+{d:"Mesa de centro",hs:"94036099",ni:"00",p:165},
+{d:"Mesa alta tipo bar (6 ft)",hs:"94036099",ni:"00",p:715},
+{d:"Mesa redonda tipo bar",hs:"94036099",ni:"00",p:341},
+{d:"Mesa cuadrada café",hs:"94036099",ni:"00",p:418},
+{d:"Mesa plegable rectangular grande (6 ft)",hs:"94032091",ni:"99",p:126.5},
+{d:"Mesa plegable rectangular estándar (4 ft)",hs:"94032091",ni:"99",p:80.3},
+{d:"Estantería plástica",hs:"94037003",ni:"00",p:170.5},
+{d:"Caja fuerte de piso",hs:"83030001",ni:"01",p:1540},
+{d:"Perchero",hs:"83025001",ni:"00",p:88},
+{d:"Espejo de piso",hs:"70099201",ni:"00",p:319},
+{d:"Sofá de tres plazas",hs:"94016101",ni:"00",p:616},
+{d:"Sofá de dos plazas",hs:"94016101",ni:"00",p:462},
+{d:"Sillón lounge",hs:"94016101",ni:"00",p:330},
+{d:"Locker de cuatro niveles",hs:"94032091",ni:"99",p:396},
+{d:"Locker doble nivel",hs:"94032091",ni:"99",p:363},
+{d:"Escritorio grande (5 ft)",hs:"94032091",ni:"99",p:357.5},
+{d:"Escritorio estándar (4 ft)",hs:"94032091",ni:"99",p:192.5},
+{d:"Silla operativa de medios",hs:"94017999",ni:"01",p:82.5},
+{d:"Silla alta con brazos",hs:"94017999",ni:"99",p:319},
+{d:"Silla tipo café",hs:"94017999",ni:"99",p:66},
+{d:"Silla plegable plástica",hs:"94017999",ni:"99",p:32.45},
+{d:"Silla ejecutiva con brazos",hs:"94017999",ni:"99",p:176},
+{d:"Gabinete metálico alto",hs:"94032091",ni:"99",p:418},
+{d:"Silla de umpire",hs:"94017999",ni:"99",p:2530},
+{d:"Megáfono",hs:"85182102",ni:"99",p:88},
+{d:"Cono de tráfico de plástico",hs:"39269018",ni:"00",p:31.9},
+{d:"Señal tipo barrera de plástico",hs:"39269018",ni:"00",p:38.5},
+{d:"Barrera con cinta retráctil",hs:"76169999",ni:"99",p:53.9}
+];
+function _mxCustNom(sku){
+  const co=LP_customsOverrides[sku]||{};
+  // If MX fields manually set, use them
+  if(co.mxDesc||co.mxHsCode||co.mxPrice!==undefined){
+    return{mxDesc:co.mxDesc||'',mxHsCode:co.mxHsCode||'',mxNico:co.mxNico||'',mxPrice:co.mxPrice!==undefined?co.mxPrice:0};
+  }
+  // Auto-match ONLY for RGS source items
+  const nom=LP_STATE.nomenclature[sku]||{};
+  const src=(nom.source||'').toUpperCase().trim();
+  if(src!=='RGS')return{mxDesc:'',mxHsCode:'',mxNico:'',mxPrice:0};
+  const cn=_lpCustNom(sku);
+  const price=cn.unitPrice||0;
+  const name=(cn.customsName||cn.name||nom.name||'').toLowerCase();
+  // 1st priority: exact price match
+  if(price>0){
+    const priceMatch=_MX_APPROVED.filter(mx=>Math.abs(mx.p-price)<0.01);
+    if(priceMatch.length===1)return{mxDesc:priceMatch[0].d,mxHsCode:priceMatch[0].hs,mxNico:priceMatch[0].ni,mxPrice:priceMatch[0].p};
+    // Multiple price matches — disambiguate by name
+    if(priceMatch.length>1){
+      let best=null,bestScore=0;
+      for(const mx of priceMatch){
+        let score=0;
+        const mxW=mx.d.toLowerCase().split(/\s+/);
+        const nmW=name.split(/\s+/);
+        for(const mw of mxW)for(const nw of nmW){if(nw.length>2&&(mw.includes(nw)||nw.includes(mw)))score++}
+        if(score>bestScore){bestScore=score;best=mx}
+      }
+      if(best)return{mxDesc:best.d,mxHsCode:best.hs,mxNico:best.ni,mxPrice:best.p};
+      return{mxDesc:priceMatch[0].d,mxHsCode:priceMatch[0].hs,mxNico:priceMatch[0].ni,mxPrice:priceMatch[0].p};
+    }
+  }
+  // 2nd priority: name keyword match (no price match found)
+  let best=null,bestScore=0;
+  for(const mx of _MX_APPROVED){
+    let score=0;
+    const mxW=mx.d.toLowerCase().split(/\s+/);
+    const nmW=name.split(/\s+/);
+    for(const mw of mxW)for(const nw of nmW){if(nw.length>3&&(mw.includes(nw)||nw.includes(mw)))score+=3}
+    if(score>bestScore){bestScore=score;best=mx}
+  }
+  if(best&&bestScore>=9)return{mxDesc:best.d,mxHsCode:best.hs,mxNico:best.ni,mxPrice:best.p};
+  return{mxDesc:'',mxHsCode:'',mxNico:'',mxPrice:0};
+}
+// Get customs data for a SKU+destination. For MEX dests, uses MX approved fields when available.
+function _custForDest(sku,dest){
+  const nm=_lpCustNom(sku);
+  const isMex=(dest||'').toUpperCase().includes('MEX');
+  if(!isMex)return{desc:nm.customsName||nm.name||sku,hsCode:nm.hsCode||'',country:nm.country||'',unitPrice:nm.unitPrice||0,nico:''};
+  const mx=_mxCustNom(sku);
+  return{
+    desc:mx.mxDesc||nm.customsName||nm.name||sku,
+    hsCode:mx.mxHsCode||nm.hsCode||'',
+    country:nm.country||'Mexico',
+    unitPrice:mx.mxPrice||nm.unitPrice||0,
+    nico:mx.mxNico||''
+  };
+}
 let LP_holds=new Set();// "dest|sku" pairs put on hold — excluded from plan generation
 let LP_stockHolds=new Set();// auto-computed: dest|sku where stock qty < total demand — resets on new stock upload
 let LP_arrivedConts=new Set();// container keys marked as arrived
@@ -1319,8 +1370,9 @@ function _hsNormalize(code){
 }
 function LP_setCustomsOvr(sku,field,val){
   if(ROLE==='viewer')return;
-  let v=(field==='price'||field==='ppu')?(parseFloat(val)||0):String(val||'').trim();
+  let v=(field==='price'||field==='ppu'||field==='mxPrice')?(parseFloat(val)||0):String(val||'').trim();
   if(field==='hsCode'&&v)v=_hsNormalize(v);
+  // mxHsCode is 8-digit (no normalization)
   if(!v||v===0){
     if(LP_customsOverrides[sku]){
       delete LP_customsOverrides[sku][field];
@@ -1339,7 +1391,7 @@ function LP_customsInput(el){
   const sku=el.dataset.sku,field=el.dataset.field;
   // Skip if value unchanged (prevents double-fire from onchange+onblur)
   const cur=(LP_customsOverrides[sku]||{})[field];
-  const newVal=field==='hsCode'?_hsNormalize(el.value):el.value.trim();
+  const newVal=field==='hsCode'?_hsNormalize(el.value):(field==='mxPrice'?el.value:el.value.trim());
   if(newVal===String(cur||''))return;
   LP_setCustomsOvr(sku,field,el.value);
   // Update visual style to show override (purple) without full re-render
@@ -2551,7 +2603,7 @@ async function LP_saveTruckState(){
       dispatched:[...LP_dispatched],contDateOverrides:LP_contDateOverrides,
       lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
       arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
-      lockedRows:LP_STATE.lockedRows||[],
+
       stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays
     }),updated_at:now});
     if(error){console.warn('Truck state save error:',error);_lpSaveRetry()}
@@ -2581,7 +2633,7 @@ window.addEventListener('beforeunload',e=>{
         dispatched:[...LP_dispatched],contDateOverrides:LP_contDateOverrides,
         lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
         arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
-        lockedRows:LP_STATE.lockedRows||[],
+  
         stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays
       };
       fetch(SUPABASE_URL+'/rest/v1/shared_state?on_conflict=id',{
@@ -2604,7 +2656,6 @@ async function LP_saveToSupabase(){
         turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,
         maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,
         ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,
-        gapTolerance:LP_STATE.gapTolerance,fillThreshold:LP_STATE.fillThreshold,engineVersion:LP_STATE.engineVersion
       }),
       u(LP_KEYS.nom,LP_STATE.nomenclature),
       u(LP_KEYS.demand,LP_STATE.materialPlan),
@@ -2614,7 +2665,7 @@ async function LP_saveToSupabase(){
         dispatched:[...LP_dispatched],contDateOverrides:LP_contDateOverrides,
         lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
         arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
-        lockedRows:LP_STATE.lockedRows||[],
+  
         stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays
       })
     ]);
@@ -2638,9 +2689,6 @@ async function LP_loadFromSupabase(){
       LP_STATE.maxTrucks=cfg.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
       LP_STATE.maxDests=cfg.maxDests||LP_DEFAULT_MAX_DESTS;
       LP_STATE.ricStartDate=cfg.ricStartDate||'2026-04-01';
-      LP_STATE.gapTolerance=cfg.gapTolerance??2;
-      LP_STATE.fillThreshold=cfg.fillThreshold||0;
-      LP_STATE.engineVersion=cfg.engineVersion||'v1';
       LP_STATE.planGenerated=true;
       LP_STATE.nomenclature=nom||{};
       LP_STATE.materialPlan=demand||[];
@@ -2654,7 +2702,6 @@ async function LP_loadFromSupabase(){
       LP_excludeStaples=truck?.excludeStaples!==undefined?truck.excludeStaples:true;
       LP_arrivedConts=new Set(truck?.arrivedConts||[]);
       LP_holds=new Set(truck?.holds||[]);
-      if(truck?.lockedRows?.length)LP_STATE.lockedRows=truck.lockedRows;
       if(truck?.transitDays)LP_transitDays={...LP_TRANSIT_DEFAULTS,...truck.transitDays};
       if(LP_transitDays.TOR===5)LP_transitDays.TOR=7;if(LP_transitDays.VAN===5)LP_transitDays.VAN=7;
       if(truck?.destWhsDays)LP_destWhsDays={...LP_DEST_WHS_DEFAULTS,...truck.destWhsDays};
@@ -2682,9 +2729,6 @@ async function LP_loadFromSupabase(){
     LP_STATE.maxTrucks=p.maxTrucks||LP_DEFAULT_MAX_TRUCKS;
     LP_STATE.maxDests=p.maxDests||LP_DEFAULT_MAX_DESTS;
     LP_STATE.ricStartDate=p.ricStartDate||'2026-04-01';
-    LP_STATE.gapTolerance=p.gapTolerance??2;
-    LP_STATE.fillThreshold=p.fillThreshold||0;
-    LP_STATE.engineVersion=p.engineVersion||'v1';
     LP_STATE.planGenerated=true;
     LP_STATE.generatedPlan=p.generatedPlan;
     LP_dispatched=new Set(p.dispatched||[]);
@@ -2735,13 +2779,14 @@ function LP_render(){
   // Sync tab button highlighting
   document.querySelectorAll('#lpTabs .tbtn').forEach(b=>{
     const txt=b.textContent.toLowerCase();
-    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='late'&&txt.includes('late'));
+    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='late'&&txt.includes('late'))||(LP_TAB==='status'&&txt.includes('status'));
     b.classList.toggle('on',active);
   });
   switch(LP_TAB){
     case'arrivals':LP_renderArrivals(el);break;
     case'demand':LP_renderDemand(el);break;
     case'late':LP_renderLate(el);break;
+    case'status':LP_renderStatus(el);break;
     case'plan':LP_renderPlan(el);break;
     default:LP_renderPlan(el);
   }
@@ -2798,16 +2843,13 @@ function LP_settingsChanged(){
     LP_lastGenSettings.maxDests!==LP_STATE.maxDests||
     LP_lastGenSettings.turnaround!==LP_STATE.turnaround||
     LP_lastGenSettings.ricStartDate!==LP_STATE.ricStartDate||
-    LP_lastGenSettings.gapTolerance!==(LP_STATE.gapTolerance??2)||
-    LP_lastGenSettings.fillThreshold!==(LP_STATE.fillThreshold||0)||
-    LP_lastGenSettings.engineVersion!==(LP_STATE.engineVersion||'v1')||
     LP_lastGenSettings.contDateHash!==_contDateHash()||
     LP_lastGenSettings.palletOvrHash!==_palletOvrHash()||
     LP_lastGenSettings.holdsHash!==_holdsHash()||
     LP_lastGenSettings.arrDateHash!==_arrDateHash();
 }
 function LP_snapshotSettings(){
-  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,gapTolerance:LP_STATE.gapTolerance??2,fillThreshold:LP_STATE.fillThreshold||0,engineVersion:LP_STATE.engineVersion||'v1',contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash()};
+  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash()};
 }
 
 // ── Helpers ──
@@ -2824,90 +2866,40 @@ function LP_reset(){systemReset()}
 
 // ── Re-generate with new settings (from Plan tab constraints) ──
 function LP_regenerate(){
-  if(ROLE==="viewer")return;// viewers cannot regenerate
+  if(ROLE==="viewer")return;
   if(!LP_STATE.materialPlan.length||!LP_STATE.arrivals.length)return;
-  // Recalculate ready dates with current turnaround before regenerating
   LP_recalcReadyDates();
   LP_recomputeStockHolds();
+  const _cfg={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples};
   try{
-    const oldPlan=LP_STATE.generatedPlan;
-    
-    // ── Separate dispatched vs undispatched rows ──
-    const dispatchedRows=oldPlan.filter(r=>LP_dispatched.has(r.truckId));
-    
-    if(dispatchedRows.length===0){
-      // Nothing dispatched — full regenerate
-      const _eng=LP_STATE.engineVersion==='v2'?LP_buildLoadPlanV2:LP_buildLoadPlan;
-      LP_STATE.generatedPlan=_eng(
-        LP_STATE.materialPlan,LP_STATE.arrivals,
-        {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples,gapTolerance:LP_STATE.gapTolerance,fillThreshold:LP_STATE.fillThreshold}
-      );
-      LP_STATE.planGenerated=true;
-      LP_snapshotSettings();
-      LP_render();LP_saveToSupabase();
-      return;
+    const dispatchedRows=(LP_STATE.generatedPlan||[]).filter(r=>LP_dispatched.has(r.truckId));
+    if(!dispatchedRows.length){
+      // Nothing locked — full regenerate
+      LP_STATE.generatedPlan=LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg);
+      LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();return;
     }
-    
-    // ── Calculate consumed inventory by dispatched trucks (aggregate by SKU) ──
-    const consumedBySku={};
-    for(const r of dispatchedRows){
-      consumedBySku[r.sku]=(consumedBySku[r.sku]||0)+(r.qty||0);
-    }
-    
-    // ── Calculate consumed demand by dispatched trucks (aggregate by dest+SKU) ──
-    const consumedDemand={};// "dest|sku" -> qty consumed
-    for(const r of dispatchedRows){
-      const k=r.destination+'|'+r.sku;
-      consumedDemand[k]=(consumedDemand[k]||0)+(r.qty||0);
-    }
-    
-    // ── Build reduced demand: subtract dispatched quantities ──
+    console.log('[V3-regen] locked:',dispatchedRows.length,'rows');
+    // Aggregate locked consumption by dest+sku and by sku
+    const consumedDemand={},consumedStock={};
+    for(const r of dispatchedRows){const k=r.destination+'|'+r.sku;consumedDemand[k]=(consumedDemand[k]||0)+(r.qty||0);consumedStock[r.sku]=(consumedStock[r.sku]||0)+(r.qty||0)}
+    // Reduce demand
     const remainDemand=[];
     for(const d of LP_STATE.materialPlan){
-      const k=d.destination+'|'+d.sku;
-      const consumed=consumedDemand[k]||0;
-      if(consumed>=d.requiredQty){
-        consumedDemand[k]=consumed-d.requiredQty;
-        continue;
-      }
-      const remaining=d.requiredQty-(consumed>0?consumed:0);
-      if(consumed>0)consumedDemand[k]=0;
-      if(remaining>0){
-        remainDemand.push({...d,requiredQty:remaining,sourceIds:[{id:d.uid,qty:remaining}]});
-      }
+      const k=d.destination+'|'+d.sku;const used=Math.min(consumedDemand[k]||0,d.requiredQty);
+      if(used>0)consumedDemand[k]-=used;
+      const rem=d.requiredQty-used;
+      if(rem>0)remainDemand.push({...d,requiredQty:rem});
     }
-    
-    // ── Build reduced arrivals: subtract dispatched consumption ──
-    const remainConsumed={...consumedBySku};
+    // Reduce arrivals (earliest first)
     const remainArrivals=[];
     const sortedArr=[...LP_STATE.arrivals].sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
-    for(const a of sortedArr){
-      const used=remainConsumed[a.sku]||0;
-      if(used>=a.qty){
-        remainConsumed[a.sku]=used-a.qty;
-        continue;
-      }
-      const leftover=a.qty-(used>0?used:0);
-      if(used>0)remainConsumed[a.sku]=0;
-      if(leftover>0){
-        remainArrivals.push({...a,qty:leftover});
-      }
-    }
-    
-    // ── Run engine on remainder — dispatched trucks are frozen, engine replans the rest freely ──
-    const maxDispatchedId=Math.max(0,...LP_dispatched);
-    const _eng2=LP_STATE.engineVersion==='v2'?LP_buildLoadPlanV2:LP_buildLoadPlan;
-    const newRows=_eng2(
-      remainDemand,remainArrivals,
-      {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,
-       startTruckId:maxDispatchedId,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples,gapTolerance:LP_STATE.gapTolerance,fillThreshold:LP_STATE.fillThreshold}
-    );
-    
-    // ── Merge: dispatched (frozen) + new plan ──
+    for(const a of sortedArr){const used=Math.min(consumedStock[a.sku]||0,a.qty);if(used>0)consumedStock[a.sku]-=used;const left=a.qty-used;if(left>0)remainArrivals.push({...a,qty:left})}
+    console.log('[V3-regen] remain demand:',remainDemand.length,', remain arrivals:',remainArrivals.length);
+    const maxId=Math.max(0,...LP_dispatched);
+    const lastLockedDate=dispatchedRows.reduce((m,r)=>r.date>m?r.date:m,'');
+    const newRows=LP_buildPlanV3(remainDemand,remainArrivals,{..._cfg,startTruckId:maxId,lastLockedDate});
     LP_STATE.generatedPlan=[...dispatchedRows,...newRows];
-    LP_STATE.planGenerated=true;
-    LP_snapshotSettings();
-    LP_render();LP_saveToSupabase();
+    LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();
   }catch(e){alert('Re-generate error: '+e.message);console.error(e)}
 }
 
@@ -2997,6 +2989,7 @@ function LP_renderArrivals(el){
   window._lpConts=conts;// store for popup access
   html+=`<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
     <input type="text" class="lp-search" placeholder="Search container number..." id="lpArrSearch" oninput="LP_filterArrivals()" style="flex:1">
+    <button class="rbtn" onclick="LP_exportArrivals()" style="background:var(--as);color:var(--ac);border-color:var(--ab);white-space:nowrap;font-size:11px;padding:6px 12px">📥 Export</button>
     ${ROLE!=='viewer'?`<button class="rbtn" onclick="LP_showAddItem()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;white-space:nowrap;font-size:11px;padding:6px 12px">+ Add Item</button>`:''}
   </div>`;
   html+=`<div id="lpArrGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;width:100%">`;
@@ -3364,6 +3357,32 @@ function LP_removeArrival(idx){
   clM();
 }
 const PALETTE=['#CF5D5D','#4A90D9','#50B86C','#E8A838','#9B59B6','#1ABC9C','#E67E22','#3498DB','#E91E63','#00BCD4'];
+function LP_exportArrivals(){
+  const arr=LP_STATE.arrivals;if(!arr.length)return;
+  const nom=LP_STATE.nomenclature||{};
+  const wb=XLSX.utils.book_new();
+  const rows=arr.map(a=>{
+    const n=nom[a.sku]||{};
+    return{
+      'Container':a.container||(a._localName?'Local: '+a._localName:'')||'—',
+      'SKU':a.sku,
+      'Name':n.name||a.name||'',
+      'Source':(n.source||'').trim(),
+      'Qty':a.qty||0,
+      'Pallet Qty':n.palletQty||0,
+      'Pallet Spc':n.palletSpc||0,
+      'Pallets':n.palletQty>0&&n.palletSpc>0?+((a.qty/n.palletQty)*n.palletSpc).toFixed(2):0,
+      'Arrival Date':a.arrivalDate||'',
+      'Ready Date':a.readyDate||'',
+      'Arrived':LP_arrivedConts.has(a.container||'')?'Yes':'',
+      'Manual':a._manual?'Yes':''
+    };
+  });
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws['!cols']=[{wch:18},{wch:18},{wch:36},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:12},{wch:12},{wch:8},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws,'Arrivals');
+  XLSX.writeFile(wb,'LP_Arrivals_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
 function LP_filterArrivals(){
   const q=(document.getElementById('lpArrSearch')?.value||'').toLowerCase().trim();
   const cards=document.querySelectorAll('#lpArrGrid .lp-arr-card');
@@ -3486,7 +3505,7 @@ function LP_renderDemand(el){
     +'<div id="lpHoldDestStatus" style="display:none;margin-top:6px"></div>'
     +'</div>':''}
   <div class="csf" id="lpDemBody"><table class="dtb"><thead><tr>
-    <th>SKU</th><th>Name</th><th>Source</th><th title="Raw quantity from demand file">Raw Qty</th><th title="Pieces per Unit of Measure — divides raw qty to get effective qty">PPU</th><th title="Effective qty = Raw Qty ÷ PPU (used in exports and stock comparison)">Eff Qty</th><th style="color:var(--gn)" title="Available qty from stock report">Stock Qty</th><th title="Unit price for CI/customs">Price</th><th title="HS Tariff Code">HS Code</th><th title="Country of Origin">COO</th><th title="Customs description for CI docs" style="min-width:100px">Customs Name</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
+    <th>SKU</th><th>Name</th><th>Source</th><th title="Raw quantity from demand file">Raw Qty</th><th title="Pieces per Unit of Measure — divides raw qty to get effective qty">PPU</th><th title="Effective qty = Raw Qty ÷ PPU (used in exports and stock comparison)">Eff Qty</th><th style="color:var(--gn)" title="Available qty from stock report">Stock Qty</th><th title="Unit price for CI/customs">Price</th><th title="HS Tariff Code">HS Code</th><th title="Country of Origin">COO</th><th title="Customs description for CI docs" style="min-width:100px">Customs Name</th><th title="MX Spanish description" style="color:var(--or)">MX Desc</th><th title="MX HS code" style="color:var(--or)">MX HS</th><th title="MX unit price" style="color:var(--or)">MX $</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
   </tr></thead><tbody>`;
   let _prevName='';
   for(const s of skus){
@@ -3548,6 +3567,13 @@ function LP_renderDemand(el){
     const _cooCell=_mkTxtIn('country',_cooVal,_cooOvr,44,'China');
     const _cnVal=_cOvr.customsName||_nom.customsName||'';const _cnOvr=!!_cOvr.customsName;
     const _cnCell=_mkTxtIn('customsName',_cnVal,_cnOvr,100,'Customs description');
+    const _mx=_mxCustNom(s.sku);
+    const _mxDV=(_cOvr.mxDesc||_mx.mxDesc||'');const _mxDO=!!_cOvr.mxDesc;
+    const _mxHV=(_cOvr.mxHsCode||_mx.mxHsCode||'');const _mxHO=!!_cOvr.mxHsCode;
+    const _mxPV=_cOvr.mxPrice!==undefined?_cOvr.mxPrice:(_mx.mxPrice||'');const _mxPO=_cOvr.mxPrice!==undefined;
+    const _mxDC=_mkTxtIn('mxDesc',_mxDV,_mxDO,90,'Spanish name');
+    const _mxHC=_mkTxtIn('mxHsCode',_mxHV,_mxHO,70,'94017999');
+    const _mxPC=ROLE!=='viewer'?('<input type="number" step="0.01" min="0" value="'+_mxPV+'" data-sku="'+s.sku+'" data-field="mxPrice" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="0.00" style="width:55px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_mxPO?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_mxPO?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_mxPO?'var(--ps)':'var(--sf)')+'">'):String(_mxPV||'—');
     const _ppuVal=_lpPPU(s.sku);const _ppuOvr=!!_cOvr.ppu;
     const _ppuCell=ROLE!=='viewer'?'<input type="number" step="1" min="1" value="'+_ppuVal+'" data-sku="'+s.sku+'" data-field="ppu" onchange="LP_ppuInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" style="width:45px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_ppuOvr?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_ppuOvr?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_ppuOvr?'var(--ps)':'var(--sf)')+'">':String(_ppuVal);
     const _rowDests=Object.keys(s.dests||{}).map(d=>clDisp(d)).join('|');
@@ -3563,6 +3589,9 @@ function LP_renderDemand(el){
       <td class="mono" style="${_hsConf?'color:var(--gn);font-weight:700;background:var(--gs)':(_hsOvr?'color:var(--pu);font-weight:700':'')}">${_hsCell}</td>
       <td class="mono" style="${_cooOvr?'color:var(--pu);font-weight:700':''}">${_cooCell}</td>
       <td style="${_cnOvr?'color:var(--pu);font-weight:700':''}">${_cnCell}</td>
+      <td style="font-size:10px;${_mxDO?'color:var(--pu)':''}">${_mxDC}</td>
+      <td class="mono" style="${_mxHO?'color:var(--pu)':''}">${_mxHC}</td>
+      <td class="mono" style="${_mxPO?'color:var(--pu)':''}">${_mxPC}</td>
       <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<input type="number" value="${pq||''}" min="1" step="1" data-sku="${s.sku}" data-field="palletQty" data-orig="${origPq}" onchange="LP_palletInput(this)" onkeydown="if(event.key==='Enter')this.blur()" style="width:55px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${isOvr?'var(--pu)':'var(--bd)'};border-radius:4px;color:${isOvr?'var(--pu)':'var(--tp)'};outline:none;background:${isOvr?'var(--ps)':'var(--sf)'}" ${isOvr?'title="Original: '+origPq+'"':''}>`:`${pq||'—'}`}</td>
       <td class="mono" style="${isOvr?'color:var(--pu);font-weight:700':''}">${ROLE!=='viewer'?`<input type="number" value="${ps||''}" min="1" step="1" data-sku="${s.sku}" data-field="palletSpc" data-orig="${origPs}" onchange="LP_palletInput(this)" onkeydown="if(event.key==='Enter')this.blur()" style="width:45px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${isOvr?'var(--pu)':'var(--bd)'};border-radius:4px;color:${isOvr?'var(--pu)':'var(--tp)'};outline:none;background:${isOvr?'var(--ps)':'var(--sf)'}" ${isOvr?'title="Original: '+origPs+'"':''}>`:`${ps||'—'}`}</td>
       <td class="mono">${s.totalPlt>0?s.totalPlt.toFixed(1):'—'}</td>
@@ -3780,10 +3809,9 @@ function LP_palletInput(el){
 function LP_aggregateTruck(items){
   const map={};
   for(const r of items){
-    if(!map[r.sku])map[r.sku]={sku:r.sku,name:r.name||'',qty:0,pallets:0,hasSplit:false};
+    if(!map[r.sku])map[r.sku]={sku:r.sku,name:r.name||'',qty:0,pallets:0};
     map[r.sku].qty+=r.qty||0;
     map[r.sku].pallets+=r.pallets||0;
-    if(r.isSplit)map[r.sku].hasSplit=true;
   }
   return Object.values(map).sort((a,b)=>b.pallets-a.pallets);
 }
@@ -3795,18 +3823,42 @@ function LP_renderPlan(el){
   // Group by truckId
   const trucks={};
   for(const r of plan){
-    if(!trucks[r.truckId])trucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,items:[],totalPlt:0,totalQty:0};
+    if(!trucks[r.truckId])trucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,items:[],totalPlt:0,totalQty:0,ready:false};
     trucks[r.truckId].items.push(r);
     trucks[r.truckId].totalPlt+=r.pallets||0;
     trucks[r.truckId].totalQty+=r.qty||0;
+    if(r._ready)trucks[r.truckId].ready=true;
   }
-  const _tpByDS={};for(const r of plan){const k=r.destination+'|'+r.sku;_tpByDS[k]=(_tpByDS[k]||0)+(r.qty||0);}
-  const _skuInStk=(sku,dest)=>{if(!STOCK_SKUS.has(sku))return false;const sq=STOCK_QTYS[sku];return sq===undefined||sq>=(_tpByDS[dest+'|'+sku]||0);};
-  const _truckInStock=t=>STOCK_SKUS.size>0&&LP_aggregateTruck(t.items).every(s=>_skuInStk(s.sku,t.dest));
   const truckList=Object.values(trucks).sort((a,b)=>{
     const dc=a.date.localeCompare(b.date);if(dc)return dc;
     return a.id-b.id;
   });
+
+  // ── Sequential stock allocation waterfall ──
+  // Walk trucks in date order, deduct from available stock, mark ready/not-ready
+  const _stockPool={};// running available balance
+  if(STOCK_SKUS.size>0){
+    for(const sku of STOCK_SKUS){const sq=STOCK_QTYS[sku];_stockPool[sku]=sq!==undefined?sq:Infinity}
+  }
+  for(const t of truckList){
+    if(STOCK_SKUS.size===0){t.stockReady=false;continue}
+    const agg=LP_aggregateTruck(t.items);
+    // Locked trucks: just check SKU presence (stock already shipped)
+    if(LP_dispatched.has(t.id)){
+      t.stockReady=agg.every(s=>STOCK_SKUS.has(s.sku));
+      continue;
+    }
+    // Check if ALL SKUs have enough remaining stock
+    const canFill=agg.every(s=>(_stockPool[s.sku]||0)>=s.qty);
+    if(canFill){
+      t.stockReady=true;
+      // Deduct from pool
+      for(const s of agg)_stockPool[s.sku]=(_stockPool[s.sku]||0)-s.qty;
+    }else{
+      t.stockReady=false;
+    }
+  }
+  const _truckInStock=t=>t.stockReady;
 
   // Group by date
   const byDate={};
@@ -3816,6 +3868,11 @@ function LP_renderPlan(el){
   }
   const dates=Object.keys(byDate).sort();
   const maxPlt=LP_STATE.maxPallets;
+
+  // ── Counts ──
+  const dispCount=LP_dispatched.size;
+  const readyCount=truckList.filter(t=>!LP_dispatched.has(t.id)&&_truckInStock(t)).length;
+  const fullCount=truckList.filter(t=>!LP_dispatched.has(t.id)&&_truckInStock(t)&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
 
   // ── KPI Summary ──
   const lpTotalTrucks=truckList.length;
@@ -3831,6 +3888,7 @@ function LP_renderPlan(el){
     {label:'📦 Pallets',value:Math.round(lpTotalPlt).toLocaleString(),color:'var(--ac)'},
     {label:'📋 Pieces',value:lpTotalPcs.toLocaleString(),color:'#A84444'},
     {label:'🚛 Trucks',value:lpTotalTrucks,color:'var(--gn)'},
+    {label:'✅ Ready Full',value:fullCount,color:'var(--gn)',sub:'of '+lpTotalTrucks+' trucks'},
     {label:'🌎 Destinations',value:lpDests,color:'var(--pu)'},
     {label:'📅 Dispatch Days',value:lpDispDays,color:'var(--or)'},
     {label:'📈 Peak/Day',value:lpPeakDay,color:'var(--rd)'},
@@ -3838,9 +3896,6 @@ function LP_renderPlan(el){
   ];
   lpKpis.push({label:'💰 Dist. Cost',value:'$'+Math.round(lpDistCost).toLocaleString(),color:'var(--pu)',sub:lpTotalTrucks+' trucks'});
   let html=kpiRow(lpKpis,'fin');
-
-  // Constraints panel
-  const dispCount=LP_dispatched.size;
   const totalTruckCount=truckList.length;
   const dirty=LP_settingsChanged();
   const regenLabel=dirty
@@ -3859,9 +3914,6 @@ function LP_renderPlan(el){
       <div class="lp-field"><label>Max Dests / Day</label><input type="number" value="${LP_STATE.maxDests}" min="1"${isViewer?' disabled':''} onchange="LP_STATE.maxDests=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
       <div class="lp-field"><label>WH Turnaround (days)</label><input type="number" value="${LP_STATE.turnaround}" min="0"${isViewer?' disabled':''} onchange="LP_STATE.turnaround=+this.value;LP_recalcReadyDates();LP_saveToSupabaseDebounced();LP_render()"></div>
       <div class="lp-field"><label>RIC Start Date</label><input type="date" value="${LP_STATE.ricStartDate}"${isViewer?' disabled':''} onchange="LP_STATE.ricStartDate=this.value;LP_saveToSupabaseDebounced();LP_render()" style="font-family:var(--fd)"></div>
-      <div class="lp-field"><label title="V1=classic, V2=stock-on-hand first">Engine</label><select${isViewer?' disabled':''} onchange="LP_STATE.engineVersion=this.value;LP_saveToSupabaseDebounced();LP_render()" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fd)"><option value="v1"${LP_STATE.engineVersion!=='v2'?' selected':''}>V1 (Classic)</option><option value="v2"${LP_STATE.engineVersion==='v2'?' selected':''}>V2 (Ready First)</option></select></div>
-      <div class="lp-field"><label title="Ship if within N pallets of full (0=off)">Gap Tolerance (plt)</label><input type="number" value="${LP_STATE.gapTolerance}" min="0" max="10"${isViewer?' disabled':''} onchange="LP_STATE.gapTolerance=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
-      <div class="lp-field"><label title="Ship if buildable pallets >= this (0=auto 80%)">Min Fill to Ship</label><input type="number" value="${LP_STATE.fillThreshold||Math.ceil(LP_STATE.maxPallets*0.8)}" min="0"${isViewer?' disabled':''} onchange="LP_STATE.fillThreshold=+this.value;LP_saveToSupabaseDebounced();LP_render()"></div>
     </div>
     <details style="margin-top:10px">
       <summary style="font-size:11px;font-weight:600;color:var(--ts);cursor:pointer;user-select:none">🚚 Transit Times (days)</summary>
@@ -3878,85 +3930,283 @@ function LP_renderPlan(el){
     </details>
   </div>`;
 
-  html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-    <h2 style="font-size:18px;font-weight:700">🚛 Load Plan</h2>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
+  html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2 style="font-size:18px;font-weight:700;margin:0">🚛 Load Plan</h2>
       <span class="bg bg-bl">${truckList.length} trucks</span>
       ${dispCount>0?`<span class="bg bg-gn">${dispCount} locked</span>`:''}
+      <span class="bg bg-gn">${fullCount} ready</span>
       <span class="bg bg-gy">${dates.length} dates</span>
     </div>
+    <button class="rbtn" id="lpReadyBtn" onclick="LP_toggleReadyFilter()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">✅ Ready (${fullCount})</button>
   </div>
-  <input type="text" class="lp-search" placeholder="Search by truck, destination, SKU..." id="lpPlanSearch" oninput="LP_filterPlan()">
-  <div id="lpPlanBody">`;
+  <input type="text" class="lp-search" placeholder="Search by truck, destination, SKU..." id="lpPlanSearch" oninput="LP_filterPlan()" style="margin-bottom:8px">`;
 
-  for(const d of dates){
-    const dayTrucks=byDate[d];
-    const dayPlt=dayTrucks.reduce((s,t)=>s+t.totalPlt,0);
-    const dayQty=dayTrucks.reduce((s,t)=>s+t.totalQty,0);
+  // ── Split trucks into MEX/CAN and USA ──
+  const _isMCDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')};
+  const mcTrucks=truckList.filter(t=>_isMCDest(t.dest));
+  const usTrucks=truckList.filter(t=>!_isMCDest(t.dest));
+  const mcDates={};for(const t of mcTrucks){if(!mcDates[t.date])mcDates[t.date]=[];mcDates[t.date].push(t)}
+  const usDates={};for(const t of usTrucks){if(!usDates[t.date])usDates[t.date]=[];usDates[t.date].push(t)}
+  const mcReady=mcTrucks.filter(t=>!LP_dispatched.has(t.id)&&t.stockReady&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
+  const usReady=usTrucks.filter(t=>!LP_dispatched.has(t.id)&&t.stockReady&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
+
+  // ── Truck card renderer ──
+  function _tc(t){
+    const pct=Math.min(100,Math.round((t.totalPlt/maxPlt)*100));
+    const barColor=pct>=95?'var(--gn)':pct>=70?'var(--or)':'var(--ac)';
+    const dc=LP_destColor(t.dest);const isDisp=LP_dispatched.has(t.id);
+    const aggSkus=LP_aggregateTruck(t.items);const lsr=LP_lsrNumbers[t.id]||'';
+    const _arrDate=LP_getArrivalDate(t.date,t.dest);
+    const _arrDisp=LP_parseLocalDate(_arrDate)?LP_parseLocalDate(_arrDate).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';
+    const _transitD=LP_getTransitDays(t.dest);
+    const _isReady=t.stockReady;
+    const _lpDotColor=STOCK_SKUS.size===0?'var(--tt)':(_isReady?'var(--gn)':'var(--rd)');
+    const _lpDotTitle=STOCK_SKUS.size===0?'No stock report':(_isReady?'Stock allocated':'Insufficient stock');
+    const _isReadyFull=_isReady&&pct>=95;
+    const dispClass=isDisp?' dispatched':'';const checked=isDisp?'checked':'';
+    const _cargoVal=aggSkus.reduce((s,sk)=>{const cd=_custForDest(sk.sku,t.dest);return s+(cd.unitPrice||0)*sk.qty},0);
+    let h='<div class="lp-truck'+dispClass+'" data-search="'+t.id+' '+t.dest+' '+clDisp(t.dest)+' '+lsr+' '+aggSkus.map(s=>s.sku+' '+s.name).join(' ')+'" data-ready="'+(_isReady?1:0)+'" data-full="'+(_isReadyFull?1:0)+'" onclick="LP_showTruckModal('+t.id+')">';
+    // Row 1: icon + ID + dest badge (wraps naturally)
+    h+='<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">';
+    h+='<span>'+(isDisp?'🔒':'🚛')+'</span>';
+    if(_isReady)h+='<span style="font-size:8px;font-weight:700;color:var(--gn);background:var(--gs);padding:1px 5px;border-radius:3px;border:1px solid #B8DFCA">READY</span>';
+    h+='<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+_lpDotColor+'" title="'+_lpDotTitle+'"></span>';
+    h+='<span class="lp-truck-id">LP-'+t.id+'</span>';
+    if(lsr)h+='<span class="mono lsr-badge" style="font-size:9px;color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px">'+lsr+'</span>';
+    h+='<span class="lp-dest-badge" style="background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+'">'+clDisp(t.dest)+'</span>';
+    h+='</div>';
+    // Row 2: arrival
+    h+='<div style="font-size:10px;color:var(--ac);margin-top:3px;font-weight:600">📍 Arrives: '+_arrDisp+' <span style="font-weight:400;color:var(--ts)">('+_transitD+'d transit)</span></div>';
+    // Row 3: capacity number + bar
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-top:4px">';
+    h+='<span style="font-size:16px;font-weight:700;color:var(--tp);white-space:nowrap">'+t.totalPlt.toFixed(1)+'<span style="font-size:11px;font-weight:400;color:var(--ts)"> / '+maxPlt+' plt</span></span>';
+    h+='<div class="lp-cap-bar" style="flex:1"><div class="lp-cap-track"><div class="lp-cap-fill" style="width:'+pct+'%;background:'+(isDisp?'var(--gn)':barColor)+'"></div></div>';
+    h+='<span class="lp-cap-lbl" style="color:'+(isDisp?'var(--gn)':barColor)+'">'+pct+'%</span></div></div>';
+    // Row 4: stats + cargo value
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">';
+    h+='<span style="font-size:10px;color:var(--tt)">'+aggSkus.length+' SKU'+(aggSkus.length>1?'s':'')+' · '+t.totalQty.toLocaleString()+' pcs · '+t.totalPlt.toFixed(1)+' plt</span>';
+    if(_cargoVal>0)h+='<span style="font-size:10px;font-weight:600;color:var(--pu);background:var(--ps);padding:1px 6px;border-radius:3px;border:1px solid #D4C5FE;font-family:var(--fm)">$'+Math.round(_cargoVal).toLocaleString()+'</span>';
+    h+=rateInputHtml('LP-'+t.id,t.dest,LP_STATE.maxPallets,false,'LP_render()');
+    h+='</div>';
+    const mi=MI_get(MI_lpKey(t.id));
+    if(mi.length)h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ '+mi.length+' manual item'+(mi.length>1?'s':'')+'</span></div>';
+    if(ROLE==="viewer"){if(isDisp)h+='<div class="lp-dispatch-row"><span>🔒 Locked</span></div>';}
+    else{h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input type="checkbox" '+checked+' onclick="event.stopPropagation();LP_toggleDispatch('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex:1">'+(isDisp?'🔒 Locked':'Lock')+'</span><input type="date" value="'+t.date+'" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate('+t.id+',this.value)"></div>';}
+    const lsrEsc=lsr.replace(/"/g,'&quot;');
+    h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:5px;margin-top:4px">';
+    h+='<span style="font-size:10px;color:var(--tt);white-space:nowrap">LSR</span>';
+    h+='<span id="lsr-val-'+t.id+'" class="mono" style="font-size:10px;color:'+(lsr?'var(--tp)':'var(--tt)')+'">'+(lsr||'—')+'</span>';
+    h+='<input id="lsr-inp-'+t.id+'" type="text" value="'+lsrEsc+'" placeholder="LSR625-001" onclick="event.stopPropagation()" onkeydown="event.stopPropagation();if(event.key===\'Enter\')LP_lsrSave('+t.id+');if(event.key===\'Escape\'){this.style.display=\'none\';document.getElementById(\'lsr-val-'+t.id+'\').style.display=\'\';document.getElementById(\'lsr-edit-'+t.id+'\').style.display=\'\';document.getElementById(\'lsr-save-'+t.id+'\').style.display=\'none\'}" style="display:none;font-size:10px;font-family:var(--fm);padding:2px 6px;border:1px solid var(--ac);border-radius:4px;color:var(--tp);width:105px;outline:none">';
+    if(ROLE!=="viewer")h+='<button id="lsr-edit-'+t.id+'" onclick="event.stopPropagation();LP_lsrEdit('+t.id+')" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--ts)" title="Edit LSR">✏️</button><button id="lsr-save-'+t.id+'" onclick="event.stopPropagation();LP_lsrSave('+t.id+')" style="display:none;background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--gn)" title="Save LSR">💾</button>';
+    h+='</div></div>';
+    return h;
+  }
+
+  // ── Date group renderer ──
+  function _dg(dateTrucks,d){
+    const dayPlt=dateTrucks.reduce((s,t)=>s+t.totalPlt,0);
+    const dayQty=dateTrucks.reduce((s,t)=>s+t.totalQty,0);
     const dObj=LP_parseLocalDate(d);
     const dayLabel=dObj?dObj.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):d;
-
-    html+=`<div class="lp-day-hdr"><span class="dt">${dayLabel}</span><span class="ds">${dayTrucks.length} truck${dayTrucks.length>1?'s':''}</span>
-      <span class="dp">${dayPlt.toFixed(1)} plt · ${dayQty.toLocaleString()} pcs</span></div>`;
-    html+=`<div class="lp-truck-grid" style="margin-bottom:16px">`;
-
-    for(const t of dayTrucks){
-      const pct=Math.min(100,Math.round((t.totalPlt/maxPlt)*100));
-      const barColor=pct>=95?'var(--gn)':pct>=70?'var(--or)':'var(--ac)';
-      const dc=LP_destColor(t.dest);
-      const isDisp=LP_dispatched.has(t.id);
-      const checked=isDisp?'checked':'';
-      const aggSkus=LP_aggregateTruck(t.items);
-      const uniqueSkuCount=aggSkus.length;
-      const dispClass=isDisp?' dispatched':'';
-      const lockIcon=isDisp?'🔒 ':'';
-
-      const lsr=LP_lsrNumbers[t.id]||'';
-      const _arrDate=LP_getArrivalDate(t.date,t.dest);
-      const _arrDisp=LP_parseLocalDate(_arrDate)?LP_parseLocalDate(_arrDate).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';
-      const _transitD=LP_getTransitDays(t.dest);
-      // Dispatched trucks: only check SKU presence (stock already allocated). Undispatched: full qty check.
-      const _lpAllIn=STOCK_SKUS.size>0&&aggSkus.length>0&&aggSkus.every(s=>isDisp?STOCK_SKUS.has(s.sku):_skuInStk(s.sku,t.dest));
-      const _lpDotColor=STOCK_SKUS.size===0?'var(--tt)':(_lpAllIn?'var(--gn)':'var(--rd)');
-      const _lpDotTitle=STOCK_SKUS.size===0?'No stock report':(_lpAllIn?'All SKUs in stock':'Some SKUs not in stock');
-      html+=`<div class="lp-truck${dispClass}" data-search="${t.id} ${t.dest} ${clDisp(t.dest)} ${lsr} ${aggSkus.map(s=>s.sku+' '+s.name).join(' ')}" onclick="LP_showTruckModal(${t.id})">
-        <div class="lp-truck-hd">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span>${isDisp?'🔒':'🚛'}</span>
-            <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${_lpDotColor};flex-shrink:0" title="${_lpDotTitle}"></span>
-            <span class="lp-truck-id">LP-${t.id}</span>
-            ${lsr?`<span class="mono lsr-badge" style="font-size:9px;color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px">${lsr}</span>`:''}
-            <span class="lp-dest-badge" style="background:${dc.bg};color:${dc.color};border:1px solid ${dc.border}">${clDisp(t.dest)}</span>
-          </div>
-          <div class="lp-truck-cap">${t.totalPlt.toFixed(1)} <span>/ ${maxPlt} plt</span></div>
-        </div>
-        <div style="font-size:10px;color:var(--ac);margin-top:3px;font-weight:600">📍 Arrives: ${_arrDisp} <span style="font-weight:400;color:var(--ts)">(${_transitD}d transit)</span></div>
-        <div class="lp-cap-bar">
-          <div class="lp-cap-track"><div class="lp-cap-fill" style="width:${pct}%;background:${isDisp?'var(--gn)':barColor}"></div></div>
-          <span class="lp-cap-lbl" style="color:${isDisp?'var(--gn)':barColor}">${pct}%</span>
-        </div>
-        <div style="font-size:10px;color:var(--tt);margin-top:4px">${uniqueSkuCount} SKU${uniqueSkuCount>1?'s':''} · ${t.totalQty.toLocaleString()} pcs · ${t.totalPlt.toFixed(1)} plt${rateInputHtml('LP-'+t.id,t.dest,LP_STATE.maxPallets,false,'LP_render()')}</div>
-        ${MI_get(MI_lpKey(t.id)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lpKey(t.id)).length} manual item${MI_get(MI_lpKey(t.id)).length>1?'s':''}</span></div>`:''}
-        ${ROLE==="viewer"?(isDisp?'<div class="lp-dispatch-row"><span>🔒 Locked</span></div>':''):`<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <input type="checkbox" ${checked} onclick="event.stopPropagation();LP_toggleDispatch(${t.id},this.checked)">
-          <span onclick="event.stopPropagation()" style="flex:1">${isDisp?'🔒 Locked':'Lock'}</span>
-          <input type="date" value="${t.date}" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate(${t.id},this.value)">
-        </div>`}
-        <div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:5px;margin-top:4px">
-          <span style="font-size:10px;color:var(--tt);white-space:nowrap">LSR</span>
-          <span id="lsr-val-${t.id}" class="mono" style="font-size:10px;color:${lsr?'var(--tp)':'var(--tt)'}">${lsr||'—'}</span>
-          <input id="lsr-inp-${t.id}" type="text" value="${lsr.replace(/"/g,'&quot;')}" placeholder="LSR625-001" onclick="event.stopPropagation()" onkeydown="event.stopPropagation();if(event.key==='Enter')LP_lsrSave(${t.id});if(event.key==='Escape'){this.style.display='none';document.getElementById('lsr-val-${t.id}').style.display='';document.getElementById('lsr-edit-${t.id}').style.display='';document.getElementById('lsr-save-${t.id}').style.display='none'}" style="display:none;font-size:10px;font-family:var(--fm);padding:2px 6px;border:1px solid var(--ac);border-radius:4px;color:var(--tp);width:105px;outline:none">
-          ${ROLE!=="viewer"?`<button id="lsr-edit-${t.id}" onclick="event.stopPropagation();LP_lsrEdit(${t.id})" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--ts)" title="Edit LSR">✏️</button><button id="lsr-save-${t.id}" onclick="event.stopPropagation();LP_lsrSave(${t.id})" style="display:none;background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--gn)" title="Save LSR">💾</button>`:''}
-        </div>
-      </div>`;
-    }
-    html+=`</div>`;
+    let h='<div class="lp-day-hdr"><span class="dt">'+dayLabel+'</span><span class="ds">'+dateTrucks.length+' truck'+(dateTrucks.length>1?'s':'')+'</span>';
+    h+='<span class="dp">'+dayPlt.toFixed(1)+' plt · '+dayQty.toLocaleString()+' pcs</span></div>';
+    h+='<div class="lp-truck-grid" style="margin-bottom:16px">';
+    for(const t of dateTrucks)h+=_tc(t);
+    h+='</div>';
+    return h;
   }
-  html+=`</div>`;
+
+  // ── Two-column layout: MEX/CAN left, USA right ──
+  html+='<div id="lpPlanBody" style="display:flex;gap:16px;align-items:flex-start">';
+  html+='<div style="flex:1;min-width:0" id="lpPlanMC">';
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 14px;background:var(--sf);border-radius:8px;border:1px solid var(--bd)">';
+  html+='<span style="font-size:14px;font-weight:700;color:var(--tp)">🇲🇽🇨🇦 MEX / CAN</span>';
+  html+='<span class="bg bg-bl" style="font-size:10px">'+mcTrucks.length+' trucks</span>';
+  html+='<span class="bg bg-gn" style="font-size:10px">'+mcReady+' ready</span>';
+  html+='<span class="bg bg-gy" style="font-size:10px">'+Object.keys(mcDates).length+' dates</span></div>';
+  for(const d of Object.keys(mcDates).sort())html+=_dg(mcDates[d],d);
+  html+='</div>';
+  html+='<div style="flex:1;min-width:0" id="lpPlanUS">';
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 14px;background:var(--sf);border-radius:8px;border:1px solid var(--bd)">';
+  html+='<span style="font-size:14px;font-weight:700;color:var(--tp)">🇺🇸 USA</span>';
+  html+='<span class="bg bg-bl" style="font-size:10px">'+usTrucks.length+' trucks</span>';
+  html+='<span class="bg bg-gn" style="font-size:10px">'+usReady+' ready</span>';
+  html+='<span class="bg bg-gy" style="font-size:10px">'+Object.keys(usDates).length+' dates</span></div>';
+  for(const d of Object.keys(usDates).sort())html+=_dg(usDates[d],d);
+  html+='</div></div>';
   el.innerHTML=html;
 }
 
+
+// ── Status Tab ──
+let _lpStatusDests=new Set(),_lpStatusSrcs=new Set();
+function LP_renderStatus(el){
+  const plan=LP_STATE.generatedPlan||[];
+  const mp=LP_STATE.materialPlan||[];
+  if(!mp.length){el.innerHTML='<div class="lp-empty">No data loaded.</div>';return}
+  const nom=LP_STATE.nomenclature||{};
+  const isTruckDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
+
+  // Locked trucks with LSR numbers
+  const lockedTrucks=[];
+  const truckMap={};
+  for(const r of plan){
+    if(!LP_dispatched.has(r.truckId))continue;
+    if(!truckMap[r.truckId])truckMap[r.truckId]={id:r.truckId,lsr:LP_lsrNumbers[r.truckId]||'LP-'+r.truckId,dest:r.destination,date:r.date,items:{}};
+    truckMap[r.truckId].items[r.sku]=(truckMap[r.truckId].items[r.sku]||0)+_lpEffQty(r.sku,r.qty||0);
+  }
+  const lsrTrucks=Object.values(truckMap).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  const lsrIds=lsrTrucks.map(t=>t.lsr);
+
+  // Aggregate demand by SKU
+  const skuData={};
+  for(const d of mp){
+    if(!isTruckDest(d.destination))continue;
+    const src=(nom[d.sku]?.source||'').trim();
+    const name=nom[d.sku]?.name||d.name||d.sku;
+    if(!skuData[d.sku])skuData[d.sku]={sku:d.sku,name,source:src,demand:0,shipped:0,byLsr:{},dests:new Set()};
+    skuData[d.sku].demand+=_lpEffQty(d.sku,d.requiredQty||0);
+    skuData[d.sku].dests.add(d.destination);
+  }
+
+  // Fill shipped per LSR
+  for(const t of lsrTrucks){
+    for(const[sku,qty]of Object.entries(t.items)){
+      if(!skuData[sku])continue;
+      skuData[sku].shipped+=qty;
+      skuData[sku].byLsr[t.lsr]=(skuData[sku].byLsr[t.lsr]||0)+qty;
+    }
+  }
+
+  // Build list
+  let skus=Object.values(skuData).filter(s=>s.demand>0);
+
+  // Collect filter options
+  const allSources=[...new Set(skus.map(s=>s.source).filter(Boolean))].sort();
+  const _destPri=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')?0:u.includes('CAN')?1:2};
+  const allDests=[...new Set(skus.flatMap(s=>[...s.dests]))].sort((a,b)=>_destPri(a)-_destPri(b)||a.localeCompare(b));
+
+  // Apply filters (multi-select)
+  if(_lpStatusSrcs.size)skus=skus.filter(s=>_lpStatusSrcs.has(s.source));
+  if(_lpStatusDests.size)skus=skus.filter(s=>[...s.dests].some(d=>_lpStatusDests.has(d)));
+  skus.sort((a,b)=>(a.source||'').localeCompare(b.source||'')||(a.name||'').localeCompare(b.name||''));
+
+  // KPIs
+  const totalSku=skus.length;
+  const totalDemand=skus.reduce((s,x)=>s+x.demand,0);
+  const totalShipped=skus.reduce((s,x)=>s+x.shipped,0);
+  const totalRemaining=totalDemand-totalShipped;
+  const pctShipped=totalDemand>0?Math.round(totalShipped/totalDemand*100):0;
+  const fullyShipped=skus.filter(s=>s.shipped>=s.demand).length;
+
+  const kpis=[
+    {label:'📦 SKUs',value:totalSku,color:'var(--tp)'},
+    {label:'📋 Total Demand',value:totalDemand.toLocaleString(),color:'var(--ac)'},
+    {label:'🚛 Shipped',value:totalShipped.toLocaleString(),color:'var(--gn)'},
+    {label:'📭 Remaining',value:totalRemaining.toLocaleString(),color:totalRemaining>0?'var(--or)':'var(--gn)'},
+    {label:'📊 Progress',value:pctShipped+'%',color:pctShipped>=90?'var(--gn)':pctShipped>=50?'var(--or)':'var(--ac)'},
+    {label:'✅ Complete',value:fullyShipped+'/'+totalSku,color:'var(--gn)'}
+  ];
+  let html=kpiRow(kpis,'fin');
+
+  // Group LSR trucks by destination
+  const lsrByDest={};for(const t of lsrTrucks){if(!lsrByDest[t.dest])lsrByDest[t.dest]=[];lsrByDest[t.dest].push(t)}
+  const destOrder=Object.keys(lsrByDest).sort((a,b)=>_destPri(a)-_destPri(b)||a.localeCompare(b));
+  // Which dest LSR groups to show: if dest filter active, only those; else all
+  const visibleDests=_lpStatusDests.size?destOrder.filter(d=>_lpStatusDests.has(d)):destOrder;
+  const visDestsSet=new Set(visibleDests);
+
+  // Header row: title + badges
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+  html+='<div style="display:flex;align-items:center;gap:10px"><h2 style="font-size:18px;font-weight:700;margin:0">📊 Shipping Status</h2>';
+  html+='<span class="bg bg-gn">'+pctShipped+'% shipped</span>';
+  html+='<span class="bg bg-bl">'+fullyShipped+'/'+totalSku+' complete</span></div></div>';
+  // Search bar
+  html+='<input type="text" class="lp-search" placeholder="Search SKU, name..." id="lpStatusSearch" oninput="LP_filterStatus()" style="margin-bottom:8px">';
+  // Destination filter chips
+  html+='<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px;flex-wrap:wrap">';
+  html+='<span style="font-size:10px;color:var(--ts);font-weight:600">Destinations:</span>';
+  for(const d of allDests){
+    const dc=LP_destColor(d);const dn=clDisp(d);const sel=_lpStatusDests.has(d);
+    html+='<button onclick="_lpStatusDests.has(\''+d.replace(/'/g,"\\'")+'\')? _lpStatusDests.delete(\''+d.replace(/'/g,"\\'")+'\'):_lpStatusDests.add(\''+d.replace(/'/g,"\\'")+'\');LP_renderStatus(document.getElementById(\'lpMain\'))" class="rbtn" style="font-size:10px;padding:3px 8px;'+(sel?'background:'+dc.color+';color:#fff;border-color:'+dc.color:'background:'+dc.bg+';color:'+dc.color+';border-color:'+dc.border)+'">'+dn+'</button>';
+  }
+  html+='</div>';
+  // Source filter chips
+  html+='<div style="display:flex;gap:5px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
+  html+='<span style="font-size:10px;color:var(--ts);font-weight:600">Sources:</span>';
+  for(const s of allSources){
+    const sel=_lpStatusSrcs.has(s);
+    html+='<button onclick="_lpStatusSrcs.has(\''+s+'\')?_lpStatusSrcs.delete(\''+s+'\'):_lpStatusSrcs.add(\''+s+'\');LP_renderStatus(document.getElementById(\'lpMain\'))" class="rbtn" style="font-size:10px;padding:3px 8px;'+(sel?'background:var(--pu);color:#fff;border-color:var(--pu)':'')+'">'+s+'</button>';
+  }
+  html+='</div>';
+
+  // Overall progress bar
+  html+='<div style="background:var(--bd);border-radius:6px;height:8px;margin-bottom:10px;overflow:hidden"><div style="height:100%;width:'+pctShipped+'%;background:var(--gn);border-radius:6px;transition:width .3s"></div></div>';
+
+  // Table with two-row header
+  html+='<div class="csf" id="lpStatusBody"><table class="dtb"><thead>';
+  // Row 1: country/dest spans — only visible dests
+  html+='<tr><th rowspan="2">SKU</th><th rowspan="2">Name</th><th rowspan="2">Source</th>';
+  for(const dest of destOrder){
+    const dc=LP_destColor(dest);const dn=clDisp(dest);const cnt=lsrByDest[dest].length;
+    const isMex=dest.toUpperCase().includes('MEX'),isCan=dest.toUpperCase().includes('CAN');
+    const flag=isMex?'🇲🇽':isCan?'🇨🇦':'🇺🇸';
+    const vis=visDestsSet.has(dest);
+    html+='<th colspan="'+cnt+'" class="lsr-d-'+destOrder.indexOf(dest)+'" style="background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+';font-size:11px;text-align:center;padding:4px 6px;'+(vis?'':'display:none')+'">'+flag+' '+dn+'</th>';
+  }
+  html+='<th rowspan="2" style="color:var(--gn)">Shipped</th><th rowspan="2" style="color:var(--or)">Remaining</th><th rowspan="2">Demand</th><th rowspan="2" style="min-width:100px">Status</th></tr>';
+  // Row 2: LSR numbers
+  html+='<tr>';
+  for(const dest of destOrder){
+    const dc=LP_destColor(dest);const vis=visDestsSet.has(dest);
+    for(const t of lsrByDest[dest]){
+      html+='<th class="lsr-d-'+destOrder.indexOf(dest)+'" style="font-size:10px;font-weight:600;padding:3px 4px;background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+';white-space:nowrap;text-align:center;'+(vis?'':'display:none')+'">'+t.lsr+'</th>';
+    }
+  }
+  html+='</tr></thead><tbody>';
+
+  for(const s of skus){
+    const remaining=Math.max(0,s.demand-s.shipped);
+    const pct=s.demand>0?Math.round(s.shipped/s.demand*100):0;
+    const barColor=pct>=100?'var(--gn)':pct>=50?'var(--or)':'var(--ac)';
+    const rowStyle=pct>=100?'background:var(--gs)':'';
+    html+='<tr data-search="'+s.sku+' '+s.name+' '+s.source+'" style="'+rowStyle+'">';
+    html+='<td class="mono">'+s.sku+'</td>';
+    html+='<td class="tcl">'+s.name+'</td>';
+    html+='<td style="font-size:10px;color:var(--ts)">'+s.source+'</td>';
+    for(const dest of destOrder){const vis=visDestsSet.has(dest);for(const t of lsrByDest[dest]){
+      const qty=s.byLsr[t.lsr]||0;
+      html+='<td class="mono lsr-d-'+destOrder.indexOf(dest)+'" style="text-align:center;font-size:10px;'+(vis?'':'display:none;')+(qty?'font-weight:600;color:var(--gn)':'color:var(--tt)')+'">'+(qty?qty.toLocaleString():'—')+'</td>';
+    }}
+    html+='<td class="mono fw7" style="color:var(--gn)">'+s.shipped.toLocaleString()+'</td>';
+    html+='<td class="mono fw7" style="color:'+(remaining>0?'var(--or)':'var(--gn)')+'">'+remaining.toLocaleString()+'</td>';
+    html+='<td class="mono">'+s.demand.toLocaleString()+'</td>';
+    html+='<td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;background:var(--bd);border-radius:4px;height:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:4px"></div></div><span class="mono" style="font-size:10px;color:'+barColor+';font-weight:600;min-width:32px;text-align:right">'+pct+'%</span></div></td>';
+    html+='</tr>';
+  }
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+}
+function LP_filterStatus(){filterBySearch('lpStatusSearch','#lpStatusBody','tr[data-search]',{})}
+
 function LP_filterPlan(){filterBySearch('lpPlanSearch','#lpPlanBody','.lp-truck',{dayHdrSel:'.lp-day-hdr'})}
+let _lpReadyFilter=false;
+function LP_toggleReadyFilter(){
+  _lpReadyFilter=!_lpReadyFilter;
+  const btn=document.getElementById('lpReadyBtn');
+  if(btn){btn.style.background=_lpReadyFilter?'var(--gn)':'var(--gs)';btn.style.color=_lpReadyFilter?'#fff':'var(--gn)'}
+  const body=document.getElementById('lpPlanBody');if(!body)return;
+  body.querySelectorAll('.lp-truck').forEach(el=>{
+    el.style.display=(_lpReadyFilter&&el.getAttribute('data-full')!=='1')?'none':'';
+  });
+  body.querySelectorAll('.lp-day-hdr').forEach(hdr=>{
+    const grid=hdr.nextElementSibling;if(!grid)return;
+    const visible=[...grid.querySelectorAll('.lp-truck')].some(t=>t.style.display!=='none');
+    hdr.style.display=visible?'':'none';grid.style.display=visible?'':'none';
+  });
+  _lpApplyTruckFilters();
+}
 
 function LP_toggleDispatch(truckId,checked){
   if(ROLE==="viewer")return;
@@ -4843,90 +5093,80 @@ async function LP_exportA10(truckId){
   const first=rawPlan[0];const dest=first.destination;const date=first.date;
   const agg=LP_aggregateTruck(rawPlan);
   agg.forEach(it=>{it.qty=_lpEffQty(it.sku,it.qty)});
-  // Build items with customs data
+  // Use MX customs data — no AI translation, fall back to US customs name
   const items=agg.map(s=>{
-    const nm=_lpCustNom(s.sku);
-    return{sku:s.sku,name:nm.name,customsName:nm.customsName||nm.name||s.name,hsCode:nm.hsCode,qty:s.qty,unitPrice:nm.unitPrice||0};
+    const cd=_custForDest(s.sku,dest);
+    return{sku:s.sku,spanishName:cd.desc,hsCode:(cd.hsCode||'').replace('.',''),nico:cd.nico||'',qty:s.qty,unitPrice:cd.unitPrice||0};
   }).filter(it=>it.qty>0);
   if(!items.length){alert('No items on this truck.');return;}
-  // Show loading
   const pov=document.getElementById('pov');if(pov)pov.style.display='flex';
-  // Translate to Spanish
-  const translated=await _a10TranslateToSpanish(items);
-  const totalValue=translated.reduce((s,it)=>s+(it.qty*(it.unitPrice||0)),0);
-  // Build Word HTML
-  const tableRows=translated.map(it=>`<tr>
-    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial">${it.spanishName}</td>
-    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial;text-align:center">${it.hsCode.replace('.','')}</td>
-    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial;text-align:center">${it.qty.toLocaleString()}</td>
-    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial;text-align:center">PIEZA</td>
-    <td style="border:1px solid #000;padding:4px 6px;font-size:11pt;font-family:Arial;text-align:right">${(it.unitPrice||0).toFixed(2)}</td>
-  </tr>`).join('');
-  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><style>
-body{font-family:Arial,sans-serif;font-size:11pt;margin:40px 50px}
-h2{text-align:center;font-size:14pt;margin-bottom:4px}
-h3{text-align:center;font-size:11pt;font-weight:normal;margin-top:2px}
-table{border-collapse:collapse;width:100%}
-th{border:1px solid #000;padding:4px 6px;font-size:10pt;background:#f0f0f0;text-align:center}
-.info-table td{border:none;padding:2px 4px;font-size:11pt;vertical-align:top}
-.sig-line{border-bottom:1px solid #000;width:250px;display:inline-block;margin-top:30px}
-</style></head><body>
-<h2>A10.</h2>
-<h3>Importaci\u00f3n temporal de las mercanc\u00edas destinadas a la CMF 2026 y sus eventos relacionados</h3>
-<p style="text-align:right;font-size:10pt">No. de Folio: ________________</p>
-<p style="font-size:10pt">Antes de llenar este formato, lea las instrucciones al reverso.</p>
-<table class="info-table" style="margin-bottom:6px"><tr>
-<td>Fecha de ingreso: ____/____/________</td>
-<td style="text-align:right">Fecha de vencimiento: ____/____/________</td>
-</tr><tr>
-<td colspan="2">Aduana/secci\u00f3n aduanera: ________________________________ Clave: ________________</td>
-</tr></table>
-<h3 style="text-align:left;font-weight:bold;font-size:11pt;margin-top:12px">1. Informaci\u00f3n General.</h3>
-<p style="font-size:10pt;font-weight:bold">1.1. Datos del importador:</p>
-<p style="font-size:10pt"><b>Nombre completo, raz\u00f3n o denominaci\u00f3n social:</b><br>FWC2026 MEXICO, S. DE R.L. DE C.V.</p>
-<p style="font-size:10pt"><b>Domicilio:</b><br>Paseo De La Reforma 350, Interior 12, Col. Ju\u00e1rez, C.P. 06600, Alcald\u00eda Cuauht\u00e9moc, Ciudad De M\u00e9xico, M\u00e9xico.</p>
-<p style="font-size:10pt"><b>Folio de autorizaci\u00f3n emitida por la DGJA:</b> 500-00-00-00-00-2026-1264 del 26 de Febrero de 2026 - Anexo \u00fanico (parcial)</p>
-<p style="font-size:10pt"><span class="sig-line"></span><br>Firma<br>Kim Dexter Soto Castro (R.F.C.: SOCK 930129 LK7)<br>Representante legal de: FWC2026 MEXICO, S. DE R.L. DE C.V.</p>
-<p style="font-size:10pt;font-weight:bold">1.2. Domicilio para o\u00edr y recibir notificaciones:</p>
-<table class="info-table" style="font-size:10pt">
-<tr><td>Calle: Paseo de la Reforma</td><td>No. exterior: 350</td><td>No. interior: 12</td></tr>
-<tr><td>Colonia: Ju\u00e1rez</td><td>C\u00f3digo postal: 06600</td><td></td></tr>
-<tr><td>Municipio o Alcald\u00eda: Cuauht\u00e9moc</td><td colspan="2">Localidad: Ciudad de M\u00e9xico</td></tr>
-<tr><td>Entidad Federativa: Ciudad de M\u00e9xico, M\u00e9xico</td><td colspan="2">Tel\u00e9fonos: 55 4609 5623</td></tr>
-</table>
-<p style="font-size:9pt"><b>Personas autorizadas para o\u00edr y recibir notificaciones:</b><br>
-Nicolas Cucidis, nicolas.cucidis@rockitcargo.com, +52 1 55 4368 2314<br>
-Sofia Escalante Acedo, sofia.escalante@fwc2026.org, +52 1 55 7970 2358<br>
-Gloria Johanna Romero Bernal, sportsmx@rockitcargo.com, +52 1 55 5959 8242<br>
-Cruz Salinas Galicia, cruz.salinas@rockitcargo.com, +52 1 55 2920 0809</p>
-<h3 style="text-align:left;font-weight:bold;font-size:11pt;margin-top:16px">2. Informaci\u00f3n relacionada con el tr\u00e1mite.</h3>
-<p style="font-size:10pt;font-weight:bold">2.1. Mercanc\u00edas a importar:</p>
-<table style="margin-bottom:8px">
-<thead><tr>
-<th>Descripci\u00f3n detallada</th><th>Fracci\u00f3n arancelaria</th><th>Cantidad</th><th>Unidad de medida</th><th>Valor unitario</th>
-</tr></thead>
-<tbody>${tableRows}</tbody>
-</table>
-<p style="font-size:8pt;font-style:italic">No se entender\u00e1 que la fracci\u00f3n arancelaria declarada es aceptada por la autoridad o que existe resoluci\u00f3n favorable al particular.</p>
-<p style="font-size:10pt"><b>2.2. Valor total de las mercanc\u00edas:</b> $${totalValue.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} d\u00f3lares de los Estados Unidos de Am\u00e9rica.</p>
-<p style="font-size:10pt;font-style:italic">Declaro, bajo protesta de decir verdad, que los datos asentados en el presente formato son ciertos.</p>
-<h3 style="text-align:left;font-weight:bold;font-size:11pt;margin-top:16px">3. Conformidad de la aduana/secci\u00f3n aduanera:</h3>
-<p style="font-size:10pt">Nombre: ______________________________________________________<br>
-No. de gafete del empleado: ______________________________________<br><br>
-<span class="sig-line"></span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sello Aduana/Secci\u00f3n aduanera<br>Firma</p>
-<h3 style="text-align:left;font-weight:bold;font-size:11pt;margin-top:16px">4. Datos del retorno:</h3>
-<p style="font-size:10pt">Fecha: ____/____/________<br>
-Aduana/secci\u00f3n aduanera: ________________________________________<br>
-Clave: _________________________________________________________<br>
-Lugar: _________________________________________________________</p>
-<p style="font-size:9pt;text-align:center;margin-top:12px">Este aviso se presentar\u00e1 por duplicado: el original para la aduana y la copia para el importador.</p>
-</body></html>`;
+  try{
+    const totalValue=items.reduce((s,it)=>s+(it.qty*(it.unitPrice||0)),0);
+    // Fetch template DOCX
+    const resp=await fetch('a10_template.docx');
+    if(!resp.ok)throw new Error('A10 template not found');
+    const tplBuf=new Uint8Array(await resp.arrayBuffer());
+    // Unzip with fflate
+    const unzipped=fflate.unzipSync(tplBuf);
+    // Get document.xml
+    const docXml=fflate.strFromU8(unzipped['word/document.xml']);
+    // Find the items table data rows (between header row and table end)
+    // Locate 'Silla operativa' row as first data row marker
+    const markerIdx=docXml.indexOf('Silla operativa');
+    if(markerIdx<0)throw new Error('Template marker not found');
+    const firstRowStart=docXml.lastIndexOf('<w:tr ',markerIdx);
+    // Find end of ALL data rows (last row before </w:tbl> of this table)
+    const tblEnd=docXml.indexOf('</w:tbl>',markerIdx);
+    const lastRowEnd=docXml.lastIndexOf('</w:tr>',tblEnd)+7;
+    // Extract the first data row as template
+    const firstRowEnd=docXml.indexOf('</w:tr>',firstRowStart)+7;
+    const rowTpl=docXml.substring(firstRowStart,firstRowEnd);
+    // Build new rows from items
+    const newRows=items.map(it=>{
+      let row=rowTpl;
+      // Replace cell values: Description, HS Code, NICO, Qty, PIEZA, Unit Price
+      // The row has 6 <w:t> elements with the values
+      const replaceNthText=(xml,n,newVal)=>{
+        let pos=0;
+        for(let i=0;i<=n;i++){
+          pos=xml.indexOf('<w:t>',pos);
+          if(pos<0)pos=xml.indexOf('<w:t ',pos);// w:t with attributes
+          if(pos<0)return xml;
+          if(i===n){
+            const closeTag=xml.indexOf('</w:t>',pos);
+            const openEnd=xml.indexOf('>',pos)+1;
+            return xml.substring(0,openEnd)+newVal+xml.substring(closeTag);
+          }
+          pos=xml.indexOf('</w:t>',pos)+6;
+        }
+        return xml;
+      };
+      row=replaceNthText(row,0,it.spanishName||it.sku);
+      row=replaceNthText(row,1,(it.hsCode||'').replace('.',''));
+      row=replaceNthText(row,2,it.nico||'');// NICO from MX list
+      row=replaceNthText(row,3,it.qty.toLocaleString());
+      row=replaceNthText(row,4,'PIEZA');
+      row=replaceNthText(row,5,(it.unitPrice||0).toFixed(2));
+      // Remove yellow highlight from all cells
+      row=row.replace(/<w:highlight w:val="yellow"\/>/g,'');
+      return row;
+    }).join('');
+    // Replace data rows in document
+    let newDocXml=docXml.substring(0,firstRowStart)+newRows+docXml.substring(lastRowEnd);
+    // Remove ALL yellow highlights from entire document
+    newDocXml=newDocXml.replace(/<w:highlight[^/]*\/>/g,'').replace(/<w:highlight[^>]*>[^<]*<\/w:highlight>/g,'');
+    // Replace total value ($40,491.00 -> actual total)
+    const finalXml=newDocXml.replace(/40,491\.00/g,totalValue.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
+    // Re-pack
+    unzipped['word/document.xml']=fflate.strToU8(finalXml);
+    const rezipped=fflate.zipSync(unzipped,{level:6});
+    // Download
+    const blob=new Blob([rezipped],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');
+    a.href=url;a.download='A10_LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_'+date+'.docx';a.click();
+    URL.revokeObjectURL(url);
+  }catch(e){alert('A10 export error: '+e.message);console.error(e)}
   if(pov)pov.style.display='none';
-  const blob=new Blob(['\ufeff'+html],{type:'application/msword'});
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');
-  a.href=url;a.download='A10_LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_'+date+'.doc';a.click();
-  URL.revokeObjectURL(url);
 }
 async function LP_exportCI(truckId){
   const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
@@ -4948,8 +5188,8 @@ async function LP_exportCI(truckId){
 }
 function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   const wb=XLSX.utils.book_new();let tQ=0,tV=0;
-  const rows=agg.map(it=>{const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
-    return{'QTY':it.qty,'DESCRIPTION':nm.customsName||nm.name||it.name||it.sku,'ITEM #':it.sku,'HS CODE':nm.hsCode,'COUNTRY':nm.country,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
+  const rows=agg.map(it=>{const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
+    return{'QTY':it.qty,'DESCRIPTION':cd.desc,'ITEM #':it.sku,'HS CODE':cd.hsCode,'COUNTRY':cd.country,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
   rows.push({'QTY':tQ,'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV,'Pallets':+totalPlt.toFixed(2)});
   const pty=LP_getCIParties(dest);
   const ciData=[['COMBINED INVOICE AND PACKING LIST'],[''],['DATE:',date,'','INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Mode of Transport:','Road'],[''],['SHIPPER:','FWC2026 US, Inc, 396 Alhambra Circle, Ste# 400, Coral Gables, FL 33134, USA'],['CONSIGNEE:',pty.consignee.filter(Boolean).join(', ')],['CUSTOMS BROKER:',pty.broker.filter(Boolean).join(', ')],['']];
@@ -4957,7 +5197,7 @@ function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   ws['!cols']=[{wch:8},{wch:36},{wch:22},{wch:16},{wch:20},{wch:8},{wch:12},{wch:14},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Commercial Invoice');
   const plData=[['PACKING LIST'],[''],['Truck:','LP-'+truckId,'Date:',date,'Destination:',dest],['Items:',tQ,'Pallets:',+totalPlt.toFixed(2),'Total Value:',tV],['']];
-  const plRows=agg.map((it,i)=>{const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;return{'#':i+1,'Code':it.sku,'Name':nm.customsName||nm.name||it.name||it.sku,'Qty':it.qty,'Pallets':+it.pallets.toFixed(3),'HS Code':nm.hsCode,'Country':nm.country,'Unit Price':up,'Line Total':up*it.qty}});
+  const plRows=agg.map((it,i)=>{const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;return{'#':i+1,'Code':it.sku,'Name':cd.desc,'Qty':it.qty,'Pallets':+it.pallets.toFixed(3),'HS Code':cd.hsCode,'Country':cd.country,'Unit Price':up,'Line Total':up*it.qty}});
   plRows.push({'#':'','Code':'','Name':'TOTAL','Qty':tQ,'Pallets':+totalPlt.toFixed(2),'HS Code':'','Country':'','Unit Price':'','Line Total':tV});
   const ps=XLSX.utils.aoa_to_sheet(plData);XLSX.utils.sheet_add_json(ps,plRows,{origin:'A6'});
   ps['!cols']=[{wch:4},{wch:22},{wch:36},{wch:8},{wch:10},{wch:16},{wch:14},{wch:10},{wch:14}];
@@ -5096,10 +5336,10 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   // DATA ROWS (21+)
   const DS=21;let tQ=0,tV=0;
   items.forEach((it,idx)=>{
-    const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
+    const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
     const rn=DS+idx;ws.getRow(rn).height=19;
     const bg=idx%2===1?fillL1:fillWh;
-    const vals=[it.qty,nm.customsName||nm.name||it.name||it.sku,it.sku,nm.hsCode,nm.country,'','','','','','','USD',up,tv,'Re-Export (Temporary Imported)'];
+    const vals=[it.qty,cd.desc,it.sku,cd.hsCode,cd.country,'','','','','','','USD',up,tv,'Re-Export (Temporary Imported)'];
     vals.forEach((v,i)=>{
       const al=i===0?alC:(i===11?alC:([12,13].includes(i)?alR:alL));
       const fmt=i===12?'#,##0.00':(i===13?'$ #,##0.00':null);
@@ -5149,9 +5389,9 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   p.getRow(5).height=22;[[1,'Items:',fLabel,null],[2,tQ,fValB,null],[4,'Pallets:',fLabel,null],[5,tPal,fValB,null],[7,'Total Value:',fLabel,null],[8,tV,fValB,'$ #,##0.00']].forEach(([c,v,f,fm])=>pc(5,c,v,f,alL,null,brdThin,fm));
   p.getRow(6).height=6;
   p.getRow(7).height=28;['#','Nomenclature Code','Nomenclature Name','Qty','Pallets','HS Code','Country','Unit Price','Line Total'].forEach((h,i)=>{const cl=p.getRow(7).getCell(i+1);cl.value=h;cl.font=fHdr;cl.fill=fillDark;cl.border=brdMed;cl.alignment=alW});
-  items.forEach((it,idx)=>{const nm=nomenclature[it.sku]||{};const co=LP_customsOverrides&&LP_customsOverrides[it.sku]||{};const rn=8+idx;p.getRow(rn).height=18;const bg=idx%2===1?fillL1:fillWh;
-    const _up=co.price!==undefined?co.price:(nm.unitPrice||0);
-    [idx+1,it.sku,co.customsName||nm.customsName||nm.name||it.name||it.sku,it.qty,+it.pallets.toFixed(3),_hsNormalize(co.hsCode||nm.hsCode||''),co.country||nm.country||'',_up,_up*it.qty].forEach((v,i)=>{
+  items.forEach((it,idx)=>{const cd=_custForDest(it.sku,dest);const rn=8+idx;p.getRow(rn).height=18;const bg=idx%2===1?fillL1:fillWh;
+    const _up=cd.unitPrice||0;
+    [idx+1,it.sku,cd.desc,it.qty,+it.pallets.toFixed(3),cd.hsCode,cd.country,_up,_up*it.qty].forEach((v,i)=>{
       const al=i===0?alC:([7,8].includes(i)?alR:alL);const fmt=i===7?'#,##0.00':(i===8?'$ #,##0.00':null);
       pc(rn,i+1,v,fData,al,bg,brdThin,fmt);
     });
@@ -6298,10 +6538,9 @@ function masterBackupExport(){
     Object.entries(LP_lsrNumbers).forEach(([id,lsr])=>rows.push({Setting:'LSR: LP-'+id,Value:lsr}));
     // Customs overrides (HS code, country, price, customsName)
     Object.entries(LP_customsOverrides).forEach(([sku,ov])=>rows.push({Setting:'Customs Override: '+sku,Value:JSON.stringify(ov)}));
-    // Holds, excludeStaples, lockedRows, destWhsDays
+    // Holds, excludeStaples, destWhsDays
     rows.push({Setting:'Holds',Value:JSON.stringify([...LP_holds])});
     rows.push({Setting:'Exclude Staples',Value:LP_excludeStaples?'true':'false'});
-    rows.push({Setting:'Locked Rows',Value:JSON.stringify(LP_STATE.lockedRows||[])});
     Object.entries(LP_destWhsDays).forEach(([k,v])=>rows.push({Setting:'Dest WHS Days: '+(CITY_ABBR[k]||k),Value:v}));
     const ws=XLSX.utils.json_to_sheet(rows);
     ws['!cols']=[{wch:40},{wch:60}];
@@ -6511,7 +6750,6 @@ async function masterBackupRestore(file){
         else if(s.startsWith('Customs Override: ')){try{LP_customsOverrides[s.replace('Customs Override: ','')]=JSON.parse(v)}catch(e){}}
         else if(s==='Holds'&&v){try{LP_holds=new Set(JSON.parse(v))}catch(e){}}
         else if(s==='Exclude Staples')LP_excludeStaples=v==='true'
-        else if(s==='Locked Rows'&&v){try{LP_STATE.lockedRows=JSON.parse(v)}catch(e){}}
         else if(s.startsWith('Dest WHS Days: ')){const city=s.replace('Dest WHS Days: ','');const abbr=Object.entries(CITY_ABBR).find(([k,n])=>n===city);if(abbr)LP_destWhsDays[abbr[0]]=+v||0}
       }
       log.push('LP Config restored');
@@ -11089,7 +11327,7 @@ function doSystemReset(){
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};
   STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
-  LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
+  LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
   // Restore upload screen
   document.getElementById("US").querySelector(".uc").innerHTML=`<div class="sm-logo sm-logo-lg"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAYAAAA5ZDbSAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAB6GElEQVR4nKz9dbhlV33/gb/W2nb0us4dd81kJJl4QowkJCFIcHctFAql1KhAC7S0lEIJXlxCEuLEZSKTiY77XHc59/i2tX5/7H3OvTMJ/X2f5/fbz3PuPbJ1fdbH3h9Z4qHcjBZCoNAIIRBaI9CcvgkhIN5HahACIP5u3v4CkIj6Zy00UkTf1b5X8TFCgNYaY97+aJDRBePrarTUSBWdWwgx71qqfm9i3i0LQOjo2JcfI5CAJoyeBXHKcejojax9nvf8tWtIRPSbUPXfpRDRsXruPoUQ8RBpJLp+/vn3Uz8+vt/45k4b97nrnrq9nE6cto/UIhpwiAb7ZbvXbvS0i2ktogd8+b3OXVwoBHqOuGLu+hodX++0E9TGSetXvB/q373Sw/3pez/lvrSuf3/6NUSNeP/HpmuUnHed04kyd1lVnwj1O3+l55p3e///3OTLzi8ESrwSD8c3pmoDr1BI1GnDoYEQBSiEEBhCnvJj7bzzpgoqHh+hQei5watPLA26dkCdMNS/nPc2figRc9S8GVU7XJ86hi+bAOLlY3y6hIhIHNaf4xTpIeb2QSi01oj6zSm0iF6vNMBaC7QS9Tn8SpxeP/cpIzn/deo+Zm02zZ/RQsztMn+21w8VMc9rgUBH41i7KZjjVkBpjYxVQI2Ir7jNO8efvO68R3ilR69x0vzj9StMmP9v2/+3vf5fzqLRr0jE//us0b2efn4hxJz6OPUi/19vRtYm1yliY97M16f9pgVEGkXWH6TGQTWdVh9HHSmkUCtCXSPxK2x6jkuj8xDrZxWpgtq9iLl70Qi0iImndSRY9TzdGRNXz3uOPzm5ar/puTGbExgvH8E5+yP6P6fnRTwWIX+KuqL2rMypoLpSECDiBzjluvU5eppqQNTPN/fbqfuYr/y4+uWf5nH2KTdMZJhJIecEhSYW0vrlOuDlAvAV95gbw1NvuE4AEV1HinnkEDUVrevGTv0qYv5p/n9TdDqWDuIUdVETP/qVHum0a87ZNFqDEGre7Hu53fD/Jnde6T5B/ml9Pzdw8y1RjUZoMOLZI4WMiBvrbRU/yp/mVw3zfovt3Pi8On4fvV7J3JkvomXM6nUVpzUKHd2D0BGHi5oBWbt2dLTWOhaKep7h9idE/2m6/E8ZaH/6HPMmqQYRj1d0rpdLlnm3PV+OUqNJ/W5qO4qXi/XadgqDnSKKUWitTtlZo5EaZKxiDRGzjJ6zKxWasKZv+X/nFQ2oOUaMvYt5g0JEUClEXRyfqko0p97tvP3mXWP+6M1j9lPG4JWMrLlznn7jL3/Cl6vKeUbQy5RpjeNfYUJHNzzviV7ZhX2la9Y2ebrYjR6wplnnDtQ6UpJCx4pb1xSWiCxvFfNsXbbWlfupE+cV7iR6DjHvinMzVmtxipCef1daCJSeNxFOMyL1vAESpxz7CkQ5ZXL/CftlvjqY+/JPPNDpu8xJqpdzvq4TU5x2mDjt3f/rVruEqbWMRON8OTFPjbzMjhWxZSxjAadAicjsmq8LT3FHdM1oip8lfiOEBOZ8xPnHRJ/13HFAqDVmzZCpU1DPjd8ptKv9NjfnXyZR5mZv/d7nexC1n5WugRQahYpVSaxDTxMBr0SGur9/ig+vTp1EQse38UqK6f+Wg6f+eupTmn9ytv6pk+maBo1uOBTMs6ejm1Nao5VCCDCFwDBl3RiSAFrNnwvxmxghm/sIquYqSaTU9SvImvBAEIEIkeiTnKq7oiNPM1jEnF6q+bc6NmxqFrg+/Vgh555RR3bH3HCKOiJX40BZf5A5FSHq4jn2qUVtMHVNEL6MCv+vbt3p23wBYQpdM4vmTqbjh3q5vBcoEVlmSqk5/4xIfGsVzcqEY2NbkjBUVKo+xZJXtzznjMw5GPEUARSz8nwzS8R/RCxBROx41wa3dp81GJL4GIGK9hU6/hztH8GCIpY6pwpGKWrXnXOwRDwWosZhWs27jqbmP9SOkUKDUAgdg5pCE4i5yR1NAgPDsJGmjYFE6RAdBswximAOo5hHl5dtp8nYuhsZE3jeqJ6648u+eeWttk+oNEnHwpCCk0NTvHBkmMN9E4xNFylWXAKta6MeDW79/Xxuiww4TeySyTmxKRBIOfe0UggMIzrOECCkwJCR4Re9lxhCx7+BIXXdTzdEtJ8hVIRXCzDiUxtCYcafJRpDaKz4PKbQWCgsEV3LFAJLgCXBlBpLRMQ1RXScKRSmFFhSYEgd30+0nykltm1jJxpINLSTbl6Ak2kDBDr0T4OFXw76/F+/aa3rnoUZ8Uo0Q+WcrIjeA3PypEZ2Yi6OvlZKY0hBNu2w//gotz7yEnsOD5EveKgwrM92gUZIgZAyEqdSImTsP8uI0kLGorL+P/rNEAJhCHRMRNsyI31sSKSMX0Z0H4bUSAOM2E4wpMBQkT8uZRT4MDQYxHCNjgY9jAmq0IRCRcSN9wsIMQTYUuCHAVIoDMCC+L3CFvG14wkS/RZiCjAl0aSRcwQ2JJgyxDZGscePkkgmSTf3kF1wBsnsAlAeWqvYTvm/Wa3OtbF4nA8ImXN8GNvNtRkxzy44ffJIIiKgNI5poAT88LanufPRfZQLFYxQIYMAlIq5VEbcJyMiainj9yBk7BNKGRFfxvwsI+NPImP2FiRsk6RtYRqSQGsCNKZpYBgSYQgMQ0bcYgpMKZFmRHwzHlghqHN2FOFSCCJiGTryw4VSCMI68aVW2NIgYRhINDqQEPhRlCvWyVpDEHsLEur+twFoEaJlNOihiKSNFhHBQwGB0PgmhKoM3nHC/CBex1oaF25DCAt0CKKGT9eY7VRD6hRizyN4TOA54p5Cx9osEHPGU03TyNgtckyTsufzjf+9j6dfHMBSPrJcjWB4w6jvj9SoGPmp6cHa2eoGpohoK2N9K6WMiGxoLMvEtAySjo0QkkCCZdsIpZC2iWUaGKZAmBIkKCnwJREHC4mSYEiBKUHLOYRNAgZhfcabgKk1pg6ROsTQGkNrLAlChegwxDLNONypkISYGAgtkLr2XRw9EzrSz7E6kiKsqwYho98MNKaMbIHA05RCDcrFGN1Hzi3QsOxCpJmIiHyKpaLngBoxj9SvwOgmhC9j0Whmzml2jY7EYGxIoCMdWPUD/vm7d/PiwUESrodfdZGmgTBk/aI19wcx3/rm5dIh1s01jpZSYiVMHEtimhaGKTEti1BoLMdBSTAtSSgNPENiW4JUwqQxk6Atk6I1k6QllSTrWKQsi4RlYkkRxVxVSBAqvMCn7PqUq1Vmy2XylSqVagU/8JCAhcBCYRKiPA8zFBB4WJYBOhL1MsYDpJ6bNDL2C8W8UZ8fGa0ZcXM2SKy3tcD1orE28sMUT+wku+JCkFZsSM7n5Jfz8CvpY7NGyFp07VTwWtRnYYQKKbQApUJs2+K/fvIAL+wfIFGt4nk+wjSio5SOZNErbJqafo9vODaQpIgtXClxUhbJhIVtmmghEIaBtA2MhE0oBVUpMWxJKmmzoLWBZV2trOhopKsxQ1aagKLqeVTLHuWKR7VQZjoIUSp6FssQJExBxnHoymbJtrWQdGxsAa5WzJRKjOXzDE5NM13IE/geQiuEaWDbEhGGCBWACjHCkAgACiOUD6J9hUBiILWqewU1R2o+7lBHp6SBIS0MqfC9gIKGrBok3/sk2eUXRfq4Zvf/Hyr5dBAlChdqEMapct1AENb1ceTgG0LgBwGplM0fHz/Aw08fIuG6+FUPLGPOAfs/wny1D1FGh0ZKAx3r/HRDipaWFPliJcKyhUBaFolMAldqZoUgk3FY19PO1mVdLO9sI20IcvkiJwfGee6pfQyMzDA2mSdXLFNyXTzfR6so5kzNaJNgSoFtShzToCGVoKetkaa0w+rudjYs7mJVezNnLejBI2RoapLj4+NM5nIor4JFiKVMRBBAEEAYxHiNQCqB1JGlLrWaex8bsnM4jEZIiWHa6LAaMRiKUIeYhoXv+eQVpNUxzEwXia516MCPOfFPE3j+MAOIe6am6s6WITUmEqVVHKjXaK1i7hKESmFoKFY9/urff8/YwDRhoYA0TRDGHJJXt5bFnDElagZVxKWGKRGmgVKadFOKnsUdFCtVQtdHAcKyyDRmUabEE9Dd3sCWtYvYsnwBDabBYP8oz+85zvMH+ugbHCc3WyZQIaZp4tgOTsLGTjhYCQvLtrAsC8Mw4iiQirhZBTgG5At5pFAEgU/gBzSlk7RkHBa2Zjlz+UK2rVrC0o4WQqXoGx+nd3SYQmkWMwwxtYLAhTDS0VqFoEKEDjF0GOlZgsiQE9HQG2gcy0IHLgnDREqN0JF+F0JDGCC0JlSQTlkkG1ppWncV0kxEv78CC+vT/9d86LunpyIIWQgMNFYNpYm5TM0LOKggJJt0+P39L/CDXz+OVamiggAhZSRKY/dmjsCAkAgjurSUAhnrUoRECU3H4lYaWxvx8yUCN0BbNol0kooQhJZkWU8Lr9q6kk0LOpnK5XjsiX3sfHI/J/vHcF0Paduk0ynSDRkyjU0kGxpxslnMVJJkIoltmxiWgTQizDxyqyKDSqJJmiACn2qlROgWKeVmKeZmKBVyhJUiBiFNmSRrejo5d+1KzlqzkuZMipH8BCcHBsgXZ5AqQKoQ5bvoIEQFMaG1QuoQU4cYqEhyoCMRbliR36zCyNDS0f4QM5SOdaqUZDMW2SU7yPRsQoUeUkTjPWf+1gziOWNY1Qh859SkNoWM86ZAynnKuo5ygdYKpRRg8A/fvIND+45D1ZtzcwRoKSIYLyZ2DbkQGAhDYZgSw3FQQCJjs3LjMqQKGOmbwLZtRMJGJpO4Aro7G7nk7DVsXtzNcP8Q99z7LE/vOsjExAyGJck0NdLU3kG2o5tEUzN2Kk1ZAULTaBskLEk+jF0XKUgYmqxtEEiBlpHl7RiChAVKQsIwEFJhohBhiFcu4uamKE+NExSm8ctFBCHt2SxbVi/lsjM3sKitk4n8JL1DJykVcwjto4OA0PMJfT8KwKjIIpcoDClwJFgoEBLPi4w5Q8e5a1JFgryuRwWh0qQTBpm2btrWvRqkGQvcU7n4dJ6umWHij1PTUValVkgR+YhKq8hVESBi/y4MFbYpOTkwzd9/4zYq0zMoL6gTOOLiSPzOETiy2qSUmAmLRCaJaRhkOzKs3rCEyYFJBnrHyTZnsdNJciE0NCe54uw1nLdxJQNDI9z8mwfZ/eRBql5AOpsm29pBprMTu7UNK51FSEFSatJCcdWKZjYvaCGbMBnO5XlxvIA0bNrTJtu6WmhL2pzMzXJ33wxVKZkOIEAT6AAzHrBABSQNyDiRBd9ugV8uMTMxSnlsBC83BX6VlqTNljWruXjbmbQ3tzIyOcDo6EkCvwxKEVRdgiBAK0EQenFWpUIEPgkjMvR8r4rnRUwkZBSlkzVqxTQOlcY2DTLZBO0brsTOdkYqQMpTiKxfgcJaR2gboVaYQqK0xte6bgBHDBEbWVohDZPjAxOUihWMQJ1qTMUiYi6nKzLppSEwkibJpiyJdJKeFR0sWdHJ/qcPMTNepKm9CWWZ5ELF2jU9vOmKrSR1yM9/chd33/0UpUKebLaB1kVLaFi8gp4F7QgpSFtQdaskpMlfX74afI817c081z/B00OzXLJyAZetWPiyud2etNnY1sKTYzP84Ng42pCYMhJpTabk3K5mqr7H7qk8KgAlLLTpkOxaQkPXAtzpCdTkCEZ+kr2H9zPYf4JtG9Zy9plb6GhuY3j4KKX8ONoSBKHGrbgoncAPfELfxbBslApxfRfHEAjboOqG6DCiaXgalbSCaqCwPQ+3OIWZ6QA1Zxe9fBNzHCzADGPC+MSok4bIy9EQZ/hppVFKo7RmeCxH6AUYoQIpTvFla35flPKqEFJiOTaJliZkU5ZN56+htTnJzruewS94ZFoaKChI2BbXX7iRizav4sknnufnP76XocEJstkMzQtX0rBwKZtWL2J5W4KRmSKmNDClIJkwEFqzOJtk/0jAh3+3i/eds5S3b1uHHfvi892GKLwnSdmSnSMzTLo+zQkbDw0ipKpgWSZBg5nieLHIVBByrORiC4WDwCBkYWcHVlcXpZlprPEBwslhnn3uOUYGTnLO2TtYvHgjxfwwuYljqMDHtQRuuYyrIdQGge9FgRokvgojMMaUuH7wSo5tpPpCiRsEuOVZkkrFUjWCiU/1WOZ8bx0fbgaoGMCYx+6ArqVXxKa9UhAEitl8OU6Gi76Xda6NZ04tEiQ0pm3hNDWQXtjGBVefTTplsvOWnVQrCiebJq+hu6eVd113Ns3pFN/8xi949I+7sISktbuHxiWruXjLCvomijihS6s02DdTZMviJsqux7mLuij6Ll+87Xme6M+TSts8cDxH70yVt21ZiSnky2Z5zRvd3p7hyekSgVagNFJqZgLNNw71sjRtUwh9fCExgUDXABKNCgJWNGd4upgkvWwtnd1tMHKS3NQETz3+ALnVg2zYcj7JJU0UJvbjVWapCAvb0FSrChcDP9BopQm1jKx5GWEAvtLzpXNEKhUhb16gcatlQhXMS9+qZbjExI09qBpQpQETLeuQpKyJVgShjiIjNW7UOiQIDFw3iP1dhdBGdDtCoFFIbUR50wIs06SptQHZkuG8q7bTvbCN+295nFLRxU4ncbVm9Zoe3nHD+eQGxvmrv/0hh/afIJVMkly0gq61G3jV+lY+ccEqDg9N8/OnDnFsPOD85c1Uqy5pGTJVyDNV8nj46DSZdAKhBDfvGWVh1uKGjUtpcOxXxNL9MMANo2qJUKvIqiUyMA3LoL/qYcf4NQKUFngK0obgZMkjbZZZ32qzZ6JIJtPCWed24g/1MXSil+Hew1CdZtWWC2nq3kpl+iC2MYxrmViyiqxGdo2vNaGKMAitNEIa6MBHKRGLQh3hqkSSM1CCIAwJQ4WBiK1kHYEsRK5oLWKua3nMMeYNyHqqzvyxqAX3tQKlIj9YKz0v6F+XDGgiQ8w0JYmUTTKTJBCCjVtX0NyQ5J7fPExhLAcIXK3ZumUFb776PJ557Blu+sZvmc6VWbp4ARvP3ELzwh729U2yJAkJy2Lbii7+8eaneO2OFZwYmWbjglY+etkWACZLZSrhAf54ZAbHEHRmHRY0OUwUyzQ4FvN1sIpF21SpzJ6J2ShpX0Et+qyFRgcaw6iNh8JT4MiQJltTcDUoyTNTZTY0GXSnLaYKHqMJyRlr19DV3UPf3ucoTI/S/8LdLFp/EanWzZiWjT3bhyEchFCgFUpHBl2owojblEKLKIgSwXvUwROFJggVodIRDaTA1FEwI4J8RTRJhJyXvhQxpxnGRpGMxbIQEYIUO1NEGJaOcp+UihNNanm/Ud6yUBKEJGFF4IXtOGitWLJmEd097dz1iwfwClVMy8I3DM45Zy3XX3oWt//2bn713TtwvZCLzj2Dv/3422lrbsQk4Ka7nqJYqvDTh55n79A0mxc2sGNZJ/fuOsS5y7v4m988TldLlk9csYXPXLaRR48+jA5NkrZBxQ/onZpheUtjNBG1iAzJ2DcfLrtMugpLyCghREaDOJf6GhkjSknSwuOGxR6L04rBkuRkQZArC/ryIVkDGizQosJM0SOVTrL23IsY3r+b4uQJpg8/iFjlkmw/CyGTCHkQIRJoBUGoCVT0CrVCaRHFtgSocJ7BqiM6B0rE+ynQMgqY6EgVzpXG1FxaqCX6mdEXc3JMzcOmISqlUCrK4FBE7zVRfhRxVEagySTMCA1L2OjQp6GrlcWrF7LzD4/hlULsTIKqkpx37jreeOnZ/Pont/Kb792OQnPDNRfx1x9/K88dHeSl4wNcs20Nb7/4DArlKu0NKXasKrG2uwVpSL5w7TYG8oof7DzORauaef22ZXQ0ZHjd5oXcfmiKsutzRmeGLQu76hCpEGAKyaHJHLccGeNwvkpvJUChSVkC05SYtqwPTBgqpBR4oebsLs2Z3ZpCVdPtV1nWpcm7kr5Ckqmi4txFmjZHIpVPELrkVYK1Oy5m6EAjheG9JPuewpAKu/UsQJFQh/B9By8ICQKNHyg8oQkxCLWO88lBhbXyFo3SgkCJSHzHkpkYCJlfuRHtLU7RSWYkoE+ZuKDn51XGYR+lo2CYCjGAtG1TCRRJx8KJoyt+HFKTlsHizat5/vGXKEwUSbU0UAlh+46VXH/5Wfzyhzfzux/dgzQt3n3jlbznrdfiuh7LO5rJLGojVB7N2STdTVlModjY2cx4ucLo+BQ7j4zz210nec8Fq3jbeatpa8zyu92HWNyWBTXOTMlj88IltKSSBKHCNARDhSKP9U1xy+EJRj2NYUouWpjm/O5mVjZluLV3hPtHZ0lbJlqAYVlYdhT3NbxZbnlshGf2T1MOBV9420bAo3+ySleDIGsFlNwo28TGwDZLzBT6WbjhTKZSaWZ6dyP7nkArD6f9XHRQJumewEs4uH5INVSIUKMIIwbSoLQiDKOxl4ZBGIQgTLSQKBU5UrXAiYpDkzrGiXVNf8dRu3plw+mhpsjuEmgVu0lagwqxEGScBEZQJW1ZBKGq+7tCGxTKZTZt38xo3yhTA5M0tDfjhYrVGxdzw2vO45af/oHffvcOZMLg/W+7lne96WoKxRLlSpUXDp1k68oFZBe04vshSVNiSIP/uONpfr/zIFdtX8JkKaQpk6BvdAbTEFgy5Nh0hR/deYQF7Q0IafDCwDRv27Ic4oDJPz50iF3jVToySZosE08ITuZcrltuMVmtMlT0SNgRZi3CkMLkNH2DQ+SGBtlXLrBx6SLKgYNvKmwLEqbm8rUS3/Mp+SGGBhEIEAqlBEoGTM320rpsFYYhGT/yOM3uU6QDSbr7TGy3guUO4jgWthfixhCv0hDqSIpqITEMM0LiTINAKXw1l4Oq5nGvEtQ4cy7MG7OnqbWIE851XZzV0nV0jI0q5nKWAxWiRZx0h8A2DUKlqYY+XhDQvqwLKQT9B3tJNTcSIOjuaePGN1/CY3c+wq+/9VuENHjDa6/mbW+4hqmZHCnHQochy3ra6G5vwg9DHMtiZKbIV376EI8fGCWRSnL7c0O0Zm2+/d6L2X1igr/7/W4aMxbHpj3aG9KoUJOwLF4cmuXE9CzLWxq59UA/L41WWdCQItQKLwwwDYOJiubzO4/FQRaF7bn0nuxjenCAZh2ytruZN5y3kbXrF9G1tJNb73ycJw6MMlJ2yOJScn06swFeEOIYgnTCRgWapClRocYLKoxPH6Fj8QrCMGT04E6y5cdoxaSh+wwq5SKmO4HlWBhBiPBVJEu1QmmDMEY+wjBKL7CQKAWhUnXaRPWdck7Kzovb1RjWfKUv52/zZbwWxJmSHg2GJNRQqVYJwmiWmWmb9u52+g6cxHQctGViZ5Lc+OZLGDxwgh9++cc4hsTsXsZZ559PsVJBaUkYKDpaMizpasT3fXwFzUmbb/zyQe56upfVyzrxlGKy4PK2i9Zw5pIuzlzSxa+fPoQ0stiGRcELo7QdAaXA4M9ue5HXn7GAR3tnEYbED6PEhlp9tSUE0rAIPY8TTz1JbniEy7eu5ao3X0j7sjbSHVmqluLQ7AxPDBxldCLPwla447gk6wt29AQoCdmMTaHk89AT/Rw6Ps26Ze1cvKmdntYEvuczOnWIruVrKFfKjB3cReH5h1l+TpKmhRsplp/G9suYpok0Ilc10JoQFf0PfQxpEIYK11dUfY9AhdTysWvBfx3DVqeX1NRSiOpVC6fDevXKwVgcaBUR2616eJ5P1fXx/BBpCkId0r6gg+mxaVwvxEklCBBccdV20pbkO3/7fbQfQnMn284/hyUdEVhRqyb0g5BS1cOyTCSCStXjgjOWsWlpCyNTBQSCQqnM2kVtBFqT9wL+4Q07+MVHLmdZm0PFDzAFcahTMF0VfGfXECdmXFJmBCggJWEoqbo+SgW0pk1WLW3htW+5iiWrllHyfFavW4LfaXPQneFoscDd+/soe5piuUpPm02+pEhYHuu7QyqVgN8/MsRffe8gfb1VvnjlOpZaJj+5/TDfv+MAQ1MFhBkyOnmYRes3kepex8TULAeevg8V+rT2rEYYBqZlYRhx3pogLv2RkQHmazwvxPfDuoE736yaA+r0PKNr7kc5l0cbZxa8zCqL/cT4Jx1Gs6JS9SJURUbuUzKTRArB7GSORCZFVWvWblzC9u2r+d4//Yjh44Ok2xeQXLiOS85cgWlqvDCM1EBsHCqhOTk8SajA9Xwu376W7/zF9dxw7lJUGHDjBatYs7CNchCJrXNXL8aSJlt6mnDdah04UEphAlnLxpSRdRwEikrFI5FQrFneyNa17SxuS+NVA/onA5afewG7+ib41Jd/RpefIOskeal3gpmShykkY+OzDBWytJk+6zs1j74wwZdu2scCleDfX7eRNQubuWv/BGcuzvKNN21iW3sz3/jVIe7bNYppBIxPnWD19nOQDV2MDo6z96mHSTd20NDaHYlS04zADiHROpKOoZZ4QYgfagIFoQL0XCr/KflYdWoL0LE+R8zj4PnEnVecNdfeoQZhzoXgdBxOVGjS2Syz03lMy0ZYJpnmDNe89kIe+/1DPHnno2Qas1jdq1i1uI01i7sJAjAMs34ejabqhtz1xJ5Ix2vN2GyB1Qs72L52EUs6bL75gatpTCVww5BQhcxWPWZcnw9efAb/8voz8QK3PpNVGPmMEWF9shmD7RtaWb+iBdcNeengFM/sn6R3II/vweCRY5jFPB9+x+WMJ0N2HR/jyOg0GdNAeCHlQpkLV3m8Y8sMG7sCntozyaY0tBgFGnSJD5/fw6tWtHLz82N868FepFfm3FbB4EgRLSX56iQFf4SN512ELxyO7D/CyYN76Vm8BieZQUsTYUREjrgmInRkeAmCMHKVIELAtD5VfRK7eDVDreYHn1a+G1E/wqGjVy2aNDdDNEqFaFSUM6XBSSQIw5DAC7BSCUJhcOnl2zGqRX77X7/CMQzSnUsx7QxNyZATU4OMFCbJu0Xc0CPQGoWBYye44eKzsQxJMmFhmQa5chXDhBsuWE/eDyh5PqBJJCwSCYusY+ER0tbgkDIkKqhVIECl5OKYmq2b21mzsoXh8RLPvDDKsZOzVKoKKTXJdJLZkUGOPrmTz73nKtZvXc5jvcM80zvClhXdLOtoxK+4aB2wtAMCv4gXhJgSXrccNtk5Htl9jJ/etx8vCFmblTy8Z5DC2AiXtwWEaPwwwDIlUzP9JBtNVm0/l0JVsfvJXbilEosWL0MLA0wzDrHGCb1xVocQBn4IfhiJ76h1Rg3RjAJBIXNAiZZzYnyuALzGuKKWH80pmZV1Ia4UtiHJJm2EYSKDEMuycF0XmbAJBCxc2sE5567jx1/6PlODUzQvWkiibTFucRov1cGu4UNo5ZG0oSUZkE1A1rFpspN0ZdrIlZbw/MFZ1ixrJURz0ZYVJAyT2XKFlGXgBYo/Pr2PXCVKsTk8MsvK7gbCIERLg2KpgjAlG9Z3snhRE/2DBfr3jKGFgZOwsMxokpqJFNP9vex58H4+856rufzyzdw10sejBwc4Y0kXj3//EdZuWc6CNQtpSifIJhMov0pgeHhewGyuwoVLm1iUgROzFX56/4u8e63Du9Y4LEt4jE7kkZkmKtpgcErR0yAYGj/KyvVncPJYL73HjrJr5xNcfPUVNDY1UxifBMNGiWqkh6XEkBZKgQ40QaCo9cvQOpKcQhNF9WrYpp7L/Iqt6BrEFbdEiMGOujqPRYFSUcWAaUiSto3WCt/zSCRShDoivuk4hIbB+Zdu5eS+Yzx2++OkmhrILF6LW6rQscCmbVEjrlshEILxahFhekgZUA18Cq7PcF7Sd/wZnnmpwKVnbuVzb72UfKGIMmySlkPZCzg60Mei9kZ+9JuneKE/z9vPWca7z16PLW1ueqKXS89ZgWywmZ4t8cjDR/FDQTJpIQyDwPcxtIWTdhg/dojDTzzCJ971aq694Swemhzi9pdOsml5Nyfu3IM3Ns6hx0v07p+mo8EimagwOgXttsSyQBdLVGdtCtqgO2WxqgGabTi/LcQoFKnaNkd6Z/jO7UOkGjr46GWa2VyRycIAW87ZwcneQZ59YT9r1q9h9fJlDE7PgqFjcR0VGIRhiB8EGELEAHFc5B5zN0bNNJ6DK2sMOmdk1Yioa7vN09vxfymiEhLTiKS67/sgJGXPi5LxLIsAycJlC1i5chG3fPt3VAtF0p2LMJKNWNJl6ZkLcP2AUujT5Ni894zttCW7KAdgSwvLSOA4FivWKc5YZ/LCiYN87WeP0JTOIiTM+tP0FfeQt56lsynFq7ct4+1XrKVXmXz2of0cCzWvuXYzn3n1Gaxf3EauIli2voc1GxeycGkbnR0ZGhpSmFJz5IlH6X/qEf76E6/n9Teex+Pjg/xi12FWLGqn8Ewve54a4M3vOp+//NBKymMD+GHAsSmH4VLAAwfSzPop+ksSb6ZEUgWUqz75SkCpUEXkZil5iscGKhREO6VSgpd27+G3fzyOr2yq3hTZVptlq1cyOevx4KO7aWjI0tHchpIWpmUjpYkmMrJCDWXXJ9BEmISeU6G6Fn8ngo9VzRiuiWit40BDHBESisiSE7FbJMAQUcS4hp54QYDUiiAIsG0LbQgM20JZBue/agu9Lx3gxYd3k2zIkO5YglsosGx9C06jTT5XpBJ6XLlxI8++OMiFm9fx+EgBxyhT8nJkMiGH94W0NCTYsLSVrG7jD089jNkwiHammCyGHOxtY3jVOEs2reDEvl5kucihE+OsXNdDU6XKX/z2SWZmXKqVgFnLwE7aNDRlaGtJMTM8zFN33UtXg+CL//w+Nm1azMNDffzuueMsXdpJ6fkh9t3/El/5iy30LJC0ZwU3vnEDt+70+ekzzZzRLlnVo5mtWNw7btBbcLlqGWxZ3oilFZVchScnFXfkmwiXbOa883bQ1JQlP9DHyf17+dZvetmyyuaqcy02bl3L83uPsO/IAIMnBli3bDEnJ2YJ/JBABPjaJ1CKwA/RmthLEHVGnM+t8+MJc4bzadWFsQoGEaXPeoT1DL0orcckCBTVqkvClhhxrZG0TAIB3QtbWbNmET/8wjcIKlUal61F2AlkeYLmBQuplCpkGptI2W0EYcDrt67hSGWC1lQrm9uXEeoKIR6qp5dsQ5GxoSny4glam8uc0bQK32hnd59N/5ji6KHnmZqpYggbqXw2Xbwav1LhiV0nUNLESSZJOAl0CPmRaU7sfp6x3mNkU4Ibrz2X17/5XHRK8It9B3i8d5yz1ixi8JGDvHj/c3zhk1tYv0IRenkODDo8O9pO08IUPQ159o1mODljQ+DymTMT7B4z+cBOj2tGfAo5l4cCKCzawpZrL2RpTxvjhRKjuSKrV69l9aI2fv3LO7j9oUNsX9fEykUL2HTGJu5/aCcPPrWXd7/1ahoySYZcHyVl5C3oqJ9fGGpCFTNejWNrfKx5ReLGBI74uVbDZkqJTxjV6DCXymMIgR+GuL5Xk9lRoNkwkJZNICSbt69lZmCMPY/tJdnYTKJtIX65jGlAIELaOhfhOCmO9R1hp5fn3PPP53s7d2KYOWY9QdpULGlo57rNO/D9KpWuAr6o0JzuIGEv5+BIwNDkMSyjSJhwaGk28MoBWy/ezOREnuMHhmhsbcayLbxSkZH+Y+TGx9Bunu6WFG96wzYue802lnS3cDw3w50v9DNVDdmypJPh+/fyws4+tl9+AZs3hlTLJWxLc3C4kcEJi2zCZWQiSq/Rhkm1VOJfHh6jYe16PvDRK5j1YHjvQTpWLmPL8mX4nstorkJHc5aEm2ffow9wbGAao30FzcUxpLSZKUxwxua1PPXcQXbvOcE1F4+zbnE3R8dzUV60kAREbpJSEaMpolBuTZVqiFJoRc1uYs6O0joS0TWwsmY028gIgY4jFIEO8VSIlLWukjGkaUTxXy0lqWyKtRtW8sSv7qI4MU3zyjUYySz+9BRKVmlbtBikSe+xoyjpY9hpvr9nN2VVot2ygAApoahmOZk/SYORoSPZwVhpmFt3PQ+5Ms8fHmPM1TS1N5JuSOP0OKzZvBSv5NF7YpzW9iaKU5OcPH4Ed3aKRT2NXHXRGs4+Zw2r1vdgpC2Oz0xz09N7OZYr0tXRzAZD8uhPnqLv0BA7Lr8Io2UJP985xsJGwVRe0jcpuHztFItbfbrbLEYnQ779qxM4XsCa17yZDdvOxPOhHcXCxQuougEzhRKpdJL2tGby4EvsO9iLazbS1LWUoFKlEruhpXKJBR0mq1Yt48HHn+PRZw/wutecTzqRYtbzUcInqIEWShPUqjXrVIg6CanT2vTM/2QKHYWbjHlBhzCu3g+0RkfhjXoeUM3BllFVNcIyUMCiFYuwpGD3H59AOjZOWxeEIX65SPPidprTkuO9fYTSwFeKhZk0Wng4po0hAhqcJE0JUKHL8aleKmEBWwjOX76VDmsd/3DzszQ2pHAci8p0BS/wOfPyM9jzxEFKMx7LNyxkz8M7OfL0s5x1/jqufv1bWLtpMSJtMF2s8OjAEAfGcoyXfTKZBGtbWxnb3cc9Txzk6k4f75wWbt/9LJneYRauXsOaDpuWjjLnrajS3eSjheS+R4Z5eHeVzeu2s/G8HVSMJCcniiRMiW1oKFfJJh1WdKQZP36MB54/gCuyNHcsQ3o+lVyOhONgWwZKgR945EtTrFjVwx8fe54nX+rlda8+l6XtjTyby4OIqpjDGMWqNZxRcTsLdAQ81aJDAlEnds0OMw0RQY+hVhhKoCQEIqqWO6WLUk2R63gGiVqVvUkoTdZvXsXwoZMMH+ol2dKKlWkmKBexEjYLNq4iOLCTtZ2tjHhZpj1NwjIpuCX8MCAhTHzfp68yjSlDUqYi7dikkxY33bYHPbOcv3nfJXzvtucQ0iT0AzZfdgZuqcrgwTEcQ3PL1+9l8cIsX/zX97P0rCXMVMo8crKfk5NF8kFIMpMim0ix1gooHpng4YdeZHFQ5Kvbk7y6u4TdKnjDhha+dOcJjj52nJaty1iz1CZfUQxNGvznDw7itK7myvdeTzKRZmY2T6CK2IZBKQjxpcXi5gTG9BBP7jzAeC4g2bKQJkNSzeVwbAvbMilV/SiHHIWvNFP5cboWLKO9s42jQ1Mc7htnVXcbTx0bRghJGMd8Ax1ldSgdFa5rovpiiLoR1Di6tkX1izrKyZrfT1IFUaJ6xK2KWnORsJZ5GWfhCyFBGigkqUyK5ct7ePhHvyWsVEk2tWOYNsXZMdacvY7cwDAvzo5w2aVw7coyB3IR+F/yAlKmSWgqipRJJUySlsQSHijBnb/XvLQ3TdUfoOop3nfdFr75q6dZf856tB9w7PmT2CLg+O6nOf/yzbzhE6/Bl/DgSyc4PJrDzCToakixrKrI901QGMxx+MQE+alZ3rW9kc9szdDaZDPCMtT4EJebR9nx/hV84SGPz/zLQf764+s5f0uWA0emOD5qcN6KJgaOH6dt4VKymRRe1aUShHQ2Z7CqM+x75AlODMyQbu2huS2JJUJKlQqOaWFZNghIoJipBARK0JwxmS1WSVgBa1cv5fDxEXbt6eUt151PwklQdANCJCGCQIsYgpxLYa7p2xqcHGOP1Pp7CMD0iSoJ/XlNVeZaB0QyWen5Un0OJZGGQaChbUEbCdPg4K4DCNvCamojdD3shEmmo5njt+3l3HOSzOaqSFK0ihxLUxVyVUXFDxh+JkfSDjAEDPdV2b7DobFBsfdFcBKSTCbN43tGyCYdPvH283h6vMrx505g65BjTz3Kq954Lld/9FoODI3x4uExRNZh+YJ2pvedZO9zx5CeJKz6VMIQJ50i097M7SfKPNTv8rrtC3jL9iYaz1xC3+g47SPP8T+v6aarfQ1f/f5x/uUv1mBKj4a2NlJL1jFx9CX2Pf0Sm85YxZJ1a2nJOhx+4WmOHRkmsBtIty7CDAMGjxzEL89iaMHUbA7LcUhYDpUwJDc5yY/vS7J2ocPyngyNTR4rly/CMJ/l6f29vOnaHXQ2pZnJlRHCJNQ+gYJAxUZWLfijNDpu3l1Lt1Vxjl1MSEwVClTcc6IWjYj0rJofi6ojW3WDTBIVeivNwiXd5ManGD7Ri5XNYKUbqBaKtC7soDSVIyiVkbqT4SGX4voQkyrdScXShpA/3DzA8B4P0zYxLIkfmEwMu7z7g2maWhT5vAYR0pJNcd9zfVx+2WYajh2gWPGZOfQ8Wy/fxHnvu5qn9vdyuH+GrkXNOKMzPPT9P5IMBdeceybPDY5StB0C30OaBuVQ05RqZOu6lXznif189+Hd/M1r13PtJVsZalpE24mH+PtLGpnM9/CV/znI+2/oxhBgBR5dS1aQ8wbAVzxw272YQhNYTTR2LEV4Lm4hj2GbtHf1cGzPEO+/7kLaWpsYmJyhVCxTdV08fyl3PLibiTU9DJW7+MWuHBesb6W9rYmj/eMMjs+yrKOFfb0TSCEJhMDTRKm2zNUaq7h7q9S1rglxJ6N5rCjr8lrXwoJz/YpraMj8Yqjaj1GRmQTToHtJJwOHT1KZmSWRaUQYNsor0724i8rYJFIajE/6FEsGff0lEgkDN/TpIGC2r4DlWDgJE8uSpNKCaslgfFhiWlEoUiJwKx5rtq3lh3c8x5kr2lFjJ2hqd7jyI9dz6MQIe46O09HdSPXpY9z3zdu5busG/vjtv2LNmoUMTucIEiappjR2xibVlmEqCFixsIkHvvwRXnfJRXzi1wf5h589itnYzfCa68hPzfD1a7P0pLP89M6oygLfZ3Z0BFUtsGT1WvxEC4WyoqW5BV2p4JgCx7YIfYWZSBAaDrv3Hubsi87lvNdfw6vf9Uau++Db2XLxuXQ2Sz771qW8YYeFZWj2jWuyLa3MzpY53DfBovYmhJSEoiaiI2hSIaOE+ZpRLKDWGHWuYUutWZyICsDlPLafaxWgQdUqGOYA7vr0EFGk3k4maG5r5pkHHgfXx840k7AsRNLCdCymBifINKYYGfEolSukkhmWrUyi8RgcCsnnBdmMpOIGKAWplCDTaPDwA2UmpjW24xD6imxHM5mGFHueP8SdM+OUpwZ4zefewnChzL6jYyxa1kXl6f08/euH+d7X/4Jt65dx764XWdzexr998PXsPNrHiXIR05Asb2rkwlXLEUpx1+6XeN9V53LuphW8+2v/S2g+ycfffglHWs9ma3iYb757PVd+ZReBWUZ5Pg3ZDENTRUb7+nCnp7ClAM/FFAbVqo8WFip02f3Q/SxoTnDZZedxolJlpOQxOVuhMZ3ipm/9hCt3NNGY9XCrIW0pwWA5JGNl0EpxuHeM887egOPYFKoeGoNQScJ6ALjGZHMVKVGFRJROO1+jmtTldq1LXa2BZY2w0Ush5oMliDiXOJNN4yQdRo4PYCcTpBqbQQWksym0CqkUy5HYqEKhFKJ01NooX81hyRb8QFH1Aro6BZ2dNif7Arq7Jd1dEmEYPP+iYjYvWby4m6Gj/aQyaZ558hkWr+0mu3ohL+7tpbGtEdk7wv47dvPj//4iLY1Z7t35LB+47jJashkA3v6qc/nl47sJlOJdF++oP0e+VOb79z/C2mVL+M3ff5h3/vN3aets4dqrdvDCUMi2RUVu+vj5vPebTzB8oo3FCzso5XJI0ybT1IhfLOJWqkgrgW0n6D95lLFj+7nhsm285QNvpZJM88LAJPlSQEtDhqPPvoDlT3LpeecxM1tByCwTsyGBpSiQRpgWxwanEMIglUwxlSuCkAQIAhVXBM8TwzXNqnWUTqXEHOUiAse5uOi5bq71wuK4yl8RBZFlHKHQ1FJ4oKE5iwgU1ek8ViqNk86gXA8z61AqVPBcD8tJIlAkHJP+vjLFfIJka4n1K1ayuMdgZqbKO9/ZRSEv2bN3ggN7Ffv3KLafk+DiC7M884KgIVmlb3gMQ9oI32XVFdvpG5rGD2BJyuLx3z7B1jPX8Py+E2QSJv/4/jcCUZJaqDSWIVnU3oQXhGggCKLCr4Z0is/ecA1fu/Ue+qfzXLB5DT+641mWrV7CgsWb2Dt1iDdsN7E+dw2f+M79DPQ3snDJEhyilkumNAgAVZzlwMEDtDgeX/v7j7LmrM3s7J9muDdHi2OSlBqlff542z28/dUrEYbCxOTQgMdk3iTVEiCsJBg2oxM5qn5IQyaFH9X4xf0yNYYQqLgGO/JyYqep3rRVxXBm3GtMiXlcquf0ra7n6MyFJ6L06CgpPJVMAJL29mYMzyM/NYWWEoVFpVLB1ZpyqRz3m4wmhm3Cyb6Q7/5gjCMnqzQ2mHzq4wv57GfbSac1v7t5Ardk4FgGtpVgfMzmj/dOs2ZVggs2l1i5wkDkx2jqytK4ZCH5sVmyzUn6dx7AyxXZe2yQ7938R1519hlAVINkSBnF0OMaZiFjhSSinllh5Htw0RnruWP3SxwanMKQJv9x051Mz1Q50baZp2dSXL+tk5v/5nWk/BzTw0Mks43gpPG1ZmZ8kucfv5+t6zv4+rf/ntSG9fx693Em81USlQq/+Nr/cPCxnRzb9RwpPcMZG1oJfI9iCb77oycpTA5jGhbKdMCwmc6VyJU9GrNphGGhkBimg2klalGhiBZEIURFlO6kRa2Xp6yrXFkLOdXQ6FDruGqBOIlrngOtwTQM0qkEhmmSSlikM2ncsotXcjFtB1drKpVqVA5S9WJ9oRCmhZAmys1xeO8MX/23k9zz8DgnDpk0ZiyEkqxYbrB+vUEQRi5bfsYl9ODwiM2PfzTBzFQav5SnZ00PM0WXih+SMW1GXziG5/pUXJ/uxd0I0yIkLg8JQ0wjggIeee4Aj+85hFYa0zAIVZR6ioCMY7Oku4vQ8zGFYDrn8pWv/ZLRkRmG29dx76TNysWt/P6rH2Zxg8lvfn0bwew0vUePMtV/mE986h28428+zcPDBe545jgp2+HIE7v48b/8Bx3pPAee3c39v7+PMNGO0orZsuY7t03TsWgVwdghhvY9i2HaCMuhUPSYLnqk02kQAsdMRLVMupbgHhUUxSDjnDFMLco0p0tlvaFWHbYScbYAcykgdcs6CkBLatwMDY1ZSrMlZmfyUfmjNKhlFoR+GHWhQ1CaHKcweITFyxKcd/kC/KkR7rjrRfr7Utz0gzFGRjze8KZm3vjmJhxboAgpFxVYScLAxK+CUAblokeiq51SvoKwTXLDk0wMjiNsE6lCZnIlXjh4HB/irngGfaPjfOxbP2Hn0AC7J8b4+Pd+wYnhMQwpsWLiH+gbYmIqD0FAGIQ4lolS8E9fuonDLx1nqnkF90wnMRsy/M/fv49NPRl2Pfwgi7sa+dI3PseaKy/h5p17ODaSIxFUufXbP+a5B+7mPW9dyGc+vYm2NpNNaxzWrWvlloeLfOu3eQ4Ow7LNW/jsX36C0vARxg4fwEymKFVcJgsVnEQCHwgAIaMJ6SsVxYXjzI3aOhfzX0rMObVm5E+pOhQpZN1HnlPgdW0eha0qVZ8GQ+JpDbZNbraAX6lgN7eCjrIaQz9AOBZBuYwqjrB0VTNb3/AGmrcsJ7QkZ77pYg7c/Swv7NrJ8d4Kh/dXec8HF7GwWzAz7eI4JpUAVvQ0sKDR54FHjxG0ZUhYAcmWBsZnK+iExBuZQFU8nOYklXKZRUGKyswM//jtn7NkURfN6Qz/+ss7qDgW2o0CbAOtaV78z//lz659FaHn0jc6QSadpk3C4VKVbCrJzFSO6955Db4WfPlvv8VHPvUuNl90Po9OTbKySfPlv30/poQX+icZ8DR7ntpDg+Mwte84v/7tbZxzdhM3fngb/YNFvvE/BwixueK8ThZ32Xz1u+MsWpDiw69q4Wf3HKGj8xz+5Suf5y+/+J84mQS+FhRKLu0tzRDHBEquR8XzT6HHy93Yl28mcWxxLsQUca6I00JUPUsgOp2UAs/3cT0fTxsoIXGrHqgwykIQILQiCDwMQ1Ad7+WGP38Na959Ocdn8vRP5Eg4JsnWFOs/8mpWvvpMVt6zm90PHOcPv6zwoU+v5YwtCSamYXUq5N/eFNLcOMt/hVm+efMxqr5ipRsSWgZGqPFzRbTSuFUXU0j+7nPv5XWXnM345CwHj5/k8//5S4ZmS6RNEyWjcpBqyWPaFnz1F3fylQ+9kYvPOoPuxgY2rl3Bu7/0XSqVKhrFyMgkH/nzd1MKJD++6XdcOTrFBa+9mieniqxt9vnKP3ycL//rj/inj/8T13/kLex/7jBDe5/jXe9ajrDg37+7lxariX+8cSuH+yb59R+O0dKT5B2v72bpAovj/RXS6TR3PryHV3/xTbz1DVfy/V/cjm1ZlN0QX4Afanzfww2C+noY9XJXFSdIxv1RXpHAL6tmqMv0WmB5PppFXVRX3QBlRG2JfN8HPdezQwhBUHXRboWWrSs4lA/o/+ovWXfJmXRsXMZ0tUphtsJsrozdnGLTx1/L9jflefa2p/jFfz/DijM76FnWyk2bijQWJ/DCFP/89kW84zUb+esf7OeW79zGgnM20n3ZZmYKRZauWIaZtti4sofzLzibIxM5UokE1+44k4PX9PGFb91MprMFwnhFCSmYGSvwZ+++hqu3bWKoXGGgWGbFiqVcetYGjg2O4vsh07lZcm6Fs664GOWkuOW/fsj46AxXvPutHJ6q4qsKn/6rjxCIm/jV13/C2ds7eff7NvLw46OsT5p87bp17Bsp8UL/BNec0cq7L+rhlucm+a/fn2DDeoeELZgchOYlq7hz9xGuf93V/OG+nYyOzeApjRIGVS9AKk2IJAijTr+1Fg61xTNO5+L5zWRNdIReCTmfzee/rzVEi2aNQtXDh0rHDWXj1FqNqler+6UyIiEJRYC7pJNyIcMTjx1m4e6jLD13Da0rFlBwA1TFZWx8hkTKZuNHXs2a12zjwG27efjBQ3xjsMIntxuknDy5yRJr1y3m93+3ge9uaeazX38UhSLVkEJR5urXX0MCn8myC1rg+j4DnsX2zWtISAi8EGHEYL0QmDpk24aV5AKFF0YGy/BUjuUrFrJ63XJu+cNDOEmHpGGTy02Ram6kqSXNC089Q7Xscd0H3snBCY/ZsMgnPv9ByuWAY8MHOXJyltRkiR0X9rCk1eaqrZ0c6J/hV0/2o0SSHUsyXL8qywMnZ2hesBhv9iiliSRDw4touKyBs7as51e3PoiSEl+LSNeqWrqOpiZxawwIc0awhliC1pYzEnEvTX0q+jF/q3lJkXLViLhWWGuNIcH3AzDMSEzE3yMEgesjpBF1h50poAwBy7o5aSV4/A+7OfazB2gcnWZxZwtWJsFsqcrxvnFmm5Nc9g9v4f1fezv/sUfw+t+WOFhpoCX0mHhiD7ndT/KRq7Pcf9MNJI4PMLDzINMzU1i2ycxslamSSylQeKFgvFhlxaqlbF+3hPH+IWam88xMFxjsG2Hz0h42rFnGZLmKKQ1GCkXGS1UqFZ9EwmGwb4TFPV2gBCVXMzM6iTZNVrz9Ko4P9XLLt3+AG8DARJUjk1U++9cfJmt3cMstR3nHmQ6XNBe5/8njfPkXLzCVr7K9K8OtTw3y9Esn+cTZDoWSSd9UlpbOBeRHh7CVRxlYs3pZFJK1HNxQ4YdR5/gwjCoV5lvN81lR1Y2sSIqGcQmMWQciVeRT1XzGyHKe3wgtJrRS2FKSTtp40kAHIYZjgyFRQRghIiJycyoT04iWRNRIZLaCG/iYqSRy7XL6SlWG7tnLymd6WXneShKL23C1Rg3M8sff3EphdpYVl2/g6Xv3cOF3J/nI2Sm+eEEK2T/NeHEf521bxT3/soOr/2onvYM5yrkipVKJgaEpetob0aGPYwqCTJKlC9tJXbyZTDYDQuK6Lk2NaULDQukqQ/kygzNlKn5IvlAimUwxm6+wdv0aposuVdcnmJ3Fcgw6V3fjzK5l1w/uJdDw+g+/j96xEp5h8Nm//Rif+Ng/8/CBPDescHjvGUkmypp/vvMg7zm7jS+c49DTYlGq+OSLGicRYGczBMMB3c0JqkBzc1PUQNx28EOwpcQ2DAwh8cOoZqnmB9egSy2YW5OIiAQ1US3nOPQVOLYuCohx6sgPTjg2Kgxx3QCvVMVJpRGmjfZ9dOgipYlyi4zv24eQJpY0UWU3ygrxFX6hAo6DXL+cg8kE9/zmCU787CF6f/EkL922i4ETY5z5hotRi7rYtqOTGz64jm/vnuXqn1c4nlpAQyHH2M59rDVGuOVvttOQsnj8oadp6+rm2V0v4RkJykhSjQ386Fd307V4If/73S/xlS/9Gf/6pU/wi2/+FWduWsP3f3kXoe1wdKaITGXZu/cond2dPPLIMyxa3MH6jSsYHs2hQ8X4iT4au1qYfeBZ9v72aV79xo0URg5y389vRlgJjg/MUsm08Pd/8yH+cNzntpfyFHNV2h04b2mWNlvz6iWSdivk+b4SSUuiVIBb9Ug7JmeuWUzZi4IrwjBIZ9NUKh5BKKi6YcyEkYEVFafNYRPRgpYvLz7TUV50fKCac4lUXbZHQl2oeKUzKTHNKOjveT5CKybGp3HSDViJBIFbiXSEV2b65GGu2NKE19vP+MFe7GQWx7IJqy5CGIhA40/MIKs+YsMyjuY8Dp6YZNtbL6NraSdBVaEqIYHvs+KMZj74l2dTamni8m8OsjPsJludZfT542xpzvG196/jxUefojAzy/23/5Gvfek/eHrXPu594BkOHR/mmuuv4qWBSQZmSgzOlHhucJqLLruQ46Nj/PQPj3L0cD83fesn3HnbvZQLFR5/9Gmuv/EKQsNkYrwI5RIDx48xtb+fgw8doGvZMs65pIM3vnMtj9/7AA/cehfNzc0MjkzTs3EdV11/BV97bJyRsVkqZZ/Zkkuu4KL8gBdPzrJ3oITvKmzLYuDoMS7cupqOnh6Er5memMZxHNLZNIWKi+v5+CqkVK7GNVw1JpxXEBiHeU+tDo0+mzUVXd9FE+OctVCdBiNeEENHudK+54Ln40lNKVfAzGRIZrPkxyewhGa09ySvWS1429YkzuMDbCmW+NljQ+SXLqNlZTem0PhVDyE1OlC4rk9DayPSrhBUXXwtMXywfB+hBTMzAaEtue7dq7j7N3D9fx7lvs8u48zKIJPPHeOD21Zw6/kL+cm3f05jg8UzJ3fxwjMvgQ74/D99gb6ZIqFbwTYt0Jqq56EMi3Vbz+Krf/N1Ahn1jWxuauCH//Nzdpx3Bpdedyl7Do5Q9CWTRw4xPTRFY2c33cuWUfZcbr+1D50r8LHXrGb/oSe565eCrRedQ0NLC9e99VoeevBJfre3wOeaE9ihJmtITk74PNUXMFasoFSW8aEBurIG733fGzmcq7CjK8P/7j1EOp3GTiWYnMnj+wGB60XBfqVjI1HHUaPoVQs+1IMMtYCDjhflqJX/C0Rsh0clKq6OSpwUIYHWWEIQ+IpSqUo27WMmLPJT02DaNLa3MTs6Sq7vMGld5G9f08Mzjx2lJWnz5xsUrymM8puTU/zh8W6mliynaUEThghw3SrCsqiWQ9AGZqBRvodpGwR+gF/x0MqiWgkoV4pcdMNSyhWft/xgiCc/1o450Es14fA/b17IRb2zDM94NDZlCUJNteJz/50P0LP8/bge6GqkJoSUJGybe26/n3LFJ9WQpa2rmZGRSVqbUrz/L97PdBn2H53CSlnsvPs+GroXke1YwFjfCZY2w40LO3jrW9YT2jY/eGSIg73Pc+J3e3mxdSWve8cN3PD6V3PT939OQc9CIsPxvMvY9CzXr82ysT3Dtb8co6RzfPdbn2My1U7ScymOjfL4M4dYvGIhZiLJ2FQOP1AYgY6MLDXntNZQLBXTrsa8ca0CmrgXrNaC+qoRRHm/oOtBBRXXpEotcEOF63lEFW0KoaA0M4sXhLQu7gGtyQ8OcM0Zac5ogCMzFiUlGZyoktIun98a8JtNw9w4/Dje488w2TuDNG2SqQQZCcr3MW2brCEYOtxLdW8/mYYsniHwDYGWNoVqyGU3rmZCCz59d56mhZ2MHBtlYb6P2z65iu4Wk9xMGYEimUzwzGNPcesvb2Vmusj0TJWZ2Sr52TJ/+M3tPP3wkyzobkOimR6bpqOtgc9//TM0LljII48dILBT7HvwPnIjUzQtWExuaoqlqQJfunEl77hiGTe/MML3/niIN21v5ea/uZgPX7yAkcfu4q5f38mOyy7ATCTJNiR5abxEdzLkv65qZ4nj87Hfn6C1s5XvfOPThEvW0DuRY2t3mt/f9hBTMwWaOtpwganpAhpFGGqCUEfYc03vxrpYxfaVmgdY1XFpAWaN3LVmWloqpCHrvSAQ4IdRXrSI1zEiVBBELlG1UKaQy9O5emXkFNuSq9enGJ8q8/tBwXlLopVDSlUoDJVpSsHfbkvyzsIoP9s/yJ293ZQ2bKQ7bZEUkqdvfZKxPScZPnofG5sMDmYbocnGsAySGYts2sZLB7z6Leu49du7+dbyRXx0STPHD0+yfkXInR9u4xO/m+aJw2UMR9LW3oEONCeOnIzSgSF+DoPOnh7K+QLC91m5fikf+uKHaF60lPsf3MtUxUDkjrDn/kfoWL4WFYRUymX+8sYlFKemWPffL/DJa1bw1288g+cODvPX/7WfM7qS/N1Vi/jObBGzrYWW5ctp1n28cZnJqmzAv94/zI8Ph5x34fn806feyVSqhZcGc1y4oo0Dz+/lp797AFOY9CzrIV8pk8sX0XHAJAzDenvJaK0Y6qbW3KJjp1rLWghMHfdKtISMQQwI4tQuFaoo4hL7VyKywKJWPmG0UlfgukwOjdC1Zi3CdEimDTZ0pzjcP8twUdBgS5SvKHqQdCRVD/pGKqRMxd/uyPIut8APDz3FQ+UFBIGHPTnGkuWL+eAnL+Pk4ATLZl2mjuQoeIoJX9E/OMW68xdy5lVr2HHDBr7w64N0f2Q513VJjhyaYEFnmdve3MX3XzS56akiA/kKBw6fYNb1WNDRgmEalIplpgYHKc3kae1s5PzrL+aSG6+hUJXcesdzeKFJWpS4/Uc/paFzMVamBR2E+GGA6RVY093AxcuTXNrp8dFvPsIli5N8YKPDshaTXz08Q6AUwoRlq5Zw75NHSTqCv+udYsm6lXz5X29k41lbODjtMjE8xZbFLfhTo3z+776NxsBybJauXcbQ2DSViosdKsIgJAhU1JClZi3H3CtjzXsKklU3kDWmKaO82kCHUeqs5pSub5G1FudIi3iV0Vpz8CAAYTB2coA1115BurMDy83hWAaeaYE02DupONlhsiStcUNBJXRQ2kNpk/68QYoCX9ue4QfHRpiaqrBleYJPvTDBF/7zYhJmFoQDfhTSu+muPJ/87ydYvn0FM1MuK85ajFfWvO8Hh/nm2xbypiWCkf4cxlQfH1yc5nXLGnjsWJkn+4+z/9AIdz5QRPkBqVSCBat6uPHP3sSmi87CzzTx3IFRjrw0QKqpEaMywe0//CFOpo2GzoUEfoC0LExgbLLERUtTfOmSRlZ3GrzUYnD1chupFSePjzObK2A2R0ZPcybFXROwZccaPv/+8zjrnG1MhRbPDM1i6pDzVrThjo3y0Y/9A1PTJRKJJE5jA90renjy6ZcIA00QhNH/kHpsQNas59iFPcV4runfmKNNLcBX8RoNOsrcq60xSK2B0jxzXBNZ10oFEHqYlsNE7yDYDks2rOPozscY8RKsbzO4dK3NQy9UefeMyVtW2bx1TZJGP09Zm9haktEaaWfpH3ep5hW/21vglmM+55+7kfGpabrNHEGhiOg7QqFlBf/8vX1svGgz2AnCUoVi6LPmgqUoFJ/4yX72Xd7NZ7d1YMzMMjnlYckJzs4Y6J40R/dWWLSwizVnr2X9q89j4cbVlFzYe2KK4SMnKRZ82jtbmT7+Ik/degeppg4aFywi9MP6ijSWUAzmA/7w/DiXLM8wMxPpxql8FVEpk/J9GtIOQajwPcXZZ63jvLM2sHT9SsqBwf7pEoFXoqMxwYbuDPuefpG/+atvUpY2nStXMrRvH6u3rcXOJOntHUUoCDxFGKiYsSLdq0Qc942JrJhb55GYuIooMmiqMFrLIIhnhkCjdS3xPfax5vlckatU4+AQQysKE1NMDI+z6tyz2X/7HRwoZVmeyvCNa02+nCnzuz0VvvdcyC19VV67yGFrpkrR85nxDfZOlzmUhyDdwEWXr+AD1y7iok0J1Hgv5RNT6PFhsku6+Mxt0+SMBs7duopq6GNmTIQOqQQh6y9dTfuSDn582z529vp8akcLYwMT3Hu8zKGijbOokS037OBVV5yNbG1ibLLCAw8eojhaxsChta2ZpJ5m189uov/Fl8guWIyTSuPmC5iWhTBk1DTBMDgwpuluTKD9aD0Gv+Iiq5BUAccmfX63v0ByR4rQC2ldsgwtTQ6MFtFK0ZpxWLyoDVku8t//9mN+/Yt7aGjrZtGW7Uwd2UMYBKw7ZxMTUwUmxmaQocb3ItGswogAUZP2GvhUQ7XidObIAYrhzKgKwgx01Fa3tkpmtGPNxxL19nrEYcRajbAOVLRsWxCgXJcTew6waftmjGyaP+we5py3n0Hy0FN864ZW3n2BySPHqzzbX+HJouKxaY1tCxozNhu2NfP2Mzt41cY2upqrMDHE9P1DJColkk1pZMrimdkufnjnLhLpBI/+8AESTRkS6WixLK01XrWK1JqsKdh3dJaPjJZpX7aAtddt5c3nbaBheTtFw+Clo1NMP92PP6NJOAkaMklEMce+ux7gxN49rDpjPdtf9xrGTvZTmhnFr/qRDaJj+FbB74d9nuwt80Snz+vXZxChYF+fy90nyrwgF7D6hht57aXn4RUr5D2fpOGxqDFBa0sar1LlwT/cx8++/TumZyZZsGIVVttyquUS5akJMq3NrD1rI4cOnsQtudhhQBAEkS0UQBCquiuk6ynMtWycufTZGlOGOg741z0rPR/Grhtjp0h3rRQ6robSIkD5LoZp0bdvP2dcchGrLryIR++5h/suO4urz7iM4wefY322yjkXOggzFZXHmJKEY9GQ0CBDqE5R7u1n7Nk8ju/T3JLiBaOb54+7vP9VC/iLfzlG00Xn0b5pEcUTgwTFMvlSBVXVGIaJk2jCaciw5qwuLl7ZTWN3C057M8qyyOWKHHphgLG+WbQraGxqoK1VMHviOM/e+hRTQ6Ms3HAGH/jnv2PFtvUEAvxSmUqxSDmfp5ov4lYqyNDDNARJO4F0bKZzef7l3geZPXmSppWrWPu6V/HRi84ik05QLlVI2gadbRkMQ1Acn+H2Xz3Ovbf+keMHjrNmcwcXvXYbLzwvUUIRTI9TLZbZfPkOGjuaOHzLMYSOFsgKfIUOosTBGnPVEjJCBIamvt7EHMwcdabVIo4HKyHiArV5+c9wyv9aNRtxc3C0QitF6PtIJyQ/Ns7wiV7OuOZa+p/axX99917Ep17L2WdeSmXwCHJqjKQ/S0JUScaVFKO+h3JdTCXIZB0S7W2cDLP85sUi371viEwChgoJHh/wWH7pCioZh/T5W3CySaykhW0ZWFa0OKVpmlhaU6p6TObKzBw5RFgOCbXETiRpaGlA5qYYf+oh9u45SqUasursc9l8/bto6FzAdFWQf+oE6axDpjFBMuPQvKgH27GxTQPTkNFKorEak5Zg60U7GDzez/LVS2htSONWPSSK1kySyelZnn7yJZ59eBcHn3mJYrGEZSW54I3Xs3VHwEtPjFAqJ0llNcXJMTAMzrv6AsaGJhgdnkAqhe/6BEEIoUKFYdzDMnJnoyaktXz2WjotdShTxQ6xOUfA2pJr87n3VPB6PiereJVO5QdozwUh6H3+RS5/6+tYcMYGxg4d5d/+9TecfcF6rnzVRlatW4kKS7jVAlW/REL5OCJEoZksVdkzmOe+Z4o8tHeSwnQZpyWFDgT/+Lt+lr3p1YRpG7/oUp4poUKFNsAwBNKQ2IaJ0BLLAMe0kI6NYSaw0yFqZhr3+BFOHO5lpm8SrQXSAidhMTU8iOd5pJpaSbd0kmpuI5FKYzgmhm1gOSaOI7ETEscxsS0TyzYwLRPT0CRsg+bFixkeL3Hy5ASV6RmGTw5yfO8heg+fID85QUOzoKOnjdRsKzLVzNJ1beTGDtB/ApzmNNWZSSoTk3SvXcbaHRu5+9aHCaoBphd1EFJhFKGLmoFHTFZr41/z6Wtgx/wgUY1dTZSoQ15RV7Raz8PTCFuLGUeLF6JCH6HBCCMxnW1qYurkSQozs2y+8kru3rsHKRM8ePsuHrrvBZat7GHJ4laaMxa28FGez2zeZXSyxInBGQrTRRAGZipBpimJ7/lUtMBOZMi/cIhErkByQQcynUKkbTBMtJRkTCtaOSxUGEqhy0UqA9MUxqbJ941QHBrH96OKi3THoqikJPBQXpnS9BSzIwMIFWDYNolMJupM0NCMk23CyWSxkymkFTVsM4xozWOtfCyh8QolivkCbn6a0tQkM1M5yuUqDa1Jule2sPXVG+nsSXHihSITg1MsXreSbEOePc9X8VSatDSYHRvF81zOv/4ScsUKR/cdxwjBd0PCIMT3A4QW9aakUkpEvZVwrdJ/ro/36dtcQ/B6uGFuqyns+SFFHS+2nErYVLyAhJUg4VgYgUs1r3nhoZ2cc+1VZLt/zfjRIzSt3IROZDnR38uJA4MgFfh+ZCmYSTA00jGRKScCTrwqRQ9sJxkZDYbF7IlRcof6MMwoBBgIgZ10sBMJcqFP6PkYEtySRz6Xh6oLpoWdTGCmszR0tyBChVY+vhegAg1eFaECNAJPGeiSR6kwBkPDYAhsO4FlRlkVthktb1ssV0lYJo4dwbkhBtm2NKVpF9dzCQKFbVsEWjI5XGJqsMhLgaacc7ETaRoXtLLrnj1Mjkrs5jTlmUkqU9N0LF/KtqsvYOd9T1OerWCFIX685qJj2nhVPxpny0EQLa0Q6GgFNVS0VN88osWKNqKlWWumpTWEMRfPhZ/i/3quXY9pSNLJBFII0kmHMAxRQYDyfKRlcPS5l1i24zy2vfnt3PPlv6c0NULD8g6al6wgmBkj1ZAi29nO0Iv7MRMOXmmGMAhpbW4g6URJA9IwGJ0uRvCccLAbGrENiWOCW6mQEpK2hI0hJcK0yFUrDI3N0tCYZeXyhaAV5UqVqdkyOl4aVisVNT0tFlEqwKt4mFKzoLOZnq52GhsyGIaB67mMTRc4NjBGqeTR3JzBsSSOZbKip5NQK0JgYrJA+wIbK5tkbLhIwrZY0pHBDQISls34bJlCyUWaJoEXsO7Sc5juG2fkYIVsZzson9L4AG4Ycvm7r6fi+uzddQCpwXWrSKWxTZPA1yRth4JbqgfltdBxwb4klLXUrDrmXF/sM+LgOAhcM7t1nNExX0TX/CyISz6Q6GjVKGzbIfADKkEJbQTgBOy9/wFe9fa3smj7uQw8+zSVsZMkO5YgrST5sSkSbR1kFi4kPzAQ1d3MTvOvX/0kb77+MsrVKiknwT9848d89T9+jREvWev7glRKUpjN8Zcfu5G//fP3Uq16JBMOv7vzId75ji9y41uv4Jt//0m01tz+4JO85YP/TLrVJvT9uLkbUVuJQoHXXHkOf//Jt7Gkp4O2psa4TCfaqm6VQycG+er3bubme5/ES6d54w1n8/XPfQDQ/OGhXbzjL75BxU3hulNYJvzu3/+C87duwDANnt9/hDd89MsIQyGUz4I1G7AyWSZePEy6tREjmaQ82kdxYpIV2zZx7nUXceev7qNcqGD6PlIpqq6PZUfqRAqBJQ3CUOPF62bY8zRtLctyjmDx+sS1nKz427kDdO2/rIvmWrRChZpypYopo7lRLlUozBbxXRcCFyMMGT54kMGjx7no/R/ATKSoTg4RFHLIVCNWMs308X4yXZ2YTgIV+KAUjmWRTDg0NWRJJh0+/aE30tKexq9U0GFAGPrM5vL0tLXwoXdcT8K2yaZTOLZFKuGA0pgyyjZJJpzoOx11s1VBgAoDdBhiSJPQC0naJts2rqGtufkU4gIknARnrlvJr/7jC1x10ZmUJ6bJpBIkHJuE42BKQeB5aC3wyyV+/M8f58rzt5FOJpiYnOZdn/k6EzMFDAVOpoWuDWsYeHE/hmkhEhncQp7i6BDCNLn2E29isG+UA88fxlAqUhsheNWAcqkarUIXQrniRauzzoMpo7hwrQvDqf02orCBiitHY+rXgsZaR4EhpSLq1mGx2OH3PR+36lMpu3iuHyEsnh/lUrtVhO/z/N13k120gm1vfDOqWKI63hfVzaSbUEoxdaKP7KKuejV6GFvsSin8IKCrvY33vvkqwkIxyrkmpDSV582vexVLerrxfb8e9A5jJKYOwmgd1RxF4gcR+hB66NAjDANEMsnuPSe4+Z5H+Lt//xFv+/S/cvV7vsir3/UF3vrJf2Lns3vxgwCtNR9801XoUolSpXoK0G9Ii3w+z3996UPcePUlKK0Zn5rmmg/8A8eHcqTTaQwjTc+WMxg/0YdbKGOmswihKY+coDxb4Pw3X8mSzau57+aHCcseuC4J26JS9hBa4FY93IpHxXXxvaid4TxCMWdlibmMnHmwcqSDYyLWjlWaUxi+1p+pNlgxk1OuRg8spQEqRPka5QcYGQftVZkdHuLZe+/hrLe8k97nn2Vs/4sYY30kFqzASFUJi3nKysd0EnhhbPLHusOyorUKPvnBN/KDX95LyfcAQUNHEx999/WRLWCahGFYL3uNTfx6jvfc82gIo8yQWhta2zYYHp/hxg/9M4QhuEH0UJYJYxNUqlVu+/6XgcgVQ2sCP6if2/cCwpFRvvy1T/Oxt9+ABvLFEq/94N+x71A/2eZGEA7tZ2ygUihRGBjHbmzASNiUhnspT02zaPNarvvkO9h515MMHR9Cej6ZpI1X9fCrfjQeSlGuhBiWpJ6nHhN3DpMScaP2ugCe+y9q9cFELQxlDcycN0nmPkSDo+OziziyBGGU825o3EqZhpZGwnKICEOOPvkEnStW8apPf47b/uKTVKeHkIkEdks3OvQJymVCL4zaMdWvq3n8iV2cd852lvR08543X8E3v3sr6JC3vvE6li3qIQxDHnz0SS654BxO2fRp77WO8phUlJkyN4k0WkKiMYsl4JId62nMpAmVpjGd4OPvuSEaTAG/vuMRaut31ya5Ywo+9LHX88WPvJUgCCmUy7z9U1/h6d2HyLY2ARYtq1ehFeT7hjHTGWQqQ3VijPL4MEY6yVu/9DHGhsZ55r5dGEGAICCZTDE5PBmZS0EYL3YFOoy7Hs2zhXT9FRsXomY7z6FaIgI6RETi2K8SMehRx8OYQ7Pq/baUioBsyyDwQwwjtt5UQDU3S0N3F4XxHAaC3bfdypUf/zgXfuwz3P/VL1Ed68WwbMxMS7TwVrUQHRtfybIs/vd399LU0sqGtSv4xPtez/d+djdB4PKR974epTX7j5zkpzffz5WXXljPXHg5jaMHF4p6slot1wyiZP0gCLEswQ+/9jnaW5pOPYdW/OM3fsjPf3kvNGXwgwCAahhwzZUX8tqrX0XJdUk7Dr/8w/3cc9eTNC5aQIhBQ083oe9RHplCxq6aX5gmP3oCt+rx5r/+EG1LFvC/X/1flBsQlqv0LGtncmiK0AsjaRNGY4yAhCmpxH5uRKO5ktFouU1Rf95TsiqJlplnroN0TQzES9gxV54YGdkRFm2aksZMgnQiEfWkCMNYTAi8XIHAdUm3NxOWy7gzkzz169+w+IKL2XLjOwlKZSpjJ1CVImampTZ98JViQkMJGJsu892f30FFCNqWLebqK7bz6ldtZ9X6VRSF4Ie/vJNCOaCoIVezFeLJWNQwGYKnoims48UnIwg2XsWtJuNUFDnrH5lgZDrPifFpRvIlZkJNX8Hl7W+7gRuuvxjKLulklLc8WvIpKoELlKTFidkKb7zhSi66dDuzM7NIoQldn+pEDuE4WOlGwmqJ4uAJKrk8F73ztZz92iu47ce3MzM2RVgq09bdhFIBufF85Of6YVS0bhpkU0kSjo1lGehQ1StK6oEg5mqD1SnSNxpZWesFHSnp+a1qa9banOGFjhaddJJxXnTVxTINhIgqCgkDpNTM9g+TyGawMklE1WXy6DGeveUWtr39vax59XV4uRnKo8fRvoc0zBjf1uQ9KCpoaszyk5/fQ9/IOEOVkD//5Dv5yz9/D2NuwNjYOD/65d00NmYohJpcEBLWpolS5EPNtB9GkRTDwDQMDBk1TjWkxJQyRoaixThDDTd84G+54IaPc+WbPstl13+Yb3/np/hCYDa38LW/+xgNLSlK5SoFDcq0OHnkGF/8y6/x7DPPIRyLkrD59lc+RWtjgko+R2VyDDOZwkw1oH2XwuARijMznHntFVz/6ffy4G/v48SeY8iqRzpr0bGohYHDQwghCP2onZRjGSRtC6UUVc/HqLe40nNErOlg5or3wzjjUjGHa8yxdKxnVd0ii8WEjrvayQjcF0g8L1o/qVQqIaKsr2j5O61A+UwdO0HbqmWAxlQeJ3c/y56HHuaCj/45S8+/An82T3nsGKEf4dghmqLvUXIDkrZDub+f3/7qDgSSxp4eGpcuxdOC3//2jxRHZghVQNELmHWD2NqP5mzJDyh4AVXXJZjMUZrKUZnOUZ2cpTqZozo5gw4DTEOifJ/K+DSDR4c5caif44dPcvCZI/zPD29BBh7DuTJWJkNPVxuu51H0QsoI9hzu5Zv/8Us+9Jl/ozw+xnjJxepewDf+4aP4rodXyeN5FQiqzPbupzg9y7pXXchbv/Qpnrz/aZ598FlsrUH7rDp7Nb2HBvAqAVoFEaDj2FhG5P97foBQmkq5Sq0JTrTCRU11RgwptETUkyfnZLTJy7bYmIrlvEG0bLsSMu66EyW9SyuqKpQGaKLFjUUYK3rToTozQ25ggIVnn0n/U8/hpAyOPPwgpmVx2ef+hgf/HXoffxCnqQkwCBUU3CBKlw18RLqB393yAK9/83X0e9EEWFwuc9NPbos6BWgo+iGlICSMfQStNNVAkStWWblsER//83dgJJz6wCCiHKbv/uwurrvsHD727ht4cOdzDA6NMzU9ixf4NGdSvOUNVzEdCHJVlyYNoxOzmJZFyQ3I+QEaA3NRJ0MTJT7719/kv//nH3lxYJLzr7yUT33wCN/89i1YzjjVqRFKU5OsvuQi3v2Vz7N/1x6euOMxEqbELZc568rNjPeNMzEwjW0a2DFaqMIoWhcqSeD7BKpGzNMopWuqh7rbcHoZqVln+3gHpQUSjWUIqj7xd1EHF8s0CP0owG4ZMurLVDPX4jvQShGGHtJymDl+kmzPAhZdeB59jz9DOtvAwQcexDQMLvyzzyOEYODZJyNdGcJMNUAS9dbQqSSHeie48/f38tYPvQME/PR/fkrvsWFIOOhQUfACpl0V+8FR8L8QwFCuTGdrJ2/5/Mfj5QaiWwy0ZmlacPPtD3H5JTto2HoGFy1ZQdqIejrqMEQbJkVPMVT02bK4jZ/+z/8yc3IQQ0pmXY+pqsYPFYEbkGlr4I/3P8P/fv+X3PD+d/DI8XE++JF38NxLx9i5+whO0mbLtVdz3V9/khef2cMTtz1M2rHxKjm2Xr0JtGD00BCmEIgw4kov8HFsG9/XuG4FrcEwjNiWmNdGuE7cuYzKeqfC+QTWqrYWmI6bi0ZtDZWO4DEvqNtuVEJN1XXnTaW5qkQhQMko5ChDhcLHsB0Gdj3Lute/jmWXX8LAk8+RSNvsufde3MDn7A9+jMneoxT6B2hpzNKTNMg4JrbjgOuTbW3hv398J4/tfAEhBbv2nMBubMTL5wHFwoxDi6MomBYEUS+OxSmTsCmBISV+pVrzHupllRUUtu3Qf3KQ1UeOk8hm8S0bX1poLESgSIuQRlXkpn/7Hf/+/VshmUIHPt3pBE12SN4xQEXZjk5LE1/75q9Zv3E127adSWgIvv9vn+Wqt32R/pHIozj83AEev/l+MtkEoXQ558qz6O5q5pbv3oH0wUJQqVaQCRtTmhQKZZTWGFLWiTgfvDjdF9bxDH6lBc7Efz47qCPKRz6XaURd7JSKwlN+EOL5HuWyhzBMfvVv3+HgE89hptOnmORCCpDzkr+kRBg2puMgGpvY/J53UJotMPjUC1hCUnU9FqxeweDTj1EcHGTbhiV0tqZQoeBo/wR9A2MooaPy1KoHGoxMEsMQhIGipSXFhlWLMDSMTuY4dGSQzp4O1iztJgjD+rLpigiMkSIqbw2V4vkDvRQnZ2jtbGLzhlUsW9hFJpvCNA0KhRK9A2O8sP8IE2Oz2M1N6NCnrSnN2qULsK0Ew5NTHDw2iLTtyDDyPFpbGti6djkV38O0TI4OTDEx62FkEqQXLKJpQTs65bL9wnUsWbGA+358N6XBIvnJPAQhlapHEISoUEVjOY8NpSGplKpsO289H/jUG1BBSCphR1WHZrz2VK3C4fSI4H88O6ilACtOapdCxim0UfNLPwwJggC37CFMk198/TsceuJZzHQapeZ3B4gWKxZxkw8hBAiJtB3MVBpr4WK2ffidFMsl+p58CTU2hT8zg+O7VKdGCco5CjN5kGb0QiGFQloWyot0hVIhhpkgJEr4wy2DZYGUWMl0VDPlx4tX+wFoFaUrKUAakExAGOKkTTKNTRSKHmgfr1CARBpcD6plsFOQsLBsgyAIqXch8v2oI0rKxrEiREsYUWtBtICyG3GI0NjNLSRbWjGzGTJdTWRWtXH9ldtZurybn/7gVqYPj5MbyqFcD9eNGr/Ut/liUUcELhcrbDt/PR/81BtQoSJZI7BhIoxak7qagJ6bHWakSzW+0lHyu47aKAWxHV6DAeOcj6hHpa53iYh1cJyFSWR5y4jCoBXKcwkNCRNj7L/9Xi79i3fTtrSVA796EAHkJsYQEq56/ZU4SZPh/jFyuSI9izppbm3grp/dwurzzmJqapJFixbQe3KUTds28NyTL3LhZWdx8uAxzrpoB/19gyQTNhMjE6zatJrHH3yGqZEJrrz+UnpP9LF02UJKxSpPPf4cr3vbNUyMTjA5MYP2PDoWdeH6igfvfoxtZ1/A7sef4arXX02gAp5+ZBcXXXExTz/5Ile99iKOHu7niQee4Ia3vIbpqWkam5rIzeRpamokl8uTasiAYfLQ/btxMmmae9oxe5K87trzOGv1Mr77i1uZ6Z2mMl2mnC8R+kEd40fP4z89z1IGqDXKgTmRHSOPtc81XpNCRkgjYAoRgfWGlPWucAgRLx1eu9gcvusknHkzRM39LmqKDrSKsFMpI5QsqFaQhsAcGmLXT+9kx9uvYuN1F7D7+38g5VjMhIJjJ4ZobsmyeNVStnS24sW+n1926VzQybVvu5ZKoUTn0T7O2LGJ/EyOjp5ORgbGGBocwQsCFvUsJj+bZ/n61bz47BHaO7vI5WdZuX4lK9as4LF7HmJsaIzJ2QrT0zm2nrcNz/Noam7gwIsHcV2PFZvWUqm4WAmL4lSRd3zkbXT2dJJpTDPUN8ziZT08l7CZnslz6VWXsO/FA5z3qnMZ7O+nZ8VCKp6HwqC5ZwFOOkmYhBtuvIyezlb+6yc3M7p/kNJIntxYjtAP6kTVSp9iIJ1e56uUxrEtpKitnzTXCK3WgrTGw4aQBFpF2R//8dyQNoQgjFeWZp50AIVSGt8PqVSqGLbNA7+8lUd/dRtWNhNj0cw7taxfSQhdX1rcMAxM0ybd2IjR1k7Y2cHqS87BFgle+PXvKfb309HRRMIyUL5LOZ+je2EHXQs6efapfaTTCYRp4tgmzc1phodG6O7uoqm9hd7jwwS+Rxh4rDtzLcMnhxCGYGI8z8xEnqvfeClD/cME5TKH9h+j4oas37Sa2dl8pJslLF25BMOyeOyBpzj/8rMp5QpIw8SyTAqzsxRLHp0L2mlsaaT/aD+H9x/ioqsuYnx0is4FHQz0jdDR08X0xBSZ5gbsTCMHDvTTurKHc2+8GNPUPPvgExQGZskN5/DzZZQfxnltp27za4zqUlNKSsUy1954Ma97++X4rk8i6WDFq5YKKeqQpRCRlNVEBYTi67uHtMGc7tRKxWUP0SWUCgmCkGrVRRgme3fu4nffuAkzlYxB/HkE1vNyc0UkYqQQpNIOtuWgFEjHoqQsdDLFgm2baV+5gt6HH2d8//4orcYvowMP7fqgQ2QyWQcyorSTMOoJUougGAZIGX3vuWBEKkQ6Dql0iiAMQEpMoalWXZAmgedFOjlWIwRRwMOwLcJSCQw7Vj0qtglk7CZokBrTsQhKFTAtwEBaZhSET6WRToJEIsGybevYcO0FTPQN8MLDu5Cuxs9X8EoVdBDMC9/Okfg0N7f+nZSCSsXl/X/2Rs6+aCM6VDiOjWmaGIaBlBIZS0wpapY3eFpFfnAMRs5zmGMLtA5fRoQL/IDuJYtJNjfilsrx2gPUdbWI7yjUGsMwyKQSIDUq1Kgou57ybIEQifQrDDz0MLNHj7Jwx9kkGxsYeeYZtDYQZhJlO9RgONtyUGFAGLgov4LWIVYqhTSMOvoWWfFZpDRIJZOgQ0LfJ5lOo9BUKi7Ciohvp+zYbwQtopVjZO1aqUZUGIAK5kKOYUDouWBZGE4SNGSaM/jKj8dKYGdSZFINyFSSnq1rWLBhJQfueYL+/ccBSbXqojwfHUYlKLIW1AFOqc9mbu7WCB4EmkxDip6lXfh+gGXUKk90netFTRfHfB/Etd2m1qCEjLuGxwXfuoZhznODhCAMPBra21i6dhUHn3gGM5NGh2GMc0QYqDQM0olErH91lDCWcPD8yFpUWkepnuWoFrhw4gSHh0foPnMziy6+gIm9+/FyRZx0AzKZAdumqXMRHUtWk2poojwxwuALO5k4sR+3MA3CQJgGTiJJOtuE4aSRjo2vNNlUKvIAvBAzo7DEvAqeeg5PPChhiA5cwmoVgpDA81FhlMtlJ9N0rtrCkm3n07J4MdVinuHeo4wP9GKEAZbUKN8n09HEgk2rkSh2/+puijOFKErn+xCEEVaso3uo28yC+gpzsn43sc2jox7QlVKV9ZuX09rRTOCHmEYEQJpSRhh1zFRSiLjNoYrrlYgrG053n8TLYTERuz5KKzZdsINDu56bMwTi423brqeXGkaU6qm0plAsE+qwvthHBGuCdr0IdiyXGHj0UVILumlZuQK/5JEfmSCsFDFEipnhkxRnp2hetJIFKzexfdPZuLPTTBzdx9ihFygMH8ctTFOdGsE0I1jVCzR5aaKlgWFEC1POXwJd6xCtQnTgEQY+KgggTh8Stk2qqYO2RSvoWreFzlXrSTS1kC9MMtx3lMnBAbx8jqRl4QcepiHpWL2MVGsz/XsPM3G0P5JuUqD9ICJgPFY1xqkPeeyR1AZGxHIr+hgBR4YJOy7eEiVYCBF30JWxMTwXKgyURscZlvXEh689MxSv6xBZwkLMq1WLAwhhGOD7IZ7nU6lUUAhu/86POfr081jZFCpQpNOpuLC6tng0VKpulJmPiFL/iK1z5mVwiKgVvZQmKvDRtk3j4sU4zU1Up/K4uRmEtJC2g5YSbafJdHTRvmQ1bYtX09rSgvKqFEYGmB06QX6sn6mRAfKTY7iVAspzI/08f40gQeTaGSam7WAn0yQbW8i2dtPUs4SWJcto6lmKnc5SKeUZHTjOyInDlMZH0Z6L0IqUFbUPTDWnaexoppIvMnS4D69UxbCMCCgK5655OkYsTuUNXqaBNQjToFiocOY563jHx9+A0CEN6RR2wsIyDAzTQEqDWqhFn34CQHy1RuA61XV8M1HTs8hED+sErlYqeKGiPJXjF//yn4SeRyKTRAUK1/MxYhTG84P6AlvRlWLsen4Ob+1hRVSGIQwZibRAYyQSpNpaMSwbvxrlJFmmTSKZohqE2AmHRDqD09CM09pNU/sCUs1tmE4WLQy07xOWi/iVAn61TOhVok65QmCYJoblYKfSOKkMTiqNaduEErxqifzMGDNjg8yODVOankR7Lo4p8V0XWwpMQ2MmHUTSQShNYWScQq4AcW/qWhrUy4c7JmbNq6TmWYp5S/rWhivKf25sTPOuT7+F7p5WHMskaVvIuLrCMOJ1M2ppS+i6vTRH4F2DujbIgijTAdQpAYQgToQL3IDA9wk9D4XFyb37uev7P8a0LUzTplJxcd1qJFrkqVM2SseV8fmpr9Y1R+QYMJESKaLV1FAK00lgZtPYTpKkaUVdbOPFKpyEA9Kg7AW4gULYDnY6g5NtJplpJpVpwE5lsBJJDMtBSjnXCS6sEroV/EqFajFPuTBDJT+NWy4SehWEUkgNliFIORah78dpPJpkOopQzU7mKM3+f+q6mh3LbiL8VZXtc7snmQwoygaioEQRCIEIAsGCHayRQCxYw8uEN2EBEk/ADqJIZMUmQAQrJmyAEJLp9L3HdrGoKtvnTtOL6em+p31sV9VXvy5/AiExOF6rXjzy0L0ObPipdCXKD3wRE9CB20cZP/7ZD/Hm11+H9o7HtyecSgZlsegVM8TbIdM1AsRYQeDgrlH+EVekqV11V1tD2xv28wXUFZ8+e2Z3Ef7xffz2l7/G3cf/RZdkVVuLdTcJrDa6hhvVr54JK9LgPDq0Rw2YpA1PXn6C3uC+oV3KdWkNuwIsGcRAH+MRFDLGivtlRuQHZsSMqJyLVnTk1N7tDFSreOnRDXozj4kA3N9/hvu7O9TavejQK09dMlcSDnrTXOs1kaOjoKkqweX+AjkxfvrzH+HNb7wBUsXtoxucskCyIGWBJPbneRYePkTgX7z7d71mKquUD9/Tzr20XtH2ivOlotUK3Ss+/ezeWjH8+QP87le/wUdPPwSVDZzTcZGe7YilEwDl+X9ftVcsTIMOgLXgJ7Pst7Lh5nZDV+C8d+zVLHISsYJBFpDwYA5DBEeThfCHiXlKpnuZ0rhppneQKnrrOJ0yTlvCXisu9zsudVZYrhUWU80BlnTFAZs1bI74u2Aql6leG+rlgldefQXf/8kP8MZXXkUGUG43lJSQS0LZElKyE5VB3LmFk9DjtW+/89Tey1NiOWwix3TttgGtNtS94Xy+QFvD3f0Zz55dACLcffIM7//+XfzlD+/h2b8/stFFfKMf4LAVwr3SEbQQffkbQhyNZNzebNhrtcsqgnCu35V4EHMs3AlNAzt5UmNxk9YCwxmv99oJVdyc7L21BtKEWXN0JccCXBeq8mBrZcKR4jqQopHipc89xte+81W89b23cPt4A6ni8QsvoBRBzhllE5QSwQ1DsfB/oxlanDwMO53efufpmCFz8J1/SBEAMa5u3s6nXirO54sZXXvF5e6CvRnEfPKfj/Dhnz7AP/76N3z8z3/hcndvXXnW2Gpw26yVtW/kUgAakDZcsUXCLRXI8xmaTAAwlD2jBRoB+clO7qpRX7Z63BZlVaXkleEj4eoazt9Hy3yfs35XOKTxD4YeDiRTgohge1Tw5OUn+MIbX8RrX/4Snnz+MVQ7ShKcThvKlnCzFWybSbBJr4w9GFdgEVtQaqgbm9ehZCeMiFE7rHNDyDvIMrPHaRW9W7IaJwWdzco+vfgCXv/ut/Dat7+J/bN71PMFrbUDEScxY2vn5sQN5EHsMFGCU3FltMTGh9gNaPRPp4oPmG5O+HDXHGopDKSFG4KSpPMV5I5AZHKu7u59Dqn8cx6IREMFpSTYTgWnm4IsCVBFbxXbVlBKMYLmBEk8QpJTNSCyiUG8IbW6JIeOBIaV7FjgetkkP10YgYqo9l/3gWiHJgbv1c+0duStIG35UHlwhcYYU5zK+EgYuGQxe7Nx87Mj6zWHmIahbShC+T+44RpewzKLlQD2TPffdjAAYcGuDeKSMgcIVlzQRi2RsBpXgN3VHAkBu6cqGEaRS0bKjFIEJRtxS7KkBwuDJ1GeN9QesKJVl/PBkY+MveohyevewE4gpNRRJKGJeOhaXdV1VGFz9Jt3h+lt5CuX2czpUKTJFgjTWVtk07JnchZsSUBQXFrH3tqUZaKxyIB4//X62oUe+rBtMJgFgK+XOVkjUyLktqP2ZpAIPTBIYJIJd8DnRInxGdHQoSwMEUZOgpQYKTGyE/W0ZdzmBMlpeBRxP+GhESmFkMXi5v6mcSpgcW36mNBMIhhxFYmsbFa1ofaGrRQrmOAG4YbaGK0xavPGIdEFPgy2Qd2AkeFIDOPK0GGaCsKWxM6JAVL0BjzaGJe9zsWYWpvMOoi7AHZY6CDMi1pXEoRUWp+pRF4u7N18tHds24a9NkQqLzoT+TBjJMH8WoviGGbVW3yCIYms/4ckiJheLjmjlIybYgwAirgCOdMF+3ef8hG2AY0zadZOGJg+XKQJh6MOQMja91sVpUWDLo0hCbjsDSllEDGaMFITM8SaN+8KI21Jj63JbA7IXDdJaWx2YqvHBqyxV+0dVAi1KU5JDgi8ShT0CPNzt4ORgyuw/IxxUZZ4EIHV0qe1dy9jsurSkM3gkrWeUTFMuQVhNHjHDCQ2V469IF/YpDinjJIzUrICSDBBmVEBJE8FBrTNu8DVJTj2Ng7kwXpVBsf3g+71q9FIIeQbrGqDug+nCqRk158S2Ya01sBdkLof+lLjp3Ed8fBENFDwuMPAeG+SZBKuOnQZNyuuT/nKQMOwe8Yi140NZzP+gsNYCSNIrduQkNkY0+CyscTDttmle0hlPHZAi2kfxOUYUZk6AhNkmaKwhktilFzsBAYRIASwuDU/S6Xg9xKOrJPzFTtZ7XJvGpK99OhgJ7JB85YE52rFd4oObQoWA+3aDOCITB8idYtbd1uARLBAo5TTGW8wxvTbiOw6nsjPbpJwXysSYxhWmRlNgdqs8j8kY6icyKdeMYnp4u5qYOomk6T42fz+zIJza17v7S1EmD3I0/1sbnTgPWpeDENKjx8DIJ2SS/AAjP8NM3BKaZxDGnCc7HvTqa9n/inu0piWi4P1QXrdnp5WtJGYsCXGue7orSOzlc8mAcCE8958YnacMgZkh2/Tgd1OOygANV09N90TGWHDONczAVti3NeOxIRHuRgUigUJ9mah6y2t+DKNMMuCjQGXFSmUPFY7xHs+xiBsIri0ChZG0oKqDYXjvc3gkxa9N+noRlpY74veD3sGEynWIIgQIUuyexUTI7G5NinZHKsLhEn3TCCEvWT+rxEQaqU642rhQWj72WKKLTbDMiEnyajaIAQom8QqdESfrqUAEMuiiLGJOrwFkWNhoxcXpuWnZBNMwngxAVUrGIzUo7uqncsOaRxkDATwGT1n8T9QJ0w03aMwtbIwck5WpAZCchWkiiHNq6FGqySv7xvzirHj9/62EUAjc7kSoaQN1eMLCqvIjXdElUZ8xemTNRQFOO5exf4DjxXe6Y6ZkdkWJiCcmxF394XG5MexiW6wOuOuDhcMc3FcahQKUjF4nipxDJjILovuqkhg7NqRJKN1G0tgftwQmBHqm9IAmC8502RxFZAtkVxBulIBYNDLnv0RtrZ/GYKmHaS0BBQWnbps4JFppoTGWw84Epa7I5+EOmI7SsOQYRnYc9MVumYk7X1CvM/DYi5W/D3UQcAMEVIRBitbS2FhVJeaKCOxidOQPhq+2PLiWHSnAZlGTIMcDukloPiGii+6diCx2MSqNZO32DEGgcaGXevaxY9dJfZACA8mZGQ0GEEZxrziNeFRUErMw72ZBJ4QOXX5cf2AEe+AF2QqIDHQ0CGwwEbrVtZkxG9oBJNpClS0fSMcD7aPvdbn0ergj6tBt7AZv0lA2HtFloSu3a6IDXP8MODzVuv47BicjbfOl8J82SJsupWNa6saU6laz2rys02gSIDj4EMedd0k5NrXa9J+PleE0DqQSaCk2NGRBUBX1EZzgw9SO7/mux7S9ZOgU2lYxCqztbnITvym3boTAdi1mZWlc6NIAY4Y7QNzWHuH/r+8MjEhEdu7SPA/ME7l1+TP8dAAAAAASUVORK5CYII=" style="width:80px;height:80px;border-radius:14px"></div><h1 style="font-size:26px;font-weight:700">ML3K</h1><label class="dz" id="dz" for="fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files to browse</div></label><input type="file" accept=".xlsx,.xls" multiple id="fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><div class="fcs" id="fcs"></div><div id="eb" class="erbox" style="display:none"></div><button class="gbtn off" id="gb">Generate</button>`;
@@ -11311,7 +11549,7 @@ function doResetLP(){
   if(SB){
     SB.from('shared_state').delete().in('id',['lp-state','lp-config','lp-nom','lp-demand','lp-arrivals','lp-plan','lp-truck-state']).then(()=>{}).catch(()=>{});
   }
-  LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,manualArrivals:[],demandAdjustments:[],lockedRows:[],planGenerated:false,generatedPlan:[]};
+  LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
   lpUf=[];lpRenderUpload();
   // Clear rendered content so upload overlay is visible
@@ -11343,12 +11581,11 @@ function doSoftResetLP(){
   }
   // Clear file data + generated plan, keep engine settings and truck-level overrides
   const _ta=LP_STATE.turnaround, _mp=LP_STATE.maxPallets, _mt=LP_STATE.maxTrucks, _md=LP_STATE.maxDests, _ric=LP_STATE.ricStartDate;
-  const _lr=LP_STATE.lockedRows||[];
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:_ma,loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},
     turnaround:_ta,maxPallets:_mp,maxTrucks:_mt,maxDests:_md,ricStartDate:_ric,
-    manualArrivals:[],demandAdjustments:[],lockedRows:_lr,planGenerated:false,generatedPlan:[]};
+    planGenerated:false,generatedPlan:[]};
   // LP_dispatched, LP_lsrNumbers, LP_palletOverrides, LP_customsOverrides, LP_arrivedConts,
-  // LP_transitDays, LP_contDateOverrides, lockedRows, manual arrivals (_manual:true) — all preserved
+  // LP_transitDays, LP_contDateOverrides, manual arrivals (_manual:true) — all preserved
   lpUf=[];lpRenderUpload();
   // Clear rendered content so upload overlay is visible
   const lpM2=document.getElementById('lpMain');if(lpM2)lpM2.innerHTML='';
@@ -11423,10 +11660,9 @@ async function goGenerateLP(){
     LP_STATE.materialPlan=LP_parseMaterialPlan(pE.buf);
     for(const d of LP_STATE.materialPlan){
       const n=LP_STATE.nomenclature[d.sku];
-      if(n){d.name=n.name||d.name;d.palletQty=n.palletQty||0;d.palletSpc=n.palletSpc||0;d.sourceIds=[{id:d.uid,qty:d.requiredQty}]}
+      if(n){d.name=n.name||d.name;d.palletQty=n.palletQty||0;d.palletSpc=n.palletSpc||0}
     }
-    const _engInit=LP_STATE.engineVersion==='v2'?LP_buildLoadPlanV2:LP_buildLoadPlan;
-    LP_STATE.generatedPlan=_engInit(
+    LP_STATE.generatedPlan=LP_buildPlanV3(
       LP_STATE.materialPlan,LP_STATE.arrivals,
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate}
     );
