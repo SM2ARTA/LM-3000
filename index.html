@@ -7584,7 +7584,7 @@ function renderTruckCard(t,opts){
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">🔒 Locked</span></div>':''}
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
-      ${t.items&&t.items.some(it=>NOM[it.sku]?._kitNom)?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#E8F5E9;color:#43A047;border:1px solid #81C784">📦 Kit</span></div>`:''}
+      ${(()=>{if(!t.items)return'';const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom);if(!kitItems.length)return'';const badges=kitItems.map(it=>{const r=LM_kitReadiness(NOM[it.sku]._kitId);if(!r.total)return'';const sc=STOCK_SKUS.size===0?'var(--tt)':(r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)');const bg=STOCK_SKUS.size===0?'var(--bg)':(r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)');return`<span class="bg bgs" style="background:${bg};color:${sc};border:1px solid ${sc}40">📦 Kit ${STOCK_SKUS.size===0?'—':r.pct+'%'} (${r.inStock}/${r.total})</span>`}).filter(Boolean).join(' ');return badges?`<div style="font-size:9px;margin-top:2px">${badges}</div>`:''})()}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
@@ -9270,6 +9270,16 @@ function LM_kitArrivedOnTime(sku,lpAbbrs,dispDate){
   if(!kit||!kit.items.length)return false;
   return kit.items.every(i=>LM_skuArrivedOnTime(i.sku,lpAbbrs,dispDate));
 }
+function LM_kitReadiness(kitId){
+  const kit=LM_getKitById(kitId);if(!kit||!kit.items.length)return{total:0,inStock:0,pct:0,items:[]};
+  const items=kit.items.map(i=>{
+    const inStock=STOCK_SKUS.has(i.sku);
+    const stockQty=STOCK_QTYS[i.sku]||0;
+    return{sku:i.sku,name:NOM[i.sku]?.nm||i.sku,needed:i.qty,stockQty,inStock,fulfilled:inStock&&stockQty>=i.qty};
+  });
+  const inStock=items.filter(i=>i.fulfilled).length;
+  return{total:items.length,inStock,pct:items.length>0?Math.round(inStock/items.length*100):0,items};
+}
 function LM_deleteKit(id){
   if(ROLE==='viewer')return;
   LM_KITS=LM_KITS.filter(k=>k.id!==id);
@@ -9344,8 +9354,9 @@ function _kitLoadItems(){
   const el=document.getElementById('kit_items');if(!el)return;
   if(!venue){el.innerHTML='<div style="padding:12px;color:var(--tt);text-align:center">Select a venue first</div>';return}
   // Get all demand items for this venue (including manual, excluding kit rows)
+  const hasStp=!!LM_getStpForVenue(venue);// hide STP items if staples truck exists
   const bySkuMap={};
-  for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;bySkuMap[s]=(bySkuMap[s]||0)+(parseInt(r.Required)||0)}
+  for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(hasStp&&(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;bySkuMap[s]=(bySkuMap[s]||0)+(parseInt(r.Required)||0)}
   // Subtract already-allocated kit amounts
   const alloc=LM_kitAllocMap();
   const skuList=Object.entries(bySkuMap).map(([sku,totalQty])=>{
@@ -9499,11 +9510,13 @@ function LM_showKitDetail(kitId){
 function _kitAvailHtml(kit){
   // Get demand items for this venue that are NOT already in the kit
   const kitSkus=new Set(kit.items.map(i=>i.sku));
+  const hasStp=!!LM_getStpForVenue(kit.venue);
   const avail={};
   for(const r of RW){
     if(r.Venue!==kit.venue||r._kit)continue;
     const sku=r.Nomenclature;if(!sku||kitSkus.has(sku))continue;
     const n=NOM[sku];if(!n||n._kitNom)continue;
+    if(hasStp&&(n.src||'').toUpperCase().startsWith('STP'))continue;
     const qty=parseInt(r.Required)||0;if(qty<=0)continue;
     if(!avail[sku])avail[sku]={sku,name:n.nm||sku,src:n.src||'',qty:0};
     avail[sku].qty+=qty;
@@ -10036,6 +10049,7 @@ ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10
   <input type="checkbox" ${LM_hideStaples?'checked':''} onchange="LM_hideStaples=this.checked;showM(${i})"><span>Hide Staples</span>
 </div>`:''}
 ${(()=>{const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(_mIsLpFed&&t.dd){const onTime=nonStp.filter(it=>LM_kitArrivedOnTime(it.sku,_mLpAbbrs,t.dd)).length;const late=nonStp.length-onTime;const pct=nonStp.length>0?Math.round(onTime/nonStp.length*100):0;const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">🚚 LP Arrived: ${pct}% (${onTime}/${nonStp.length} SKUs excl. STP/CT)${late>0?' · <span style="color:var(--rd)">⚠ '+late+' late</span>':''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>LM_kitInStock(it.sku)).length:0;const pct=nonStp.length>0?Math.round(inSt/nonStp.length*100):0;const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">📦 In Stock: ${STOCK_SKUS.size===0?'— (no report)':pct+'% ('+inSt+'/'+nonStp.length+' SKUs excl. STP/CT)'}</div>`})()}
+${(()=>{const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom);if(!kitItems.length||STOCK_SKUS.size===0)return'';return kitItems.map(it=>{const kit=LM_getKitById(NOM[it.sku]._kitId);if(!kit)return'';const r=LM_kitReadiness(kit.id);const sc=r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)';const bg=r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)';let h=`<div style="margin:8px 0;padding:8px 10px;border:1px solid ${sc}40;border-radius:8px;background:${bg}"><div style="font-size:11px;font-weight:700;color:${sc};margin-bottom:4px">📦 ${kit.name} — ${r.pct}% ready (${r.inStock}/${r.total} components)</div><div style="display:flex;flex-wrap:wrap;gap:3px">`;r.items.forEach(c=>{const ic=c.fulfilled?'var(--gn)':'var(--rd)';const ibg=c.fulfilled?'var(--gs)':'var(--rs)';h+=`<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:${ibg};color:${ic};font-family:var(--fm)"><span style="font-size:7px">${c.fulfilled?'●':'●'}</span> ${c.sku} ${c.stockQty}/${c.needed}</span>`});return h+'</div></div>'}).join('')})()}
 <table class="dtb" style="margin-top:14px"><thead><tr>
 <th colspan="4" style="border-right:2px solid var(--bd)"></th>
 <th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--ts)">${isClusterTruck?'CLUSTER TOTAL':'VENUE TOTAL'}</th>
