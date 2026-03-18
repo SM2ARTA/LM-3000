@@ -11932,9 +11932,9 @@ async function exportTruck(truckIdx){
   if(P&&P.days){const day=P.days.find(d=>d.trucks.some(tr=>tr.id===t.id));if(day&&day.biDate)delDate=fF(day.biDate)}
   const oorOpts={dispatchDate:dispDate,deliveryDate:delDate};
   const kitItems=t.items.filter(it=>(it.loadQty||0)>0).map(it=>{
-    const n=NOM[it.sku]||{};const ppu=n.ppu||1;
+    const n=NOM[it.sku]||{};
     const isKit=!!n._kitNom;
-    return{sku:it.sku,name:it.nm||n.nm||it.sku,src:n.src||'',uom:isKit?'Kit':(n.uom||'Each'),qty:isKit?1:(ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty)};
+    return{sku:it.sku,name:it.nm||n.nm||it.sku,src:n.src||'',uom:isKit?'Kit':(n.uom||'Each'),qty:isKit?1:it.loadQty};
   });
   for(const mi of MI_get(MI_lmKey(t))){kitItems.push({sku:mi.sku,name:mi.name||'',src:'MANUAL',uom:'Each',qty:mi.qty||0})}
   _oorSheet(wb,'Kit',t.id,dest,venue,kitItems,oorOpts);
@@ -11947,7 +11947,7 @@ async function exportTruck(truckIdx){
       if(kit){kit.items.forEach(ci=>{const cn=NOM[ci.sku]||{};const cppu=cn.ppu||1;const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,src:cn.src||'',uom:cn.uom||'Each',qty:0};allMap[k].qty+=(cppu>1?Math.ceil(ci.qty/cppu):ci.qty)});return}
     }
     const k=it.sku;if(!allMap[k])allMap[k]={sku:k,name:it.nm||n.nm||it.sku,src:n.src||'',uom:n.uom||'Each',qty:0};
-    const ppu=n.ppu||1;allMap[k].qty+=(ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty);
+    allMap[k].qty+=it.loadQty;
   });
   for(const mi of MI_get(MI_lmKey(t))){const k=mi.sku;if(!allMap[k])allMap[k]={sku:k,name:mi.name||'',src:'MANUAL',uom:'Each',qty:0};allMap[k].qty+=(mi.qty||0)}
   const allItems=Object.values(allMap).sort((a,b)=>a.sku.localeCompare(b.sku));
