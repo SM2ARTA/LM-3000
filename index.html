@@ -10277,7 +10277,7 @@ const _isKit=!!NOM[it.sku]?._kitNom;
 h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}</td><td class="mono">${it.sku}${_isKit?' <span onclick="event.stopPropagation();LM_showKitDetail(\''+NOM[it.sku]._kitId+'\')" style="cursor:pointer;font-size:10px" title="View kit contents">📦</span>':''}</td><td class="tcl" style="color:var(--ts)">${it.nm}${_isKit?' <span style="font-size:8px;color:#43A047;font-weight:700">KIT</span>':''}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
 <td class="fw6">${totalForSku.toLocaleString()}</td><td class="cgr" style="border-right:2px solid var(--bl)" title="${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'Pallet qty '+(it.pq*_ppu)+' ÷ PPU '+_ppu+' = '+it.pq:'Pallet qty per UOM';})()}">${it.pq||'—'}${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'<span style="font-size:8px;color:var(--tt)"> ×'+_ppu+'</span>':'';})()}</td>
 ${isClusterTruck?'':`<td style="border-right:none">${reqQtyHtml}</td><td style="border-right:2px solid var(--bl)">${reqPltHtml}</td>`}
-<td class="fw7 cgn">${it.loadQty.toLocaleString()}</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.noPallet?'<span style="color:var(--or);font-size:10px">—</span>':(Number.isInteger(it.loadPlt)?it.loadPlt:it.loadPlt.toFixed(1))}</td>
+<td class="fw7 cgn">${_isKit?'1':it.loadQty.toLocaleString()}</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.noPallet?'<span style="color:var(--or);font-size:10px">—</span>':(Number.isInteger(it.loadPlt)?it.loadPlt:it.loadPlt.toFixed(1))}</td>
 <td class="${typeof poolLeft==='number'&&poolLeft>0?'fw6 cbl':'cgr'}" style="border-right:2px solid var(--bl)">${typeof poolLeft==='number'?poolLeft.toLocaleString():'—'}</td>
 ${isClusterTruck?'':`<td style="font-size:10px">${note?B(note,it.noPallet?"or":(it.topUp>0?"gn":"or"),1):""}</td>`}</tr>`});
 h+=`</tbody></table>`;
@@ -11931,7 +11931,8 @@ async function exportTruck(truckIdx){
   const oorOpts={dispatchDate:dispDate,deliveryDate:delDate};
   const kitItems=t.items.filter(it=>(it.loadQty||0)>0).map(it=>{
     const n=NOM[it.sku]||{};const ppu=n.ppu||1;
-    return{sku:it.sku,name:it.nm||n.nm||it.sku,src:n.src||'',uom:n.uom||'Each',qty:ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty};
+    const isKit=!!n._kitNom;
+    return{sku:it.sku,name:it.nm||n.nm||it.sku,src:n.src||'',uom:isKit?'Kit':(n.uom||'Each'),qty:isKit?1:(ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty)};
   });
   for(const mi of MI_get(MI_lmKey(t))){kitItems.push({sku:mi.sku,name:mi.name||'',src:'MANUAL',uom:'Each',qty:mi.qty||0})}
   _oorSheet(wb,'Kit',t.id,dest,venue,kitItems,oorOpts);
@@ -11941,7 +11942,7 @@ async function exportTruck(truckIdx){
     const n=NOM[it.sku]||{};
     if(n._kitNom&&n._kitId){
       const kit=LM_getKitById(n._kitId);
-      if(kit){kit.items.forEach(ci=>{const cn=NOM[ci.sku]||{};const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,src:cn.src||'',uom:cn.uom||'Each',qty:0};allMap[k].qty+=ci.qty});return}
+      if(kit){kit.items.forEach(ci=>{const cn=NOM[ci.sku]||{};const cppu=cn.ppu||1;const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,src:cn.src||'',uom:cn.uom||'Each',qty:0};allMap[k].qty+=(cppu>1?Math.ceil(ci.qty/cppu):ci.qty)});return}
     }
     const k=it.sku;if(!allMap[k])allMap[k]={sku:k,name:it.nm||n.nm||it.sku,src:n.src||'',uom:n.uom||'Each',qty:0};
     const ppu=n.ppu||1;allMap[k].qty+=(ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty);
