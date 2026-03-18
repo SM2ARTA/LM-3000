@@ -5347,14 +5347,14 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   ws.getRow(18).height=8;
 
   // ROW 19: Table header
-  const headers=['# of Packages / Pallets','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF MANUFACTURE','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','UNIT QTY','VALUE CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
+  const headers=['# of Packages / Pallets','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF MANUFACTURE','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','UNIT QTY','VALUE CURRENCY','UNIT VALUE','TOTAL VALUE',''];
   mg('F19:H19');
   ws.getRow(19).height=32;
   headers.forEach((h,i)=>{const cl=ws.getRow(19).getCell(i+1);cl.value=h||'';cl.font=fHdr;cl.fill=fillDark;cl.border=brdMed;cl.alignment=alW});
   ws.getRow(19).getCell(6).value='DIMENSIONS';
 
   // ROW 20: Sub-header
-  const subHdr=['(eg. outer packaging # of carton / pallets)','','','','','Length','Width','Height','(eg. cm or inches)','(eg. lbs or kgs)','','(eg. # of pieces)','(eg. USD)','(eg. value per unit qty)','','(Select from the drop down)'];
+  const subHdr=['(eg. outer packaging # of carton / pallets)','','','','','Length','Width','Height','(eg. cm or inches)','(eg. lbs or kgs)','','(eg. # of pieces)','(eg. USD)','(eg. value per unit qty)','',''];
   ws.getRow(20).height=15;
   subHdr.forEach((s,i)=>{const cl=ws.getRow(20).getCell(i+1);cl.value=s;cl.font=fSub;cl.fill=fillL2;cl.border=brdThin;cl.alignment=alC});
 
@@ -5364,7 +5364,7 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
     const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;tPlt+=it.pallets||0;
     const rn=DS+idx;ws.getRow(rn).height=19;
     const bg=idx%2===1?fillL1:fillWh;
-    const vals=[+it.pallets.toFixed(2),cd.desc,it.sku,cd.hsCode,cd.country,'','','','','','',it.qty,'USD',up,tv,'Re-Export (Temporary Imported)'];
+    const vals=[+it.pallets.toFixed(2),cd.desc,it.sku,cd.hsCode,cd.country,'','','','','','',it.qty,'USD',up,tv,''];
     vals.forEach((v,i)=>{
       const al=i===0?alC:(i===11?alC:(i===12?alC:([13,14].includes(i)?alR:alL)));
       const fmt=i===13?'#,##0.00':(i===14?'$ #,##0.00':null);
