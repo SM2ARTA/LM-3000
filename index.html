@@ -9727,10 +9727,13 @@ function _stratRenderModal(){
   const rows=vtList.map(vt=>{
     const d=vtData[vt];
     const totalV=new Set([...d.stpVenues,...d.ffeVenues]).size;
-    const manStp=[...d.stpVenues].filter(v=>stpSet.has(v)&&LM_getStpForVenue(v)&&!LM_getStpForVenue(v)._auto).length;
-    const manFfe=[...d.ffeVenues].filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('FNKIT')&&!k._auto)).length;
-    const manTxt=[(manStp?'<span style="color:var(--or)">'+manStp+' stp</span>':''),(manFfe?'<span style="color:var(--pu)">'+manFfe+' ffe</span>':'')].filter(Boolean).join(' ');
-    return`<tr><td style="font-size:11px;font-weight:600">${vt}</td><td style="text-align:center;font-size:10px;color:var(--tt)">${totalV}</td><td style="width:100px">${d.stpVenues.size?_sel(vt,'stp'):'<span style="font-size:9px;color:var(--tt)">—</span>'}</td><td style="width:100px">${d.ffeVenues.size?_sel(vt,'ffe'):'<span style="font-size:9px;color:var(--tt)">—</span>'}</td><td style="text-align:center;font-size:9px;color:var(--tt)">${manTxt}</td></tr>`}).join('');
+    const manStpD=[...d.stpVenues].filter(v=>{const e=LM_getStpForVenue(v);return e&&!e._auto});
+    const manStpK=[...d.stpVenues].filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('OSKIT')&&!k._auto));
+    const manFfeK=[...d.ffeVenues].filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('FNKIT')&&!k._auto));
+    const allManual=[...manStpD.map(v=>v+' (STP direct)'),...manStpK.map(v=>v+' (STP kit)'),...manFfeK.map(v=>v+' (FF&E kit)')];
+    const manCount=allManual.length;
+    const manEl=manCount?`<span style="color:var(--or);cursor:pointer;text-decoration:underline" onclick="alert('Manual overrides for ${vt.replace(/'/g,"\\'")}:\\n\\n${allManual.map(s=>s.replace(/'/g,"\\'")).join('\\n')}')" title="${allManual.join(', ')}">${manCount} manual</span>`:'';
+    return`<tr><td style="font-size:11px;font-weight:600">${vt}</td><td style="text-align:center;font-size:10px;color:var(--tt)">${totalV}</td><td style="width:100px">${d.stpVenues.size?_sel(vt,'stp'):'<span style="font-size:9px;color:var(--tt)">—</span>'}</td><td style="width:100px">${d.ffeVenues.size?_sel(vt,'ffe'):'<span style="font-size:9px;color:var(--tt)">—</span>'}</td><td style="text-align:center;font-size:9px;color:var(--tt)">${manEl}</td></tr>`}).join('');
   const cBtns=['usa','can','mex'].map(c=>`<button class="rbtn" onclick="_stratCountry='${c}';_stratRenderModal()" style="padding:5px 14px;font-size:11px;font-weight:700;${c===cc?'background:var(--ac);color:#fff;border-color:var(--ac)':''}">${c==='usa'?'🇺🇸 USA':c==='can'?'🇨🇦 CAN':'🇲🇽 MEX'}</button>`).join('');
   document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
     <div class="mdi" style="max-width:640px">
