@@ -9501,11 +9501,13 @@ function LM_showKitDetail(kitId){
   const kit=LM_getKitById(kitId);if(!kit)return;
   let sumPlt=0;
   const rows=kit.items.map(item=>{
-    const n=NOM[item.sku];const plt=(n&&n.pq>0&&n.ps>0)?(item.qty/n.pq)*n.ps:0;sumPlt+=plt;
-    return`<tr><td class="mono">${item.sku}</td><td class="tcl">${n?.nm||item.sku}</td><td style="font-size:9px;color:var(--tt)">${n?.src||''}</td><td class="mono">${item.qty.toLocaleString()}</td><td class="mono">${plt.toFixed(1)}</td>${ROLE!=='viewer'?`<td><button onclick="LM_removeKitItem('${kit.id}','${item.sku}');this.closest('.mo').remove()" style="background:none;border:none;cursor:pointer;color:var(--rd);font-size:12px" title="Remove">✕</button></td>`:''}</tr>`;
+    const n=NOM[item.sku];const ppu=n?.ppu||1;const effQty=ppu>1?Math.ceil(item.qty/ppu):item.qty;
+    const plt=(n&&n.pq>0&&n.ps>0)?(effQty/n.pq)*n.ps:0;sumPlt+=plt;
+    return`<tr><td class="mono">${item.sku}</td><td class="tcl">${n?.nm||item.sku}</td><td style="font-size:9px;color:var(--tt)">${n?.src||''}</td><td class="mono">${effQty.toLocaleString()}</td><td class="mono">${plt.toFixed(1)}</td>${ROLE!=='viewer'?`<td><button onclick="LM_removeKitItem('${kit.id}','${item.sku}');this.closest('.mo').remove()" style="background:none;border:none;cursor:pointer;color:var(--rd);font-size:12px" title="Remove">✕</button></td>`:''}</tr>`;
   }).join('');
   const hasPltOvr=kit.pq>0&&kit.ps>0;
-  const effPlt=hasPltOvr?((kit.items.reduce((s,i)=>s+i.qty,0)/kit.pq)*kit.ps):sumPlt;
+  const effPcs=kit.items.reduce((s,i)=>{const p=NOM[i.sku]?.ppu||1;return s+(p>1?Math.ceil(i.qty/p):i.qty)},0);
+  const effPlt=hasPltOvr?((effPcs/kit.pq)*kit.ps):sumPlt;
   document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
     <div class="mdi" style="max-width:500px">
       <div class="mdh" style="background:#E8F5E9;border-bottom-color:#43A047">
@@ -9534,7 +9536,7 @@ function LM_showKitDetail(kitId){
           <button class="rbtn" onclick="LM_exportKit('${kit.id}')" style="font-size:10px;padding:3px 10px;background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button></div>`}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <span class="bg bg-gy">${kit.venue}</span>
-          <span class="bg bg-gn">${kit.items.length} items · ${kit.items.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs</span>
+          <span class="bg bg-gn">${kit.items.length} items · ${effPcs.toLocaleString()} pcs</span>
           <span class="bg ${hasPltOvr?'bg-pu':'bg-gy'}">${effPlt.toFixed(1)} plt${hasPltOvr?' (override)':''}</span>
         </div>
         <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Src</th><th>Qty</th><th>Plt</th>${ROLE!=='viewer'?'<th></th>':''}</tr></thead><tbody>${rows}</tbody></table>
@@ -10789,8 +10791,8 @@ function LM_renderDemand(el){
     if(venueKits.length>0){
       html+=`<div style="padding:8px 12px;background:#F1F8E9;border-bottom:1px solid #C5E1A5">`;
       for(const kit of venueKits){
-        const kPcs=kit.items.reduce((s,i)=>s+i.qty,0);
-        let kPlt=0;kit.items.forEach(i=>{const n=NOM[i.sku];if(n&&n.pq>0&&n.ps>0)kPlt+=(i.qty/n.pq)*n.ps});
+        const kPcs=kit.items.reduce((s,i)=>{const p=NOM[i.sku]?.ppu||1;return s+(p>1?Math.ceil(i.qty/p):i.qty)},0);
+        let kPlt=0;kit.items.forEach(i=>{const n=NOM[i.sku];const p=n?.ppu||1;const eq=p>1?Math.ceil(i.qty/p):i.qty;if(n&&n.pq>0&&n.ps>0)kPlt+=(eq/n.pq)*n.ps});
         const effPlt=(kit.pq>0&&kit.ps>0)?((kPcs/kit.pq)*kit.ps):kPlt;
         html+=`<div onclick="LM_showKitDetail('${kit.id}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#fff;border:1px solid #A5D6A7;border-radius:6px;cursor:pointer;font-size:11px">
           <span style="font-size:14px">📦</span>
