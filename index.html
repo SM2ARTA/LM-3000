@@ -11150,6 +11150,39 @@ if(cv==="trucks"&&cortWithMerge.length>0){
   });
   h+=`</div></div>`;
 }
+// ── CORT from CORT_CACHE for cluster views (venues not in P.cortDeliveries) ──
+if(cv==="trucks"&&cortWithMerge.length===0){
+  // Gather CORT deliveries from individual venues in the cluster
+  const _cortVenues=[];
+  const _venueSet=selCluster&&CLUSTERS[selCluster]?new Set(CLUSTERS[selCluster].venues):(sel&&!sel.startsWith('__')?new Set([sel]):null);
+  if(_venueSet){
+    for(const vName of _venueSet){
+      const cc=CORT_CACHE[vName];
+      if(cc&&cc.length)for(const cd of cc)_cortVenues.push({...cd,_venueName:vName});
+    }
+  }
+  if(_cortVenues.length>0){
+    const cortLogo=`<span style="background:#E31837;color:#fff;font-weight:800;font-size:14px;padding:5px 14px;border-radius:6px;letter-spacing:1px">CORT</span>`;
+    const cortPcs=_cortVenues.reduce((s,d)=>s+(d.totalQty||0),0);
+    h+=`<div class="fin" style="margin-top:24px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <div>${cortLogo}</div>
+    <div><div style="font-size:14px;font-weight:700">Direct Deliveries</div>
+    <div style="font-size:11px;color:var(--ts)">${_cortVenues.length} deliveries · ${cortPcs.toLocaleString()} pcs</div></div></div>
+    <div class="tgr">`;
+    _cortVenues.forEach(cd=>{
+      const isExcl=LM_excluded.has(cd.id);
+      h+=`<div class="tc" style="border-left:3px solid #E31837;${isExcl?'opacity:0.4':''}" onclick="showCortDetail&&showCortDetail('${(cd._venueName||'').replace(/'/g,"\\'")}','${cd.biK||''}')">
+        <div class="tto"><div class="tin"><span style="background:#E31837;color:#fff;font-size:9px;font-weight:800;padding:3px 6px;border-radius:4px;letter-spacing:.5px">CORT</span>
+        <div><div class="tid">${cd.id||'CORT'}</div>
+        <div class="tsu">${cd.items?cd.items.length:0} SKUs · ${(cd.totalQty||0).toLocaleString()} pcs</div></div></div></div>
+        <div style="font-size:10px;color:var(--tt);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 ${cd._venueName||''}</div>
+        ${cd.biK?'<div style="font-size:10px;color:var(--ts);margin-top:2px">📅 BI: '+cd.biK+'</div>':''}
+        ${isExcl?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gy">🚫 Excluded</span></div>':''}
+      </div>`;
+    });
+    h+=`</div></div>`;
+  }
+}
 // ── STP Direct Deliveries (trucks view) ──
 if(cv==="trucks"&&LM_STP_DELIVERIES.length>0){
   // Gather all STP trucks (or filter to current venue if single-venue view)
