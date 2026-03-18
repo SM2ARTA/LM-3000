@@ -483,6 +483,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
   <button id="lmbn-venues" onclick="lmNavVenues()"><span class="ni">☰</span>Venues</button>
   <button id="lmbn-dashboard" onclick="lmNavTab('dashboard')"><span class="ni">📊</span>Dashboard</button>
   <button id="lmbn-trucks" onclick="lmNavTab('trucks')"><span class="ni">🚛</span>Trucks</button>
+  <button id="lmbn-analysis" onclick="lmNavTab('analysis')"><span class="ni">🔍</span>Analysis</button>
 </nav>
 <div id="LM_US" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:10;align-items:center;justify-content:center;flex-direction:column">
   <div class="uc" style="max-width:480px;width:100%">
@@ -9023,7 +9024,7 @@ function rTotals(){
   const bar=document.getElementById("totbar");
   if(bar)bar.style.display="flex";
 }
-function rT(){const icons={dashboard:'📊',demand:'📋',trucks:'🚛'};document.getElementById("tabs").innerHTML=["dashboard","demand","trucks"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
+function rT(){const icons={dashboard:'📊',demand:'📋',trucks:'🚛',analysis:'🔍'};document.getElementById("tabs").innerHTML=["dashboard","demand","trucks","analysis"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
 function B(t,c,s){return`<span class="bg ${s?'bgs':''} bg-${c}">${t}</span>`}
 function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95?"var(--rd)":p>80?"var(--or)":"var(--ac)";return`<div class="bw"><div class="btr"><div class="bfl" style="width:${p}%;background:${c}"></div></div><span class="blb" style="color:${c}">${p}%</span></div>`}
 
@@ -10442,7 +10443,133 @@ function LM_setDemand(venue,sku,newEffQty,origEffQty){
   setTimeout(()=>{rMain();rVL();if(typeof V26_render==='function')try{V26_render()}catch(e){}},50);
 }
 
+// ── LM Analysis Tab: LP vs LM demand comparison ──
+let _lmAnalysisSrc='',_lmAnalysisVenue='';
+function LM_renderAnalysis(el){
+  const nom=LP_STATE.nomenclature||{};const lmNom=NOM||{};
+  if(!RW.length&&!LP_STATE.materialPlan.length){el.innerHTML='<div class="lp-empty">No data loaded in LP or LM.</div>';return}
+
+  // Build LP demand by (abbr, sku) → qty
+  const lpByAbbrSku={};
+  for(const d of LP_STATE.materialPlan||[]){
+    const abbr=LP_matchTransitAbbr(d.destination);
+    if(!abbr)continue;
+    const k=abbr+'|'+d.sku;
+    lpByAbbrSku[k]=(lpByAbbrSku[k]||0)+(d.requiredQty||0);
+  }
+
+  // Build LM demand by (venue, sku) → qty, and map venue→abbr
+  const lmByVenueSku={};const venueAbbrs={};const allVenues=new Set();const allSources=new Set();
+  for(const r of RW){
+    const v=r.Venue||r.venue;if(!v)continue;
+    const sku=r.Nomenclature||r.nomenclature||r.SKU||r.sku||'';if(!sku)continue;
+    const qty=parseInt(r.Required||r.required||0)||0;if(qty<=0)continue;
+    const k=v+'|'+sku;
+    lmByVenueSku[k]=(lmByVenueSku[k]||0)+qty;
+    allVenues.add(v);
+    const abbrs=LM_getLPDestAbbrs(v);
+    if(abbrs.length)venueAbbrs[v]=abbrs[0];
+    const src=(nom[sku]?.source||lmNom[sku]?.src||'').trim();
+    if(src)allSources.add(src);
+  }
+
+  // Compare: for each (venue, sku), get LP qty (via abbr) and LM qty
+  const rows=[];
+  const processedLpKeys=new Set();
+  for(const[vsk,lmQty]of Object.entries(lmByVenueSku)){
+    const[venue,sku]=vsk.split('|');
+    const abbr=venueAbbrs[venue]||'';
+    const lpKey=abbr+'|'+sku;
+    const lpQty=lpByAbbrSku[lpKey]||0;
+    const delta=lmQty-lpQty;
+    const src=(nom[sku]?.source||lmNom[sku]?.src||'').trim();
+    const name=nom[sku]?.name||lmNom[sku]?.nm||sku;
+    if(delta!==0)rows.push({venue,sku,name,source:src,lpQty,lmQty,delta,abbr});
+    if(abbr)processedLpKeys.add(lpKey);
+  }
+  // LP items with no LM match
+  for(const[ak,lpQty]of Object.entries(lpByAbbrSku)){
+    if(processedLpKeys.has(ak))continue;
+    const[abbr,sku]=ak.split('|');
+    const src=(nom[sku]?.source||lmNom[sku]?.src||'').trim();
+    const name=nom[sku]?.name||lmNom[sku]?.nm||sku;
+    if(lpQty!==0)rows.push({venue:'(LP only: '+(CITY_ABBR[abbr]||abbr)+')',sku,name,source:src,lpQty,lmQty:0,delta:-lpQty,abbr});
+  }
+
+  // Apply filters
+  let filtered=rows;
+  if(_lmAnalysisSrc)filtered=filtered.filter(r=>r.source===_lmAnalysisSrc);
+  if(_lmAnalysisVenue)filtered=filtered.filter(r=>r.venue===_lmAnalysisVenue);
+  filtered.sort((a,b)=>(a.venue||'').localeCompare(b.venue||'')||(a.source||'').localeCompare(b.source||'')||a.sku.localeCompare(b.sku));
+
+  // KPIs
+  const totalDiffs=filtered.length;
+  const lpHigher=filtered.filter(r=>r.delta<0).length;
+  const lmHigher=filtered.filter(r=>r.delta>0).length;
+  const totalDelta=filtered.reduce((s,r)=>s+Math.abs(r.delta),0);
+  const venuesWithDiffs=new Set(filtered.map(r=>r.venue)).size;
+
+  let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">';
+  html+='<div style="display:flex;align-items:center;gap:10px"><h2 style="font-size:18px;font-weight:700;margin:0">🔍 LP vs LM Analysis</h2>';
+  html+='<span class="bg bg-bl">'+totalDiffs+' differences</span>';
+  html+='<span class="bg bg-or">'+lpHigher+' LP higher</span>';
+  html+='<span class="bg bg-gn">'+lmHigher+' LM higher</span>';
+  html+='<span class="bg bg-gy">'+venuesWithDiffs+' venues</span>';
+  html+='</div></div>';
+
+  // Filters
+  html+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
+  html+='<input type="text" class="lp-search" placeholder="Search SKU, name..." id="lmAnalysisSearch" oninput="LM_filterAnalysis()" style="flex:1;min-width:180px">';
+  html+='<select onchange="_lmAnalysisVenue=this.value;LM_renderAnalysis(document.getElementById(\'mn\'))" style="padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd)">';
+  html+='<option value="">All Venues</option>';
+  for(const v of [...allVenues].sort())html+='<option value="'+v+'"'+(v===_lmAnalysisVenue?' selected':'')+'>'+v+'</option>';
+  html+='</select>';
+  html+='<select onchange="_lmAnalysisSrc=this.value;LM_renderAnalysis(document.getElementById(\'mn\'))" style="padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd)">';
+  html+='<option value="">All Sources</option>';
+  for(const s of [...allSources].sort())html+='<option value="'+s+'"'+(s===_lmAnalysisSrc?' selected':'')+'>'+s+'</option>';
+  html+='</select>';
+  html+='</div>';
+
+  if(!filtered.length){html+='<div class="lp-empty" style="margin-top:20px">✅ No differences found between LP and LM demand'+((_lmAnalysisSrc||_lmAnalysisVenue)?' (with current filters)':'')+'.</div>';el.innerHTML=html;return}
+
+  // Group by venue
+  const byVenue={};for(const r of filtered){if(!byVenue[r.venue])byVenue[r.venue]=[];byVenue[r.venue].push(r)}
+
+  html+='<div id="lmAnalysisBody">';
+  for(const venue of Object.keys(byVenue).sort()){
+    const vRows=byVenue[venue];
+    const vDelta=vRows.reduce((s,r)=>s+r.delta,0);
+    const abbr=vRows[0]?.abbr||'';
+    const dc=LP_destColor(venue);
+    html+='<div class="lp-day-hdr" style="margin-top:12px"><span class="dt">'+venue+'</span>';
+    if(abbr)html+='<span class="lp-dest-badge" style="background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+';margin-left:8px">LP: '+(CITY_ABBR[abbr]||abbr)+'</span>';
+    html+='<span class="ds">'+vRows.length+' items</span>';
+    html+='<span class="dp" style="color:'+(vDelta>0?'var(--gn)':'var(--or)')+'">Net: '+(vDelta>0?'+':'')+vDelta.toLocaleString()+'</span></div>';
+
+    html+='<table class="dtb" style="margin-bottom:8px"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th style="color:var(--ac)">LP Qty</th><th style="color:var(--gn)">LM Qty</th><th>Delta</th></tr></thead><tbody>';
+    for(const r of vRows){
+      const dColor=r.delta>0?'var(--gn)':r.delta<0?'var(--or)':'var(--tt)';
+      const dSign=r.delta>0?'+':'';
+      html+='<tr data-search="'+r.sku+' '+r.name+' '+r.source+'">';
+      html+='<td class="mono">'+r.sku+'</td>';
+      html+='<td class="tcl">'+r.name+'</td>';
+      html+='<td style="font-size:10px;color:var(--ts)">'+r.source+'</td>';
+      html+='<td class="mono" style="color:var(--ac)">'+r.lpQty.toLocaleString()+'</td>';
+      html+='<td class="mono" style="color:var(--gn)">'+r.lmQty.toLocaleString()+'</td>';
+      html+='<td class="mono fw7" style="color:'+dColor+'">'+dSign+r.delta.toLocaleString()+'</td>';
+      html+='</tr>';
+    }
+    html+='</tbody></table>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+}
+function LM_filterAnalysis(){filterBySearch('lmAnalysisSearch','#lmAnalysisBody','tr[data-search]',{})}
+
 function rMain(){LM_buildLPArrivalMap();const el=document.getElementById("mn");
+
+// ── ANALYSIS VIEW ──
+if(cv==="analysis"){LM_renderAnalysis(el);return}
 
 // ── DEMAND VIEW ──
 if(cv==="demand"){LM_renderDemand(el);return}
@@ -11461,8 +11588,10 @@ function lmNavSync(){
   const d=document.getElementById('lmbn-dashboard');
   const t=document.getElementById('lmbn-trucks');
   const v=document.getElementById('lmbn-venues');
+  const a=document.getElementById('lmbn-analysis');
   if(d)d.classList.toggle('on',!isOpen&&cv==='dashboard');
   if(t)t.classList.toggle('on',!isOpen&&cv==='trucks');
+  if(a)a.classList.toggle('on',!isOpen&&cv==='analysis');
   if(v)v.classList.toggle('on',!!isOpen);
 }
 function lmNavVenues(){
