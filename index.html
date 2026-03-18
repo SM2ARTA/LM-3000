@@ -229,6 +229,7 @@
   z-index:65;
   background:var(--sf);
   border-top:1px solid var(--bd);
+  display:none;
   box-shadow:0 -2px 8px rgba(0,0,0,.06);
   display:flex;align-items:center;gap:6px;
   padding:5px 16px;height:44px;
@@ -6936,6 +6937,8 @@ function switchMod(mod){
   const gsbLm=document.getElementById('gsb-lm');
   const gsbLp=document.getElementById('gsb-lp');
   const gsbV26=document.getElementById('gsb-v26');
+  const gsb=document.getElementById('global-supp-bar');
+  if(gsb)gsb.style.display='flex';
   if(gsbLm)gsbLm.style.display=mod==='lm'?'flex':'none';
   if(gsbLp)gsbLp.style.display=mod==='lp'?'flex':'none';
   if(gsbV26)gsbV26.style.display=mod==='v26'?'flex':'none';
