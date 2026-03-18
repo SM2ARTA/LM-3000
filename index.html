@@ -9661,7 +9661,8 @@ async function LM_exportKit(kitId){
     R++;const n=NOM[item.sku];
     const ppu=n?.ppu||1;
     const effQty=ppu>1?Math.ceil(item.qty/ppu):item.qty;
-    const row=[idx+1,item.sku,n?.nm||item.sku,'Each',effQty];
+    const uom=n?.uom||'Each';
+    const row=[idx+1,item.sku,n?.nm||item.sku,uom.charAt(0).toUpperCase()+uom.slice(1),effQty];
     const rFill=idx%2===0?fillW:fillBg;
     row.forEach((v,i)=>{cl(R,i+1,v,i===0||i===4?fValB:fData,i===0||i===3||i===4?alC:alL,rFill,brd)});
   });
