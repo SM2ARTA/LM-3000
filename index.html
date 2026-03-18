@@ -9267,7 +9267,8 @@ function LM_showCreateKit(prefillVenue){
           </div>
         </details>
         <div style="font-size:10px;font-weight:700;color:var(--ts);margin-bottom:6px">Select Items & Quantities</div>
-        <div style="margin-bottom:8px"><input type="text" class="lp-search" placeholder="Filter items..." id="kitFilterInput" oninput="_kitFilterItems()" style="font-size:11px;padding:5px 8px"></div>
+        <div style="margin-bottom:6px"><input type="text" class="lp-search" placeholder="Filter items..." id="kitFilterInput" oninput="_kitFilterItems()" style="font-size:11px;padding:5px 8px"></div>
+        <div id="kitSrcChips" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div>
         <div id="kit_items" style="max-height:300px;overflow-y:auto;border:1px solid var(--bl);border-radius:8px"></div>
         <div id="kit_summary" style="margin-top:8px;font-size:11px;color:var(--ts)"></div>
         <div id="kit_err" style="color:var(--rd);font-size:11px;margin-top:6px;display:none"></div>
@@ -9292,8 +9293,12 @@ function _kitLoadItems(){
     return{sku,name:NOM[sku]?.nm||sku,src:NOM[sku]?.src||'',totalQty,allocd,avail};
   }).filter(s=>s.avail>0).sort((a,b)=>a.sku.localeCompare(b.sku));
   if(!skuList.length){el.innerHTML='<div style="padding:12px;color:var(--tt);text-align:center">No available items (all allocated to kits)</div>';return}
+  // Populate source chips
+  const srcs=[...new Set(skuList.map(s=>s.src).filter(Boolean))].sort();
+  const chipEl=document.getElementById('kitSrcChips');
+  if(chipEl)chipEl.innerHTML=srcs.map(s=>'<button class="rbtn kit-src-chip" data-src="'+s+'" onclick="_kitToggleSrc(this)" style="font-size:10px;padding:3px 8px">'+s+'</button>').join('');
   el.innerHTML=`<table class="dtb" style="font-size:11px"><thead><tr><th style="width:30px">✓</th><th>SKU</th><th>Item</th><th>Src</th><th>Avail</th><th style="width:70px">Kit Qty</th></tr></thead><tbody>`+
-    skuList.map(s=>`<tr class="kit-item-row" data-sku="${s.sku}" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}">
+    skuList.map(s=>`<tr class="kit-item-row" data-sku="${s.sku}" data-src="${s.src}" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}">
       <td><input type="checkbox" class="kit-chk" data-sku="${s.sku}" onchange="_kitUpdateSummary()"></td>
       <td class="mono">${s.sku}</td><td class="tcl">${s.name}</td>
       <td style="font-size:9px;color:var(--tt)">${s.src}</td>
@@ -9302,9 +9307,20 @@ function _kitLoadItems(){
     </tr>`).join('')+`</tbody></table>`;
   _kitUpdateSummary();
 }
+const _kitActiveSrcs=new Set();
+function _kitToggleSrc(btn){
+  const s=btn.dataset.src;
+  if(_kitActiveSrcs.has(s)){_kitActiveSrcs.delete(s);btn.style.background='';btn.style.color='';btn.style.borderColor=''}
+  else{_kitActiveSrcs.add(s);btn.style.background='var(--pu)';btn.style.color='#fff';btn.style.borderColor='var(--pu)'}
+  _kitFilterItems();
+}
 function _kitFilterItems(){
   const q=(document.getElementById('kitFilterInput')?.value||'').toLowerCase().trim();
-  document.querySelectorAll('.kit-item-row').forEach(r=>{r.style.display=(!q||r.dataset.search.includes(q))?'':'none'});
+  document.querySelectorAll('.kit-item-row').forEach(r=>{
+    const matchText=!q||r.dataset.search.includes(q);
+    const matchSrc=!_kitActiveSrcs.size||_kitActiveSrcs.has(r.dataset.src||'');
+    r.style.display=(matchText&&matchSrc)?'':'none';
+  });
 }
 function _kitUpdateSummary(){
   const checks=document.querySelectorAll('.kit-chk:checked');
