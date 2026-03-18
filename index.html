@@ -9627,13 +9627,13 @@ async function LM_exportKit(kitId){
   cl(R,1,'Ship From',fLbl,alC,fillH,brd);
   mg(R,2,R,3);cl(R,2,'Dallas - Main Logistics Center',fValB,alC,fillBg,brd);
   cl(R,4,'LSR',fLbl,alC,fillH,brd);
-  cl(R,5,kitNum,fValB,alC,fillBg,brd);
+  cl(R,5,'',fVal,alC,fillBg,brd);
   // ── Row 6: Ship To
   R=6;fillRow(R,1,COLS,fillBg,brd);
   cl(R,1,'Ship To',fLbl,alC,fillH,brd);
   mg(R,2,R,3);cl(R,2,kit.venue,fValB,alC,fillBg,brd);
   cl(R,4,'Reference',fLbl,alC,fillH,brd);
-  cl(R,5,'',fVal,alC,fillBg,brd);
+  cl(R,5,kitNum,fValB,alC,fillBg,brd);
   // ── Row 7: spacer
   R=7;ws.getRow(R).height=8;
   // ── Row 8: Table header
@@ -9642,7 +9642,9 @@ async function LM_exportKit(kitId){
   // ── Data rows
   kit.items.forEach((item,idx)=>{
     R++;const n=NOM[item.sku];
-    const row=[idx+1,item.sku,n?.nm||item.sku,'Each',item.qty];
+    const ppu=n?.ppu||1;
+    const effQty=ppu>1?Math.ceil(item.qty/ppu):item.qty;
+    const row=[idx+1,item.sku,n?.nm||item.sku,'Each',effQty];
     const rFill=idx%2===0?fillW:fillBg;
     row.forEach((v,i)=>{cl(R,i+1,v,i===0||i===4?fValB:fData,i===0||i===3||i===4?alC:alL,rFill,brd)});
   });
