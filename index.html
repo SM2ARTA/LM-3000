@@ -10475,11 +10475,12 @@ function LM_renderAnalysis(el){
 
   // Build LM demand by (abbr, sku) → qty — only LP-tracked SKUs
   const lmByAbbrSku={};const allDests=new Set();const allSources=new Set();
-  const lpSkuSet=new Set(Object.keys(nom));// only compare SKUs that exist in LP nomenclature
+  // Only compare SKUs that exist in LP DEMAND (not just nomenclature)
+  const lpDemandSkus=new Set();for(const k of Object.keys(lpByAbbrSku))lpDemandSkus.add(k.split('|')[1]);
   for(const r of RW){
     const v=r.Venue||r.venue;if(!v)continue;
     const sku=r.Nomenclature||r.nomenclature||r.SKU||r.sku||'';if(!sku)continue;
-    if(!lpSkuSet.has(sku))continue;// skip items not in LP — local procurement, staples, etc.
+    if(!lpDemandSkus.has(sku))continue;// skip items not in LP demand
     const qty=parseInt(r.Required||r.required||0)||0;if(qty<=0)continue;
     const abbrs=LM_getLPDestAbbrs(v);
     if(!abbrs.length)continue;// skip venues not mapped to LP destinations
