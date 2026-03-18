@@ -630,6 +630,7 @@ function _undoSnap(){
     lp_ricStart:LP_STATE.ricStartDate,
     lp_transitDays:JSON.stringify(LP_transitDays||{}),
     lp_destWhsDays:JSON.stringify(LP_destWhsDays||{}),
+    lp_lastGenSettings:JSON.stringify(LP_lastGenSettings||{}),
     lm_vs:JSON.stringify(VS||{}),
     lm_excluded:JSON.stringify([...(LM_excluded||[])]),
     lm_exclOvr:JSON.stringify(LM_excludeUserOvr||{}),
@@ -691,7 +692,7 @@ function UNDO_restore(){
     if(snap.lp_destWhsDays)LP_destWhsDays={...LP_DEST_WHS_DEFAULTS,...JSON.parse(snap.lp_destWhsDays)};
     LP_applyContDateOverrides();
     LP_applyPalletOverrides();
-    LP_snapshotSettings();
+    if(snap.lp_lastGenSettings)LP_lastGenSettings=JSON.parse(snap.lp_lastGenSettings);else LP_snapshotSettings();
     // Restore LM
     VS=JSON.parse(snap.lm_vs);
     LM_excluded=new Set(JSON.parse(snap.lm_excluded));
@@ -2659,11 +2660,21 @@ window.addEventListener('beforeunload',e=>{
   
         stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays
       };
+      const now=new Date().toISOString();
       fetch(SUPABASE_URL+'/rest/v1/shared_state?on_conflict=id',{
         method:'POST',keepalive:true,
         headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Prefer':'resolution=merge-duplicates'},
-        body:JSON.stringify({id:LP_KEYS.truck,value:JSON.stringify(truckData),updated_at:new Date().toISOString()})
+        body:JSON.stringify({id:LP_KEYS.truck,value:JSON.stringify(truckData),updated_at:now})
       }).catch(()=>{});
+      // Also save config key (includes lastGenSettings)
+      if(_lpSaveTimer){
+        const cfgData={turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,lastGenSettings:LP_lastGenSettings};
+        fetch(SUPABASE_URL+'/rest/v1/shared_state?on_conflict=id',{
+          method:'POST',keepalive:true,
+          headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Prefer':'resolution=merge-duplicates'},
+          body:JSON.stringify({id:LP_KEYS.config,value:JSON.stringify(cfgData),updated_at:now})
+        }).catch(()=>{});
+      }
     }
   }
 });
@@ -6938,6 +6949,7 @@ async function masterBackupRestore(file){
       if(LM_MANUAL_DEMAND.length)await LM_saveManualDemand();
       if(LM_KITS.length)await LM_saveKits();
       if(LM_STP_DELIVERIES.length)await LM_saveStpDeliveries();
+      if(Object.keys(LM_STP_STRATEGY).length)await LM_saveStpStrategy();
       if(STOCK_SKUS.size>0){
         await SB.from('shared_state').upsert({id:'fm-stock',value:JSON.stringify({skus:[...STOCK_SKUS],qtys:STOCK_QTYS,name:STOCK_REPORT_NAME}),updated_at:new Date().toISOString()});
       }
