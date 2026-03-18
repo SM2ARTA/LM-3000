@@ -9295,6 +9295,12 @@ function LM_showCreateKit(prefillVenue){
               ${vList.map(v=>`<option value="${v}"${v===prefillVenue?' selected':''}>${v}</option>`).join('')}
             </select>
           </div>
+          <div style="grid-column:1/-1"><label style="font-size:10px;font-weight:700;color:var(--ts)">Kit Type</label>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <button class="rbtn kit-type-btn" data-type="ffe" onclick="_kitSetType('ffe')" style="font-size:11px;padding:5px 14px">🪑 FF&E</button>
+              <button class="rbtn kit-type-btn" data-type="stp" onclick="_kitSetType('stp')" style="font-size:11px;padding:5px 14px">📎 Stationery</button>
+            </div>
+          </div>
           <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Kit SKU *</label>
             <input id="kit_sku" value="${prefillVenue?'Kit-'+(Math.floor(Math.random()*900)+100):''}" placeholder="Kit-XXX" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
           </div>
@@ -9326,8 +9332,10 @@ function _kitVenueChanged(){
   const skuEl=document.getElementById('kit_sku');
   const nmEl=document.getElementById('kit_name');
   if(v){
-    if(skuEl&&!skuEl._userEdited)skuEl.value='Kit-'+(Math.floor(Math.random()*900)+100);
-    if(nmEl&&!nmEl._userEdited)nmEl.value=v+' Kit';
+    const seq=String(Math.floor(Math.random()*900)+100);
+    if(_kitCurType==='ffe'){skuEl.value='FNKIT-001-'+seq;nmEl.value=v+' FF&E Kit'}
+    else if(_kitCurType==='stp'){skuEl.value='OSKIT-001-'+seq;nmEl.value=v+' Stationery Kit'}
+    else{skuEl.value='Kit-'+seq;nmEl.value=v+' Kit'}
   }
   _kitLoadItems();
 }
@@ -9359,6 +9367,23 @@ function _kitLoadItems(){
       <td><input type="number" class="kit-qty" data-sku="${s.sku}" value="${s.avail}" min="1" max="${s.avail}" style="width:60px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)" onchange="_kitUpdateSummary()"></td>
     </tr>`).join('')+`</tbody></table>`;
   _kitUpdateSummary();
+}
+let _kitCurType='';
+function _kitSetType(type){
+  const btns=document.querySelectorAll('.kit-type-btn');
+  btns.forEach(b=>{if(b.dataset.type===type){b.style.background='var(--pu)';b.style.color='#fff';b.style.borderColor='var(--pu)'}else{b.style.background='';b.style.color='';b.style.borderColor=''}});
+  _kitCurType=type;
+  const venue=document.getElementById('kit_venue')?.value||'';
+  const skuEl=document.getElementById('kit_sku');
+  const nmEl=document.getElementById('kit_name');
+  const seq=String(Math.floor(Math.random()*900)+100);
+  if(type==='ffe'){
+    if(skuEl)skuEl.value='FNKIT-001-'+seq;
+    if(nmEl&&venue)nmEl.value=venue+' FF&E Kit';
+  }else if(type==='stp'){
+    if(skuEl)skuEl.value='OSKIT-001-'+seq;
+    if(nmEl&&venue)nmEl.value=venue+' Stationery Kit';
+  }
 }
 function _kitToggleAll(checked){
   document.querySelectorAll('.kit-item-row').forEach(row=>{
@@ -9439,8 +9464,20 @@ function LM_showKitDetail(kitId){
             <input id="kitEditSku" value="${kit.sku.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','sku',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);font-weight:600;color:var(--ac)"></div>
           <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit Name</label>
             <input id="kitEditName" value="${kit.name.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','name',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);font-weight:600"></div>
+          <div style="grid-column:1/-1;display:flex;gap:6px;align-items:center">
+            <span style="font-size:9px;font-weight:700;color:var(--ts)">Type:</span>
+            <button class="rbtn" onclick="_kitApplyType('${kit.id}','ffe')" style="font-size:10px;padding:3px 10px">🪑 FF&E</button>
+            <button class="rbtn" onclick="_kitApplyType('${kit.id}','stp')" style="font-size:10px;padding:3px 10px">📎 Stationery</button>
+            <span style="flex:1"></span>
+            <button class="rbtn" onclick="LM_exportKit('${kit.id}')" style="font-size:10px;padding:3px 10px;background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button>
+          </div>
+          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Pallet Qty (items/pallet)</label>
+            <input type="number" min="0" value="${kit.pq||''}" placeholder="auto" onchange="LM_kitPalletOvr('${kit.id}','pq',this.value)" style="width:100%;padding:4px 6px;border:1px solid ${hasPltOvr?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fm);${hasPltOvr?'color:var(--pu);font-weight:600':''}"></div>
+          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Pallet Spaces</label>
+            <input type="number" min="0" value="${kit.ps||''}" placeholder="auto" onchange="LM_kitPalletOvr('${kit.id}','ps',this.value)" style="width:100%;padding:4px 6px;border:1px solid ${hasPltOvr?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fm);${hasPltOvr?'color:var(--pu);font-weight:600':''}"></div>
         </div>`:`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <span class="bg bg-bl">${kit.sku}</span></div>`}
+          <span class="bg bg-bl">${kit.sku}</span>
+          <button class="rbtn" onclick="LM_exportKit('${kit.id}')" style="font-size:10px;padding:3px 10px;background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button></div>`}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <span class="bg bg-gy">${kit.venue}</span>
           <span class="bg bg-gn">${kit.items.length} items · ${kit.items.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs</span>
@@ -9511,6 +9548,41 @@ function LM_removeKitItem(kitId,sku){
   setTimeout(()=>{rMain();rVL();LM_showKitDetail(kitId)},50);
 }
 
+function LM_kitPalletOvr(kitId,field,val){
+  if(ROLE==='viewer')return;
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  const v=parseInt(val)||0;
+  kit[field]=v>0?v:null;
+  LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  setTimeout(()=>{rMain();rVL();LM_showKitDetail(kitId)},50);
+}
+function _kitApplyType(kitId,type){
+  if(ROLE==='viewer')return;
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  const seq=String(Math.floor(Math.random()*900)+100);
+  if(type==='ffe'){
+    kit.sku='FNKIT-001-'+seq;
+    kit.name=kit.venue+' FF&E Kit';
+  }else{
+    kit.sku='OSKIT-001-'+seq;
+    kit.name=kit.venue+' Stationery Kit';
+  }
+  LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  setTimeout(()=>{rMain();rVL();LM_showKitDetail(kitId)},50);
+}
+function LM_exportKit(kitId){
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  const wb=XLSX.utils.book_new();
+  const data=[['SKU','Item','Source','Eff Qty']];
+  for(const item of kit.items){
+    const n=NOM[item.sku];
+    data.push([item.sku,n?.nm||item.sku,n?.src||'',item.qty]);
+  }
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[{wch:18},{wch:45},{wch:12},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Kit');
+  XLSX.writeFile(wb,(kit.sku||'Kit')+'.xlsx');
+}
 // ── LM Staples Direct Deliveries ──────────────────────────────
 let LM_STP_DELIVERIES=[];// [{id:'STP-1', venue:'Dallas Stadium', date:'2026-05-08', rate:0}]
 let _stpNextId=1;
