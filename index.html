@@ -2687,7 +2687,8 @@ async function LP_saveToSupabase(){
   try{
     const now=new Date().toISOString();
     // Skip unchanged keys — only write if data actually changed since last save
-    const u=async(id,val)=>{const json=JSON.stringify(val);const m=json.length>>1;const h=json.length+'_'+json.slice(0,80)+json.slice(m,m+80)+json.slice(-80);if(_lpSaveHashes[id]===h)return;const{error}=await SB.from('shared_state').upsert({id,value:json,updated_at:now});if(error){console.warn('LP save '+id+':',error)}else{_lpSaveHashes[id]=h}};
+    const _h=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h};
+    const u=async(id,val)=>{const json=JSON.stringify(val);const h=_h(json);if(_lpSaveHashes[id]===h)return;const{error}=await SB.from('shared_state').upsert({id,value:json,updated_at:now});if(error){console.warn('LP save '+id+':',error)}else{_lpSaveHashes[id]=h}};
     // Sequential saves — lightweight first, heaviest last. Avoids DB connection burst.
     await u(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,lastGenSettings:LP_lastGenSettings});
     await u(LP_KEYS.truck,{dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays});
