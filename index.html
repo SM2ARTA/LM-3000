@@ -9372,13 +9372,9 @@ function LM_showKitDetail(kitId){
         </div>
         <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Src</th><th>Qty</th><th>Plt</th>${ROLE!=='viewer'?'<th></th>':''}</tr></thead><tbody>${rows}</tbody></table>
         ${ROLE!=='viewer'?`<div style="margin-top:10px;border:1px solid var(--bd);border-radius:8px;padding:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--ts);margin-bottom:6px">+ Add Item to Kit</div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <input id="kitAddSku" type="text" placeholder="SKU or search..." list="kitAddSkuList" style="flex:1;min-width:120px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm)">
-            <datalist id="kitAddSkuList">${Object.keys(NOM).sort().map(s=>'<option value="'+s+'">'+((NOM[s]?.nm||''))+'</option>').join('')}</datalist>
-            <input id="kitAddQty" type="number" min="1" value="1" placeholder="Qty" style="width:60px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm)">
-            <button class="mbtn" onclick="LM_addKitItem('${kit.id}')" style="background:var(--gn);color:#fff;border-color:var(--gn);padding:5px 12px;font-size:11px">+ Add</button>
-          </div>
+          <div style="font-size:10px;font-weight:700;color:var(--ts);margin-bottom:6px">+ Add from ${kit.venue} demand</div>
+          <input type="text" placeholder="Filter items..." oninput="_kitFilterAvail(this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);margin-bottom:6px">
+          <div id="kitAvailItems" style="max-height:200px;overflow-y:auto">${_kitAvailHtml(kit)}</div>
         </div>
         <div style="margin-top:8px;display:flex;gap:8px">
           <button class="mbtn mbtn-danger mbtn-wide" onclick="LM_deleteKit('${kit.id}');this.closest('.mo').remove()">🗑 Delete Kit</button>
@@ -9386,6 +9382,28 @@ function LM_showKitDetail(kitId){
       </div>
     </div>
   </div>`;
+}
+function _kitAvailHtml(kit){
+  // Get demand items for this venue that are NOT already in the kit
+  const kitSkus=new Set(kit.items.map(i=>i.sku));
+  const avail={};
+  for(const r of RW){
+    if(r.Venue!==kit.venue||r._kit)continue;
+    const sku=r.Nomenclature;if(!sku||kitSkus.has(sku))continue;
+    const n=NOM[sku];if(!n||n._kitNom)continue;
+    const qty=parseInt(r.Required)||0;if(qty<=0)continue;
+    if(!avail[sku])avail[sku]={sku,name:n.nm||sku,src:n.src||'',qty:0};
+    avail[sku].qty+=qty;
+  }
+  const items=Object.values(avail).sort((a,b)=>(a.src||'').localeCompare(b.src||'')||a.name.localeCompare(b.name));
+  if(!items.length)return'<div style="padding:8px;color:var(--tt);text-align:center;font-size:10px">All venue items are already in the kit</div>';
+  return items.map(it=>'<div class="kit-avail-row" data-search="'+it.sku+' '+it.name+' '+it.src+'" style="display:flex;align-items:center;gap:6px;padding:4px 6px;border-bottom:1px solid var(--bl);font-size:10px"><span class="mono" style="min-width:100px;color:var(--ts)">'+it.sku+'</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+it.name+'">'+it.name+'</span><span style="color:var(--tt);min-width:40px">'+it.src+'</span><span class="mono" style="min-width:35px;text-align:right">'+it.qty+'</span><input type="number" min="1" value="'+it.qty+'" style="width:50px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)" id="kitAvQ_'+it.sku+'"><button onclick="LM_addKitItem(\''+kit.id+'\',\''+it.sku+'\',document.getElementById(\'kitAvQ_'+it.sku+'\').value)" style="background:var(--gn);color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;font-weight:600">+</button></div>').join('');
+}
+function _kitFilterAvail(q){
+  q=(q||'').toLowerCase();
+  document.querySelectorAll('.kit-avail-row').forEach(el=>{
+    el.style.display=(!q||el.getAttribute('data-search').toLowerCase().includes(q))?'flex':'none';
+  });
 }
 function LM_renameKit(kitId,field,val){
   if(ROLE==='viewer')return;
@@ -9395,12 +9413,10 @@ function LM_renameKit(kitId,field,val){
   LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
   setTimeout(()=>{rMain();rVL()},50);
 }
-function LM_addKitItem(kitId){
+function LM_addKitItem(kitId,skuArg,qtyArg){
   if(ROLE==='viewer')return;
   const kit=LM_getKitById(kitId);if(!kit)return;
-  const skuInput=document.getElementById('kitAddSku');
-  const qtyInput=document.getElementById('kitAddQty');
-  const sku=(skuInput?.value||'').trim();const qty=parseInt(qtyInput?.value)||1;
+  const sku=(skuArg||'').trim();const qty=parseInt(qtyArg)||1;
   if(!sku){alert('Enter a SKU');return}
   if(qty<1){alert('Qty must be at least 1');return}
   // Check if SKU already in kit — increment qty
