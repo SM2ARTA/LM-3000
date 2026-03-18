@@ -9583,18 +9583,74 @@ function _kitApplyType(kitId,type){
   LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
   setTimeout(()=>{rMain();rVL();LM_showKitDetail(kitId)},50);
 }
-function LM_exportKit(kitId){
+async function LM_exportKit(kitId){
   const kit=LM_getKitById(kitId);if(!kit)return;
-  const wb=XLSX.utils.book_new();
-  const data=[['SKU','Item','Source','Eff Qty']];
-  for(const item of kit.items){
-    const n=NOM[item.sku];
-    data.push([item.sku,n?.nm||item.sku,n?.src||'',item.qty]);
-  }
-  const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[{wch:18},{wch:45},{wch:12},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws,'Kit');
-  XLSX.writeFile(wb,(kit.sku||'Kit')+'.xlsx');
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('OOR',{pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+  ws.columns=[{width:7},{width:20},{width:42},{width:10},{width:12}];
+  const COLS=5;
+  // Colors
+  const C_HDR='FF5B1A18',C_WH='FFFFFFFF',C_BG='FFFDF5F0',C_BRD='FFB8805A',C_DK='FF3B0F0D',C_LBL='FF8B4513';
+  const mkF=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const fillH=mkF(C_HDR),fillW=mkF(C_WH),fillBg=mkF(C_BG);
+  const brd={top:{style:'thin',color:{argb:C_BRD}},left:{style:'thin',color:{argb:C_BRD}},bottom:{style:'thin',color:{argb:C_BRD}},right:{style:'thin',color:{argb:C_BRD}}};
+  const fTtl={name:'Calibri',size:14,bold:true,color:{argb:C_DK}};
+  const fLbl={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
+  const fVal={name:'Calibri',size:10,color:{argb:C_DK}};
+  const fValB={name:'Calibri',size:10,bold:true,color:{argb:C_DK}};
+  const fHdr={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
+  const fData={name:'Calibri',size:10,color:{argb:C_DK}};
+  const alC={horizontal:'center',vertical:'middle',wrapText:true},alL={horizontal:'left',vertical:'middle'},alR={horizontal:'right',vertical:'middle'};
+  const cl=(r,c,val,font,align,fill,border)=>{const x=ws.getRow(r).getCell(c);x.value=val!=null?val:'';if(font)x.font=font;if(align)x.alignment=align;if(fill)x.fill=fill;if(border)x.border=border;return x};
+  const mg=(r1,c1,r2,c2)=>{try{ws.mergeCells(r1,c1,r2,c2)}catch(e){}};
+  const fillRow=(r,c1,c2,fill,border)=>{for(let c=c1;c<=c2;c++){cl(r,c,'',null,null,fill,border)}};
+  const now=new Date();
+  const ts=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' '+String(now.getDate()).padStart(2,'0')+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+now.getFullYear();
+  const kitNum=kit.sku||kit.id;
+  // ── Row 1: blank spacer
+  let R=1;
+  // ── Row 2: Title
+  R=2;fillRow(R,1,COLS,fillW,brd);mg(R,1,R,COLS);
+  cl(R,1,'Outbound Order Request # '+kitNum,fTtl,alC,fillW,brd);ws.getRow(R).height=30;
+  // ── Row 3: Dispatch Date
+  R=3;fillRow(R,1,COLS,fillBg,brd);
+  mg(R,1,R,1);cl(R,1,'Dispatch Date and Time',fLbl,alC,fillH,brd);
+  mg(R,2,R,COLS);cl(R,2,ts,fVal,alC,fillBg,brd);
+  // ── Row 4: Delivery Date + Requestor
+  R=4;fillRow(R,1,COLS,fillBg,brd);
+  cl(R,1,'Delivery Date and Time',fLbl,alC,fillH,brd);
+  mg(R,2,R,3);cl(R,2,'',fVal,alC,fillBg,brd);
+  cl(R,4,'Requestor Name',fLbl,alC,fillH,brd);
+  cl(R,5,'',fVal,alC,fillBg,brd);
+  // ── Row 5: Ship From
+  R=5;fillRow(R,1,COLS,fillBg,brd);
+  cl(R,1,'Ship From',fLbl,alC,fillH,brd);
+  mg(R,2,R,3);cl(R,2,'Dallas - Main Logistics Center',fValB,alC,fillBg,brd);
+  cl(R,4,'LSR',fLbl,alC,fillH,brd);
+  cl(R,5,kitNum,fValB,alC,fillBg,brd);
+  // ── Row 6: Ship To
+  R=6;fillRow(R,1,COLS,fillBg,brd);
+  cl(R,1,'Ship To',fLbl,alC,fillH,brd);
+  mg(R,2,R,3);cl(R,2,kit.venue,fValB,alC,fillBg,brd);
+  cl(R,4,'Reference',fLbl,alC,fillH,brd);
+  cl(R,5,'',fVal,alC,fillBg,brd);
+  // ── Row 7: spacer
+  R=7;ws.getRow(R).height=8;
+  // ── Row 8: Table header
+  R=8;const hdrs=['Line #','Nomenclature Code','Nomenclature name','UOM','Quantity'];
+  hdrs.forEach((h,i)=>{cl(R,i+1,h,fHdr,alC,fillH,brd)});ws.getRow(R).height=28;
+  // ── Data rows
+  kit.items.forEach((item,idx)=>{
+    R++;const n=NOM[item.sku];
+    const row=[idx+1,item.sku,n?.nm||item.sku,'Each',item.qty];
+    const rFill=idx%2===0?fillW:fillBg;
+    row.forEach((v,i)=>{cl(R,i+1,v,i===0||i===4?fValB:fData,i===0||i===3||i===4?alC:alL,rFill,brd)});
+  });
+  // Download
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OOR_'+kitNum+'.xlsx';a.click();URL.revokeObjectURL(a.href);
+}
 }
 // ── LM Staples Direct Deliveries ──────────────────────────────
 let LM_STP_DELIVERIES=[];// [{id:'STP-1', venue:'Dallas Stadium', date:'2026-05-08', rate:0}]
