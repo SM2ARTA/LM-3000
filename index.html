@@ -9346,7 +9346,7 @@ function LM_showKitDetail(kitId){
   let sumPlt=0;
   const rows=kit.items.map(item=>{
     const n=NOM[item.sku];const plt=(n&&n.pq>0&&n.ps>0)?(item.qty/n.pq)*n.ps:0;sumPlt+=plt;
-    return`<tr><td class="mono">${item.sku}</td><td class="tcl">${n?.nm||item.sku}</td><td style="font-size:9px;color:var(--tt)">${n?.src||''}</td><td class="mono">${item.qty.toLocaleString()}</td><td class="mono">${plt.toFixed(1)}</td></tr>`;
+    return`<tr><td class="mono">${item.sku}</td><td class="tcl">${n?.nm||item.sku}</td><td style="font-size:9px;color:var(--tt)">${n?.src||''}</td><td class="mono">${item.qty.toLocaleString()}</td><td class="mono">${plt.toFixed(1)}</td>${ROLE!=='viewer'?`<td><button onclick="LM_removeKitItem('${kit.id}','${item.sku}');this.closest('.mo').remove()" style="background:none;border:none;cursor:pointer;color:var(--rd);font-size:12px" title="Remove">✕</button></td>`:''}</tr>`;
   }).join('');
   const hasPltOvr=kit.pq>0&&kit.ps>0;
   const effPlt=hasPltOvr?((kit.items.reduce((s,i)=>s+i.qty,0)/kit.pq)*kit.ps):sumPlt;
@@ -9363,14 +9363,47 @@ function LM_showKitDetail(kitId){
           <span class="bg bg-gn">${kit.items.length} items · ${kit.items.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs</span>
           <span class="bg ${hasPltOvr?'bg-pu':'bg-gy'}">${effPlt.toFixed(1)} plt${hasPltOvr?' (override)':''}</span>
         </div>
-        <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Src</th><th>Qty</th><th>Plt</th></tr></thead><tbody>${rows}</tbody></table>
-        ${ROLE!=='viewer'?`<div style="margin-top:12px;display:flex;gap:8px">
+        <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Src</th><th>Qty</th><th>Plt</th>${ROLE!=='viewer'?'<th></th>':''}</tr></thead><tbody>${rows}</tbody></table>
+        ${ROLE!=='viewer'?`<div style="margin-top:10px;border:1px solid var(--bd);border-radius:8px;padding:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--ts);margin-bottom:6px">+ Add Item to Kit</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input id="kitAddSku" type="text" placeholder="SKU or search..." list="kitAddSkuList" style="flex:1;min-width:120px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm)">
+            <datalist id="kitAddSkuList">${Object.keys(NOM).sort().map(s=>'<option value="'+s+'">'+((NOM[s]?.nm||''))+'</option>').join('')}</datalist>
+            <input id="kitAddQty" type="number" min="1" value="1" placeholder="Qty" style="width:60px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm)">
+            <button class="mbtn" onclick="LM_addKitItem('${kit.id}')" style="background:var(--gn);color:#fff;border-color:var(--gn);padding:5px 12px;font-size:11px">+ Add</button>
+          </div>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px">
           <button class="mbtn mbtn-danger mbtn-wide" onclick="LM_deleteKit('${kit.id}');this.closest('.mo').remove()">🗑 Delete Kit</button>
         </div>`:''}
       </div>
     </div>
   </div>`;
 }
+function LM_addKitItem(kitId){
+  if(ROLE==='viewer')return;
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  const skuInput=document.getElementById('kitAddSku');
+  const qtyInput=document.getElementById('kitAddQty');
+  const sku=(skuInput?.value||'').trim();const qty=parseInt(qtyInput?.value)||1;
+  if(!sku){alert('Enter a SKU');return}
+  if(qty<1){alert('Qty must be at least 1');return}
+  // Check if SKU already in kit — increment qty
+  const existing=kit.items.find(i=>i.sku===sku);
+  if(existing){existing.qty+=qty}
+  else{kit.items.push({sku,qty})}
+  LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  setTimeout(()=>{rMain();rVL();LM_showKitDetail(kitId)},50);
+}
+function LM_removeKitItem(kitId,sku){
+  if(ROLE==='viewer')return;
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  kit.items=kit.items.filter(i=>i.sku!==sku);
+  if(!kit.items.length){LM_deleteKit(kitId);return}
+  LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  setTimeout(()=>{rMain();rVL();LM_showKitDetail(kitId)},50);
+}
+
 // ── LM Staples Direct Deliveries ──────────────────────────────
 let LM_STP_DELIVERIES=[];// [{id:'STP-1', venue:'Dallas Stadium', date:'2026-05-08', rate:0}]
 let _stpNextId=1;
