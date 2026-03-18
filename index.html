@@ -2607,8 +2607,9 @@ const LP_KEYS={config:'lp-config',nom:'lp-nom',demand:'lp-demand',arr:'lp-arriva
 // Debounced save — batches rapid edits into one write (saves Disk IO)
 let _lpSaveTimer=null;
 function LP_saveToSupabaseDebounced(){
+  // Settings-only save: just config key, not all 6 keys
   if(_lpSaveTimer)clearTimeout(_lpSaveTimer);
-  _lpSaveTimer=setTimeout(()=>{_lpSaveTimer=null;LP_saveToSupabase()},1500);
+  _lpSaveTimer=setTimeout(async()=>{_lpSaveTimer=null;if(ROLE==='viewer'||!SB)return;try{await SB.from('shared_state').upsert({id:LP_KEYS.config,value:JSON.stringify({turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated}),updated_at:new Date().toISOString()})}catch(e){console.warn('LP config save:',e)}},1500);
 }
 // Save only truck-state key (for customs/hold/pallet edits — much lighter than full save)
 let _lpSavePending=false;// true when a debounced save hasn't fired yet
@@ -2662,6 +2663,19 @@ window.addEventListener('beforeunload',e=>{
     }
   }
 });
+const _lpSaveHashes={};// tracks last-saved hash per key to skip unchanged writes
+// Rehydrate slim plan rows — add name from nomenclature and recompute truckTotal
+function _lpRehydratePlan(){
+  if(!LP_STATE.generatedPlan?.length)return;
+  const nom=LP_STATE.nomenclature||{};
+  const byTruck={};
+  for(const r of LP_STATE.generatedPlan){
+    if(!r.name){const n=nom[r.sku];r.name=n?.name||r.sku}
+    if(!byTruck[r.truckId])byTruck[r.truckId]=0;
+    byTruck[r.truckId]+=(r.pallets||0);
+  }
+  for(const r of LP_STATE.generatedPlan){if(!r.truckTotal)r.truckTotal=+(byTruck[r.truckId]||0).toFixed(4)}
+}
 async function LP_saveToSupabase(){
   if(ROLE==="viewer")return;
   if(!SB)return;
@@ -2671,26 +2685,27 @@ async function LP_saveToSupabase(){
   UNDO_capture();// snapshot before save
   try{
     const now=new Date().toISOString();
-    const u=(id,val)=>SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now});
-    await Promise.all([
-      u(LP_KEYS.config,{
-        turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,
-        maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,
-        ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,
-      }),
-      u(LP_KEYS.nom,LP_STATE.nomenclature),
-      u(LP_KEYS.demand,LP_STATE.materialPlan),
-      u(LP_KEYS.arr,LP_STATE.arrivals),
-      u(LP_KEYS.plan,LP_STATE.generatedPlan),
-      u(LP_KEYS.truck,{
-        dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,
-        lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
-        arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
-  
-        stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays
-      })
-    ]);
-  }catch(e){console.warn('LP save error:',e)}
+    // Skip unchanged keys — only write if data actually changed since last save
+    const u=async(id,val)=>{const json=JSON.stringify(val);const h=json.length+'_'+json.slice(0,100);if(_lpSaveHashes[id]===h)return;const{error}=await SB.from('shared_state').upsert({id,value:json,updated_at:now});if(error){console.warn('LP save '+id+':',error)}else{_lpSaveHashes[id]=h}};
+    // Sequential saves — lightweight first, heaviest last. Avoids DB connection burst.
+    await u(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated});
+    await u(LP_KEYS.truck,{dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays});
+    await u(LP_KEYS.demand,LP_STATE.materialPlan);
+    await u(LP_KEYS.nom,LP_STATE.nomenclature);
+    await u(LP_KEYS.arr,LP_STATE.arrivals);
+    // Slim plan rows: strip recomputable fields (name, truckTotal) to reduce payload ~30%
+    const _slimPlan=LP_STATE.generatedPlan.map(r=>({date:r.date,truckId:r.truckId,destination:r.destination,sku:r.sku,qty:r.qty,pallets:r.pallets,_ready:r._ready||undefined}));
+    await u(LP_KEYS.plan,_slimPlan);
+  }catch(e){
+    console.warn('LP save error, retrying in 3s:',e);
+    setTimeout(async()=>{try{
+      const now=new Date().toISOString();
+      const u2=async(id,val)=>{await SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now})};
+      await u2(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated});
+      await u2(LP_KEYS.truck,{dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays});
+      console.log('LP save retry succeeded');
+    }catch(e2){console.warn('LP save retry failed:',e2)}},3000);
+  }
 }
 
 async function LP_loadFromSupabase(){
@@ -2734,6 +2749,7 @@ async function LP_loadFromSupabase(){
       }
       LP_applyContDateOverrides();
       LP_applyPalletOverrides();
+      _lpRehydratePlan();// restore name + truckTotal stripped during save
       LP_snapshotSettings();
       return true;
     }
@@ -2772,6 +2788,7 @@ async function LP_loadFromSupabase(){
     }
     LP_applyContDateOverrides();
     LP_applyPalletOverrides();
+    _lpRehydratePlan();// restore name + truckTotal stripped during save
     LP_snapshotSettings();
     // Write to new split keys (migration)
     if(ROLE==='admin'){
@@ -7109,6 +7126,8 @@ function enterApp(){
   };
   loadBoth().then(()=>{initLPUpload();initLMUpload();});
 }
+let _lmSaveTimer=null;
+function saveSharedDataDebounced(){if(_lmSaveTimer)clearTimeout(_lmSaveTimer);_lmSaveTimer=setTimeout(()=>{_lmSaveTimer=null;saveSharedData(false)},1500)}
 async function saveSharedData(fullSave){
   if(ROLE==="viewer")return;// viewers cannot save
   if(!SB){console.warn('Supabase not configured');return}
@@ -7153,20 +7172,9 @@ async function loadSharedData(){
     if(eoV)LM_excludeUserOvr=eoV;
     LM_cleanVS();
     if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
-    // Load remaining config in parallel
-    await Promise.all([
-      stockReportLoad().catch(()=>{}),
-      LM_loadManualDemand().catch(()=>{}),
-      LM_loadKits().catch(()=>{}),
-      LM_loadStpDeliveries().catch(()=>{}),
-      LM_loadDateOverrides().catch(()=>{}),
-      MI_load().catch(()=>{}),
-      LM_loadPalletCfg().catch(()=>{}),
-      DIST_loadOverrides().catch(()=>{}),
-      LM_loadDemandAdj().catch(()=>{}),
-      LM_loadNomOverrides().catch(()=>{}),
-      LM_loadClusterTA().catch(()=>{})
-    ]);
+    // Load remaining config in 2 waves (avoid 11 parallel connections)
+    await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),MI_load().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadClusterTA().catch(()=>{})]);
+    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
