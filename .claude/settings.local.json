@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(powershell -Command \":*)"
+      "Bash(powershell -Command \":*)",
+      "Bash(git.exe -C c:/Users/vla8529/Projects/MB show HEAD:index.html)",
+      "Bash(python -m http.server 8080)"
     ]
   }
 }
