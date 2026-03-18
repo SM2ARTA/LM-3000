@@ -9587,7 +9587,7 @@ async function LM_exportKit(kitId){
   const kit=LM_getKitById(kitId);if(!kit)return;
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet('OOR',{pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
-  ws.columns=[{width:7},{width:20},{width:42},{width:10},{width:12}];
+  ws.columns=[{width:12},{width:20},{width:38},{width:14},{width:14}];
   const COLS=5;
   // Colors
   const C_HDR='FF5B1A18',C_WH='FFFFFFFF',C_BG='FFFDF5F0',C_BRD='FFB8805A',C_DK='FF3B0F0D',C_LBL='FF8B4513';
@@ -9612,14 +9612,13 @@ async function LM_exportKit(kitId){
   // ── Row 2: Title
   R=2;fillRow(R,1,COLS,fillW,brd);mg(R,1,R,COLS);
   cl(R,1,'Outbound Order Request # '+kitNum,fTtl,alC,fillW,brd);ws.getRow(R).height=30;
-  // ── Row 3: Dispatch Date
+  // ── Row 3-4: Dispatch / Delivery (merge label A:B)
   R=3;fillRow(R,1,COLS,fillBg,brd);
-  mg(R,1,R,1);cl(R,1,'Dispatch Date and Time',fLbl,alC,fillH,brd);
-  mg(R,2,R,COLS);cl(R,2,ts,fVal,alC,fillBg,brd);
-  // ── Row 4: Delivery Date + Requestor
+  mg(R,1,R,2);cl(R,1,'Dispatch Date and Time',fLbl,alC,fillH,brd);
+  mg(R,3,R,COLS);cl(R,3,ts,fVal,alC,fillBg,brd);
   R=4;fillRow(R,1,COLS,fillBg,brd);
-  cl(R,1,'Delivery Date and Time',fLbl,alC,fillH,brd);
-  mg(R,2,R,3);cl(R,2,'',fVal,alC,fillBg,brd);
+  mg(R,1,R,2);cl(R,1,'Delivery Date and Time',fLbl,alC,fillH,brd);
+  cl(R,3,'',fVal,alC,fillBg,brd);
   cl(R,4,'Requestor Name',fLbl,alC,fillH,brd);
   cl(R,5,'',fVal,alC,fillBg,brd);
   // ── Row 5: Ship From
