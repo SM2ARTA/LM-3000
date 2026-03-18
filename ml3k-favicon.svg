@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#000"/>
+
+  <!-- M -->
+  <path d="M11 57 V7 L20 30 L29 7 V57"
+        stroke="#FFF" stroke-width="4" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- L -->
+  <path d="M36 7 V31 H54"
+        stroke="#FFF" stroke-width="4" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 3 top arc -->
+  <path d="M40 10 Q51 10 51 15 Q51 19 43 19"
+        stroke="#E53935" stroke-width="3.5" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 3 bottom arc -->
+  <path d="M43 19 Q51 19 51 23 Q51 28 40 28"
+        stroke="#E53935" stroke-width="3.5" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- K stem -->
+  <path d="M36 36 V57"
+        stroke="#FFF" stroke-width="4" fill="none"
+        stroke-linecap="round"/>
+
+  <!-- K upper arm -->
+  <path d="M36 44 L54 36"
+        stroke="#FFF" stroke-width="4" fill="none"
+        stroke-linecap="round"/>
+
+  <!-- K lower arm -->
+  <path d="M36 44 L54 57"
+        stroke="#FFF" stroke-width="4" fill="none"
+        stroke-linecap="round"/>
+</svg>
