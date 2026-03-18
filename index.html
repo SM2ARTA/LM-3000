@@ -9618,7 +9618,7 @@ async function LM_exportKit(kitId){
   const kit=LM_getKitById(kitId);if(!kit)return;
   const wb=new ExcelJS.Workbook();
   const kitNum=kit.sku||kit.id;
-  const items=kit.items.map(item=>{const n=NOM[item.sku];const ppu=n?.ppu||1;const uom=n?.uom||'Each';return{sku:item.sku,name:n?.nm||item.sku,uom:uom.charAt(0).toUpperCase()+uom.slice(1),qty:ppu>1?Math.ceil(item.qty/ppu):item.qty}});
+  const items=kit.items.map(item=>{const n=NOM[item.sku];const ppu=n?.ppu||1;const uom=n?.uom||'Each';return{sku:item.sku,name:n?.nm||item.sku,src:n?.src||'',uom:uom.charAt(0).toUpperCase()+uom.slice(1),qty:ppu>1?Math.ceil(item.qty/ppu):item.qty}});
   _oorSheet(wb,'OOR',kitNum,kit.venue,kit.venue,items);
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -11870,10 +11870,11 @@ function exportXL(){
 
   XLSX.writeFile(wb,'ML3000_Last_Mile_Plan.xlsx');
 }
-function _oorSheet(wb,sheetName,truckId,dest,venue,items){
+function _oorSheet(wb,sheetName,truckId,dest,venue,items,opts){
+  const dispDate=opts?.dispatchDate||'';const delDate=opts?.deliveryDate||'';
   const ws=wb.addWorksheet(sheetName,{pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
-  ws.columns=[{width:12},{width:20},{width:38},{width:14},{width:14}];
-  const COLS=5;
+  ws.columns=[{width:12},{width:20},{width:32},{width:12},{width:12},{width:12}];
+  const COLS=6;
   const C_HDR='FF5B1A18',C_WH='FFFFFFFF',C_BG='FFFDF5F0',C_BRD='FFB8805A',C_DK='FF3B0F0D';
   const mkF=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
   const fillH=mkF(C_HDR),fillW=mkF(C_WH),fillBg=mkF(C_BG);
@@ -11892,16 +11893,16 @@ function _oorSheet(wb,sheetName,truckId,dest,venue,items){
   const ts=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' '+String(now.getDate()).padStart(2,'0')+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+now.getFullYear();
   let R=2;fillRow(R,1,COLS,fillW,brd);mg(R,1,R,COLS);
   cl(R,1,'Outbound Order Request # '+truckId,fTtl,alC,fillW,brd);ws.getRow(R).height=30;
-  R=3;fillRow(R,1,COLS,fillBg,brd);mg(R,1,R,2);cl(R,1,'Dispatch Date and Time',fLbl,alC,fillH,brd);mg(R,3,R,COLS);cl(R,3,ts,fVal,alC,fillBg,brd);
-  R=4;fillRow(R,1,COLS,fillBg,brd);mg(R,1,R,2);cl(R,1,'Delivery Date and Time',fLbl,alC,fillH,brd);cl(R,3,'',fVal,alC,fillBg,brd);cl(R,4,'Requestor Name',fLbl,alC,fillH,brd);cl(R,5,'',fVal,alC,fillBg,brd);
-  R=5;fillRow(R,1,COLS,fillBg,brd);cl(R,1,'Ship From',fLbl,alC,fillH,brd);mg(R,2,R,3);cl(R,2,'Dallas - Main Logistics Center',fValB,alC,fillBg,brd);cl(R,4,'LSR',fLbl,alC,fillH,brd);cl(R,5,'',fVal,alC,fillBg,brd);
-  R=6;fillRow(R,1,COLS,fillBg,brd);cl(R,1,'Ship To',fLbl,alC,fillH,brd);mg(R,2,R,3);cl(R,2,venue||dest,fValB,alC,fillBg,brd);cl(R,4,'Reference',fLbl,alC,fillH,brd);cl(R,5,truckId,fValB,alC,fillBg,brd);
+  R=3;fillRow(R,1,COLS,fillBg,brd);mg(R,1,R,2);cl(R,1,'Dispatch Date and Time',fLbl,alC,fillH,brd);mg(R,3,R,COLS);cl(R,3,dispDate||ts,fVal,alC,fillBg,brd);
+  R=4;fillRow(R,1,COLS,fillBg,brd);mg(R,1,R,2);cl(R,1,'Delivery Date and Time',fLbl,alC,fillH,brd);mg(R,3,R,4);cl(R,3,delDate,fVal,alC,fillBg,brd);cl(R,5,'Requestor Name',fLbl,alC,fillH,brd);cl(R,6,'',fVal,alC,fillBg,brd);
+  R=5;fillRow(R,1,COLS,fillBg,brd);cl(R,1,'Ship From',fLbl,alC,fillH,brd);mg(R,2,R,4);cl(R,2,'Dallas - Main Logistics Center',fValB,alC,fillBg,brd);cl(R,5,'LSR',fLbl,alC,fillH,brd);cl(R,6,'',fVal,alC,fillBg,brd);
+  R=6;fillRow(R,1,COLS,fillBg,brd);cl(R,1,'Ship To',fLbl,alC,fillH,brd);mg(R,2,R,4);cl(R,2,venue||dest,fValB,alC,fillBg,brd);cl(R,5,'Reference',fLbl,alC,fillH,brd);cl(R,6,truckId,fValB,alC,fillBg,brd);
   R=7;ws.getRow(R).height=8;
-  R=8;['Line #','Nomenclature Code','Nomenclature name','UOM','Quantity'].forEach((h,i)=>{cl(R,i+1,h,fHdr,alC,fillH,brd)});ws.getRow(R).height=28;
+  R=8;['Line #','Nomenclature Code','Nomenclature name','Source','UOM','Quantity'].forEach((h,i)=>{cl(R,i+1,h,fHdr,alC,fillH,brd)});ws.getRow(R).height=28;
   items.forEach((item,idx)=>{
     R++;const rFill=idx%2===0?fillW:fillBg;
     cl(R,1,idx+1,fValB,alC,rFill,brd);cl(R,2,item.sku,fData,alL,rFill,brd);cl(R,3,item.name,fData,alL,rFill,brd);
-    cl(R,4,item.uom||'Each',fData,alC,rFill,brd);cl(R,5,item.qty,fValB,alC,rFill,brd);
+    cl(R,4,item.src||'',fData,alC,rFill,brd);cl(R,5,item.uom||'Each',fData,alC,rFill,brd);cl(R,6,item.qty,fValB,alC,rFill,brd);
   });
 }
 async function exportTruck(truckIdx){
@@ -11910,26 +11911,32 @@ async function exportTruck(truckIdx){
   const venue=sel||dest;
   const wb=new ExcelJS.Workbook();
   // Tab 1: Kit — items as displayed (kits as single rows)
+  // Get dispatch and delivery (bump-in) dates from the plan
+  const dispDate=t.dd?fF(new Date(t.dd+'T12:00:00')):'';
+  const P=PLAN_CACHE[selCluster&&CLUSTERS[selCluster]?selCluster:sel];
+  let delDate='';
+  if(P&&P.days){const day=P.days.find(d=>d.trucks.some(tr=>tr.id===t.id));if(day&&day.biDate)delDate=fF(day.biDate)}
+  const oorOpts={dispatchDate:dispDate,deliveryDate:delDate};
   const kitItems=t.items.filter(it=>(it.loadQty||0)>0).map(it=>{
     const n=NOM[it.sku]||{};const ppu=n.ppu||1;
-    return{sku:it.sku,name:it.nm||n.nm||it.sku,uom:n.uom||'Each',qty:ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty};
+    return{sku:it.sku,name:it.nm||n.nm||it.sku,src:n.src||'',uom:n.uom||'Each',qty:ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty};
   });
-  for(const mi of MI_get(MI_lmKey(t))){kitItems.push({sku:mi.sku,name:mi.name||'',uom:'Each',qty:mi.qty||0})}
-  _oorSheet(wb,'Kit',t.id,dest,venue,kitItems);
+  for(const mi of MI_get(MI_lmKey(t))){kitItems.push({sku:mi.sku,name:mi.name||'',src:'MANUAL',uom:'Each',qty:mi.qty||0})}
+  _oorSheet(wb,'Kit',t.id,dest,venue,kitItems,oorOpts);
   // Tab 2: All — expand kits into individual SKUs, sum by nomenclature
   const allMap={};
   t.items.filter(it=>(it.loadQty||0)>0).forEach(it=>{
     const n=NOM[it.sku]||{};
     if(n._kitNom&&n._kitId){
       const kit=LM_getKitById(n._kitId);
-      if(kit){kit.items.forEach(ci=>{const cn=NOM[ci.sku]||{};const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,uom:cn.uom||'Each',qty:0};allMap[k].qty+=ci.qty});return}
+      if(kit){kit.items.forEach(ci=>{const cn=NOM[ci.sku]||{};const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,src:cn.src||'',uom:cn.uom||'Each',qty:0};allMap[k].qty+=ci.qty});return}
     }
-    const k=it.sku;if(!allMap[k])allMap[k]={sku:k,name:it.nm||n.nm||it.sku,uom:n.uom||'Each',qty:0};
+    const k=it.sku;if(!allMap[k])allMap[k]={sku:k,name:it.nm||n.nm||it.sku,src:n.src||'',uom:n.uom||'Each',qty:0};
     const ppu=n.ppu||1;allMap[k].qty+=(ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty);
   });
-  for(const mi of MI_get(MI_lmKey(t))){const k=mi.sku;if(!allMap[k])allMap[k]={sku:k,name:mi.name||'',uom:'Each',qty:0};allMap[k].qty+=(mi.qty||0)}
+  for(const mi of MI_get(MI_lmKey(t))){const k=mi.sku;if(!allMap[k])allMap[k]={sku:k,name:mi.name||'',src:'MANUAL',uom:'Each',qty:0};allMap[k].qty+=(mi.qty||0)}
   const allItems=Object.values(allMap).sort((a,b)=>a.sku.localeCompare(b.sku));
-  _oorSheet(wb,'All',t.id,dest,venue,allItems);
+  _oorSheet(wb,'All',t.id,dest,venue,allItems,oorOpts);
   // Download
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
