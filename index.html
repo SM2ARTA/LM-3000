@@ -536,6 +536,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
     <button class="rbtn admin-only" onclick="stockReportUpload()" id="stockBtn" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">📦 Stock Report</button>
     <input type="file" accept=".xlsx,.xls" id="stockFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
     <button class="rbtn" onclick="showPalletCfg()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📐 Pallets</button>
+    <button class="rbtn admin-only" onclick="showStpSetup()" style="background:var(--os);color:var(--or);border-color:#F5D6B8">📋 STP Setup</button>
   </div>
   <div id="gsb-lp" style="display:none;align-items:center;gap:4px">
     <button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button>
@@ -643,6 +644,7 @@ function _undoSnap(){
     lm_kitNextId:_kitNextId,
     lm_stp:JSON.stringify(LM_STP_DELIVERIES||[]),
     lm_stpNextId:_stpNextId,
+    lm_stpStrategy:JSON.stringify(LM_STP_STRATEGY||{}),
     lm_manualDemand:JSON.stringify(LM_MANUAL_DEMAND||[]),
     lm_palletCfg:JSON.stringify(Object.fromEntries(Object.entries(LM_palletCfg||{}).map(([k,v])=>([k,{mode:v.mode,overrides:[...v.overrides]}])))),
     lm_stockSkus:JSON.stringify([...(STOCK_SKUS||[])]),
@@ -704,6 +706,7 @@ function UNDO_restore(){
     // Restore newer features (with backward compat for old snapshots)
     if(snap.lm_kits){LM_KITS=JSON.parse(snap.lm_kits);_kitNextId=snap.lm_kitNextId||1}
     if(snap.lm_stp){LM_STP_DELIVERIES=JSON.parse(snap.lm_stp);_stpNextId=snap.lm_stpNextId||1;LM_STP_TRUCKS={}}
+    if(snap.lm_stpStrategy)LM_STP_STRATEGY=JSON.parse(snap.lm_stpStrategy);
     if(snap.lm_manualDemand)LM_MANUAL_DEMAND=JSON.parse(snap.lm_manualDemand);
     if(snap.lm_palletCfg){const pc=JSON.parse(snap.lm_palletCfg);LM_palletCfg={};for(const[k,v]of Object.entries(pc))LM_palletCfg[k]={mode:v.mode||'dis',overrides:new Set(v.overrides||[])}}
     if(snap.lm_stockSkus){STOCK_SKUS=new Set(JSON.parse(snap.lm_stockSkus));STOCK_QTYS=snap.lm_stockQtys?JSON.parse(snap.lm_stockQtys):{};STOCK_REPORT_NAME=snap.lm_stockName||''}
@@ -6662,9 +6665,15 @@ function masterBackupExport(){
 
   // 20. LM STP Deliveries
   if(LM_STP_DELIVERIES.length>0){
-    const rows=LM_STP_DELIVERIES.map(d=>({ID:d.id,Venue:d.venue,Date:d.date||'',Rate:d.rate||0}));
+    const rows=LM_STP_DELIVERIES.map(d=>({ID:d.id,Venue:d.venue,Date:d.date||'',Rate:d.rate||0,Auto:d._auto?'Y':''}));
     const ws=XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb,ws,'LM STP Deliveries');
+  }
+  // 21. LM STP Strategy
+  if(Object.keys(LM_STP_STRATEGY).length>0){
+    const rows=Object.entries(LM_STP_STRATEGY).map(([vt,mode])=>({'Venue Type':vt,Strategy:mode}));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'LM STP Strategy');
   }
 
   XLSX.writeFile(wb,`ML3K_Backup_${ts}.xlsx`);
@@ -6873,9 +6882,17 @@ async function masterBackupRestore(file){
     // ── 20. LM STP Deliveries → LM_STP_DELIVERIES ──
     const stpRows=getSheet('LM STP Deliveries');
     if(stpRows){
-      LM_STP_DELIVERIES=stpRows.map(r=>({id:r.ID||'',venue:r.Venue||'',date:r.Date||'',rate:r.Rate||0}));
+      LM_STP_DELIVERIES=stpRows.map(r=>({id:r.ID||'',venue:r.Venue||'',date:r.Date||'',rate:r.Rate||0,_auto:r.Auto==='Y'?true:undefined}));
       _stpNextId=LM_STP_DELIVERIES.reduce((mx,d)=>Math.max(mx,(parseInt(String(d.id).replace(/\D/g,''))||0)+1),1);
       log.push('STP Deliveries: '+LM_STP_DELIVERIES.length);
+    }
+
+    // ── 21. LM STP Strategy → LM_STP_STRATEGY ──
+    const stratRows=getSheet('LM STP Strategy');
+    if(stratRows){
+      LM_STP_STRATEGY={};
+      stratRows.forEach(r=>{if(r['Venue Type']&&r.Strategy)LM_STP_STRATEGY[r['Venue Type']]=r.Strategy});
+      log.push('STP Strategy: '+Object.keys(LM_STP_STRATEGY).length+' types');
     }
 
     // ── Rebuild everything ──
@@ -7076,6 +7093,7 @@ function enterApp(){
       LM_loadManualDemand().catch(()=>{}),
       LM_loadKits().catch(()=>{}),
       LM_loadStpDeliveries().catch(()=>{}),
+      LM_loadStpStrategy().catch(()=>{}),
       LM_loadDateOverrides().catch(()=>{}),
       MI_load().catch(()=>{}),
       LM_loadPalletCfg().catch(()=>{}),
@@ -7177,7 +7195,7 @@ async function loadSharedData(){
     if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
     // Load remaining config in 2 waves (avoid 11 parallel connections)
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),MI_load().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadClusterTA().catch(()=>{})]);
-    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
+    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
@@ -7228,7 +7246,7 @@ async function syncLM(){
     if(nomV)NOM=nomV;if(rwV)RW=rwV;if(vsV)VS=vsV;
     if(exV)LM_excluded=new Set(exV);if(eoV)LM_excludeUserOvr=eoV;
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),MI_load().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadClusterTA().catch(()=>{})]);
-    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
+    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
     LM_injectAll();LM_applyNomOverrides();bV();numberAll();PLAN_CACHE={};
     rT();rVL();rMain();applyRole();
   });
@@ -7248,7 +7266,7 @@ async function syncV26(){
     const get=async id=>{try{const{data}=await SB.from('shared_state').select('value').eq('id',id).single();return data?JSON.parse(data.value):null}catch(e){return null}};
     const [nomV,rwV,vsV,exV]=await Promise.all([get('fm-nom'),get('fm-rw'),get('fm-vs'),get('fm-excl')]);
     if(nomV)NOM=nomV;if(rwV)RW=rwV;if(vsV)VS=vsV;if(exV)LM_excluded=new Set(exV);
-    await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
+    await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
     LM_injectAll();LM_applyNomOverrides();bV();numberAll();PLAN_CACHE={};
     await LP_loadFromSupabase().catch(()=>{});
     V26_render();
@@ -9652,6 +9670,132 @@ async function LM_exportKit(kitId){
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OOR_'+kitNum+'.xlsx';a.click();URL.revokeObjectURL(a.href);
 }
+// ── LM STP Strategy (per venue type: 'direct' or 'kit') ──────
+let LM_STP_STRATEGY={};// {venueType: 'direct'|'kit'}
+async function LM_saveStpStrategy(){
+  if(ROLE==='viewer'||!SB)return;
+  try{await SB.from('shared_state').upsert({id:'fm-stp-strategy',value:JSON.stringify(LM_STP_STRATEGY),updated_at:new Date().toISOString()})}catch(e){}
+}
+async function LM_loadStpStrategy(){
+  if(!SB)return;
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-stp-strategy').single();if(data)LM_STP_STRATEGY=JSON.parse(data.value)||{}}catch(e){}
+}
+function showStpSetup(){
+  if(ROLE==='viewer')return;
+  // Get venue types that have STP items in the data
+  const vtWithStp={};
+  for(const r of RW){
+    if(r._kit)continue;const sku=r.Nomenclature;if(!sku||!NOM[sku])continue;
+    if(!(NOM[sku].src||'').toUpperCase().startsWith('STP'))continue;
+    const venue=r.Venue;const vt=LM_vtMap[venue];if(!vt)continue;
+    if(!vtWithStp[vt])vtWithStp[vt]=new Set();
+    vtWithStp[vt].add(venue);
+  }
+  const vtList=Object.keys(vtWithStp).sort();
+  if(!vtList.length){alert('No STP items found in demand data.');return}
+  const stpSet=LM_stpVenueSet();
+  const kitVenues=new Set(LM_KITS.filter(k=>k.sku.startsWith('OSKIT')).map(k=>k.venue));
+  const rows=vtList.map(vt=>{
+    const cur=LM_STP_STRATEGY[vt]||'';
+    const venues=[...vtWithStp[vt]];
+    const manualD=venues.filter(v=>stpSet.has(v)&&LM_getStpForVenue(v)&&!LM_getStpForVenue(v)._auto).length;
+    const manualK=venues.filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('OSKIT')&&!k._auto)).length;
+    const autoD=venues.filter(v=>stpSet.has(v)&&LM_getStpForVenue(v)?._auto).length;
+    const autoK=venues.filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('OSKIT')&&k._auto)).length;
+    return`<tr>
+      <td style="font-size:11px;font-weight:600">${vt}</td>
+      <td style="text-align:center;font-size:10px;color:var(--tt)">${venues.length}</td>
+      <td style="text-align:center">
+        <select data-vt="${vt}" class="stp-strat-sel" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);background:${cur==='direct'?'var(--gs)':cur==='kit'?'var(--ps)':'var(--bg)'};color:${cur==='direct'?'var(--gn)':cur==='kit'?'var(--pu)':'var(--ts)'}">
+          <option value=""${!cur?' selected':''}>— None</option>
+          <option value="direct"${cur==='direct'?' selected':''}>📦 Direct</option>
+          <option value="kit"${cur==='kit'?' selected':''}>📋 Kit</option>
+        </select>
+      </td>
+      <td style="text-align:center;font-size:9px;color:var(--tt)">${manualD?'<span style="color:var(--gn)">'+manualD+' manual</span>':''}${manualK?'<span style="color:var(--pu)">'+manualK+' manual</span>':''}</td>
+    </tr>`}).join('');
+  document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:560px">
+      <div class="mdh" style="background:var(--os);border-bottom-color:var(--or)">
+        <h3 style="color:var(--or)">📋 STP Strategy by Venue Type</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
+      </div>
+      <div class="mdb" style="padding:16px">
+        <div style="font-size:10px;color:var(--ts);margin-bottom:10px">Configure how STP (Staples) items are handled per venue type. <strong>Direct</strong> = STP delivery truck. <strong>Kit</strong> = Stationery kit bundled into venue truck. Manual overrides are preserved.</div>
+        <table class="dtb" style="font-size:11px"><thead><tr><th>Venue Type</th><th>Venues</th><th>Strategy</th><th>Manual</th></tr></thead><tbody>${rows}</tbody></table>
+        <button class="mbtn mbtn-wide" onclick="_stpApplyStrategy()" style="margin-top:12px;background:var(--or);color:#fff;border-color:var(--or)">✓ Apply Strategy</button>
+      </div>
+    </div>
+  </div>`;
+}
+function _stpApplyStrategy(){
+  if(ROLE==='viewer')return;
+  UNDO_capture();
+  // Read selections
+  const newStrat={};
+  document.querySelectorAll('.stp-strat-sel').forEach(sel=>{
+    const vt=sel.dataset.vt;const v=sel.value;
+    if(v)newStrat[vt]=v;
+  });
+  // Remove auto-created items for types whose strategy changed or was removed
+  for(const vt of Object.keys(LM_STP_STRATEGY)){
+    if(LM_STP_STRATEGY[vt]===newStrat[vt])continue;// no change
+    // Strategy changed — remove auto-created items for this type
+    if(LM_STP_STRATEGY[vt]==='direct'){
+      LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&LM_vtMap[d.venue]===vt));
+    }
+    if(LM_STP_STRATEGY[vt]==='kit'){
+      LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&LM_vtMap[k.venue]===vt));
+    }
+  }
+  LM_STP_STRATEGY=newStrat;
+  // Apply new strategy
+  for(const [vt,mode] of Object.entries(newStrat)){
+    // Get all venues of this type with STP items
+    const venues=new Set();
+    for(const r of RW){
+      if(r._kit)continue;const sku=r.Nomenclature;if(!sku||!NOM[sku])continue;
+      if(!(NOM[sku].src||'').toUpperCase().startsWith('STP'))continue;
+      if(LM_vtMap[r.Venue]===vt)venues.add(r.Venue);
+    }
+    for(const venue of venues){
+      if(mode==='direct'){
+        // Skip if manual STP delivery exists
+        const existing=LM_getStpForVenue(venue);
+        if(existing&&!existing._auto)continue;
+        if(existing&&existing._auto)continue;// already auto-created
+        // Skip if auto kit exists — remove it first
+        LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&k.venue===venue));
+        LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date:'',rate:0,_auto:true});
+      }else if(mode==='kit'){
+        // Skip if manual kit exists for this venue
+        const existingKit=LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&!k._auto);
+        if(existingKit)continue;
+        const existingAutoKit=LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&k._auto);
+        if(existingAutoKit)continue;// already auto-created
+        // Remove auto STP delivery if exists
+        LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&d.venue===venue));
+        // Build kit from STP items
+        const items=[];
+        const bySkuMap={};
+        for(const r of RW){
+          if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;
+          if(!(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;
+          bySkuMap[s]=(bySkuMap[s]||0)+(parseInt(r.Required)||0);
+        }
+        for(const [sku,qty] of Object.entries(bySkuMap)){if(qty>0)items.push({sku,qty})}
+        if(!items.length)continue;
+        const seq=String(Math.floor(Math.random()*900)+100);
+        LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-001-'+seq,name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true});
+      }
+    }
+  }
+  // Save everything
+  LM_saveStpStrategy();LM_saveStpDeliveries();LM_saveKits();
+  LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  document.querySelector('.mo')?.remove();
+  setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
+}
 // ── LM Staples Direct Deliveries ──────────────────────────────
 let LM_STP_DELIVERIES=[];// [{id:'STP-1', venue:'Dallas Stadium', date:'2026-05-08', rate:0}]
 let _stpNextId=1;
@@ -11831,7 +11975,7 @@ function doSystemReset(){
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};
   STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
-  LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
+  LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
   // Restore upload screen
@@ -11990,9 +12134,9 @@ function resetLM(){
 function doResetLM(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits','fm-lm-stp-deliveries','fm-dist-overrides','fm-pallet-cfg']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits','fm-lm-stp-deliveries','fm-stp-strategy','fm-dist-overrides','fm-pallet-cfg']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
   document.getElementById("mn").innerHTML='';
