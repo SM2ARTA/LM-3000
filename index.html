@@ -9350,7 +9350,7 @@ function _kitLoadItems(){
   const srcs=[...new Set(skuList.map(s=>s.src).filter(Boolean))].sort();
   const chipEl=document.getElementById('kitSrcChips');
   if(chipEl)chipEl.innerHTML=srcs.map(s=>'<button class="rbtn kit-src-chip" data-src="'+s+'" onclick="_kitToggleSrc(this)" style="font-size:10px;padding:3px 8px">'+s+'</button>').join('');
-  el.innerHTML=`<table class="dtb" style="font-size:11px"><thead><tr><th style="width:30px">✓</th><th>SKU</th><th>Item</th><th>Src</th><th>Avail</th><th style="width:70px">Kit Qty</th></tr></thead><tbody>`+
+  el.innerHTML=`<table class="dtb" style="font-size:11px"><thead><tr><th style="width:30px"><input type="checkbox" onchange="_kitToggleAll(this.checked)" title="Select/deselect all visible"></th><th>SKU</th><th>Item</th><th>Src</th><th>Avail</th><th style="width:70px">Kit Qty</th></tr></thead><tbody>`+
     skuList.map(s=>`<tr class="kit-item-row" data-sku="${s.sku}" data-src="${s.src}" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}">
       <td><input type="checkbox" class="kit-chk" data-sku="${s.sku}" onchange="_kitUpdateSummary()"></td>
       <td class="mono">${s.sku}</td><td class="tcl">${s.name}</td>
@@ -9358,6 +9358,13 @@ function _kitLoadItems(){
       <td class="mono">${s.avail.toLocaleString()}${s.allocd>0?'<span style="color:var(--or);font-size:8px"> ('+s.allocd+' in kits)</span>':''}</td>
       <td><input type="number" class="kit-qty" data-sku="${s.sku}" value="${s.avail}" min="1" max="${s.avail}" style="width:60px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)" onchange="_kitUpdateSummary()"></td>
     </tr>`).join('')+`</tbody></table>`;
+  _kitUpdateSummary();
+}
+function _kitToggleAll(checked){
+  document.querySelectorAll('.kit-item-row').forEach(row=>{
+    if(row.style.display==='none')return;// skip hidden/filtered rows
+    const cb=row.querySelector('.kit-chk');if(cb)cb.checked=checked;
+  });
   _kitUpdateSummary();
 }
 const _kitActiveSrcs=new Set();
