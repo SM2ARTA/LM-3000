@@ -6669,11 +6669,15 @@ function masterBackupExport(){
     const ws=XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb,ws,'LM STP Deliveries');
   }
-  // 21. LM STP Strategy
+  // 21. LM Delivery Strategy
   if(Object.keys(LM_STP_STRATEGY).length>0){
-    const rows=Object.entries(LM_STP_STRATEGY).map(([vt,mode])=>({'Venue Type':vt,Strategy:mode}));
-    const ws=XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb,ws,'LM STP Strategy');
+    const rows=[];
+    for(const[country,vtMap]of Object.entries(LM_STP_STRATEGY)){
+      for(const[vt,cfg]of Object.entries(vtMap)){
+        rows.push({Country:country,'Venue Type':vt,STP:cfg.stp||'',FFE:cfg.ffe||''});
+      }
+    }
+    if(rows.length){const ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'LM STP Strategy')}
   }
 
   XLSX.writeFile(wb,`ML3K_Backup_${ts}.xlsx`);
@@ -6887,12 +6891,21 @@ async function masterBackupRestore(file){
       log.push('STP Deliveries: '+LM_STP_DELIVERIES.length);
     }
 
-    // ── 21. LM STP Strategy → LM_STP_STRATEGY ──
+    // ── 21. LM Delivery Strategy → LM_STP_STRATEGY ──
     const stratRows=getSheet('LM STP Strategy');
     if(stratRows){
       LM_STP_STRATEGY={};
-      stratRows.forEach(r=>{if(r['Venue Type']&&r.Strategy)LM_STP_STRATEGY[r['Venue Type']]=r.Strategy});
-      log.push('STP Strategy: '+Object.keys(LM_STP_STRATEGY).length+' types');
+      stratRows.forEach(r=>{
+        if(!r['Venue Type'])return;
+        if(r.Country){// new format: country+vt+stp+ffe
+          if(!LM_STP_STRATEGY[r.Country])LM_STP_STRATEGY[r.Country]={};
+          LM_STP_STRATEGY[r.Country][r['Venue Type']]={stp:r.STP||'',ffe:r.FFE||''};
+        }else if(r.Strategy){// legacy flat format
+          if(!LM_STP_STRATEGY.usa)LM_STP_STRATEGY.usa={};
+          LM_STP_STRATEGY.usa[r['Venue Type']]={stp:r.Strategy,ffe:''};
+        }
+      });
+      log.push('Delivery Strategy: '+Object.keys(LM_STP_STRATEGY).length+' countries');
     }
 
     // ── Rebuild everything ──
@@ -9671,59 +9684,64 @@ async function LM_exportKit(kitId){
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OOR_'+kitNum+'.xlsx';a.click();URL.revokeObjectURL(a.href);
 }
-// ── LM STP Strategy (per venue type: 'direct' or 'kit') ──────
-let LM_STP_STRATEGY={};// {venueType: 'direct'|'kit'}
+// ── LM Delivery Strategy (per country + venue type) ──────
+// Structure: {country: {venueType: {stp:'direct'|'kit'|'', ffe:'direct'|'kit'|''}}}
+let LM_STP_STRATEGY={};
+let _stratCountry='usa';
+function _venueCountry(venue){const v=VN.find(vn=>vn.name===venue);if(!v)return'usa';if(vcIsCAN(v.cluster))return'can';if(vcIsMEX(v.cluster))return'mex';return'usa'}
+function _stratGet(country,vt,field){return(LM_STP_STRATEGY[country]||{})[vt]?.[field]||''}
 async function LM_saveStpStrategy(){
   if(ROLE==='viewer'||!SB)return;
   try{await SB.from('shared_state').upsert({id:'fm-stp-strategy',value:JSON.stringify(LM_STP_STRATEGY),updated_at:new Date().toISOString()})}catch(e){}
 }
 async function LM_loadStpStrategy(){
   if(!SB)return;
-  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-stp-strategy').single();if(data)LM_STP_STRATEGY=JSON.parse(data.value)||{}}catch(e){}
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-stp-strategy').single();if(data){const v=JSON.parse(data.value)||{};if(v&&typeof v==='object'&&(v.usa||v.can||v.mex))LM_STP_STRATEGY=v;else{/* migrate old flat format */const m={};for(const[vt,mode]of Object.entries(v)){if(typeof mode==='string'){if(!m.usa)m.usa={};m.usa[vt]={stp:mode,ffe:''}}}if(Object.keys(m).length)LM_STP_STRATEGY=m;else LM_STP_STRATEGY=v}}}catch(e){}
 }
+function _isFfeItem(sku){const s=(NOM[sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')}
 function showStpSetup(){
   if(ROLE==='viewer')return;
-  // Get venue types that have STP items in the data
-  const vtWithStp={};
+  _stratRenderModal();
+}
+function _stratRenderModal(){
+  const cc=_stratCountry;
+  // Get venue types with items per country
+  const vtData={};// vt -> {stpVenues:Set, ffeVenues:Set}
   for(const r of RW){
     if(r._kit)continue;const sku=r.Nomenclature;if(!sku||!NOM[sku])continue;
-    if(!(NOM[sku].src||'').toUpperCase().startsWith('STP'))continue;
     const venue=r.Venue;const vt=LM_vtMap[venue];if(!vt)continue;
-    if(!vtWithStp[vt])vtWithStp[vt]=new Set();
-    vtWithStp[vt].add(venue);
+    const vc=_venueCountry(venue);if(vc!==cc)continue;
+    if(!vtData[vt])vtData[vt]={stpVenues:new Set(),ffeVenues:new Set()};
+    const src=(NOM[sku].src||'').toUpperCase();
+    if(src.startsWith('STP'))vtData[vt].stpVenues.add(venue);
+    else if(!src.startsWith('CT'))vtData[vt].ffeVenues.add(venue);
   }
-  const vtList=Object.keys(vtWithStp).sort();
-  if(!vtList.length){alert('No STP items found in demand data.');return}
+  const vtList=Object.keys(vtData).sort();
+  if(!vtList.length){document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()"><div class="mdi" style="max-width:560px"><div class="mdh" style="background:var(--os);border-bottom-color:var(--or)"><h3 style="color:var(--or)">📋 Delivery Strategy</h3><button class="mdc" onclick="this.closest('.mo').remove()">✕</button></div><div class="mdb" style="padding:16px;text-align:center;color:var(--tt)">No items found for ${cc.toUpperCase()}</div></div></div>`;return}
   const stpSet=LM_stpVenueSet();
-  const kitVenues=new Set(LM_KITS.filter(k=>k.sku.startsWith('OSKIT')).map(k=>k.venue));
+  const _sel=(vt,field)=>{
+    const cur=_stratGet(cc,vt,field);
+    const bg=cur==='direct'?'var(--gs)':cur==='kit'?'var(--ps)':'';
+    const clr=cur==='direct'?'var(--gn)':cur==='kit'?'var(--pu)':'var(--ts)';
+    return`<select data-vt="${vt}" data-field="${field}" class="strat-sel" style="padding:3px 6px;border:1px solid var(--bd);border-radius:6px;font-size:10px;font-family:var(--fd);width:100%;background:${bg};color:${clr}"><option value=""${!cur?' selected':''}>—</option><option value="direct"${cur==='direct'?' selected':''}>📦 Direct</option><option value="kit"${cur==='kit'?' selected':''}>📋 Kit</option></select>`};
   const rows=vtList.map(vt=>{
-    const cur=LM_STP_STRATEGY[vt]||'';
-    const venues=[...vtWithStp[vt]];
-    const manualD=venues.filter(v=>stpSet.has(v)&&LM_getStpForVenue(v)&&!LM_getStpForVenue(v)._auto).length;
-    const manualK=venues.filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('OSKIT')&&!k._auto)).length;
-    const autoD=venues.filter(v=>stpSet.has(v)&&LM_getStpForVenue(v)?._auto).length;
-    const autoK=venues.filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('OSKIT')&&k._auto)).length;
-    return`<tr>
-      <td style="font-size:11px;font-weight:600">${vt}</td>
-      <td style="text-align:center;font-size:10px;color:var(--tt)">${venues.length}</td>
-      <td style="text-align:center">
-        <select data-vt="${vt}" class="stp-strat-sel" style="padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);background:${cur==='direct'?'var(--gs)':cur==='kit'?'var(--ps)':'var(--bg)'};color:${cur==='direct'?'var(--gn)':cur==='kit'?'var(--pu)':'var(--ts)'}">
-          <option value=""${!cur?' selected':''}>— None</option>
-          <option value="direct"${cur==='direct'?' selected':''}>📦 Direct</option>
-          <option value="kit"${cur==='kit'?' selected':''}>📋 Kit</option>
-        </select>
-      </td>
-      <td style="text-align:center;font-size:9px;color:var(--tt)">${manualD?'<span style="color:var(--gn)">'+manualD+' manual</span>':''}${manualK?'<span style="color:var(--pu)">'+manualK+' manual</span>':''}</td>
-    </tr>`}).join('');
+    const d=vtData[vt];
+    const totalV=new Set([...d.stpVenues,...d.ffeVenues]).size;
+    const manStp=[...d.stpVenues].filter(v=>stpSet.has(v)&&LM_getStpForVenue(v)&&!LM_getStpForVenue(v)._auto).length;
+    const manFfe=[...d.ffeVenues].filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('FNKIT')&&!k._auto)).length;
+    const manTxt=[(manStp?'<span style="color:var(--or)">'+manStp+' stp</span>':''),(manFfe?'<span style="color:var(--pu)">'+manFfe+' ffe</span>':'')].filter(Boolean).join(' ');
+    return`<tr><td style="font-size:11px;font-weight:600">${vt}</td><td style="text-align:center;font-size:10px;color:var(--tt)">${totalV}</td><td style="width:100px">${d.stpVenues.size?_sel(vt,'stp'):'<span style="font-size:9px;color:var(--tt)">—</span>'}</td><td style="width:100px">${d.ffeVenues.size?_sel(vt,'ffe'):'<span style="font-size:9px;color:var(--tt)">—</span>'}</td><td style="text-align:center;font-size:9px;color:var(--tt)">${manTxt}</td></tr>`}).join('');
+  const cBtns=['usa','can','mex'].map(c=>`<button class="rbtn" onclick="_stratCountry='${c}';_stratRenderModal()" style="padding:5px 14px;font-size:11px;font-weight:700;${c===cc?'background:var(--ac);color:#fff;border-color:var(--ac)':''}">${c==='usa'?'🇺🇸 USA':c==='can'?'🇨🇦 CAN':'🇲🇽 MEX'}</button>`).join('');
   document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
-    <div class="mdi" style="max-width:560px">
+    <div class="mdi" style="max-width:640px">
       <div class="mdh" style="background:var(--os);border-bottom-color:var(--or)">
-        <h3 style="color:var(--or)">📋 STP Strategy by Venue Type</h3>
+        <h3 style="color:var(--or)">📋 Delivery Strategy</h3>
         <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
       </div>
       <div class="mdb" style="padding:16px">
-        <div style="font-size:10px;color:var(--ts);margin-bottom:10px">Configure how STP (Staples) items are handled per venue type. <strong>Direct</strong> = STP delivery truck. <strong>Kit</strong> = Stationery kit bundled into venue truck. Manual overrides are preserved.</div>
-        <table class="dtb" style="font-size:11px"><thead><tr><th>Venue Type</th><th>Venues</th><th>Strategy</th><th>Manual</th></tr></thead><tbody>${rows}</tbody></table>
+        <div style="display:flex;gap:4px;margin-bottom:12px">${cBtns}</div>
+        <div style="font-size:10px;color:var(--ts);margin-bottom:10px"><strong>Direct</strong> = items ship from WHS as-is. <strong>Kit</strong> = items bundled into kit on venue truck. Manual overrides preserved.</div>
+        <table class="dtb" style="font-size:11px"><thead><tr><th>Venue Type</th><th>Venues</th><th style="text-align:center">📎 STP</th><th style="text-align:center">🪑 FF&E</th><th>Manual</th></tr></thead><tbody>${rows}</tbody></table>
         <button class="mbtn mbtn-wide" onclick="_stpApplyStrategy()" style="margin-top:12px;background:var(--or);color:#fff;border-color:var(--or)">✓ Apply Strategy</button>
       </div>
     </div>
@@ -9732,66 +9750,73 @@ function showStpSetup(){
 function _stpApplyStrategy(){
   if(ROLE==='viewer')return;
   UNDO_capture();
+  const cc=_stratCountry;
   // Read selections
-  const newStrat={};
-  document.querySelectorAll('.stp-strat-sel').forEach(sel=>{
-    const vt=sel.dataset.vt;const v=sel.value;
-    if(v)newStrat[vt]=v;
+  const newCountryStrat={};
+  document.querySelectorAll('.strat-sel').forEach(sel=>{
+    const vt=sel.dataset.vt,field=sel.dataset.field,v=sel.value;
+    if(!newCountryStrat[vt])newCountryStrat[vt]={stp:'',ffe:''};
+    newCountryStrat[vt][field]=v;
   });
-  // Remove auto-created items for types whose strategy changed or was removed
-  for(const vt of Object.keys(LM_STP_STRATEGY)){
-    if(LM_STP_STRATEGY[vt]===newStrat[vt])continue;// no change
-    // Strategy changed — remove auto-created items for this type
-    if(LM_STP_STRATEGY[vt]==='direct'){
-      LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&LM_vtMap[d.venue]===vt));
+  // Also preserve fields not shown (venue types with no items for this field)
+  const oldCC=LM_STP_STRATEGY[cc]||{};
+  for(const vt of Object.keys(oldCC)){
+    if(!newCountryStrat[vt])newCountryStrat[vt]={...oldCC[vt]};
+  }
+  // Clean up auto items for changed strategies
+  for(const vt of Object.keys(oldCC)){
+    const oldStp=oldCC[vt]?.stp||'';const newStp=newCountryStrat[vt]?.stp||'';
+    const oldFfe=oldCC[vt]?.ffe||'';const newFfe=newCountryStrat[vt]?.ffe||'';
+    if(oldStp!==newStp){
+      if(oldStp==='direct')LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&LM_vtMap[d.venue]===vt&&_venueCountry(d.venue)===cc));
+      if(oldStp==='kit')LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&LM_vtMap[k.venue]===vt&&_venueCountry(k.venue)===cc));
     }
-    if(LM_STP_STRATEGY[vt]==='kit'){
-      LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&LM_vtMap[k.venue]===vt));
+    if(oldFfe!==newFfe){
+      if(oldFfe==='kit')LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('FNKIT')&&LM_vtMap[k.venue]===vt&&_venueCountry(k.venue)===cc));
     }
   }
-  LM_STP_STRATEGY=newStrat;
-  // Apply new strategy
-  for(const [vt,mode] of Object.entries(newStrat)){
-    // Get all venues of this type with STP items
-    const venues=new Set();
+  // Remove empty entries
+  for(const vt of Object.keys(newCountryStrat)){if(!newCountryStrat[vt].stp&&!newCountryStrat[vt].ffe)delete newCountryStrat[vt]}
+  if(!LM_STP_STRATEGY)LM_STP_STRATEGY={};
+  if(Object.keys(newCountryStrat).length)LM_STP_STRATEGY[cc]=newCountryStrat;else delete LM_STP_STRATEGY[cc];
+  // Apply new strategy for this country
+  const strat=LM_STP_STRATEGY[cc]||{};
+  for(const [vt,cfg] of Object.entries(strat)){
+    // Collect venues of this type in this country
+    const stpVenues=new Set(),ffeVenues=new Set();
     for(const r of RW){
       if(r._kit)continue;const sku=r.Nomenclature;if(!sku||!NOM[sku])continue;
-      if(!(NOM[sku].src||'').toUpperCase().startsWith('STP'))continue;
-      if(LM_vtMap[r.Venue]===vt)venues.add(r.Venue);
+      const venue=r.Venue;if(LM_vtMap[venue]!==vt||_venueCountry(venue)!==cc)continue;
+      const src=(NOM[sku].src||'').toUpperCase();
+      if(src.startsWith('STP'))stpVenues.add(venue);
+      else if(!src.startsWith('CT'))ffeVenues.add(venue);
     }
-    for(const venue of venues){
-      if(mode==='direct'){
-        // Skip if manual STP delivery exists
-        const existing=LM_getStpForVenue(venue);
-        if(existing&&!existing._auto)continue;
-        if(existing&&existing._auto)continue;// already auto-created
-        // Skip if auto kit exists — remove it first
-        LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&k.venue===venue));
-        LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date:'',rate:0,_auto:true});
-      }else if(mode==='kit'){
-        // Skip if manual kit exists for this venue
-        const existingKit=LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&!k._auto);
-        if(existingKit)continue;
-        const existingAutoKit=LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&k._auto);
-        if(existingAutoKit)continue;// already auto-created
-        // Remove auto STP delivery if exists
-        LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&d.venue===venue));
-        // Build kit from STP items
-        const items=[];
-        const bySkuMap={};
-        for(const r of RW){
-          if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;
-          if(!(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;
-          bySkuMap[s]=(bySkuMap[s]||0)+(parseInt(r.Required)||0);
-        }
-        for(const [sku,qty] of Object.entries(bySkuMap)){if(qty>0)items.push({sku,qty})}
-        if(!items.length)continue;
-        const seq=String(Math.floor(Math.random()*900)+100);
-        LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-001-'+seq,name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true});
-      }
-    }
+    // Apply STP strategy
+    if(cfg.stp==='direct'){for(const venue of stpVenues){
+      const ex=LM_getStpForVenue(venue);if(ex)continue;// manual or auto exists
+      LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&k.venue===venue));
+      LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date:'',rate:0,_auto:true});
+    }}
+    if(cfg.stp==='kit'){for(const venue of stpVenues){
+      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&!k._auto))continue;
+      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&k._auto))continue;
+      LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&d.venue===venue));
+      const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;bySkuMap[s]=(bySkuMap[s]||0)+(parseInt(r.Required)||0)}
+      const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
+      if(!items.length)continue;
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-001-'+String(Math.floor(Math.random()*900)+100),name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true});
+    }}
+    // Apply FF&E strategy
+    if(cfg.ffe==='kit'){for(const venue of ffeVenues){
+      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('FNKIT')&&!k._auto))continue;
+      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('FNKIT')&&k._auto))continue;
+      const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!_isFfeItem(s))continue;bySkuMap[s]=(bySkuMap[s]||0)+(parseInt(r.Required)||0)}
+      const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
+      if(!items.length)continue;
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-001-'+String(Math.floor(Math.random()*900)+100),name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true});
+    }}
+    // FF&E 'direct' = default (no action needed)
   }
-  // Save everything
   LM_saveStpStrategy();LM_saveStpDeliveries();LM_saveKits();
   LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
   document.querySelector('.mo')?.remove();
