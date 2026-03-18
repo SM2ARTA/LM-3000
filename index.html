@@ -7541,6 +7541,7 @@ function renderTruckCard(t,opts){
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">🔒 Locked</span></div>':''}
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
+      ${t.items&&t.items.some(it=>NOM[it.sku]?._kitNom)?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#E8F5E9;color:#43A047;border:1px solid #81C784">📦 Kit</span></div>`:''}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
@@ -9357,8 +9358,14 @@ function LM_showKitDetail(kitId){
         <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
       </div>
       <div class="mdb" style="padding:16px">
+        ${ROLE!=='viewer'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit SKU</label>
+            <input id="kitEditSku" value="${kit.sku.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','sku',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);font-weight:600;color:var(--ac)"></div>
+          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit Name</label>
+            <input id="kitEditName" value="${kit.name.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','name',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);font-weight:600"></div>
+        </div>`:`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="bg bg-bl">${kit.sku}</span></div>`}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <span class="bg bg-bl">${kit.sku}</span>
           <span class="bg bg-gy">${kit.venue}</span>
           <span class="bg bg-gn">${kit.items.length} items · ${kit.items.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs</span>
           <span class="bg ${hasPltOvr?'bg-pu':'bg-gy'}">${effPlt.toFixed(1)} plt${hasPltOvr?' (override)':''}</span>
@@ -9379,6 +9386,14 @@ function LM_showKitDetail(kitId){
       </div>
     </div>
   </div>`;
+}
+function LM_renameKit(kitId,field,val){
+  if(ROLE==='viewer')return;
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  val=(val||'').trim();if(!val)return;
+  kit[field]=val;
+  LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  setTimeout(()=>{rMain();rVL()},50);
 }
 function LM_addKitItem(kitId){
   if(ROLE==='viewer')return;
