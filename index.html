@@ -9617,69 +9617,9 @@ function _kitApplyType(kitId,type){
 async function LM_exportKit(kitId){
   const kit=LM_getKitById(kitId);if(!kit)return;
   const wb=new ExcelJS.Workbook();
-  const ws=wb.addWorksheet('OOR',{pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
-  ws.columns=[{width:12},{width:20},{width:38},{width:14},{width:14}];
-  const COLS=5;
-  // Colors
-  const C_HDR='FF5B1A18',C_WH='FFFFFFFF',C_BG='FFFDF5F0',C_BRD='FFB8805A',C_DK='FF3B0F0D',C_LBL='FF8B4513';
-  const mkF=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
-  const fillH=mkF(C_HDR),fillW=mkF(C_WH),fillBg=mkF(C_BG);
-  const brd={top:{style:'thin',color:{argb:C_BRD}},left:{style:'thin',color:{argb:C_BRD}},bottom:{style:'thin',color:{argb:C_BRD}},right:{style:'thin',color:{argb:C_BRD}}};
-  const fTtl={name:'Calibri',size:14,bold:true,color:{argb:C_DK}};
-  const fLbl={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
-  const fVal={name:'Calibri',size:10,color:{argb:C_DK}};
-  const fValB={name:'Calibri',size:10,bold:true,color:{argb:C_DK}};
-  const fHdr={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
-  const fData={name:'Calibri',size:10,color:{argb:C_DK}};
-  const alC={horizontal:'center',vertical:'middle',wrapText:true},alL={horizontal:'left',vertical:'middle'},alR={horizontal:'right',vertical:'middle'};
-  const cl=(r,c,val,font,align,fill,border)=>{const x=ws.getRow(r).getCell(c);x.value=val!=null?val:'';if(font)x.font=font;if(align)x.alignment=align;if(fill)x.fill=fill;if(border)x.border=border;return x};
-  const mg=(r1,c1,r2,c2)=>{try{ws.mergeCells(r1,c1,r2,c2)}catch(e){}};
-  const fillRow=(r,c1,c2,fill,border)=>{for(let c=c1;c<=c2;c++){cl(r,c,'',null,null,fill,border)}};
-  const now=new Date();
-  const ts=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' '+String(now.getDate()).padStart(2,'0')+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+now.getFullYear();
   const kitNum=kit.sku||kit.id;
-  // ── Row 1: blank spacer
-  let R=1;
-  // ── Row 2: Title
-  R=2;fillRow(R,1,COLS,fillW,brd);mg(R,1,R,COLS);
-  cl(R,1,'Outbound Order Request # '+kitNum,fTtl,alC,fillW,brd);ws.getRow(R).height=30;
-  // ── Row 3-4: Dispatch / Delivery (merge label A:B)
-  R=3;fillRow(R,1,COLS,fillBg,brd);
-  mg(R,1,R,2);cl(R,1,'Dispatch Date and Time',fLbl,alC,fillH,brd);
-  mg(R,3,R,COLS);cl(R,3,ts,fVal,alC,fillBg,brd);
-  R=4;fillRow(R,1,COLS,fillBg,brd);
-  mg(R,1,R,2);cl(R,1,'Delivery Date and Time',fLbl,alC,fillH,brd);
-  cl(R,3,'',fVal,alC,fillBg,brd);
-  cl(R,4,'Requestor Name',fLbl,alC,fillH,brd);
-  cl(R,5,'',fVal,alC,fillBg,brd);
-  // ── Row 5: Ship From
-  R=5;fillRow(R,1,COLS,fillBg,brd);
-  cl(R,1,'Ship From',fLbl,alC,fillH,brd);
-  mg(R,2,R,3);cl(R,2,'Dallas - Main Logistics Center',fValB,alC,fillBg,brd);
-  cl(R,4,'LSR',fLbl,alC,fillH,brd);
-  cl(R,5,'',fVal,alC,fillBg,brd);
-  // ── Row 6: Ship To
-  R=6;fillRow(R,1,COLS,fillBg,brd);
-  cl(R,1,'Ship To',fLbl,alC,fillH,brd);
-  mg(R,2,R,3);cl(R,2,kit.venue,fValB,alC,fillBg,brd);
-  cl(R,4,'Reference',fLbl,alC,fillH,brd);
-  cl(R,5,kitNum,fValB,alC,fillBg,brd);
-  // ── Row 7: spacer
-  R=7;ws.getRow(R).height=8;
-  // ── Row 8: Table header
-  R=8;const hdrs=['Line #','Nomenclature Code','Nomenclature name','UOM','Quantity'];
-  hdrs.forEach((h,i)=>{cl(R,i+1,h,fHdr,alC,fillH,brd)});ws.getRow(R).height=28;
-  // ── Data rows
-  kit.items.forEach((item,idx)=>{
-    R++;const n=NOM[item.sku];
-    const ppu=n?.ppu||1;
-    const effQty=ppu>1?Math.ceil(item.qty/ppu):item.qty;
-    const uom=n?.uom||'Each';
-    const row=[idx+1,item.sku,n?.nm||item.sku,uom.charAt(0).toUpperCase()+uom.slice(1),effQty];
-    const rFill=idx%2===0?fillW:fillBg;
-    row.forEach((v,i)=>{cl(R,i+1,v,i===0||i===4?fValB:fData,i===0||i===3||i===4?alC:alL,rFill,brd)});
-  });
-  // Download
+  const items=kit.items.map(item=>{const n=NOM[item.sku];const ppu=n?.ppu||1;const uom=n?.uom||'Each';return{sku:item.sku,name:n?.nm||item.sku,uom:uom.charAt(0).toUpperCase()+uom.slice(1),qty:ppu>1?Math.ceil(item.qty/ppu):item.qty}});
+  _oorSheet(wb,'OOR',kitNum,kit.venue,kit.venue,items);
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OOR_'+kitNum+'.xlsx';a.click();URL.revokeObjectURL(a.href);
@@ -11930,44 +11870,70 @@ function exportXL(){
 
   XLSX.writeFile(wb,'ML3000_Last_Mile_Plan.xlsx');
 }
-function exportTruck(truckIdx){
+function _oorSheet(wb,sheetName,truckId,dest,venue,items){
+  const ws=wb.addWorksheet(sheetName,{pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+  ws.columns=[{width:12},{width:20},{width:38},{width:14},{width:14}];
+  const COLS=5;
+  const C_HDR='FF5B1A18',C_WH='FFFFFFFF',C_BG='FFFDF5F0',C_BRD='FFB8805A',C_DK='FF3B0F0D';
+  const mkF=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const fillH=mkF(C_HDR),fillW=mkF(C_WH),fillBg=mkF(C_BG);
+  const brd={top:{style:'thin',color:{argb:C_BRD}},left:{style:'thin',color:{argb:C_BRD}},bottom:{style:'thin',color:{argb:C_BRD}},right:{style:'thin',color:{argb:C_BRD}}};
+  const fTtl={name:'Calibri',size:14,bold:true,color:{argb:C_DK}};
+  const fLbl={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
+  const fVal={name:'Calibri',size:10,color:{argb:C_DK}};
+  const fValB={name:'Calibri',size:10,bold:true,color:{argb:C_DK}};
+  const fHdr={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
+  const fData={name:'Calibri',size:10,color:{argb:C_DK}};
+  const alC={horizontal:'center',vertical:'middle',wrapText:true},alL={horizontal:'left',vertical:'middle'};
+  const cl=(r,c,val,font,align,fill,border)=>{const x=ws.getRow(r).getCell(c);x.value=val!=null?val:'';if(font)x.font=font;if(align)x.alignment=align;if(fill)x.fill=fill;if(border)x.border=border};
+  const mg=(r1,c1,r2,c2)=>{try{ws.mergeCells(r1,c1,r2,c2)}catch(e){}};
+  const fillRow=(r,c1,c2,fill,border)=>{for(let c=c1;c<=c2;c++){cl(r,c,'',null,null,fill,border)}};
+  const now=new Date();
+  const ts=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' '+String(now.getDate()).padStart(2,'0')+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+now.getFullYear();
+  let R=2;fillRow(R,1,COLS,fillW,brd);mg(R,1,R,COLS);
+  cl(R,1,'Outbound Order Request # '+truckId,fTtl,alC,fillW,brd);ws.getRow(R).height=30;
+  R=3;fillRow(R,1,COLS,fillBg,brd);mg(R,1,R,2);cl(R,1,'Dispatch Date and Time',fLbl,alC,fillH,brd);mg(R,3,R,COLS);cl(R,3,ts,fVal,alC,fillBg,brd);
+  R=4;fillRow(R,1,COLS,fillBg,brd);mg(R,1,R,2);cl(R,1,'Delivery Date and Time',fLbl,alC,fillH,brd);cl(R,3,'',fVal,alC,fillBg,brd);cl(R,4,'Requestor Name',fLbl,alC,fillH,brd);cl(R,5,'',fVal,alC,fillBg,brd);
+  R=5;fillRow(R,1,COLS,fillBg,brd);cl(R,1,'Ship From',fLbl,alC,fillH,brd);mg(R,2,R,3);cl(R,2,'Dallas - Main Logistics Center',fValB,alC,fillBg,brd);cl(R,4,'LSR',fLbl,alC,fillH,brd);cl(R,5,'',fVal,alC,fillBg,brd);
+  R=6;fillRow(R,1,COLS,fillBg,brd);cl(R,1,'Ship To',fLbl,alC,fillH,brd);mg(R,2,R,3);cl(R,2,venue||dest,fValB,alC,fillBg,brd);cl(R,4,'Reference',fLbl,alC,fillH,brd);cl(R,5,truckId,fValB,alC,fillBg,brd);
+  R=7;ws.getRow(R).height=8;
+  R=8;['Line #','Nomenclature Code','Nomenclature name','UOM','Quantity'].forEach((h,i)=>{cl(R,i+1,h,fHdr,alC,fillH,brd)});ws.getRow(R).height=28;
+  items.forEach((item,idx)=>{
+    R++;const rFill=idx%2===0?fillW:fillBg;
+    cl(R,1,idx+1,fValB,alC,rFill,brd);cl(R,2,item.sku,fData,alL,rFill,brd);cl(R,3,item.name,fData,alL,rFill,brd);
+    cl(R,4,item.uom||'Each',fData,alC,rFill,brd);cl(R,5,item.qty,fValB,alC,rFill,brd);
+  });
+}
+async function exportTruck(truckIdx){
   const t=LP.allT[truckIdx];if(!t)return;
   const dest=selCluster&&CLUSTERS[selCluster]?clDisp(selCluster):clDisp(sel);
-  const rows=t.items.filter(it=>(it.loadQty||0)>0).flatMap(it=>{
-    const nom=NOM[it.sku]||{};
-    const mainRow={
-      'Nomenclature code':it.sku,
-      'Nomenclature name':it.nm||nom.nm||it.sku,
-      'Source':nom.src||'',
-      'In Stock':LM_kitInStock(it.sku)?'Yes':'No',
-      'Qty':it.loadQty
-    };
-    // If this is a kit, expand its contents as sub-rows
-    if(nom._kitNom&&nom._kitId){
-      const kit=LM_getKitById(nom._kitId);
-      if(kit){
-        return[mainRow,...kit.items.map(ci=>({
-          'Nomenclature code':'  ↳ '+ci.sku,
-          'Nomenclature name':(NOM[ci.sku]?.nm||ci.sku),
-          'Source':NOM[ci.sku]?.src||'',
-          'In Stock':STOCK_SKUS.has(ci.sku)?'Yes':'—',
-          'Qty':ci.qty
-        }))];
-      }
-    }
-    return[mainRow];
+  const venue=sel||dest;
+  const wb=new ExcelJS.Workbook();
+  // Tab 1: Kit — items as displayed (kits as single rows)
+  const kitItems=t.items.filter(it=>(it.loadQty||0)>0).map(it=>{
+    const n=NOM[it.sku]||{};const ppu=n.ppu||1;
+    return{sku:it.sku,name:it.nm||n.nm||it.sku,uom:n.uom||'Each',qty:ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty};
   });
-  // Append manual items
-  for(const mi of MI_get(MI_lmKey(t))){
-    rows.push({'Nomenclature code':mi.sku,'Nomenclature name':mi.name||'','Source':'MANUAL','In Stock':'—','Qty':mi.qty||0});
-  }
-  const wb=XLSX.utils.book_new();
-  const hdr=[['Truck',t.id,'Destination',dest]];
-  const ws=XLSX.utils.aoa_to_sheet(hdr);
-  XLSX.utils.sheet_add_json(ws,rows,{origin:'A3'});
-  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:10},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws,'Truck '+t.id);
-  XLSX.writeFile(wb,t.id+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_Shipping_Order.xlsx');
+  for(const mi of MI_get(MI_lmKey(t))){kitItems.push({sku:mi.sku,name:mi.name||'',uom:'Each',qty:mi.qty||0})}
+  _oorSheet(wb,'Kit',t.id,dest,venue,kitItems);
+  // Tab 2: All — expand kits into individual SKUs, sum by nomenclature
+  const allMap={};
+  t.items.filter(it=>(it.loadQty||0)>0).forEach(it=>{
+    const n=NOM[it.sku]||{};
+    if(n._kitNom&&n._kitId){
+      const kit=LM_getKitById(n._kitId);
+      if(kit){kit.items.forEach(ci=>{const cn=NOM[ci.sku]||{};const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,uom:cn.uom||'Each',qty:0};allMap[k].qty+=ci.qty});return}
+    }
+    const k=it.sku;if(!allMap[k])allMap[k]={sku:k,name:it.nm||n.nm||it.sku,uom:n.uom||'Each',qty:0};
+    const ppu=n.ppu||1;allMap[k].qty+=(ppu>1?Math.ceil(it.loadQty/ppu):it.loadQty);
+  });
+  for(const mi of MI_get(MI_lmKey(t))){const k=mi.sku;if(!allMap[k])allMap[k]={sku:k,name:mi.name||'',uom:'Each',qty:0};allMap[k].qty+=(mi.qty||0)}
+  const allItems=Object.values(allMap).sort((a,b)=>a.sku.localeCompare(b.sku));
+  _oorSheet(wb,'All',t.id,dest,venue,allItems);
+  // Download
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=t.id+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_OOR.xlsx';a.click();URL.revokeObjectURL(a.href);
 }
 function systemReset(){
   // Show custom confirmation modal (native confirm() blocked in sandboxed iframes)
