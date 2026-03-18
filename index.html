@@ -9272,7 +9272,7 @@ function LM_kitArrivedOnTime(sku,lpAbbrs,dispDate){
 }
 function LM_kitReadiness(kitId){
   const kit=LM_getKitById(kitId);if(!kit||!kit.items.length)return{total:0,inStock:0,pct:0,items:[]};
-  const items=kit.items.map(i=>{
+  const items=kit.items.filter(i=>{const s=(NOM[i.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')}).map(i=>{
     const inStock=STOCK_SKUS.has(i.sku);
     const stockQty=STOCK_QTYS[i.sku]||0;
     return{sku:i.sku,name:NOM[i.sku]?.nm||i.sku,needed:i.qty,stockQty,inStock,fulfilled:inStock&&stockQty>=i.qty};
