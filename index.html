@@ -2852,6 +2852,7 @@ let LP_lastGenSettings={maxPallets:0,maxTrucks:0,maxDests:0,turnaround:0,ricStar
 function _contDateHash(){return JSON.stringify(LP_contDateOverrides)}
 function _palletOvrHash(){return JSON.stringify(LP_palletOverrides)}
 function _holdsHash(){return JSON.stringify([...new Set([...LP_holds,...LP_stockHolds])].sort())}
+function _arrDateHash(){return JSON.stringify(LP_STATE.arrivals.map(a=>a.arrivalDate||'').join(','))}
 function _effectiveStockSkus(){
   if(!STOCK_SKUS.size)return[];
   const demand={};
@@ -12024,7 +12025,7 @@ async function goGenerateLP(){
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate}
     );
     LP_STATE.planGenerated=true;
-    LP_dispatched=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
+    LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
     LP_snapshotSettings();
     await LP_saveToSupabase();
     document.getElementById('pov').style.display='none';
