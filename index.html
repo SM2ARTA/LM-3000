@@ -10929,7 +10929,7 @@ function LM_renderAnalysis(el){
     const v=r.Venue||r.venue;if(!v)continue;
     const sku=r.Nomenclature||r.nomenclature||r.SKU||r.sku||'';if(!sku)continue;
     if(!lpDemandSkus.has(sku))continue;// skip items not in LP demand
-    const qty=parseInt(r.Required||r.required||0)||0;if(qty<=0)continue;
+    const qty=r._effQty||0;if(qty<=0)continue;
     // Use venue cluster for CAN/MEX mapping (reliable), venue name for USA stadiums
     const cluster=r['Venue cluster']||r['venue cluster']||'';
     let abbr=null;
