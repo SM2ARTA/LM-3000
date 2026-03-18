@@ -10458,8 +10458,8 @@ function LM_setDemand(venue,sku,newEffQty,origEffQty){
   setTimeout(()=>{rMain();rVL();if(typeof V26_render==='function')try{V26_render()}catch(e){}},50);
 }
 
-// ── LM Analysis Tab: LP vs LM demand comparison ──
-let _lmAnalysisSrc='',_lmAnalysisVenue='';
+// ── LM Analysis Tab: LP vs LM demand comparison by LP destination ──
+let _lmAnalysisSrc='',_lmAnalysisDest='';
 function LM_renderAnalysis(el){
   const nom=LP_STATE.nomenclature||{};const lmNom=NOM||{};
   if(!RW.length&&!LP_STATE.materialPlan.length){el.innerHTML='<div class="lp-empty">No data loaded in LP or LM.</div>';return}
@@ -10473,96 +10473,92 @@ function LM_renderAnalysis(el){
     lpByAbbrSku[k]=(lpByAbbrSku[k]||0)+(d.requiredQty||0);
   }
 
-  // Build LM demand by (venue, sku) → qty, and map venue→abbr
-  const lmByVenueSku={};const venueAbbrs={};const allVenues=new Set();const allSources=new Set();
+  // Build LM demand by (abbr, sku) → qty — aggregate all venues per LP destination
+  const lmByAbbrSku={};const allDests=new Set();const allSources=new Set();
   for(const r of RW){
     const v=r.Venue||r.venue;if(!v)continue;
     const sku=r.Nomenclature||r.nomenclature||r.SKU||r.sku||'';if(!sku)continue;
     const qty=parseInt(r.Required||r.required||0)||0;if(qty<=0)continue;
-    const k=v+'|'+sku;
-    lmByVenueSku[k]=(lmByVenueSku[k]||0)+qty;
-    allVenues.add(v);
     const abbrs=LM_getLPDestAbbrs(v);
-    if(abbrs.length)venueAbbrs[v]=abbrs[0];
+    if(!abbrs.length)continue;// skip venues not mapped to LP destinations
+    const abbr=abbrs[0];
+    const k=abbr+'|'+sku;
+    lmByAbbrSku[k]=(lmByAbbrSku[k]||0)+qty;
+    allDests.add(abbr);
     const src=(nom[sku]?.source||lmNom[sku]?.src||'').trim();
     if(src)allSources.add(src);
   }
 
-  // Compare: for each (venue, sku), get LP qty (via abbr) and LM qty
+  // Compare at LP destination level: for each (abbr, sku), compare LP vs LM totals
   const rows=[];
-  const processedLpKeys=new Set();
-  for(const[vsk,lmQty]of Object.entries(lmByVenueSku)){
-    const[venue,sku]=vsk.split('|');
-    const abbr=venueAbbrs[venue]||'';
-    const lpKey=abbr+'|'+sku;
-    const lpQty=lpByAbbrSku[lpKey]||0;
+  const allKeys=new Set([...Object.keys(lpByAbbrSku),...Object.keys(lmByAbbrSku)]);
+  for(const k of allKeys){
+    const[abbr,sku]=k.split('|');
+    const lpQty=lpByAbbrSku[k]||0;
+    const lmQty=lmByAbbrSku[k]||0;
     const delta=lmQty-lpQty;
+    if(delta===0)continue;
     const src=(nom[sku]?.source||lmNom[sku]?.src||'').trim();
     const name=nom[sku]?.name||lmNom[sku]?.nm||sku;
-    if(delta!==0)rows.push({venue,sku,name,source:src,lpQty,lmQty,delta,abbr});
-    if(abbr)processedLpKeys.add(lpKey);
-  }
-  // LP items with no LM match
-  for(const[ak,lpQty]of Object.entries(lpByAbbrSku)){
-    if(processedLpKeys.has(ak))continue;
-    const[abbr,sku]=ak.split('|');
-    const src=(nom[sku]?.source||lmNom[sku]?.src||'').trim();
-    const name=nom[sku]?.name||lmNom[sku]?.nm||sku;
-    if(lpQty!==0)rows.push({venue:'(LP only: '+(CITY_ABBR[abbr]||abbr)+')',sku,name,source:src,lpQty,lmQty:0,delta:-lpQty,abbr});
+    const destName=CITY_ABBR[abbr]||abbr;
+    rows.push({abbr,destName,sku,name,source:src,lpQty,lmQty,delta});
   }
 
   // Apply filters
   let filtered=rows;
   if(_lmAnalysisSrc)filtered=filtered.filter(r=>r.source===_lmAnalysisSrc);
-  if(_lmAnalysisVenue)filtered=filtered.filter(r=>r.venue===_lmAnalysisVenue);
-  filtered.sort((a,b)=>(a.venue||'').localeCompare(b.venue||'')||(a.source||'').localeCompare(b.source||'')||a.sku.localeCompare(b.sku));
+  if(_lmAnalysisDest)filtered=filtered.filter(r=>r.abbr===_lmAnalysisDest);
+  filtered.sort((a,b)=>(a.destName||'').localeCompare(b.destName||'')||(a.source||'').localeCompare(b.source||'')||a.sku.localeCompare(b.sku));
 
   // KPIs
   const totalDiffs=filtered.length;
   const lpHigher=filtered.filter(r=>r.delta<0).length;
   const lmHigher=filtered.filter(r=>r.delta>0).length;
   const totalDelta=filtered.reduce((s,r)=>s+Math.abs(r.delta),0);
-  const venuesWithDiffs=new Set(filtered.map(r=>r.venue)).size;
+  const destsWithDiffs=new Set(filtered.map(r=>r.abbr)).size;
 
   let html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">';
   html+='<div style="display:flex;align-items:center;gap:10px"><h2 style="font-size:18px;font-weight:700;margin:0">🔍 LP vs LM Analysis</h2>';
-  html+='<span class="bg bg-bl">'+totalDiffs+' differences</span>';
+  html+='<span class="bg bg-bl">'+totalDiffs+' SKU differences</span>';
   html+='<span class="bg bg-or">'+lpHigher+' LP higher</span>';
   html+='<span class="bg bg-gn">'+lmHigher+' LM higher</span>';
-  html+='<span class="bg bg-gy">'+venuesWithDiffs+' venues</span>';
+  html+='<span class="bg bg-gy">'+destsWithDiffs+' destinations</span>';
   html+='</div></div>';
 
   // Filters
   html+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
   html+='<input type="text" class="lp-search" placeholder="Search SKU, name..." id="lmAnalysisSearch" oninput="LM_filterAnalysis()" style="flex:1;min-width:180px">';
-  html+='<select onchange="_lmAnalysisVenue=this.value;LM_renderAnalysis(document.getElementById(\'mn\'))" style="padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd)">';
-  html+='<option value="">All Venues</option>';
-  for(const v of [...allVenues].sort())html+='<option value="'+v+'"'+(v===_lmAnalysisVenue?' selected':'')+'>'+v+'</option>';
-  html+='</select>';
-  html+='<select onchange="_lmAnalysisSrc=this.value;LM_renderAnalysis(document.getElementById(\'mn\'))" style="padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd)">';
-  html+='<option value="">All Sources</option>';
-  for(const s of [...allSources].sort())html+='<option value="'+s+'"'+(s===_lmAnalysisSrc?' selected':'')+'>'+s+'</option>';
-  html+='</select>';
+  // Destination chips
+  const _dPri=a=>{const n=(CITY_ABBR[a]||a).toUpperCase();return n.includes('MEX')||n.includes('GUAD')||n.includes('MONT')?0:n.includes('TOR')||n.includes('VAN')?1:2};
+  const destList=[...allDests].sort((a,b)=>_dPri(a)-_dPri(b));
+  for(const abbr of destList){
+    const dn=CITY_ABBR[abbr]||abbr;const dc=LP_destColor(dn);const sel=_lmAnalysisDest===abbr;
+    html+='<button onclick="_lmAnalysisDest=_lmAnalysisDest===\''+abbr+'\'?\'\':\''+abbr+'\';LM_renderAnalysis(document.getElementById(\'mn\'))" class="rbtn" style="font-size:10px;padding:3px 8px;'+(sel?'background:'+dc.color+';color:#fff;border-color:'+dc.color:'background:'+dc.bg+';color:'+dc.color+';border-color:'+dc.border)+'">'+dn+'</button>';
+  }
+  // Source chips
+  for(const s of [...allSources].sort()){
+    const sel=_lmAnalysisSrc===s;
+    html+='<button onclick="_lmAnalysisSrc=_lmAnalysisSrc===\''+s+'\'?\'\':\''+s+'\';LM_renderAnalysis(document.getElementById(\'mn\'))" class="rbtn" style="font-size:10px;padding:3px 8px;'+(sel?'background:var(--pu);color:#fff;border-color:var(--pu)':'')+'">'+s+'</button>';
+  }
   html+='</div>';
 
-  if(!filtered.length){html+='<div class="lp-empty" style="margin-top:20px">✅ No differences found between LP and LM demand'+((_lmAnalysisSrc||_lmAnalysisVenue)?' (with current filters)':'')+'.</div>';el.innerHTML=html;return}
+  if(!filtered.length){html+='<div class="lp-empty" style="margin-top:20px">✅ No differences found between LP and LM demand'+((_lmAnalysisSrc||_lmAnalysisDest)?' (with current filters)':'')+'.</div>';el.innerHTML=html;return}
 
-  // Group by venue
-  const byVenue={};for(const r of filtered){if(!byVenue[r.venue])byVenue[r.venue]=[];byVenue[r.venue].push(r)}
+  // Group by LP destination
+  const byDest={};for(const r of filtered){const g=r.destName||r.abbr;if(!byDest[g])byDest[g]=[];byDest[g].push(r)}
 
   html+='<div id="lmAnalysisBody">';
-  for(const venue of Object.keys(byVenue).sort()){
-    const vRows=byVenue[venue];
-    const vDelta=vRows.reduce((s,r)=>s+r.delta,0);
-    const abbr=vRows[0]?.abbr||'';
-    const dc=LP_destColor(venue);
-    html+='<div class="lp-day-hdr" style="margin-top:12px"><span class="dt">'+venue+'</span>';
-    if(abbr)html+='<span class="lp-dest-badge" style="background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+';margin-left:8px">LP: '+(CITY_ABBR[abbr]||abbr)+'</span>';
-    html+='<span class="ds">'+vRows.length+' items</span>';
-    html+='<span class="dp" style="color:'+(vDelta>0?'var(--gn)':'var(--or)')+'">Net: '+(vDelta>0?'+':'')+vDelta.toLocaleString()+'</span></div>';
+  for(const destName of Object.keys(byDest).sort()){
+    const dRows=byDest[destName];
+    const dDelta=dRows.reduce((s,r)=>s+r.delta,0);
+    const abbr=dRows[0]?.abbr||'';
+    const dc=LP_destColor(destName);
+    html+='<div class="lp-day-hdr" style="margin-top:12px"><span class="dt">'+destName+'</span>';
+    html+='<span class="ds">'+dRows.length+' SKUs</span>';
+    html+='<span class="dp" style="color:'+(dDelta>0?'var(--gn)':'var(--or)')+'">Net: '+(dDelta>0?'+':'')+dDelta.toLocaleString()+' pcs</span></div>';
 
     html+='<table class="dtb" style="margin-bottom:8px"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th style="color:var(--ac)">LP Qty</th><th style="color:var(--gn)">LM Qty</th><th>Delta</th></tr></thead><tbody>';
-    for(const r of vRows){
+    for(const r of dRows){
       const dColor=r.delta>0?'var(--gn)':r.delta<0?'var(--or)':'var(--tt)';
       const dSign=r.delta>0?'+':'';
       html+='<tr data-search="'+r.sku+' '+r.name+' '+r.source+'">';
