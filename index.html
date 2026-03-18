@@ -4059,23 +4059,38 @@ function LP_renderStatus(el){
   const lsrTrucks=Object.values(truckMap).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   const lsrIds=lsrTrucks.map(t=>t.lsr);
 
-  // Aggregate demand by SKU
+  // Aggregate demand by SKU — track per-destination for filtered views
   const skuData={};
   for(const d of mp){
     if(!isTruckDest(d.destination))continue;
     const src=(nom[d.sku]?.source||'').trim();
     const name=nom[d.sku]?.name||d.name||d.sku;
-    if(!skuData[d.sku])skuData[d.sku]={sku:d.sku,name,source:src,demand:0,shipped:0,byLsr:{},dests:new Set()};
-    skuData[d.sku].demand+=_lpEffQty(d.sku,d.requiredQty||0);
+    if(!skuData[d.sku])skuData[d.sku]={sku:d.sku,name,source:src,demandByDest:{},shippedByDest:{},byLsr:{},dests:new Set()};
+    const eq=_lpEffQty(d.sku,d.requiredQty||0);
+    skuData[d.sku].demandByDest[d.destination]=(skuData[d.sku].demandByDest[d.destination]||0)+eq;
     skuData[d.sku].dests.add(d.destination);
   }
 
-  // Fill shipped per LSR
+  // Fill shipped per LSR — track per destination
   for(const t of lsrTrucks){
     for(const[sku,qty]of Object.entries(t.items)){
       if(!skuData[sku])continue;
-      skuData[sku].shipped+=qty;
+      skuData[sku].shippedByDest[t.dest]=(skuData[sku].shippedByDest[t.dest]||0)+qty;
       skuData[sku].byLsr[t.lsr]=(skuData[sku].byLsr[t.lsr]||0)+qty;
+    }
+  }
+
+  // Compute totals based on dest filter
+  const _hasDFilter=_lpStatusDests.size>0;
+  for(const s of Object.values(skuData)){
+    s.demand=0;s.shipped=0;
+    for(const[d,q]of Object.entries(s.demandByDest)){
+      if(_hasDFilter&&!_lpStatusDests.has(d))continue;
+      s.demand+=q;
+    }
+    for(const[d,q]of Object.entries(s.shippedByDest)){
+      if(_hasDFilter&&!_lpStatusDests.has(d))continue;
+      s.shipped+=q;
     }
   }
 
