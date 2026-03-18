@@ -10477,14 +10477,25 @@ function LM_renderAnalysis(el){
   const lmByAbbrSku={};const allDests=new Set();const allSources=new Set();
   // Only compare SKUs that exist in LP DEMAND (not just nomenclature)
   const lpDemandSkus=new Set();for(const k of Object.keys(lpByAbbrSku))lpDemandSkus.add(k.split('|')[1]);
+  // Map venue cluster string to LP abbr: "CAN TOR / RGS" → TOR, "MEX CDMX / RGS" → CDMX
+  // For USA stadiums: map by venue name (NY/KC/HOU stadiums only)
+  const _clusterToAbbr=cl=>{
+    if(!cl)return null;
+    const u=cl.toUpperCase();
+    for(const a of Object.keys(LP_transitDays)){if(u.includes(a))return a;const full=(CITY_ABBR[a]||'').toUpperCase();if(full&&u.includes(full))return a}
+    return null;
+  };
   for(const r of RW){
     const v=r.Venue||r.venue;if(!v)continue;
     const sku=r.Nomenclature||r.nomenclature||r.SKU||r.sku||'';if(!sku)continue;
     if(!lpDemandSkus.has(sku))continue;// skip items not in LP demand
     const qty=parseInt(r.Required||r.required||0)||0;if(qty<=0)continue;
-    const abbrs=LM_getLPDestAbbrs(v);
-    if(!abbrs.length)continue;// skip venues not mapped to LP destinations
-    const abbr=abbrs[0];
+    // Use venue cluster for CAN/MEX mapping (reliable), venue name for USA stadiums
+    const cluster=r['Venue cluster']||r['venue cluster']||'';
+    let abbr=null;
+    if(LM_LPFED_STADIUM_KEYS[v])abbr=LM_LPFED_STADIUM_KEYS[v];// NY/KC/HOU stadiums
+    else abbr=_clusterToAbbr(cluster);// CAN TOR / RGS → TOR, MEX CDMX / RGS → CDMX
+    if(!abbr)continue;
     const k=abbr+'|'+sku;
     lmByAbbrSku[k]=(lmByAbbrSku[k]||0)+qty;
     allDests.add(abbr);
