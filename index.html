@@ -1744,6 +1744,7 @@ let _hsWiz={step:0,cats:[],selCat:null,material:'',usage:'',url:'',composition:'
 function _hsGetAIProvider(){return localStorage.getItem('hs-ai-provider')||''}
 function _hsGetAIKey(){return localStorage.getItem('hs-ai-key')||''}
 function _hsSetAI(provider,key){
+  if(ROLE==='viewer')return;
   localStorage.setItem('hs-ai-provider',provider);
   localStorage.setItem('hs-ai-key',(key||'').trim());
   // Persist to Supabase so keys survive across browsers/devices
@@ -2647,6 +2648,9 @@ window.addEventListener('beforeunload',e=>{
 async function LP_saveToSupabase(){
   if(ROLE==="viewer")return;
   if(!SB)return;
+  // Cancel pending debounced saves — this full save includes truck-state
+  if(_lpTruckSaveTimer){clearTimeout(_lpTruckSaveTimer);_lpTruckSaveTimer=null}
+  _lpSavePending=false;
   UNDO_capture();// snapshot before save
   try{
     const now=new Date().toISOString();
