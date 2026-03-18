@@ -806,6 +806,22 @@ function LP_parseMaterialPlan(buf){
   return demand;
 }
 
+// ── Aggregate demand rows to one per (destination, sku) — idempotent ──
+// Handles both old format (destination/sku/requiredQty) and backup format (Destination/SKU/Required Qty)
+function _lpAggregateDemand(rows){
+  if(!rows||!rows.length)return[];
+  const map={};
+  for(const d of rows){
+    const dest=(d.destination||d.Destination||'').trim();
+    const sku=(d.sku||d.SKU||'').trim();
+    if(!dest||!sku)continue;
+    const k=dest+'|'+sku;
+    if(!map[k])map[k]={destination:dest,sku,requiredQty:0};
+    map[k].requiredQty+=(d.requiredQty||d['Required Qty']||0);
+  }
+  return Object.values(map);
+}
+
 // ── LP Nomenclature parser ──
 function LP_parseNomenclature(buf){
   const wb=XLSX.read(buf,{type:"array",cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];
@@ -1342,11 +1358,7 @@ function LP_applyPalletOverrides(){
       delete n._origPalletQty;delete n._origPalletSpc;
     }
   }
-  // Sync materialPlan rows so demand display and build engine stay consistent
-  for(const d of (LP_STATE.materialPlan||[])){
-    const n=LP_STATE.nomenclature[d.sku];
-    if(n){d.palletQty=n.palletQty;d.palletSpc=n.palletSpc}
-  }
+  // Pallet data lives in nomenclature only — no materialPlan sync needed
 }
 function LP_setPalletOvr(sku,field,val){
   if(ROLE==='viewer')return;
@@ -2695,7 +2707,7 @@ async function LP_loadFromSupabase(){
       LP_STATE.ricStartDate=cfg.ricStartDate||'2026-04-01';
       LP_STATE.planGenerated=true;
       LP_STATE.nomenclature=nom||{};
-      LP_STATE.materialPlan=demand||[];
+      LP_STATE.materialPlan=_lpAggregateDemand(demand||[]);
       LP_STATE.arrivals=arr||[];
       LP_STATE.generatedPlan=plan;
       LP_dispatched=new Set(truck?.dispatched||[]);
@@ -2725,7 +2737,7 @@ async function LP_loadFromSupabase(){
     if(!legacy||!legacy.generatedPlan||!legacy.generatedPlan.length)return false;
     console.log('LP: migrating from legacy lp-state blob to split keys...');
     const p=legacy;
-    LP_STATE.materialPlan=p.materialPlan||[];
+    LP_STATE.materialPlan=_lpAggregateDemand(p.materialPlan||[]);
     LP_STATE.nomenclature=p.nomenclature||{};
     LP_STATE.arrivals=p.arrivals||[];
     LP_STATE.turnaround=p.turnaround||6;
@@ -3760,25 +3772,17 @@ function LP_saveDestQty(dest,sku,newRawQty){
   if(ROLE==='viewer')return;
   document.getElementById('lpDestQtyPop')?.remove();
   UNDO_capture();
-  // Find all materialPlan entries for this dest+sku
-  const entries=LP_STATE.materialPlan.filter(d=>d.destination===dest&&d.sku===sku);
-  if(!entries.length&&newRawQty>0){
-    // No existing entry — create one
-    LP_STATE.materialPlan.push({uid:'MAN-'+dest+'-'+sku,destination:dest,sku,name:(LP_STATE.nomenclature[sku]||{}).name||sku,requiredQty:newRawQty,rawPallets:0,inputMode:'qty'});
+  // With aggregated materialPlan, there's at most 1 entry per (dest, sku)
+  const entry=LP_STATE.materialPlan.find(d=>d.destination===dest&&d.sku===sku);
+  if(newRawQty<=0){
+    // Remove entry
+    if(entry)LP_STATE.materialPlan=LP_STATE.materialPlan.filter(d=>!(d.destination===dest&&d.sku===sku));
+  }else if(entry){
+    // Update existing
+    entry.requiredQty=newRawQty;
   }else{
-    const curTotal=entries.reduce((s,e)=>s+(e.requiredQty||0),0);
-    if(newRawQty<=0){
-      // Remove all entries for this dest+sku
-      LP_STATE.materialPlan=LP_STATE.materialPlan.filter(d=>!(d.destination===dest&&d.sku===sku));
-    }else if(entries.length===1){
-      entries[0].requiredQty=newRawQty;
-    }else{
-      // Multiple entries — set first to new total, rest to 0
-      const delta=newRawQty-curTotal;
-      entries[0].requiredQty=Math.max(0,entries[0].requiredQty+delta);
-      // Redistribute if first went negative
-      if(entries[0].requiredQty<=0){entries[0].requiredQty=newRawQty;for(let i=1;i<entries.length;i++)entries[i].requiredQty=0;}
-    }
+    // Create new
+    LP_STATE.materialPlan.push({destination:dest,sku,requiredQty:newRawQty});
   }
   LP_saveToSupabase();
   LP_render();
@@ -5049,9 +5053,10 @@ async function LP_exportCombinedCI(){
   }
   // SheetJS fallback
   const wb=XLSX.utils.book_new();let tQ=0,tV=0;
-  const rows=items.map(it=>{const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
-    return{'QTY':it.qty,'DESCRIPTION':nm.customsName||nm.name||it.name||it.sku,'ITEM #':it.sku,'HS CODE':nm.hsCode,'COUNTRY':nm.country,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
-  rows.push({'QTY':tQ,'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV,'Pallets':+totalPlt.toFixed(2)});
+  let tPlt=0;
+  const rows=items.map(it=>{const nm=_lpCustNom(it.sku);const up=nm.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;tPlt+=it.pallets||0;
+    return{'# PACKAGES':+it.pallets.toFixed(2),'DESCRIPTION':nm.customsName||nm.name||it.name||it.sku,'ITEM #':it.sku,'HS CODE':nm.hsCode,'COUNTRY':nm.country,'UNIT QTY':it.qty,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv};});
+  rows.push({'# PACKAGES':+tPlt.toFixed(2),'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','UNIT QTY':tQ,'CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV});
   const pty=_cciGetParty(selDests);
   const ciData=[['COMBINED INVOICE AND PACKING LIST'],[''],['DATE:',date,'','INVOICE #:',truckId],['DELIVERY LOCATION:',destLabel],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Mode of Transport:','Road'],[''],
     ['SHIPPER:','FWC2026 US, Inc, 396 Alhambra Circle, Ste# 400, Coral Gables, FL 33134, USA'],
@@ -5207,13 +5212,14 @@ async function LP_exportCI(truckId){
 }
 function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   const wb=XLSX.utils.book_new();let tQ=0,tV=0;
-  const rows=agg.map(it=>{const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
-    return{'QTY':it.qty,'DESCRIPTION':cd.desc,'ITEM #':it.sku,'HS CODE':cd.hsCode,'COUNTRY':cd.country,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv,'Pallets':+it.pallets.toFixed(2)};});
-  rows.push({'QTY':tQ,'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV,'Pallets':+totalPlt.toFixed(2)});
+  let tPlt=0;
+  const rows=agg.map(it=>{const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;tPlt+=it.pallets||0;
+    return{'# PACKAGES':+it.pallets.toFixed(2),'DESCRIPTION':cd.desc,'ITEM #':it.sku,'HS CODE':cd.hsCode,'COUNTRY':cd.country,'UNIT QTY':it.qty,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv};});
+  rows.push({'# PACKAGES':+tPlt.toFixed(2),'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','UNIT QTY':tQ,'CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV});
   const pty=LP_getCIParties(dest);
   const ciData=[['COMBINED INVOICE AND PACKING LIST'],[''],['DATE:',date,'','INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Mode of Transport:','Road'],[''],['SHIPPER:','FWC2026 US, Inc, 396 Alhambra Circle, Ste# 400, Coral Gables, FL 33134, USA'],['CONSIGNEE:',pty.consignee.filter(Boolean).join(', ')],['CUSTOMS BROKER:',pty.broker.filter(Boolean).join(', ')],['']];
   const ws=XLSX.utils.aoa_to_sheet(ciData);XLSX.utils.sheet_add_json(ws,rows,{origin:'A12'});
-  ws['!cols']=[{wch:8},{wch:36},{wch:22},{wch:16},{wch:20},{wch:8},{wch:12},{wch:14},{wch:10}];
+  ws['!cols']=[{wch:12},{wch:36},{wch:22},{wch:16},{wch:20},{wch:10},{wch:8},{wch:12},{wch:14}];
   XLSX.utils.book_append_sheet(wb,ws,'Commercial Invoice');
   const plData=[['PACKING LIST'],[''],['Truck:','LP-'+truckId,'Date:',date,'Destination:',dest],['Items:',tQ,'Pallets:',+totalPlt.toFixed(2),'Total Value:',tV],['']];
   const plRows=agg.map((it,i)=>{const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;return{'#':i+1,'Code':it.sku,'Name':cd.desc,'Qty':it.qty,'Pallets':+it.pallets.toFixed(3),'HS Code':cd.hsCode,'Country':cd.country,'Unit Price':up,'Line Total':up*it.qty}});
@@ -5230,7 +5236,7 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
 
   // ── Column widths ──
   ws.columns=[{width:7},{width:36},{width:18},{width:18},{width:22},{width:8},{width:8},{width:8},{width:11},{width:11},{width:11},{width:10},{width:11},{width:14},{width:28}];
-  const COLS=15;
+  const COLS=16;
 
   // ── Colors ──
   const C_DARK='FF2d3436',C_DK2='FF3d3d3d',C_MED='FF636e72',C_L1='FFf5f6fa',C_L2='FFecf0f1',C_L3='FFdfe6e9',C_WH='FFFFFFFF',C_TB='FFe8eef3';
@@ -5341,27 +5347,27 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   ws.getRow(18).height=8;
 
   // ROW 19: Table header
-  const headers=['QTY','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF ORIGIN','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
+  const headers=['# of Packages / Pallets','DESCRIPTION OF GOODS','ITEM / SERIAL #','HS TARIFF CODE','COUNTRY OF MANUFACTURE','DIMENSIONS','','','UNIT DIMS','GROSS WT','UNIT WT','UNIT QTY','VALUE CURRENCY','UNIT VALUE','TOTAL VALUE','Final plans'];
   mg('F19:H19');
   ws.getRow(19).height=32;
   headers.forEach((h,i)=>{const cl=ws.getRow(19).getCell(i+1);cl.value=h||'';cl.font=fHdr;cl.fill=fillDark;cl.border=brdMed;cl.alignment=alW});
   ws.getRow(19).getCell(6).value='DIMENSIONS';
 
   // ROW 20: Sub-header
-  const subHdr=['','','','','','Length','Width','Height','(cm/in)','','(lbs/kgs)','(USD)','','',''];
+  const subHdr=['(eg. outer packaging # of carton / pallets)','','','','','Length','Width','Height','(eg. cm or inches)','(eg. lbs or kgs)','','(eg. # of pieces)','(eg. USD)','(eg. value per unit qty)','','(Select from the drop down)'];
   ws.getRow(20).height=15;
   subHdr.forEach((s,i)=>{const cl=ws.getRow(20).getCell(i+1);cl.value=s;cl.font=fSub;cl.fill=fillL2;cl.border=brdThin;cl.alignment=alC});
 
   // DATA ROWS (21+)
-  const DS=21;let tQ=0,tV=0;
+  const DS=21;let tQ=0,tV=0,tPlt=0;
   items.forEach((it,idx)=>{
-    const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;
+    const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;tPlt+=it.pallets||0;
     const rn=DS+idx;ws.getRow(rn).height=19;
     const bg=idx%2===1?fillL1:fillWh;
-    const vals=[it.qty,cd.desc,it.sku,cd.hsCode,cd.country,'','','','','','','USD',up,tv,'Re-Export (Temporary Imported)'];
+    const vals=[+it.pallets.toFixed(2),cd.desc,it.sku,cd.hsCode,cd.country,'','','','','','',it.qty,'USD',up,tv,'Re-Export (Temporary Imported)'];
     vals.forEach((v,i)=>{
-      const al=i===0?alC:(i===11?alC:([12,13].includes(i)?alR:alL));
-      const fmt=i===12?'#,##0.00':(i===13?'$ #,##0.00':null);
+      const al=i===0?alC:(i===11?alC:(i===12?alC:([13,14].includes(i)?alR:alL)));
+      const fmt=i===13?'#,##0.00':(i===14?'$ #,##0.00':null);
       cell(rn,i+1,v,fData,al,bg,brdThin,fmt);
     });
   });
@@ -5369,9 +5375,9 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   // TOTALS ROW
   const TR=DS+items.length;ws.getRow(TR).height=28;
   for(let i=0;i<COLS;i++){
-    const v=i===0?tQ:(i===13?tV:'');
-    const al=i===0?alC:(i===13?alR:alL);
-    const fmt=i===13?'$ #,##0.00':null;
+    const v=i===0?+tPlt.toFixed(2):(i===11?tQ:(i===14?tV:''));
+    const al=i===0?alC:(i===11?alC:(i===14?alR:alL));
+    const fmt=i===14?'$ #,##0.00':null;
     cell(TR,i+1,v,v?fTotal:fData,al,fillTB,brdMed,fmt);
   }
   ws.getRow(TR+1).height=2;
@@ -6502,9 +6508,11 @@ function masterBackupExport(){
     XLSX.utils.book_append_sheet(wb,ws,'LP Nomenclature');
   }
 
-  // 10. LP Material Plan (demand)
+  // 10. LP Material Plan (demand) — aggregated format
   if(LP_STATE.materialPlan.length){
-    const ws=XLSX.utils.json_to_sheet(LP_STATE.materialPlan);
+    const _mpExp=LP_STATE.materialPlan.map(d=>({Destination:d.destination,SKU:d.sku,'Required Qty':d.requiredQty}));
+    const ws=XLSX.utils.json_to_sheet(_mpExp);
+    ws['!cols']=[{wch:30},{wch:20},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'LP Material Plan');
   }
 
@@ -6725,7 +6733,7 @@ async function masterBackupRestore(file){
 
     // ── 10. LP Material Plan → LP_STATE.materialPlan ──
     const lpMpRows=getSheet('LP Material Plan');
-    if(lpMpRows&&lpMpRows.length){LP_STATE.materialPlan=lpMpRows;log.push('LP MP: '+lpMpRows.length+' rows')}
+    if(lpMpRows&&lpMpRows.length){LP_STATE.materialPlan=_lpAggregateDemand(lpMpRows);log.push('LP MP: '+LP_STATE.materialPlan.length+' rows (aggregated)')}
 
     // ── 11. LP Arrivals → LP_STATE.arrivals ──
     const lpArrRows=getSheet('LP Arrivals');
@@ -11676,10 +11684,10 @@ async function goGenerateLP(){
     if(!pE){throw new Error('Material Plan file required.');}
     LP_STATE.nomenclature=LP_parseNomenclature(nE.buf);
     LP_STATE.arrivals=LP_parseArrivals(aE.buf,LP_STATE.turnaround);
-    LP_STATE.materialPlan=LP_parseMaterialPlan(pE.buf);
+    LP_STATE.materialPlan=_lpAggregateDemand(LP_parseMaterialPlan(pE.buf));
     for(const d of LP_STATE.materialPlan){
       const n=LP_STATE.nomenclature[d.sku];
-      if(n){d.name=n.name||d.name;d.palletQty=n.palletQty||0;d.palletSpc=n.palletSpc||0}
+      if(n&&n.name)d.name=n.name;// enrich display name from nomenclature
     }
     LP_STATE.generatedPlan=LP_buildPlanV3(
       LP_STATE.materialPlan,LP_STATE.arrivals,
