@@ -1496,7 +1496,13 @@ function _lpPPU(sku){return(LP_customsOverrides[sku]||{}).ppu||(LP_STATE.nomencl
 function _lpEffQty(sku,rawQty){return rawQty;}// Identity — all quantities now in UOM systemwide
 // ── Enrich RW rows with _effQty (UOM) — call after NOM is loaded ──
 function _rwEnrichEffQty(){for(const r of RW){const ppu=(NOM[r.Nomenclature]?.ppu)||1;r._effQty=ppu>1?Math.ceil((parseInt(r.Required)||0)/ppu):(parseInt(r.Required)||0)}}
-// ── Convert LP demand to UOM ──
+// ── Convert LP demand to UOM (applied to raw parsed rows BEFORE aggregation) ──
+function _lpConvertDemandRowsToUOM(rows){
+  const nom=LP_STATE.nomenclature||{};
+  for(const d of rows){const ppu=nom[d.sku]?.ppu||1;if(ppu>1)d.requiredQty=Math.ceil(d.requiredQty/ppu)}
+  return rows;
+}
+// ── Convert already-aggregated demand to UOM (for Supabase migration only) ──
 function _lpConvertDemandToUOM(){
   const nom=LP_STATE.nomenclature||{};
   for(const d of LP_STATE.materialPlan){const ppu=nom[d.sku]?.ppu||1;if(ppu>1)d.requiredQty=Math.ceil(d.requiredQty/ppu)}
@@ -12345,8 +12351,8 @@ async function goGenerateLP(){
     if(!pE){throw new Error('Material Plan file required.');}
     LP_STATE.nomenclature=LP_parseNomenclature(nE.buf);
     LP_STATE.arrivals=LP_parseArrivals(aE.buf,LP_STATE.turnaround);
-    LP_STATE.materialPlan=_lpAggregateDemand(LP_parseMaterialPlan(pE.buf));
-    _lpConvertDemandToUOM();// convert requiredQty from pieces to UOM
+    LP_STATE.materialPlan=_lpAggregateDemand(_lpConvertDemandRowsToUOM(LP_parseMaterialPlan(pE.buf)));
+    // demand already in UOM (ceiling applied per row before aggregation)
     for(const d of LP_STATE.materialPlan){
       const n=LP_STATE.nomenclature[d.sku];
       if(n&&n.name)d.name=n.name;// enrich display name from nomenclature
