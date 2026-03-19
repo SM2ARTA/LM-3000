@@ -3644,7 +3644,7 @@ function LP_renderDemand(el){
       const qLabel=dispQ>0?('<span style="font-weight:700">Rem '+remQ.toLocaleString()+'</span>'+(dispQ?' / Dis '+dispQ.toLocaleString():'')):'<span style="font-weight:700">'+q.toLocaleString()+'</span>';
       const d0=allRaw[0];const c=LP_destColor(d0);
       let bs,extra,prefix;
-      const clickAction=ROLE!=='viewer'?'onclick="event.stopPropagation();LP_editDestQty(this,\''+d0.replace(/'/g,"\\'")+'\',\''+s.sku+'\','+rawQ+')"':'';
+      const clickAction=ROLE!=='viewer'?'onclick="event.stopPropagation();LP_editDestQty(this,\''+d0.replace(/'/g,"\\'")+'\',\''+s.sku+'\','+q+')"':'';
       if(sHeld){
         bs='background:#FEF3EB;color:#C4550A;border:1px solid #F5D6B8;opacity:0.85';
         extra=' '+clickAction+' style="'+bs+';cursor:pointer" title="'+rawQ+' raw · Click to edit"';
@@ -3817,7 +3817,7 @@ function LP_editDestQty(badge,dest,sku,rawQty){
   const dd=clDisp(dest);
   const held=LP_holds.has(dest+'|'+sku);
   const ppu=_lpPPU(sku);
-  const effQty=rawQty;// already UoM
+  const effQty=rawQty;// UoM value from effDests
   const pop=document.createElement('div');
   pop.id='lpDestQtyPop';
   pop.style.cssText='position:fixed;z-index:200;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px 12px;min-width:200px';
@@ -5530,7 +5530,7 @@ function LP_exportAllCI(){
     const totalQty=agg.reduce((s,it)=>s+it.qty,0);
     let totalVal=0;
     for(const s of agg){totalVal+=(_lpCustNom(s.sku).unitPrice||0)*s.qty}
-    summaryRows.push({'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'SKUs':agg.length,'Pieces':totalQty,'Pallets':+totalPlt.toFixed(1),'Total Value (USD)':totalVal?+totalVal.toFixed(2):''});
+    summaryRows.push({'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'SKUs':agg.length,'Qty':totalQty,'Pallets':+totalPlt.toFixed(1),'Total Value (USD)':totalVal?+totalVal.toFixed(2):''});
   }
   const ws1=XLSX.utils.json_to_sheet(summaryRows);
   ws1['!cols']=[{wch:8},{wch:12},{wch:16},{wch:8},{wch:10},{wch:10},{wch:16}];
@@ -6433,7 +6433,7 @@ function V26_export(){
     const realTrucks=dt.filter(t=>t.source!=='CORT');
     const cort=dt.filter(t=>t.source==='CORT');
     const stp=realTrucks.filter(t=>t.source==='STP Direct');
-    byDateRows.push({'Date':d,'Trucks':realTrucks.length,'LP':realTrucks.filter(t=>t.source==='Load Plan').length,'LM':realTrucks.filter(t=>t.source==='Last Mile').length,'STP':stp.length,'CORT':cort.length,'Pallets':+realTrucks.reduce((s,t)=>s+t.pallets,0).toFixed(1),'Pieces':dt.reduce((s,t)=>s+t.qty,0)});
+    byDateRows.push({'Date':d,'Trucks':realTrucks.length,'LP':realTrucks.filter(t=>t.source==='Load Plan').length,'LM':realTrucks.filter(t=>t.source==='Last Mile').length,'STP':stp.length,'CORT':cort.length,'Pallets':+realTrucks.reduce((s,t)=>s+t.pallets,0).toFixed(1),'Qty':dt.reduce((s,t)=>s+t.qty,0)});
   }
   const ws3=XLSX.utils.json_to_sheet(byDateRows);
   ws3['!cols']=[{wch:12},{wch:8},{wch:6},{wch:6},{wch:6},{wch:6},{wch:10},{wch:10}];
@@ -6454,7 +6454,7 @@ function V26_export(){
   });
   const destRows=Object.values(byDest).sort((a,b)=>b.trucks-a.trucks).map(d=>({
     'Destination':d.display,'Trucks':d.trucks,'LP':d.lp,'LM':d.lm,'STP':d.stp,'CORT':d.cort,
-    'Pallets':+d.plt.toFixed(1),'Pieces':d.qty,'Unique SKUs':d.skus.size
+    'Pallets':+d.plt.toFixed(1),'Qty':d.qty,'Unique SKUs':d.skus.size
   }));
   const ws4=XLSX.utils.json_to_sheet(destRows);
   ws4['!cols']=[{wch:28},{wch:8},{wch:6},{wch:6},{wch:6},{wch:6},{wch:10},{wch:10},{wch:10}];
@@ -7838,13 +7838,13 @@ function build(venue,venueList,skipNoBi){
   // ── Demand adjustments: compute scale factors per venue|sku ──
   const _adjScale={};// "venue|sku" -> scale factor
   if(Object.keys(LM_demandAdj).length>0){
-    const origTotals={};// "venue|sku" -> original total Required
+    const origTotals={};// "venue|sku" -> original total effQty (UoM)
     for(const r of RW){
       if(!venuesToUse.includes(r["Venue"]))continue;
-      const raw=parseInt(r["Required"])||0;if(raw<=0)continue;
+      const eq=r._effQty||0;if(eq<=0)continue;
       const s=r["Nomenclature"]||"?";if(!NOM[s])continue;
       const k=r["Venue"]+'|'+s;
-      origTotals[k]=(origTotals[k]||0)+raw;
+      origTotals[k]=(origTotals[k]||0)+eq;
     }
     for(const k in LM_demandAdj){
       if(origTotals[k]&&origTotals[k]>0){
@@ -8576,7 +8576,7 @@ const _vtSkuMap={};// venueType -> country -> Set(sku)
 const _adjScale={};
 if(Object.keys(LM_demandAdj).length>0){
   const origTotals={};
-  for(const r of RW){const v=r["Venue"];if(!v)continue;const raw=parseInt(r["Required"])||0;if(raw<=0)continue;const s=r["Nomenclature"]||"?";if(!NOM[s])continue;const k=v+'|'+s;origTotals[k]=(origTotals[k]||0)+raw}
+  for(const r of RW){const v=r["Venue"];if(!v)continue;const eq=r._effQty||0;if(eq<=0)continue;const s=r["Nomenclature"]||"?";if(!NOM[s])continue;const k=v+'|'+s;origTotals[k]=(origTotals[k]||0)+eq}
   for(const k in LM_demandAdj){if(origTotals[k]&&origTotals[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/origTotals[k]}
 }
 // Kit allocation map: subtract from individual items
@@ -8592,7 +8592,8 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   const _bvSku=r["Nomenclature"]||"?";
   // Always create venue entry first so venue appears in sidebar even if all items are STP
   if(!a[v])a[v]={name:v,ep:0,ln:0,it:0,earlyBI:null,hasCort:false};
-  if(_stpVBv.has(v)&&NOM[_bvSku]&&isStp(_bvSku))continue;
+  const _isBvStp=_stpVBv.has(v)&&NOM[_bvSku]&&isStp(_bvSku);
+  if(_isBvStp){let sq=r._effQty||0;if(sq>0){const _sak=v+'|'+_bvSku;if(_adjScale[_sak]!==undefined)sq=Math.round(sq*_adjScale[_sak]);if(!r._kit&&_kitAl[_sak])sq=Math.max(0,sq-_kitAl[_sak]);a[v].it+=sq}continue;}
   let q=r._effQty||0;if(q<=0)continue;
   // Apply demand adjustment (scale the effQty)
   const _adjK=v+'|'+(r["Nomenclature"]||"?");
@@ -8752,6 +8753,28 @@ function numberAll(){
       if(LM_excludeUserOvr[fp]===true)LM_excluded.add(e.ref.id);
     }
   });
+  // ── Rename kit SKUs: FNKIT-002-NNN / OSKIT-002-NNN (globally numbered by truck order) ──
+  let _fnN=1,_osN=1;
+  allTrucks.forEach(e=>{
+    const trk=e.ref;
+    for(const it of trk.items){
+      const oldSku=it.sku;
+      const nom=NOM[oldSku];if(!nom||!nom._kitNom)continue;
+      const isFn=oldSku.startsWith('FNKIT');
+      const seq=isFn?_fnN++:_osN++;
+      const newSku=(isFn?'FNKIT-002-':'OSKIT-002-')+trk.id+'-'+String(seq).padStart(2,'0');
+      if(newSku===oldSku)continue;
+      // Update NOM
+      NOM[newSku]=nom;delete NOM[oldSku];
+      // Update truck item
+      it.sku=newSku;
+      // Update RW row
+      for(const r of RW){if(r._kit&&r.Nomenclature===oldSku){r.Nomenclature=newSku;break}}
+      // Update LM_KITS
+      if(nom._kitId){const kit=LM_KITS.find(k=>k.id===nom._kitId);if(kit)kit.sku=newSku}
+    }
+  });
+
   // Sort and number CORT globally C-1, C-2...
   allCort.sort((a,b)=>a.dateK<b.dateK?-1:a.dateK>b.dateK?1:0);
   let cn=1;allCort.forEach(e=>{e.ref.id=`C-${cn++}`;e.ref.destDisplay=e.venueName||''});
@@ -9264,9 +9287,9 @@ function LM_injectManualDemand(){
   RW=RW.filter(r=>!r._manual);
   for(const m of LM_MANUAL_DEMAND){
     if(!m.sku||!m.venue||!m.qty)continue;
-    // Ensure NOM entry
+    // Ensure NOM entry — manual input is UoM, so PPU=1 (no conversion by _rwEnrichEffQty)
     if(!NOM[m.sku]){
-      NOM[m.sku]={nm:m.nm||m.sku,src:m.src||'MANUAL',uom:m.uom||'pc',ppu:m.ppu||1,pq:m.pq||0,ps:m.ps||0,pqA:m.pqA||0,psA:m.psA||0,_manualNom:true};
+      NOM[m.sku]={nm:m.nm||m.sku,src:m.src||'MANUAL',uom:m.uom||'pc',ppu:1,pq:m.pq||0,ps:m.ps||0,pqA:m.pqA||0,psA:m.psA||0,_manualNom:true};
     }
     // Add RW row
     RW.push({"Venue":m.venue,"Nomenclature":m.sku,"Required":m.qty,"Estimated bump-in date":m.biDate||'',"Venue cluster":m.cluster||'',"Venue code":m.venueCode||'',"Venue type":m.venueType||'',"_manual":true});
@@ -9432,8 +9455,8 @@ function _kitVenueChanged(){
   const nmEl=document.getElementById('kit_name');
   if(v){
     const seq=String(Math.floor(Math.random()*900)+100);
-    if(_kitCurType==='ffe'){skuEl.value='FNKIT-001-'+seq;nmEl.value=v+' FF&E Kit'}
-    else if(_kitCurType==='stp'){skuEl.value='OSKIT-001-'+seq;nmEl.value=v+' Stationery Kit'}
+    if(_kitCurType==='ffe'){skuEl.value='FNKIT-002-'+seq;nmEl.value=v+' FF&E Kit'}
+    else if(_kitCurType==='stp'){skuEl.value='OSKIT-002-'+seq;nmEl.value=v+' Stationery Kit'}
     else{skuEl.value='Kit-'+seq;nmEl.value=v+' Kit'}
   }
   _kitLoadItems();
@@ -9478,10 +9501,10 @@ function _kitSetType(type){
   const nmEl=document.getElementById('kit_name');
   const seq=String(Math.floor(Math.random()*900)+100);
   if(type==='ffe'){
-    if(skuEl)skuEl.value='FNKIT-001-'+seq;
+    if(skuEl)skuEl.value='FNKIT-002-'+seq;
     if(nmEl&&venue)nmEl.value=venue+' FF&E Kit';
   }else if(type==='stp'){
-    if(skuEl)skuEl.value='OSKIT-001-'+seq;
+    if(skuEl)skuEl.value='OSKIT-002-'+seq;
     if(nmEl&&venue)nmEl.value=venue+' Stationery Kit';
   }
 }
@@ -9666,10 +9689,10 @@ function _kitApplyType(kitId,type){
   const kit=LM_getKitById(kitId);if(!kit)return;
   const seq=String(Math.floor(Math.random()*900)+100);
   if(type==='ffe'){
-    kit.sku='FNKIT-001-'+seq;
+    kit.sku='FNKIT-002-'+seq;
     kit.name=kit.venue+' FF&E Kit';
   }else{
-    kit.sku='OSKIT-001-'+seq;
+    kit.sku='OSKIT-002-'+seq;
     kit.name=kit.venue+' Stationery Kit';
   }
   LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
@@ -9684,6 +9707,166 @@ async function LM_exportKit(kitId){
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OOR_'+kitNum+'.xlsx';a.click();URL.revokeObjectURL(a.href);
+}
+let _kitListFilter='all';// 'all'|'ffe'|'stp'
+function LM_showKitList(){
+  // Determine which kits to show based on current venue selection
+  let kits;
+  if(sel||selCluster){
+    const vf=new Set();
+    if(selCluster&&CLUSTERS[selCluster])CLUSTERS[selCluster].venues.forEach(v=>vf.add(v));
+    else if(sel)vf.add(sel);
+    kits=LM_KITS.filter(k=>vf.has(k.venue));
+  }else{kits=[...LM_KITS]}
+  if(!kits.length)return;
+  _kitListFilter='all';
+  _kitListRender(kits);
+}
+function _kitListRender(kits){
+  const filtered=_kitListFilter==='all'?kits:_kitListFilter==='ffe'?kits.filter(k=>k.sku.startsWith('FNKIT')):kits.filter(k=>k.sku.startsWith('OSKIT'));
+  const ffeN=kits.filter(k=>k.sku.startsWith('FNKIT')).length;
+  const stpN=kits.filter(k=>k.sku.startsWith('OSKIT')).length;
+  const _ab=(t)=>_kitListFilter===t?'background:var(--pu);color:#fff;border-color:var(--pu)':'';
+  let h=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:600px">
+      <div class="mdh" style="background:#E8F5E9;border-bottom-color:#43A047">
+        <h3 style="color:#43A047">📦 Kits (${kits.length})</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
+      </div>
+      <div class="mdb" style="padding:16px">
+        <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center">
+          <button class="rbtn" onclick="_kitListFilter='all';_kitListRender(_klKits)" style="font-size:10px;padding:4px 10px;${_ab('all')}">All (${kits.length})</button>
+          ${ffeN?`<button class="rbtn" onclick="_kitListFilter='ffe';_kitListRender(_klKits)" style="font-size:10px;padding:4px 10px;${_ab('ffe')}">🪑 FF&E (${ffeN})</button>`:''}
+          ${stpN?`<button class="rbtn" onclick="_kitListFilter='stp';_kitListRender(_klKits)" style="font-size:10px;padding:4px 10px;${_ab('stp')}">📎 Stationery (${stpN})</button>`:''}
+          <span style="flex:1"></span>
+          <button class="rbtn" onclick="_klToggleAll()" style="font-size:9px;padding:3px 8px">Select All</button>
+          <button class="rbtn" onclick="_klExportSelected()" style="font-size:10px;padding:4px 10px;background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ OOR</button>
+          <button class="rbtn" onclick="_klExportASN()" style="font-size:10px;padding:4px 10px;background:var(--ps);color:var(--pu);border-color:#D4C5FE">📋 Inbound Form</button>
+        </div>
+        <div style="max-height:450px;overflow-y:auto">
+          <table class="dtb" style="font-size:11px"><thead><tr><th style="width:28px"><input type="checkbox" id="klCheckAll" onchange="_klToggleAllCb(this.checked)"></th><th>Venue</th><th>SKU</th><th>Type</th><th>Items</th><th>Qty</th><th>Plt</th></tr></thead><tbody>`;
+  for(const kit of filtered){
+    const effPcs=kit.items.reduce((s,i)=>s+i.qty,0);
+    let sumPlt=0;
+    for(const item of kit.items){const n=NOM[item.sku];const pqU=_pqUom(item.sku);if(pqU>0&&n?.ps>0)sumPlt+=(item.qty/pqU)*n.ps}
+    const hasPltOvr=kit.pq>0&&kit.ps>0;
+    const effPlt=hasPltOvr?((effPcs/kit.pq)*kit.ps):sumPlt;
+    const isFfe=kit.sku.startsWith('FNKIT');
+    h+=`<tr style="cursor:pointer" onclick="if(event.target.type!=='checkbox')LM_showKitDetail('${kit.id}')">
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="kl-chk" data-kid="${kit.id}"></td>
+      <td class="tcl" style="font-size:10px">${kit.venue}</td>
+      <td class="mono" style="font-size:10px;color:var(--ac)">${kit.sku}</td>
+      <td><span style="font-size:9px;padding:1px 6px;border-radius:3px;background:${isFfe?'#E3F2FD;color:#1565C0':'#FFF3E0;color:#EF6C00'}">${isFfe?'FF&E':'Stationery'}</span></td>
+      <td class="mono">${kit.items.length}</td>
+      <td class="mono">${effPcs.toLocaleString()}</td>
+      <td class="mono">${effPlt.toFixed(1)}</td>
+    </tr>`;
+  }
+  h+=`</tbody></table></div></div></div></div>`;
+  window._klKits=kits;
+  document.getElementById('mr').innerHTML=h;
+}
+function _klToggleAll(){
+  const cbs=document.querySelectorAll('.kl-chk');
+  const allChecked=[...cbs].every(c=>c.checked);
+  cbs.forEach(c=>c.checked=!allChecked);
+  const ca=document.getElementById('klCheckAll');if(ca)ca.checked=!allChecked;
+}
+function _klToggleAllCb(checked){document.querySelectorAll('.kl-chk').forEach(c=>c.checked=checked)}
+async function _klExportSelected(){
+  const ids=[...document.querySelectorAll('.kl-chk:checked')].map(c=>c.dataset.kid);
+  if(!ids.length){alert('Select at least one kit');return}
+  const files={};
+  for(const id of ids){
+    const kit=LM_getKitById(id);if(!kit)continue;
+    const wb=new ExcelJS.Workbook();
+    const kitNum=kit.sku||kit.id;
+    const items=kit.items.map(item=>{const n=NOM[item.sku];const uom=n?.uom||'Each';return{sku:item.sku,name:n?.nm||item.sku,src:n?.src||'',uom:uom.charAt(0).toUpperCase()+uom.slice(1),qty:item.qty}});
+    _oorSheet(wb,'OOR',kitNum,kit.venue,kit.venue,items);
+    const buf=await wb.xlsx.writeBuffer();
+    files['OOR_'+kitNum+'.xlsx']=new Uint8Array(buf);
+  }
+  const zipped=fflate.zipSync(files,{level:6});
+  const blob=new Blob([zipped],{type:'application/zip'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Kits_OOR_'+ids.length+'.zip';a.click();URL.revokeObjectURL(a.href);
+}
+async function _klExportASN(){
+  const ids=[...document.querySelectorAll('.kl-chk:checked')].map(c=>c.dataset.kid);
+  if(!ids.length){alert('Select at least one kit');return}
+  // Group kits by truck ID
+  const byTruck={};
+  for(const id of ids){
+    const kit=LM_getKitById(id);if(!kit)continue;
+    // Find which truck this kit is on
+    let truckId='';
+    for(const label in PLAN_CACHE){const P=PLAN_CACHE[label];if(!P||!P.days)continue;
+      for(const d of P.days){for(const t of d.trucks){if(t.items.some(it=>it.sku===kit.sku)){truckId=t.id;break}}if(truckId)break}if(truckId)break}
+    if(!truckId)truckId='KIT';
+    if(!byTruck[truckId])byTruck[truckId]={kits:[],dest:''};
+    byTruck[truckId].kits.push(kit);
+    // Determine destination (cluster or venue)
+    if(!byTruck[truckId].dest){
+      const v=VN.find(vn=>vn.name===kit.venue);
+      byTruck[truckId].dest=v?.cluster?clDisp(v.cluster):clDisp(kit.venue);
+    }
+  }
+  const wb=new ExcelJS.Workbook();
+  const COLS=6;
+  const C_HDR='FF5B1A18',C_WH='FFFFFFFF',C_BG='FFFDF5F0',C_BRD='FFB8805A',C_DK='FF3B0F0D';
+  const mkF=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const fillH=mkF(C_HDR),fillW=mkF(C_WH),fillBg=mkF(C_BG);
+  const brd={top:{style:'thin',color:{argb:C_BRD}},left:{style:'thin',color:{argb:C_BRD}},bottom:{style:'thin',color:{argb:C_BRD}},right:{style:'thin',color:{argb:C_BRD}}};
+  const fTtl={name:'Calibri',size:14,bold:true,color:{argb:C_DK}};
+  const fLbl={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
+  const fVal={name:'Calibri',size:10,color:{argb:C_DK}};
+  const fValB={name:'Calibri',size:10,bold:true,color:{argb:C_DK}};
+  const fHdr={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
+  const fData={name:'Calibri',size:10,color:{argb:C_DK}};
+  const alC={horizontal:'center',vertical:'middle',wrapText:true},alL={horizontal:'left',vertical:'middle'};
+  const now=new Date();
+  const ts=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' '+String(now.getDate()).padStart(2,'0')+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+now.getFullYear();
+  for(const[truckId,group] of Object.entries(byTruck)){
+    const sheetName=(truckId+' ASN').substring(0,31);
+    const ws=wb.addWorksheet(sheetName,{pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+    ws.columns=[{width:10},{width:10},{width:22},{width:28},{width:14},{width:10},{width:16}];
+    const cl=(r,c,val,font,align,fill,border)=>{const x=ws.getRow(r).getCell(c);x.value=val!=null?val:'';if(font)x.font=font;if(align)x.alignment=align;if(fill)x.fill=fill;if(border)x.border=border};
+    const mg=(r1,c1,r2,c2)=>{try{ws.mergeCells(r1,c1,r2,c2)}catch(e){}};
+    const fillRow=(r,c1,c2,fill,border)=>{for(let c=c1;c<=c2;c++){cl(r,c,'',null,null,fill,border)}};
+    const NC=7;
+    // Row 2: Title
+    let R=2;fillRow(R,1,NC,fillW,brd);mg(R,1,R,NC);
+    cl(R,1,'Advance Shipment Notification # '+truckId,fTtl,alC,fillW,brd);ws.getRow(R).height=30;
+    // Row 3: blank
+    R=3;fillRow(R,1,NC,fillW,null);ws.getRow(R).height=8;
+    // Row 4: Expected Date/Time | Shipment Ref | Ship from
+    R=4;fillRow(R,1,NC,fillBg,brd);
+    cl(R,1,'Expected Date and Time:',fLbl,alC,fillH,brd);cl(R,2,'',fLbl,alC,fillH,brd);mg(R,1,R,2);
+    cl(R,3,ts,fVal,alC,fillBg,brd);
+    cl(R,4,'Shipment Ref:',fLbl,alC,fillH,brd);
+    cl(R,5,truckId+' '+group.dest,fValB,alC,fillBg,brd);
+    cl(R,6,'Ship from:',fLbl,alC,fillH,brd);
+    cl(R,7,'WHS Kitting',fValB,alC,fillBg,brd);
+    // Row 5: blank
+    R=5;fillRow(R,1,NC,fillW,null);ws.getRow(R).height=8;
+    // Row 6: Headers
+    R=6;['Line #','','Nomenclature Code','Nomenclature name','Asset Owner','UOM','Expected Quantity'].forEach((h,i)=>{cl(R,i+1,h,fHdr,alC,fillH,brd)});
+    mg(R,1,R,2);ws.getRow(R).height=28;
+    // Data rows
+    group.kits.forEach((kit,idx)=>{
+      R++;const rFill=idx%2===0?fillW:fillBg;
+      fillRow(R,1,NC,rFill,brd);mg(R,1,R,2);
+      cl(R,1,idx+1,fValB,alC,rFill,brd);
+      cl(R,3,kit.sku,fData,alL,rFill,brd);
+      cl(R,4,kit.name,fData,alL,rFill,brd);
+      cl(R,5,'',fData,alC,rFill,brd);
+      cl(R,6,'Kit',fData,alC,rFill,brd);
+      cl(R,7,1,fValB,alC,rFill,brd);
+    });
+  }
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const truckIds=Object.keys(byTruck).join('_');
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ASN_Kits_'+truckIds+'.xlsx';a.click();URL.revokeObjectURL(a.href);
 }
 // ── LM Delivery Strategy (per country + venue type) ──────
 // Structure: {country: {venueType: {stp:'direct'|'kit'|'', ffe:'direct'|'kit'|''}}}
@@ -9808,7 +9991,7 @@ function _stpApplyStrategy(){
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
-      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-001-'+String(Math.floor(Math.random()*900)+100),name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true});
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true});
     }}
     // Apply FF&E strategy
     if(cfg.ffe==='kit'){for(const venue of ffeVenues){
@@ -9817,7 +10000,7 @@ function _stpApplyStrategy(){
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!_isFfeItem(s))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
-      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-001-'+String(Math.floor(Math.random()*900)+100),name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true});
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true});
     }}
     // FF&E 'direct' = default (no action needed)
   }
@@ -9845,7 +10028,7 @@ function _stpBuildTruck(del){
   const items=[];let totalPlt=0,totalPcs=0;
   const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
   const _adjScale={};
-  if(Object.keys(LM_demandAdj).length>0){const ot={};for(const r of RW){const v=r.Venue;if(!v||v!==del.venue)continue;const raw=parseInt(r.Required)||0;if(raw<=0)continue;const s=r.Nomenclature;if(!NOM[s])continue;ot[v+'|'+s]=(ot[v+'|'+s]||0)+raw};for(const k in LM_demandAdj){if(ot[k]&&ot[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/ot[k]}}
+  if(Object.keys(LM_demandAdj).length>0){const ot={};for(const r of RW){const v=r.Venue;if(!v||v!==del.venue)continue;const eq=r._effQty||0;if(eq<=0)continue;const s=r.Nomenclature;if(!NOM[s])continue;ot[v+'|'+s]=(ot[v+'|'+s]||0)+eq};for(const k in LM_demandAdj){if(ot[k]&&ot[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/ot[k]}}
   const bySkuMap={};
   for(const r of RW){
     if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;
@@ -10035,7 +10218,7 @@ function LM_showAddDemand(prefillVenue){
             <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Source</label>
               <input id="md_src" value="MANUAL" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
             </div>
-            <div><label style="font-size:10px;font-weight:700;color:var(--ts)"><span id="md_qtyLabel">Required Qty *</span></label>
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)"><span id="md_qtyLabel">Qty (UoM) *</span></label>
               <input id="md_qty" type="number" min="0" placeholder="e.g. 500" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
             </div>
             <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Bump-in Date</label>
@@ -10044,8 +10227,8 @@ function LM_showAddDemand(prefillVenue){
             <div><label style="font-size:10px;font-weight:700;color:var(--ts)">UOM</label>
               <input id="md_uom" value="pc" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
             </div>
-            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">Pieces per Unit</label>
-              <input id="md_ppu" type="number" min="1" value="1" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)">
+            <div><label style="font-size:10px;font-weight:700;color:var(--ts)">PPU <span style="font-weight:400;color:var(--tt)">(info only)</span></label>
+              <input id="md_ppu" type="number" min="1" value="1" disabled style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm);background:var(--bg);color:var(--tt)">
             </div>
           </div>
           <details id="md_palletSec" style="margin-top:12px">
@@ -10117,15 +10300,15 @@ function _mdCheckSku(){
   if(inNom&&existingQty>0){
     window._mdMode='adjust';
     document.getElementById('md_qty').value=adjQty;
-    document.getElementById('md_qtyLabel').innerHTML=`Adjusted Qty * <span style="font-weight:400;color:var(--tt)">(current: ${existingQty.toLocaleString()})</span>`;
-    statusEl.innerHTML=`<div style="padding:8px 12px;border-radius:8px;background:var(--os);border:1px solid var(--or);font-size:11px">📋 <strong>${sku}</strong> already at <strong>${venue}</strong> with <strong>${existingQty.toLocaleString()}</strong> pcs. Change qty to adjust.</div>`;
+    document.getElementById('md_qtyLabel').innerHTML=`Adjusted Qty (UoM) * <span style="font-weight:400;color:var(--tt)">(current: ${existingQty.toLocaleString()}${(n?.ppu||1)>1?' · PPU '+n.ppu:''})</span>`;
+    statusEl.innerHTML=`<div style="padding:8px 12px;border-radius:8px;background:var(--os);border:1px solid var(--or);font-size:11px">📋 <strong>${sku}</strong> already at <strong>${venue}</strong> with <strong>${existingQty.toLocaleString()}</strong> qty. Change to adjust.</div>`;
     statusEl.style.display='block';
     btnEl.textContent='✎ Adjust Demand Qty';btnEl.style.background='var(--or)';
     lockFields(true);
   } else if(inNom){
     window._mdMode='add';
     document.getElementById('md_qty').value='';
-    document.getElementById('md_qtyLabel').textContent='Required Qty *';
+    document.getElementById('md_qtyLabel').textContent='Qty (UoM) *';
     statusEl.innerHTML=`<div style="padding:8px 12px;border-radius:8px;background:var(--gs);border:1px solid var(--gn);font-size:11px">✅ <strong>${sku}</strong> — ${n.nm} — found in nomenclature. Adding to <strong>${venue}</strong>.</div>`;
     statusEl.style.display='block';
     btnEl.textContent='+ Add to Demand';btnEl.style.background='var(--gn)';
@@ -10133,7 +10316,7 @@ function _mdCheckSku(){
   } else {
     window._mdMode='new';
     document.getElementById('md_qty').value='';
-    document.getElementById('md_qtyLabel').textContent='Required Qty *';
+    document.getElementById('md_qtyLabel').textContent='Qty (UoM) *';
     statusEl.innerHTML=`<div style="padding:8px 12px;border-radius:8px;background:var(--ps);border:1px solid var(--pu);font-size:11px">✨ <strong>${sku}</strong> is a new SKU. Fill all details below.</div>`;
     statusEl.style.display='block';
     btnEl.textContent='✨ Create SKU & Add';btnEl.style.background='var(--pu)';
@@ -10806,8 +10989,8 @@ function LM_renderDemand(el){
       <span class="bg bg-gy">${grandOrigQty.toLocaleString()}${grandAdjQty!==grandOrigQty?' → <b>'+grandAdjQty.toLocaleString()+'</b>':' pcs'}</span>
       ${manualCount>0?`<span class="bg bg-gn">✏${manualCount}</span>`:''}
       ${adjItems>0?`<span class="bg bg-pu">★${adjItems}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_demandAdj={};LM_saveDemandAdj();PLAN_CACHE={};numberAll();rMain()" style="font-size:9px;padding:2px 6px">↻</button>`:''}`:''}
-      ${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button><button class="rbtn" onclick="LM_showCreateKit('${prefillV.replace(/'/g,"\\'")}')" style="background:#E8F5E9;color:#43A047;border-color:#A5D6A7;font-size:10px;padding:4px 10px">📦 Kit</button>${(prefillV&&LM_getStpForVenue(prefillV))?`<button class="rbtn" disabled style="background:#F0F1F3;color:var(--tt);border-color:var(--bd);font-size:10px;padding:4px 10px;cursor:not-allowed;opacity:0.5">🏪 STP ✓</button>`:`<button class="rbtn" onclick="LM_showCreateStp('${prefillV.replace(/'/g,"\\'")}')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:10px;padding:4px 10px">🏪 STP</button>`}`:''}
-      ${_filteredKits.length>0?`<span class="bg" style="background:#E8F5E9;color:#43A047">📦 ${_filteredKits.length} kit${_filteredKits.length>1?'s':''}</span>`:''}
+      ${ROLE!=='viewer'&&prefillV?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button><button class="rbtn" onclick="LM_showCreateKit('${prefillV.replace(/'/g,"\\'")}')" style="background:#E8F5E9;color:#43A047;border-color:#A5D6A7;font-size:10px;padding:4px 10px">📦 Kit</button>${LM_getStpForVenue(prefillV)?`<button class="rbtn" disabled style="background:#F0F1F3;color:var(--tt);border-color:var(--bd);font-size:10px;padding:4px 10px;cursor:not-allowed;opacity:0.5">🏪 STP ✓</button>`:`<button class="rbtn" onclick="LM_showCreateStp('${prefillV.replace(/'/g,"\\'")}')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:10px;padding:4px 10px">🏪 STP</button>`}`:''}
+      ${_filteredKits.length>0?`<span class="bg" style="background:#E8F5E9;color:#43A047;cursor:pointer" onclick="LM_showKitList()">📦 ${_filteredKits.length} kit${_filteredKits.length>1?'s':''}</span>`:''}
       ${_filteredStp.length>0?`<span class="bg" style="background:#FFF3E0;color:#EF6C00">🏪 ${_filteredStp.length} STP</span>`:''}
     </div>
   </div>`;
@@ -10912,12 +11095,9 @@ function LM_filterDemand(){
 function LM_setDemand(venue,sku,newEffQty,origEffQty){
   if(ROLE==='viewer')return;
   const k=venue+'|'+sku;
-  const ppu=_lpPPU(sku);
-  // Convert effective qty back to raw for storage (engine uses raw)
-  const newRaw=newEffQty*ppu;
-  const origRaw=origEffQty*ppu;
-  if(newRaw===origRaw){delete LM_demandAdj[k]}
-  else{LM_demandAdj[k]=newRaw}
+  // Store UoM value directly (scale factor uses UoM / UoM)
+  if(newEffQty===origEffQty){delete LM_demandAdj[k]}
+  else{LM_demandAdj[k]=newEffQty}
   // Rebuild venue stats and trucks (clear cache, renumber)
   bV();PLAN_CACHE={};numberAll();
   LM_saveDemandAdj();
@@ -10937,7 +11117,7 @@ function LM_renderAnalysis(el){
     const abbr=LP_matchTransitAbbr(d.destination);
     if(!abbr)continue;
     const k=abbr+'|'+d.sku;
-    lpByAbbrSku[k]=(lpByAbbrSku[k]||0)+_lpEffQty(d.sku,d.requiredQty||0);
+    lpByAbbrSku[k]=(lpByAbbrSku[k]||0)+(d.effQty||d.requiredQty||0);
   }
 
   // Build LM demand by (abbr, sku) → qty — only LP-tracked SKUs
@@ -11036,7 +11216,7 @@ function LM_renderAnalysis(el){
     const dc=LP_destColor(destName);
     html+='<div class="lp-day-hdr" style="margin-top:12px"><span class="dt">'+destName+'</span>';
     html+='<span class="ds">'+dRows.length+' SKUs</span>';
-    html+='<span class="dp" style="color:'+(dDelta>0?'var(--gn)':'var(--or)')+'">Net: '+(dDelta>0?'+':'')+dDelta.toLocaleString()+' pcs</span></div>';
+    html+='<span class="dp" style="color:'+(dDelta>0?'var(--gn)':'var(--or)')+'">Net: '+(dDelta>0?'+':'')+dDelta.toLocaleString()+' qty</span></div>';
 
     html+='<table class="dtb" style="margin-bottom:8px"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th style="color:var(--ac)">LP Qty</th><th style="color:var(--gn)">LM Qty</th><th>Delta</th></tr></thead><tbody>';
     for(const r of dRows){
@@ -11243,14 +11423,15 @@ if(cv==="dashboard"){
   const loadedPlt=Math.round(calDates.reduce((s,dk)=>s+(calMap[dk].pallets||0),0)*10)/10;
   // totPlt stays as demand from VN (consistent with sidebar labels)
   const peakTrucks=calDates.length?Math.max(...calDates.map(d=>calMap[d].trucks)):0;
-  const totalDays=calDates.length;
+  const totalDays=calDates.filter(d=>(calMap[d].trucks||0)>0).length;
   const filterLabel=isClusterOv?clDisp(clusterOvName)+' Overview':(isRegion?(regionCat==='can'?'Canada Overview':'Mexico Overview'):(isFiltered?(isClusterSel2?clDisp(selCluster):sel):'All Venues'));
 
   const totalCort=calDates.reduce((s,d)=>s+(calMap[d].cort||0),0);
   const totalCortPcs=calDates.reduce((s,d)=>s+(calMap[d].cortPcs||0),0);
-  const totalStp=calDates.reduce((s,d)=>s+(calMap[d].stp||0),0);
-  const totalStpPcs=calDates.reduce((s,d)=>s+(calMap[d].stpPcs||0),0);
-  const totalStpPlt=Math.round(calDates.reduce((s,d)=>s+(calMap[d].stpPlt||0),0)*10)/10;
+  // STP: count ALL venues with STP trucks in view (not just dated deliveries)
+  let totalStp=0,totalStpPcs=0,totalStpPlt=0;
+  for(const vn of _stpViewNames){const tr=LM_STP_TRUCKS[vn];if(tr&&tr.items.length){totalStp++;totalStpPcs+=tr.pcs;totalStpPlt+=tr.pallets}}
+  totalStpPlt=Math.round(totalStpPlt*10)/10;
 
   let h=`<div class="fin"><h2 style="font-size:19px;font-weight:700">📊 Dashboard — ${filterLabel}</h2>
   ${isFiltered?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing plan for selected venue/cluster. Deselect to see all.</p>':(isClusterOv?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing all venues in '+clDisp(clusterOvName)+'.</p>':(isRegion?'<p style="font-size:11px;color:var(--tt);margin-top:2px">Showing all '+( regionCat==='can'?'Canadian':'Mexican')+' venues.</p>':''))}
@@ -11265,7 +11446,7 @@ if(cv==="dashboard"){
     {label:'📈 Peak/Day',value:peakTrucks,color:'var(--rd)'},
   ];
   if(totalCort>0)lmKpiItems.push({label:'🏷 CORT',value:totalCort,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8',sub:totalCortPcs.toLocaleString()+' pcs'});
-  if(totalStp>0)lmKpiItems.push({label:'🏪 Staples',value:totalStp,color:'#EF6C00',labelColor:'#EF6C00',style:'border-color:#FFCC80;background:#FFF8F0',sub:totalStpPcs.toLocaleString()+' pcs · '+totalStpPlt+' plt'});
+  if(totalStp>0){const stpDays=calDates.filter(d=>(calMap[d].stp||0)>0).length;lmKpiItems.push({label:'🏪 Staples',value:totalStp,color:'#EF6C00',labelColor:'#EF6C00',style:'border-color:#FFCC80;background:#FFF8F0',sub:totalStpPcs.toLocaleString()+' qty · '+stpDays+' days'});}
   h+=kpiRow(lmKpiItems,'fin');
 
   // ── VISUAL CALENDAR: month grid ──
@@ -11841,7 +12022,7 @@ function exportXL(){
           'Bump-In':day.isNoBi?'No BI':fS(day.biDate),
           'Trucks':day.trucks.length,
           'Pallets':Math.round(day.exactPlt*10)/10,
-          'Pieces':day.totalQty,
+          'Qty':day.totalQty,
           'Day %':day.dayP,
           'Cumulative %':day.cumP,
           'Avg Utilization':avgU+'%',
@@ -11868,7 +12049,7 @@ function exportXL(){
       'Bump-In':'STP Direct',
       'Trucks':'STP',
       'Pallets':Math.round(truck.pallets*10)/10,
-      'Pieces':truck.pcs,
+      'Qty':truck.pcs,
       'Day %':'','Cumulative %':'',
       'Avg Utilization':'',
       'Early':'','Overflow':'','No BI':'',
@@ -11902,7 +12083,7 @@ function exportXL(){
       venRows.push({
         'Venue/Cluster':label,
         'Pallets':plt,
-        'Pieces':pcs,
+        'Qty':pcs,
         'Trucks':LM_countActive(P),
         'Dispatch Days':P.days.length,
         'Avg Utilization':avgU+'%',
