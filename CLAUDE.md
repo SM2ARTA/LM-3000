@@ -344,8 +344,89 @@ All three modules use `height:100vh;overflow:hidden` — no page-level scrollbar
 - **No admin rights** on this machine (FIFA corporate domain)
 - **Git**: user.name=SM2ARTA, user.email=sm2arta@outlook.com, remote=https://github.com/SM2ARTA/LM-3000.git
 
+## UoM (Unit of Measurement) System
+The entire system operates in UoM (packs, boxes, rolls, etc.), not raw pieces.
+
+### PPU (Pieces Per UoM)
+- `NOM[sku].ppu` — pieces per unit (e.g., 50 for a pack of 50 hangers)
+- PPU=1 means Each (1 piece = 1 UoM)
+- `effQty = ceil(rawQty / ppu)` — ceiling applied per material plan line (per venue+logicalSpace+project)
+
+### LM Module
+- `_rwEnrichEffQty()` — computes `_effQty` on every RW row after NOM is loaded
+- `bV()` and `build()` read `r._effQty` (UoM) — never raw `Required`
+- Pallet calc: `effQty / pqUom * ps` where `pqUom = _pqUomEff(palletQty, ppu)`
+- `palletQty` in NOM is pieces/pallet — must divide by PPU for UoM pallet math
+- Kit items stored in UoM (already ceiling'd at creation)
+- Stock (`STOCK_QTYS`) is in UoM
+
+### LP Module
+- **Demand source**: `materialPlan[].requiredQty` stored in pieces (Supabase)
+- **Demand effective**: `materialPlan[].effQty` = per-row ceiling, saved alongside requiredQty
+- **Engine**: reads `d.effQty` (UoM), outputs `r.qty` (UoM)
+- **palletQty**: manually maintained, already UoM-aligned — do NOT divide by PPU in engine
+- **Stock/arrivals**: already in UoM — no conversion needed
+- **unitPrice**: per UoM — `qty × unitPrice` is correct
+- **`_lpEffQty()`**: identity function (returns input unchanged) — all LP quantities already UoM
+- **`lp-demand-raw`**: Supabase archive of raw parsed rows (pieces, per-line) for PPU recalc
+- **`engineUnit:'uom'`**: flag in lp-config, triggers one-time plan row migration from pieces to UoM
+
+### LP Update Demand (`LP_updateDemandPrompt`)
+- Parses new material plan file → raw rows (pieces)
+- Archives to `lp-demand-raw` Supabase key
+- `_lpAggregateDemand(rawRows)` applies per-row ceiling → effQty
+- `LP_regenerate()` preserves locked trucks, replans rest
+- Button in `#gsb-lp`, admin-only, visible when plan exists
+
+### LP Update Nom (`LP_updateNomPrompt`)
+- Merges new nom into existing (preserves manual overrides)
+- ALWAYS re-aggregates demand from `lp-demand-raw` (handles PPU changes)
+- Regenerates plan if PPU or palletQty changed
+- Does NOT overwrite: customsName (manual-only), palletQty/Spc (if LP_palletOverrides exist)
+
+### LP Dirty Flag (`LP_settingsChanged`)
+Tracks plan-invalid state. Includes hashes of:
+- maxPallets, maxTrucks, maxDests, turnaround, ricStartDate
+- LP_contDateOverrides, LP_palletOverrides, LP_holds+LP_stockHolds
+- LP_STATE.arrivals dates, LP_transitDays, demand qty
+
+### LP Engine Leftover Logic
+- After 3-bucket allocation, post-processing appends remaining demand to last truck per destination
+- Includes both no-pallet SKUs (`pallets:0`) and partial-pallet leftovers (actual pallet calc)
+- Requires stock availability
+- `_leftover:true` flag on plan rows (not persisted to Supabase)
+
+### LP Demand Tab Filters
+- **Chip-style** destination and source filters (same as Status tab)
+- Logic-level filtering: affects KPI totals, not just row visibility
+- `_lpDemDests` / `_lpDemSrcs` Sets — toggle on click, trigger full re-render
+- No STAPLES checkbox — use source chips instead
+- Text search still works for row filtering (DOM-level)
+
+### LP Sync Buttons
+- `syncLM()`, `syncLP()`, `syncV26()` — per-module refresh from Supabase
+- Green pill button in header, visible for all roles (not admin-only)
+- Spinning animation while loading
+
+### Delivery Strategy (Kit Setup)
+- `LM_STP_STRATEGY` — per country + venue type: STP (direct/kit) + FF&E (direct/kit)
+- Country tabs: USA / CAN / MEX
+- Auto-creates STP deliveries or kits (`_auto:true` flag)
+- Manual overrides preserved
+- Supabase key: `fm-stp-strategy`
+
+### Kit System
+- Kit types: FF&E (`FNKIT-001-xxx`) / Stationery (`OSKIT-001-xxx`)
+- Kit items in UoM (ceiling applied at creation)
+- Kit readiness: `LM_kitReadiness(kitId)` — compares stock vs component qty (both UoM)
+- Kit OOR export: formatted Excel with government template styling (`_oorSheet`)
+- Truck export: two tabs — Kit (aggregated) + All (expanded components)
+
+### LP Supabase Keys
+`lp-config`, `lp-nom`, `lp-demand`, `lp-demand-raw`, `lp-arrivals`, `lp-plan`, `lp-truck-state`
+
 ## Editing
-- File is large (~11,000 lines) — always use `offset` + `limit` when reading sections
+- File is large (~12,000 lines) — always use `offset` + `limit` when reading sections
 - Use `Grep` with line numbers to locate functions before editing
 - Prefer `Edit` over full rewrites
 - Key IDs to preserve: `stockBtn`, `stockFileInput`, `lpExportBtn`, `v26ExportBtn`, `lm-bottom-nav`, `global-supp-bar`

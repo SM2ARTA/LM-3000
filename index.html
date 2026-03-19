@@ -542,6 +542,8 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
     <button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button>
     <button class="rbtn admin-only" id="lpUpdateNomBtn" onclick="LP_updateNomPrompt()" style="display:none">📋 Update Nom</button>
     <input type="file" accept=".xlsx,.xls" id="lpNomFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+    <button class="rbtn admin-only" id="lpUpdateDemBtn" onclick="LP_updateDemandPrompt()" style="display:none">📋 Update Demand</button>
+    <input type="file" accept=".xlsx,.xls" id="lpDemandFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
   </div>
   <div id="gsb-v26" style="display:none;align-items:center;gap:4px">
     <button class="rbtn" id="v26ExportBtn" onclick="V26_export()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button>
@@ -817,16 +819,20 @@ function LP_parseMaterialPlan(buf){
 
 // ── Aggregate demand rows to one per (destination, sku) — idempotent ──
 // Handles both old format (destination/sku/requiredQty) and backup format (Destination/SKU/Required Qty)
-function _lpAggregateDemand(rows){
+function _lpAggregateDemand(rows,nom){
   if(!rows||!rows.length)return[];
+  const _nom=nom||LP_STATE.nomenclature||{};
   const map={};
   for(const d of rows){
     const dest=(d.destination||d.Destination||'').trim();
     const sku=(d.sku||d.SKU||'').trim();
     if(!dest||!sku)continue;
     const k=dest+'|'+sku;
-    if(!map[k])map[k]={destination:dest,sku,requiredQty:0};
-    map[k].requiredQty+=(d.requiredQty||d['Required Qty']||0);
+    if(!map[k])map[k]={destination:dest,sku,requiredQty:0,effQty:0};
+    const raw=d.requiredQty||d['Required Qty']||0;
+    const ppu=(LP_customsOverrides[sku]||{}).ppu||_nom[sku]?.ppu||1;
+    map[k].requiredQty+=raw;
+    map[k].effQty+=(ppu>1?Math.ceil(raw/ppu):raw);// ceiling per row, then sum
   }
   return Object.values(map);
 }
@@ -886,7 +892,7 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   const isRic=d=>(d||'').toUpperCase().includes('RIC');
   if(!demand.length||!arrivals.length)return[];
 
-  // ── Nomenclature map (pq already in UOM — no conversion needed) ──
+  // ── Nomenclature map (pq in pieces per pallet — matches pieces-based demand) ──
   const nom={};const _cn=cfg.nomenclature||{};
   for(const d of demand){if(!nom[d.sku]){const n=_cn[d.sku];nom[d.sku]={pq:n?.palletQty||d.palletQty||0,ps:n?.palletSpc||d.palletSpc||0,nm:n?.name||d.name||''}}}
 
@@ -920,9 +926,8 @@ function LP_buildPlanV3(demand,arrivals,cfg){
     if(holds.has(d.destination+'|'+d.sku))continue;
     if(!arrivedSkus.has(d.sku))continue;
     if(!open[d.destination])open[d.destination]={};
-    open[d.destination][d.sku]=(open[d.destination][d.sku]||0)+(d.requiredQty||0);
+    open[d.destination][d.sku]=(open[d.destination][d.sku]||0)+(d.effQty||d.requiredQty||0);
   }
-  console.log('[V3] demand:',demand.length,'rows, arrivals:',arrivals.length,'rows, dests:',Object.keys(open).length);
 
   // ── Demand rationing ──
   const totalInv={};for(const a of inv)totalInv[a.sku]=(totalInv[a.sku]||0)+a.qty;
@@ -942,7 +947,6 @@ function LP_buildPlanV3(demand,arrivals,cfg){
     for(const dest of Object.keys(allocs))open[dest][sku]=allocs[dest];
     rationed.push(sku);
   }
-  if(rationed.length)console.log('[V3] Rationed SKUs:',rationed.join(', '));
 
   // ── Stock pool — shared across all streams ──
   const stock={};
@@ -956,7 +960,6 @@ function LP_buildPlanV3(demand,arrivals,cfg){
     for(const[sku,qty]of Object.entries(delta[dt]))stock[sku]=(stock[sku]||0)+qty;
     delete delta[dt];
   }
-  console.log('[V3] On-hand stock:',Object.values(stock).reduce((s,v)=>s+v,0),'units');
 
   // ── Shared helpers ──
   const scoreDest=dest=>{let s=0;for(const sku of Object.keys(open[dest]||{})){const q=open[dest][sku]||0;if(q<=0)continue;s+=floorSpaces(sku,Math.min(q,stock[sku]||0))}return s};
@@ -1093,11 +1096,9 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   // ════════════════════════════════════════════════════════
   const _lastLocked=cfg.lastLockedDate||'';
   const b1Start=_lastLocked?advBlk(LP_nextWorkday(LP_addDays(_lastLocked,1))):advBlk(LP_nextWorkday(today));
-  console.log('[V3-B1] Start date:',b1Start,_lastLocked?'(day after locked '+_lastLocked+')':'(first workday)');
   const b1=planStream(d=>isMC(d), mcSort, b1Start, MAX_DST, MAX_TRK,
     {readyOnly:true, markReady:true, deferNonFull:false, startBefore:today});
   for(const r of b1)plan.push(r);
-  console.log('[V3-B1] Ready MEX/CAN:',new Set(b1.map(r=>r.truckId)).size,'trucks');
 
   // ════════════════════════════════════════════════════════
   // BUCKET 2: Non-ready MEX/CAN (forecast) → after bucket 1
@@ -1105,7 +1106,6 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   const b2=planStream(d=>isMC(d), mcSort, b1Start, MAX_DST, MAX_TRK,
     {readyOnly:false, markReady:false, deferNonFull:true, startBefore:today});
   for(const r of b2)plan.push(r);
-  console.log('[V3-B2] Forecast MEX/CAN:',new Set(b2.map(r=>r.truckId)).size,'trucks');
 
   // ════════════════════════════════════════════════════════
   // BUCKET 3: USA (RIC) → from RIC start date, parallel constraints
@@ -1115,9 +1115,44 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   const b3=planStream(d=>isRic(d), usSort, RIC_START, MAX_DST, MAX_TRK,
     {readyOnly:false, markReady:false, deferNonFull:true, startBefore:today});
   for(const r of b3)plan.push(r);
-  console.log('[V3-B3] USA:',new Set(b3.map(r=>r.truckId)).size,'trucks');
 
-  console.log('[V3] Done:',plan.length,'rows,',new Set(plan.map(r=>r.truckId)).size,'trucks');
+  // ════════════════════════════════════════════════════════
+  // POST-PROCESSING: Append no-pallet SKUs to last truck per destination
+  // ════════════════════════════════════════════════════════
+  const lastTruckByDest={};
+  for(const r of plan){
+    if(!lastTruckByDest[r.destination]||r.truckId>lastTruckByDest[r.destination].truckId)
+      lastTruckByDest[r.destination]={truckId:r.truckId,date:r.date};
+  }
+  // Scan open demand for any remaining unallocated qty — add to last truck per destination
+  for(const dest of Object.keys(open)){
+    const lt=lastTruckByDest[dest];if(!lt)continue;
+    for(const sku of Object.keys(open[dest]||{})){
+      const q=open[dest][sku]||0;if(q<=0)continue;
+      const n=nom[sku];
+      // Must have stock available
+      const avail=Math.min(q,stock[sku]||0);if(avail<=0)continue;
+      open[dest][sku]-=avail;stock[sku]-=avail;
+      const _lPlt=(n&&n.pq>0&&n.ps>0)?Math.round((avail/n.pq)*n.ps*100)/100:0;
+      plan.push({date:lt.date,truckId:lt.truckId,destination:dest,sku,name:n?.nm||sku,qty:Math.round(avail),pallets:_lPlt,_leftover:true});
+    }
+  }
+  // Also add no-pallet SKUs that weren't in open (no arrivals but in stock report)
+  for(const d of demand){
+    if(!isTruck(d.destination))continue;
+    if(isExcl(d.sku,d.destination))continue;
+    if(holds.has(d.destination+'|'+d.sku))continue;
+    if(arrivedSkus.has(d.sku))continue;// already in open — handled above
+    const n=nom[d.sku];if(n&&n.pq>0&&n.ps>0)continue;// has pallet data but no arrivals — skip
+    const lt=lastTruckByDest[d.destination];if(!lt)continue;
+    const qty=d.effQty||d.requiredQty||0;if(qty<=0)continue;
+    if(!stockSet.has(d.sku))continue;// must be in stock report
+    plan.push({date:lt.date,truckId:lt.truckId,destination:d.destination,sku:d.sku,name:n?.nm||d.sku,qty:Math.round(qty),pallets:0,_leftover:true});
+  }
+  // Recalc truckTotal for affected trucks
+  const ttMap={};for(const r of plan){ttMap[r.truckId]=(ttMap[r.truckId]||0)+r.pallets}
+  for(const r of plan)r.truckTotal=+ttMap[r.truckId].toFixed(4);
+
   return plan;
 }
 
@@ -1136,6 +1171,7 @@ let LP_lsrNumbers={};// truckId -> LSR number string (e.g. "LSR625-001")
 let LP_palletOverrides={};// sku -> {palletQty, palletSpc} — manual overrides for pallet dimensions
 let LP_excludeStaples=true;// exclude STP USA items for HOU/KC/NY destinations
 let _lpDemFilterState={srcs:null,dests:null,search:''};// preserved across re-renders
+let _lpDemDests=new Set(),_lpDemSrcs=new Set();// logic-level dest/source filters (like Status tab)
 let LP_customsOverrides={};// sku -> {price, hsCode, country} — customs overrides for CI export
 
 // ── MX Approved Customs Items (from FF&E A10 list) ──
@@ -1493,31 +1529,18 @@ function _lpCustNom(sku){
   };
 }
 function _lpPPU(sku){return(LP_customsOverrides[sku]||{}).ppu||(LP_STATE.nomenclature[sku]||{}).ppu||(NOM[sku]||{}).ppu||1;}
-function _lpEffQty(sku,rawQty){return rawQty;}// Identity — all quantities now in UOM systemwide
+function _lpEffQty(sku,rawQty){return rawQty;}// Identity — all LP quantities now in UoM
 // ── Enrich RW rows with _effQty (UOM) — call after NOM is loaded ──
 function _rwEnrichEffQty(){for(const r of RW){const ppu=(NOM[r.Nomenclature]?.ppu)||1;r._effQty=ppu>1?Math.ceil((parseInt(r.Required)||0)/ppu):(parseInt(r.Required)||0)}}
-// ── Convert LP demand to UOM (applied to raw parsed rows BEFORE aggregation) ──
-function _lpConvertDemandRowsToUOM(rows){
-  const nom=LP_STATE.nomenclature||{};
-  for(const d of rows){const ppu=nom[d.sku]?.ppu||1;if(ppu>1)d.requiredQty=Math.ceil(d.requiredQty/ppu)}
-  return rows;
-}
-// ── Convert already-aggregated demand to UOM (for Supabase migration only) ──
-function _lpConvertDemandToUOM(){
-  const nom=LP_STATE.nomenclature||{};
-  for(const d of LP_STATE.materialPlan){const ppu=nom[d.sku]?.ppu||1;if(ppu>1)d.requiredQty=Math.ceil(d.requiredQty/ppu)}
-}
-// ── Convert LP plan rows from pieces to UOM (one-time migration) ──
-function _lpMigratePlanToUOM(){
-  const nom=LP_STATE.nomenclature||{};
-  for(const r of LP_STATE.generatedPlan){
-    const ppu=nom[r.sku]?.ppu||1;
-    if(ppu>1){
-      r.qty=Math.ceil(r.qty/ppu);
-      const pq=nom[r.sku]?.palletQty||0;// already in UOM
-      const ps=nom[r.sku]?.palletSpc||0;
-      if(pq>0&&ps>0)r.pallets=Math.round((r.qty/pq)*ps*100)/100;
-    }
+// ── Pallet qty in UOM: palletQty (pieces/pallet) ÷ ppu → boxes/pallet ──
+function _pqUom(sku){const n=NOM[sku];if(!n||!n.pq)return 0;const ppu=n.ppu||1;return ppu>1?n.pq/ppu:n.pq}
+function _pqUomEff(pq,ppu){return(ppu>1&&pq>0)?pq/ppu:pq}
+// LP stores pieces in Supabase. _lpEffQty() converts to UOM at display/export time.
+// Recompute effQty on materialPlan rows (call after nomenclature + customsOverrides are loaded)
+function _lpRecomputeEffQty(){
+  for(const d of LP_STATE.materialPlan){
+    const ppu=_lpPPU(d.sku);
+    d.effQty=ppu>1?Math.ceil(d.requiredQty/ppu):d.requiredQty;
   }
 }
 
@@ -2640,7 +2663,7 @@ let _lpSaveTimer=null;
 function LP_saveToSupabaseDebounced(){
   // Settings-only save: just config key, not all 6 keys
   if(_lpSaveTimer)clearTimeout(_lpSaveTimer);
-  _lpSaveTimer=setTimeout(async()=>{_lpSaveTimer=null;if(ROLE==='viewer'||!SB)return;try{await SB.from('shared_state').upsert({id:LP_KEYS.config,value:JSON.stringify({turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,qtyUnit:'uom',lastGenSettings:LP_lastGenSettings}),updated_at:new Date().toISOString()})}catch(e){console.warn('LP config save:',e)}},1500);
+  _lpSaveTimer=setTimeout(async()=>{_lpSaveTimer=null;if(ROLE==='viewer'||!SB)return;try{await SB.from('shared_state').upsert({id:LP_KEYS.config,value:JSON.stringify({turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings}),updated_at:new Date().toISOString()})}catch(e){console.warn('LP config save:',e)}},1500);
 }
 // Save only truck-state key (for customs/hold/pallet edits — much lighter than full save)
 let _lpSavePending=false;// true when a debounced save hasn't fired yet
@@ -2694,7 +2717,7 @@ window.addEventListener('beforeunload',e=>{
       }).catch(()=>{});
       // Also save config key (includes lastGenSettings)
       if(_lpSaveTimer){
-        const cfgData={turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,qtyUnit:'uom',lastGenSettings:LP_lastGenSettings};
+        const cfgData={turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings};
         fetch(SUPABASE_URL+'/rest/v1/shared_state?on_conflict=id',{
           method:'POST',keepalive:true,
           headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Prefer':'resolution=merge-duplicates'},
@@ -2730,7 +2753,7 @@ async function LP_saveToSupabase(){
     const _h=s=>{let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h};
     const u=async(id,val)=>{const json=JSON.stringify(val);const h=_h(json);if(_lpSaveHashes[id]===h)return;const{error}=await SB.from('shared_state').upsert({id,value:json,updated_at:now});if(error){console.warn('LP save '+id+':',error)}else{_lpSaveHashes[id]=h}};
     // Sequential saves — lightweight first, heaviest last. Avoids DB connection burst.
-    await u(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,qtyUnit:'uom',lastGenSettings:LP_lastGenSettings});
+    await u(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings});
     await u(LP_KEYS.truck,{dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays});
     await u(LP_KEYS.demand,LP_STATE.materialPlan);
     await u(LP_KEYS.nom,LP_STATE.nomenclature);
@@ -2743,7 +2766,7 @@ async function LP_saveToSupabase(){
     setTimeout(async()=>{try{
       const now=new Date().toISOString();
       const u2=async(id,val)=>{await SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now})};
-      await u2(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,qtyUnit:'uom',lastGenSettings:LP_lastGenSettings});
+      await u2(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings});
       await u2(LP_KEYS.truck,{dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays});
       console.log('LP save retry succeeded');
     }catch(e2){console.warn('LP save retry failed:',e2)}},3000);
@@ -2769,7 +2792,7 @@ async function LP_loadFromSupabase(){
       LP_STATE.ricStartDate=cfg.ricStartDate||'2026-04-01';
       LP_STATE.planGenerated=true;
       LP_STATE.nomenclature=nom||{};
-      LP_STATE.materialPlan=_lpAggregateDemand(demand||[]);
+      LP_STATE.materialPlan=demand||[];// already aggregated with effQty from save
       LP_STATE.arrivals=arr||[];
       LP_STATE.generatedPlan=plan;
       LP_dispatched=new Set(truck?.dispatched||[]);
@@ -2792,8 +2815,11 @@ async function LP_loadFromSupabase(){
       LP_applyContDateOverrides();
       LP_applyPalletOverrides();
       _lpRehydratePlan();// restore name + truckTotal stripped during save
-      // Migrate to UOM if not already done
-      if(!cfg.qtyUnit||cfg.qtyUnit!=='uom'){_lpConvertDemandToUOM();_lpMigratePlanToUOM();console.log('[LP] Migrated demand+plan from pieces to UOM')}
+      // One-time migration: convert plan rows from pieces to UoM
+      if(!cfg.engineUnit||cfg.engineUnit!=='uom'){
+        const _nom=LP_STATE.nomenclature||{};
+        for(const r of LP_STATE.generatedPlan){const ppu=_nom[r.sku]?.ppu||1;if(ppu>1){r.qty=Math.ceil(r.qty/ppu);const pq=_nom[r.sku]?.palletQty||0;const ps=_nom[r.sku]?.palletSpc||0;if(pq>0&&ps>0)r.pallets=Math.round((r.qty/pq)*ps*100)/100}}
+      }
       if(cfg.lastGenSettings)LP_lastGenSettings=cfg.lastGenSettings;else LP_snapshotSettings();
       return true;
     }
@@ -2803,7 +2829,7 @@ async function LP_loadFromSupabase(){
     if(!legacy||!legacy.generatedPlan||!legacy.generatedPlan.length)return false;
     console.log('LP: migrating from legacy lp-state blob to split keys...');
     const p=legacy;
-    LP_STATE.materialPlan=_lpAggregateDemand(p.materialPlan||[]);
+    LP_STATE.materialPlan=p.materialPlan||[];// legacy — effQty may be missing
     LP_STATE.nomenclature=p.nomenclature||{};
     LP_STATE.arrivals=p.arrivals||[];
     LP_STATE.turnaround=p.turnaround||6;
@@ -2833,6 +2859,8 @@ async function LP_loadFromSupabase(){
     LP_applyContDateOverrides();
     LP_applyPalletOverrides();
     _lpRehydratePlan();// restore name + truckTotal stripped during save
+    // Legacy data may not have effQty — compute as fallback (ceiling on aggregate)
+    for(const d of LP_STATE.materialPlan){if(d.effQty===undefined){const ppu=_lpPPU(d.sku);d.effQty=ppu>1?Math.ceil(d.requiredQty/ppu):d.requiredQty}}
     LP_snapshotSettings();
     // Write to new split keys (migration)
     if(ROLE==='admin'){
@@ -2878,6 +2906,7 @@ function LP_render(){
   const show=LP_STATE.planGenerated;
   const lpExp=document.getElementById('lpExportBtn');if(lpExp)lpExp.style.display=show?'':'none';
   const lpNomBtn=document.getElementById('lpUpdateNomBtn');if(lpNomBtn)lpNomBtn.style.display=show&&ROLE==='admin'?'':'none';
+  const lpDemBtn=document.getElementById('lpUpdateDemBtn');if(lpDemBtn)lpDemBtn.style.display=show&&ROLE==='admin'?'':'none';
   // Update subtitle with stats
   const sub=document.getElementById('lpSubtitle');
   if(sub&&LP_STATE.planGenerated){
@@ -2885,7 +2914,7 @@ function LP_render(){
     const totalPlt=LP_STATE.generatedPlan.reduce((s,r)=>s+(r.pallets||0),0);
     const totalQty=LP_STATE.generatedPlan.reduce((s,r)=>s+(r.qty||0),0);
     const dests=new Set(LP_STATE.generatedPlan.map(r=>r.destination)).size;
-    sub.textContent=`${tks} trucks · ${dests} destinations · ${totalPlt.toFixed(0)} pallets · ${totalQty.toLocaleString()} pcs`;
+    sub.textContent=`${tks} trucks · ${dests} destinations · ${totalPlt.toFixed(0)} pallets · ${totalQty.toLocaleString()} qty`;
   }
 }
 
@@ -2898,21 +2927,21 @@ function _arrDateHash(){return JSON.stringify(LP_STATE.arrivals.map(a=>a.arrival
 function _effectiveStockSkus(){
   if(!STOCK_SKUS.size)return[];
   const demand={};
-  for(const d of LP_STATE.materialPlan||[]){demand[d.sku]=(demand[d.sku]||0)+(d.requiredQty||0);}
+  for(const d of LP_STATE.materialPlan||[]){demand[d.sku]=(demand[d.sku]||0)+(d.effQty||d.requiredQty||0);}
   return[...STOCK_SKUS].filter(sku=>{const sq=STOCK_QTYS[sku];return sq===undefined||sq>=(demand[sku]||0);});
 }
 function LP_recomputeStockHolds(){
   LP_stockHolds=new Set();
   if(!STOCK_SKUS.size||!LP_STATE.materialPlan?.length)return;
-  // Dispatched qty per dest|sku
+  // Dispatched qty per dest|sku (UoM — plan rows are UoM after engine conversion)
   const disp={};
   for(const r of LP_STATE.generatedPlan||[]){
     if(LP_dispatched.has(r.truckId)){const k=r.destination+'|'+r.sku;disp[k]=(disp[k]||0)+(r.qty||0);}
   }
-  // Demand per dest|sku (effective qty after PPU)
+  // Demand per dest|sku (UoM via effQty)
   const dem={};
-  for(const d of LP_STATE.materialPlan){const k=d.destination+'|'+d.sku;dem[k]=(dem[k]||0)+_lpEffQty(d.sku,d.requiredQty||0);}
-  // Stock hold if STOCK_QTYS[sku] < remaining demand for that destination
+  for(const d of LP_STATE.materialPlan){const k=d.destination+'|'+d.sku;dem[k]=(dem[k]||0)+(d.effQty||d.requiredQty||0);}
+  // Stock hold if STOCK_QTYS[sku] (UoM) < remaining demand (UoM)
   for(const [k,totalD] of Object.entries(dem)){
     const sep=k.indexOf('|');const sku=k.substring(sep+1);
     if(!STOCK_SKUS.has(sku))continue;
@@ -2922,6 +2951,8 @@ function LP_recomputeStockHolds(){
   }
 }
 function _arrDateHash(){return LP_STATE.arrivals.map(a=>a.sku+'|'+a.arrivalDate+'|'+(a._localName||'')).join(',')}
+function _transitHash(){return JSON.stringify(LP_transitDays)}
+function _demandHash(){return LP_STATE.materialPlan.reduce((h,d)=>h+d.destination+d.sku+(d.effQty||d.requiredQty||0)+'|','')}
 function LP_settingsChanged(){
   return LP_lastGenSettings.maxPallets!==LP_STATE.maxPallets||
     LP_lastGenSettings.maxTrucks!==LP_STATE.maxTrucks||
@@ -2931,10 +2962,12 @@ function LP_settingsChanged(){
     LP_lastGenSettings.contDateHash!==_contDateHash()||
     LP_lastGenSettings.palletOvrHash!==_palletOvrHash()||
     LP_lastGenSettings.holdsHash!==_holdsHash()||
-    LP_lastGenSettings.arrDateHash!==_arrDateHash();
+    LP_lastGenSettings.arrDateHash!==_arrDateHash()||
+    LP_lastGenSettings.transitHash!==_transitHash()||
+    LP_lastGenSettings.demandHash!==_demandHash();
 }
 function LP_snapshotSettings(){
-  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash()};
+  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash(),transitHash:_transitHash(),demandHash:_demandHash()};
 }
 
 // ── Helpers ──
@@ -2963,23 +2996,22 @@ function LP_regenerate(){
       LP_STATE.generatedPlan=LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg);
       LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();return;
     }
-    console.log('[V3-regen] locked:',dispatchedRows.length,'rows');
     // Aggregate locked consumption by dest+sku and by sku
     const consumedDemand={},consumedStock={};
     for(const r of dispatchedRows){const k=r.destination+'|'+r.sku;consumedDemand[k]=(consumedDemand[k]||0)+(r.qty||0);consumedStock[r.sku]=(consumedStock[r.sku]||0)+(r.qty||0)}
-    // Reduce demand
+    // Reduce demand (all math in UoM via effQty)
     const remainDemand=[];
     for(const d of LP_STATE.materialPlan){
-      const k=d.destination+'|'+d.sku;const used=Math.min(consumedDemand[k]||0,d.requiredQty);
+      const eq=d.effQty||d.requiredQty||0;
+      const k=d.destination+'|'+d.sku;const used=Math.min(consumedDemand[k]||0,eq);
       if(used>0)consumedDemand[k]-=used;
-      const rem=d.requiredQty-used;
-      if(rem>0)remainDemand.push({...d,requiredQty:rem});
+      const rem=Math.max(0,eq-used);
+      if(rem>0)remainDemand.push({...d,requiredQty:rem,effQty:rem});
     }
     // Reduce arrivals (earliest first)
     const remainArrivals=[];
     const sortedArr=[...LP_STATE.arrivals].sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
     for(const a of sortedArr){const used=Math.min(consumedStock[a.sku]||0,a.qty);if(used>0)consumedStock[a.sku]-=used;const left=a.qty-used;if(left>0)remainArrivals.push({...a,qty:left})}
-    console.log('[V3-regen] remain demand:',remainDemand.length,', remain arrivals:',remainArrivals.length);
     const maxId=Math.max(0,...LP_dispatched);
     const lastLockedDate=dispatchedRows.reduce((m,r)=>r.date>m?r.date:m,'');
     const newRows=LP_buildPlanV3(remainDemand,remainArrivals,{..._cfg,startTruckId:maxId,lastLockedDate});
@@ -3126,7 +3158,7 @@ function LP_renderArrivals(el){
           </div>
           <div style="flex:1;background:var(--bg);border-radius:5px;padding:4px 5px;text-align:center">
             <div style="font-size:14px;font-weight:800;color:var(--ts);line-height:1.1">${cont.totalQty.toLocaleString()}</div>
-            <div style="font-size:8px;color:var(--tt)">pcs</div>
+            <div style="font-size:8px;color:var(--tt)">qty</div>
           </div>
           <div style="flex:1;background:var(--bg);border-radius:5px;padding:4px 5px;text-align:center">
             <div style="font-size:14px;font-weight:800;color:var(--ts);line-height:1.1">${cont.items.length}</div>
@@ -3200,7 +3232,7 @@ function LP_showContModal(ci){
   h+=`<div class="mdb">
     <div class="mst">
       <div>SKUs: <strong>${cont.items.length}</strong></div>
-      <div>Pieces: <strong>${cont.totalQty.toLocaleString()}</strong></div>
+      <div>Qty: <strong>${cont.totalQty.toLocaleString()}</strong></div>
       <div>Pallets: <strong>${cont.totalPlt.toFixed(1)}</strong></div>
     </div>
     ${bulkBar}<div class="csf"><table class="dtb"><thead><tr>${theadCols}</tr></thead><tbody>`;
@@ -3486,10 +3518,9 @@ function LP_renderDemand(el){
   if(!mp.length){el.innerHTML='<div class="lp-empty">No demand data loaded.</div>';return}
   LP_recomputeStockHolds();
 
-  // Filter to truck-relevant destinations only (MEX, CAN, RIC) and exclude STPL sourced SKUs
+  // Filter to truck-relevant destinations only (MEX, CAN, RIC) — no source exclusion (chips handle it)
   const isTruckDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
-  const isStplSku=(sku,dest)=>{const s=(LP_STATE.nomenclature[sku]?.source||'').toUpperCase().trim();if(s==='STP CAN'||s==='STP MEX')return true;if(s==='STP USA'&&LP_excludeStaples){const a=LP_matchTransitAbbr(dest);return a==='HOU'||a==='KC'||a==='NY';}return false;};
-  const filtered=mp.filter(d=>isTruckDest(d.destination)&&!isStplSku(d.sku,d.destination));
+  const filtered=mp.filter(d=>isTruckDest(d.destination));
 
   // SKUs with at least one arrival date
   const _arrSkus=new Set((LP_STATE.arrivals||[]).filter(a=>a.arrivalDate).map(a=>a.sku));
@@ -3506,26 +3537,36 @@ function LP_renderDemand(el){
     const nom=LP_STATE.nomenclature[d.sku]||{};
     const nomName=nom.name||d.name||d.sku;
     const src=(nom.source||'').trim();
-    if(!bySku[d.sku])bySku[d.sku]={sku:d.sku,name:nomName,source:src,rawTotalQty:0,totalQty:0,dests:{},rawDests:{}};
+    if(!bySku[d.sku])bySku[d.sku]={sku:d.sku,name:nomName,source:src,rawTotalQty:0,totalQty:0,dests:{},rawDests:{},effDests:{}};
     bySku[d.sku].rawTotalQty+=d.requiredQty;
+    bySku[d.sku].totalQty+=(d.effQty||d.requiredQty);// per-row ceiled, then summed
     if(!bySku[d.sku].rawDests[d.destination])bySku[d.sku].rawDests[d.destination]=0;
     bySku[d.sku].rawDests[d.destination]+=d.requiredQty;
+    if(!bySku[d.sku].effDests[d.destination])bySku[d.sku].effDests[d.destination]=0;
+    bySku[d.sku].effDests[d.destination]+=(d.effQty||d.requiredQty);
   }
-  // Apply PPU to get effective quantities
+  // Build display dests from per-row ceiled effQty
   for(const s of Object.values(bySku)){
-    s.totalQty=_lpEffQty(s.sku,s.rawTotalQty);
     s.dests={};
-    for(const [d,q] of Object.entries(s.rawDests))s.dests[d]=_lpEffQty(s.sku,q);
+    for(const [d,q] of Object.entries(s.effDests))s.dests[d]=q;
+  }
+  // Apply logic-level dest/source filters (affects KPIs like Status tab)
+  const _hasDemDF=_lpDemDests.size>0;const _hasDemSF=_lpDemSrcs.size>0;
+  for(const s of Object.values(bySku)){
+    if(_hasDemDF){s.totalQty=0;for(const[d,q]of Object.entries(s.effDests)){if(_lpDemDests.has(d))s.totalQty+=q}}
   }
   // Calculate pallets per SKU
-  const skus=Object.values(bySku).filter(s=>s.totalQty>0).map(s=>{
+  let skus=Object.values(bySku).filter(s=>s.totalQty>0).map(s=>{
     const n=LP_STATE.nomenclature[s.sku]||{};
     const pq=n.palletQty||0;const ps=n.palletSpc||0;
     s.totalPlt=(pq>0&&ps>0)?+((s.totalQty/pq)*ps).toFixed(2):0;
     return s;
-  }).sort((a,b)=>(a.source||'').localeCompare(b.source||'')||(a.name||'').localeCompare(b.name||'')||a.sku.localeCompare(b.sku));
+  });
   const totalDests=new Set(filtered.map(d=>d.destination));
-  const allSources=[...new Set(skus.map(s=>s.source).filter(Boolean))].sort();
+  const allSources=[...new Set(Object.values(bySku).map(s=>s.source).filter(Boolean))].sort();
+  if(_hasDemSF)skus=skus.filter(s=>_lpDemSrcs.has(s.source));
+  if(_hasDemDF)skus=skus.filter(s=>Object.keys(s.effDests).some(d=>_lpDemDests.has(d)));
+  skus.sort((a,b)=>(a.source||'').localeCompare(b.source||'')||(a.name||'').localeCompare(b.name||'')||a.sku.localeCompare(b.sku));
   const grandPlt=skus.reduce((s,x)=>s+x.totalPlt,0);
   const grandQty=skus.reduce((s,x)=>s+x.totalQty,0);
   const pltOvrCount=Object.keys(LP_palletOverrides).length;
@@ -3540,36 +3581,18 @@ function LP_renderDemand(el){
     :'';
   let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h2 style="font-size:18px;font-weight:700">📋 Demand Summary</h2>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="bg bg-bl">${skus.length} SKUs · ${totalDests.size} dests</span><span class="bg bg-gy">${grandQty.toLocaleString()} pcs · ${grandPlt.toFixed(1)} plt</span>${_holdsBadge}${_pltBadge}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="bg bg-bl">${skus.length} SKUs · ${totalDests.size} dests</span><span class="bg bg-gy">${grandQty.toLocaleString()} qty · ${grandPlt.toFixed(1)} plt</span>${_holdsBadge}${_pltBadge}</div>
   </div>
   ${(holdsCount||stockHoldsCount)?'<div class="note" style="background:#FEF3EB;border-color:#F5D6B8;color:#C4550A;margin-bottom:10px">'+(holdsCount?'&#9208; <strong>'+holdsCount+' manual hold'+(holdsCount>1?'s':'')+' active.</strong> ':'')+(stockHoldsCount?'&#128683; <strong>'+stockHoldsCount+' stock hold'+(stockHoldsCount>1?'s':'')+' active</strong> (stock qty &lt; remaining demand). ':'')+' Held pairs excluded from plan. <strong>Regenerate</strong> to apply.</div>':''}
   ${pltOvrCount?'<div class="note note-pu" style="margin-bottom:10px">Pallet qty overrides active (★). <strong>Regenerate</strong> the plan to apply new pallet dimensions to unlocked trucks.</div>':''}
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-    <input type="text" class="lp-search" placeholder="Search by SKU, name, source..." id="lpDemSearch" oninput="LP_filterDemand()" style="flex:1;min-width:180px;margin-bottom:0">
-    <div style="position:relative;display:inline-block">
-      <button id="lpDemSrcBtn" onclick="document.getElementById('lpDemSrcDrop').style.display=document.getElementById('lpDemSrcDrop').style.display==='none'?'block':'none'" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd);background:var(--sf);cursor:pointer;height:32px;white-space:nowrap;color:var(--tp)">All Sources ▾</button>
-      <div id="lpDemSrcDrop" style="display:none;position:absolute;top:34px;left:0;z-index:90;background:var(--sf);border:1px solid var(--bd);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);padding:6px;min-width:160px;max-height:260px;overflow-y:auto">
-        <div style="display:flex;gap:4px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--bd)">
-          <button onclick="_lpDemSrcAll(true)" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;background:var(--gs);color:var(--gn);cursor:pointer">All</button>
-          <button onclick="_lpDemSrcAll(false)" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;background:var(--rs);color:var(--rd);cursor:pointer">None</button>
-        </div>
-        ${allSources.map(s=>'<label style="display:flex;align-items:center;gap:5px;padding:3px 4px;font-size:10px;cursor:pointer;border-radius:3px;white-space:nowrap" onmouseenter="this.style.background=\'var(--bg)\'" onmouseleave="this.style.background=\'\'"><input type="checkbox" checked class="lp-src-chk" value="'+s+'" onchange="LP_filterDemand()"> '+s+'</label>').join('')}
-      </div>
-    </div>
-    <div style="position:relative;display:inline-block">
-      <button id="lpDemDestBtn" onclick="document.getElementById('lpDemDestDrop').style.display=document.getElementById('lpDemDestDrop').style.display==='none'?'block':'none'" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:4px;font-family:var(--fd);background:var(--sf);cursor:pointer;height:32px;white-space:nowrap;color:var(--tp)">All Destinations ▾</button>
-      <div id="lpDemDestDrop" style="display:none;position:absolute;top:34px;left:0;z-index:90;background:var(--sf);border:1px solid var(--bd);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);padding:6px;min-width:180px;max-height:260px;overflow-y:auto">
-        <div style="display:flex;gap:3px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--bd);flex-wrap:wrap">
-          <button onclick="_lpDemDestAll(true)" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;background:var(--gs);color:var(--gn);cursor:pointer">All</button>
-          <button onclick="_lpDemDestAll(false)" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;background:var(--rs);color:var(--rd);cursor:pointer">None</button>
-          <button onclick="_lpDemDestGroup('can')" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;cursor:pointer" title="Toronto, Vancouver">🇨🇦 CAN</button>
-          <button onclick="_lpDemDestGroup('mex')" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;cursor:pointer" title="Mexico City, Guadalajara, Monterrey">🇲🇽 MEX</button>
-          <button onclick="_lpDemDestGroup('usa')" style="font-size:9px;padding:2px 6px;border:1px solid var(--bd);border-radius:3px;cursor:pointer" title="Houston, Kansas City, New York">🇺🇸 USA</button>
-        </div>
-        ${[...totalDests].sort().map(d=>'<label style="display:flex;align-items:center;gap:5px;padding:3px 4px;font-size:10px;cursor:pointer;border-radius:3px;white-space:nowrap" onmouseenter="this.style.background=\'var(--bg)\'" onmouseleave="this.style.background=\'\'"><input type="checkbox" checked class="lp-dest-chk" value="'+clDisp(d)+'" onchange="LP_filterDemand()"> '+clDisp(d)+'</label>').join('')}
-      </div>
-    </div>
-    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ts);white-space:nowrap;cursor:pointer;user-select:none"><input type="checkbox" ${LP_excludeStaples?'checked':''} onchange="LP_excludeStaples=this.checked;LP_saveTruckStateDebounced();LP_render()"> Exclude STAPLES USA</label>
+  <input type="text" class="lp-search" placeholder="Search by SKU, name, source..." id="lpDemSearch" oninput="LP_filterDemand()" style="margin-bottom:8px">
+  <div style="display:flex;gap:5px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+    <span style="font-size:10px;color:var(--ts);font-weight:600">Destinations:</span>
+    ${[...totalDests].sort((a,b)=>{const p=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')?0:u.includes('CAN')?1:2};return p(a)-p(b)||a.localeCompare(b)}).map(d=>{const dc=LP_destColor(d);const dn=clDisp(d);const sel=_lpDemDests.has(d);return'<button onclick="_lpDemDests.has(\''+d.replace(/'/g,"\\'")+'\')? _lpDemDests.delete(\''+d.replace(/'/g,"\\'")+'\'):_lpDemDests.add(\''+d.replace(/'/g,"\\'")+'\');LP_renderDemand(document.getElementById(\'lpMain\'))" class="rbtn" style="font-size:10px;padding:3px 8px;'+(sel?'background:'+dc.color+';color:#fff;border-color:'+dc.color:'background:'+dc.bg+';color:'+dc.color+';border-color:'+dc.border)+'">'+dn+'</button>'}).join('')}
+  </div>
+  <div style="display:flex;gap:5px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+    <span style="font-size:10px;color:var(--ts);font-weight:600">Sources:</span>
+    ${allSources.map(s=>{const sel=_lpDemSrcs.has(s);return'<button onclick="_lpDemSrcs.has(\''+s+'\')? _lpDemSrcs.delete(\''+s+'\'):_lpDemSrcs.add(\''+s+'\');LP_renderDemand(document.getElementById(\'lpMain\'))" class="rbtn" style="font-size:10px;padding:3px 8px;'+(sel?'background:var(--pu);color:#fff;border-color:var(--pu)':'')+'">'+s+'</button>'}).join('')}
   </div>
   ${ROLE!=='viewer'?'<div style="padding:8px 12px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:8px">'
     +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
@@ -3590,7 +3613,7 @@ function LP_renderDemand(el){
     +'<div id="lpHoldDestStatus" style="display:none;margin-top:6px"></div>'
     +'</div>':''}
   <div class="csf" id="lpDemBody"><table class="dtb"><thead><tr>
-    <th>SKU</th><th>Name</th><th>Source</th><th title="Raw quantity from demand file">Raw Qty</th><th title="Pieces per Unit of Measure — divides raw qty to get effective qty">PPU</th><th title="Effective qty = Raw Qty ÷ PPU (used in exports and stock comparison)">Eff Qty</th><th style="color:var(--gn)" title="Available qty from stock report">Stock Qty</th><th title="Unit price for CI/customs">Price</th><th title="HS Tariff Code">HS Code</th><th title="Country of Origin">COO</th><th title="Customs description for CI docs" style="min-width:100px">Customs Name</th><th title="MX Spanish description" style="color:var(--or)">MX Desc</th><th title="MX HS code" style="color:var(--or)">MX HS</th><th title="MX unit price" style="color:var(--or)">MX $</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
+    <th>SKU</th><th>Name</th><th>Source</th><th title="Source quantity from demand file">Src Qty</th><th title="Pieces per Unit of Measure">PPU</th><th title="Effective qty in UoM (used for planning)">Qty</th><th style="color:var(--gn)" title="Available qty from stock report">Stock Qty</th><th title="Unit price for CI/customs">Price</th><th title="HS Tariff Code">HS Code</th><th title="Country of Origin">COO</th><th title="Customs description for CI docs" style="min-width:100px">Customs Name</th><th title="MX Spanish description" style="color:var(--or)">MX Desc</th><th title="MX HS code" style="color:var(--or)">MX HS</th><th title="MX unit price" style="color:var(--or)">MX $</th><th>Plt Qty</th><th>Plt Spc</th><th>Pallets</th><th>Destinations</th>
   </tr></thead><tbody>`;
   let _prevName='';
   for(const s of skus){
@@ -3660,7 +3683,7 @@ function LP_renderDemand(el){
     const _mxHC=_mkTxtIn('mxHsCode',_mxHV,_mxHO,70,'94017999');
     const _mxPC=ROLE!=='viewer'?('<input type="number" step="0.01" min="0" value="'+_mxPV+'" data-sku="'+s.sku+'" data-field="mxPrice" onchange="LP_customsInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" placeholder="0.00" style="width:55px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_mxPO?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_mxPO?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_mxPO?'var(--ps)':'var(--sf)')+'">'):String(_mxPV||'—');
     const _ppuVal=_lpPPU(s.sku);const _ppuOvr=!!_cOvr.ppu;
-    const _ppuCell=ROLE!=='viewer'?'<input type="number" step="1" min="1" value="'+_ppuVal+'" data-sku="'+s.sku+'" data-field="ppu" onchange="LP_ppuInput(this)" onkeydown="if(event.key===\'Enter\')this.blur()" style="width:45px;font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid '+(_ppuOvr?'var(--pu)':'var(--bd)')+';border-radius:4px;color:'+(_ppuOvr?'var(--pu)':'var(--tp)')+';outline:none;background:'+(_ppuOvr?'var(--ps)':'var(--sf)')+'">':String(_ppuVal);
+    const _ppuCell='<span class="mono" style="font-size:10px;color:'+(_ppuVal>1?'var(--pu)':'var(--tt)')+'">'+_ppuVal+'</span>';
     const _rowDests=Object.keys(s.dests||{}).map(d=>clDisp(d)).join('|');
     html+=`<tr data-search="${s.sku} ${s.name} ${s.source}" data-source="${s.source}" data-dests="|${_rowDests}|"${_sameNameGroup?' style="background:var(--sf)"':''}>
       <td class="mono"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${_arrSkus.has(s.sku)?'var(--gn)':'#EF4444'};margin-right:5px;flex-shrink:0;vertical-align:middle" title="${_arrSkus.has(s.sku)?'Has arrival date':'No arrival date'}"></span>${s.sku}${isOvr?'<span style="color:var(--pu);font-size:9px" title="Pallet override active"> ★</span>':''}</td>
@@ -3690,27 +3713,9 @@ function LP_renderDemand(el){
 
 function LP_filterDemand(){
   const txt=(document.getElementById('lpDemSearch')?.value||'').toLowerCase();
-  // Sources — multi-select checkboxes
-  const srcChks=document.querySelectorAll('.lp-src-chk');
-  const selSrcs=new Set();let allSrcsChecked=true;
-  srcChks.forEach(cb=>{if(cb.checked)selSrcs.add(cb.value);else allSrcsChecked=false});
-  const srcBtn=document.getElementById('lpDemSrcBtn');
-  if(srcBtn)srcBtn.textContent=allSrcsChecked?'All Sources ▾':selSrcs.size+' Source'+(selSrcs.size!==1?'s':'')+' ▾';
-  // Destinations — multi-select checkboxes
-  const destChks=document.querySelectorAll('.lp-dest-chk');
-  const selDests=new Set();let allDestsChecked=true;
-  destChks.forEach(cb=>{if(cb.checked)selDests.add(cb.value);else allDestsChecked=false});
-  const destBtn=document.getElementById('lpDemDestBtn');
-  if(destBtn)destBtn.textContent=allDestsChecked?'All Destinations ▾':selDests.size+' Destination'+(selDests.size!==1?'s':'')+' ▾';
+  // Text search — hide/show rows by matching SKU, name, source
   document.querySelectorAll('#lpDemBody .dtb tbody tr').forEach(tr=>{
-    const matchTxt=!txt||(tr.dataset.search||'').toLowerCase().includes(txt);
-    const matchSrc=allSrcsChecked||selSrcs.has(tr.dataset.source||'');
-    let matchDest=allDestsChecked;
-    if(!matchDest){
-      const rowDests=tr.dataset.dests||'';
-      for(const d of selDests){if(rowDests.includes('|'+d+'|')){matchDest=true;break}}
-    }
-    tr.style.display=(matchTxt&&matchSrc&&matchDest)?'':'none';
+    tr.style.display=(!txt||(tr.dataset.search||'').toLowerCase().includes(txt))?'':'none';
   });
   // Save filter state for restoration after re-render
   _lpDemFilterState={search:txt,srcs:allSrcsChecked?null:[...selSrcs],dests:allDestsChecked?null:[...selDests]};
@@ -3812,7 +3817,7 @@ function LP_editDestQty(badge,dest,sku,rawQty){
   const dd=clDisp(dest);
   const held=LP_holds.has(dest+'|'+sku);
   const ppu=_lpPPU(sku);
-  const effQty=_lpEffQty(sku,rawQty);
+  const effQty=rawQty;// already UoM
   const pop=document.createElement('div');
   pop.id='lpDestQtyPop';
   pop.style.cssText='position:fixed;z-index:200;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px 12px;min-width:200px';
@@ -3822,9 +3827,9 @@ function LP_editDestQty(badge,dest,sku,rawQty){
   pop.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--tp);margin-bottom:2px">${dd}</div>
     <div style="font-size:10px;color:var(--ts);margin-bottom:8px">${sku} · ${nom.name||''}</div>
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-      <label style="font-size:10px;color:var(--ts);white-space:nowrap">Raw Qty</label>
-      <input id="lpDestQtyIn" type="number" min="0" value="${rawQty}" style="width:70px;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:12px;font-family:var(--fm);outline:none" onkeydown="if(event.key==='Enter')document.getElementById('lpDestQtySave').click()">
-      ${ppu>1?'<span style="font-size:9px;color:var(--tt)">÷'+ppu+' = <strong>'+effQty+'</strong></span>':''}
+      <label style="font-size:10px;color:var(--ts);white-space:nowrap">Qty</label>
+      <input id="lpDestQtyIn" type="number" min="0" value="${effQty}" style="width:70px;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:12px;font-family:var(--fm);outline:none" onkeydown="if(event.key==='Enter')document.getElementById('lpDestQtySave').click()">
+      ${ppu>1?'<span style="font-size:9px;color:var(--tt)">PPU '+ppu+'</span>':''}
     </div>
     <div style="display:flex;gap:6px">
       <button id="lpDestQtySave" class="mbtn mbtn-primary" onclick="LP_saveDestQty('${dest.replace(/'/g,"\\'")}','${sku}',+document.getElementById('lpDestQtyIn').value)" style="padding:5px 14px;font-size:11px">Save</button>
@@ -3837,21 +3842,18 @@ function LP_editDestQty(badge,dest,sku,rawQty){
   const _close=e=>{if(!pop.contains(e.target)&&e.target!==badge){pop.remove();document.removeEventListener('mousedown',_close)}};
   setTimeout(()=>document.addEventListener('mousedown',_close),0);
 }
-function LP_saveDestQty(dest,sku,newRawQty){
+function LP_saveDestQty(dest,sku,newQty){
   if(ROLE==='viewer')return;
   document.getElementById('lpDestQtyPop')?.remove();
   UNDO_capture();
-  // With aggregated materialPlan, there's at most 1 entry per (dest, sku)
+  // Input is UoM — store as both requiredQty and effQty
   const entry=LP_STATE.materialPlan.find(d=>d.destination===dest&&d.sku===sku);
-  if(newRawQty<=0){
-    // Remove entry
+  if(newQty<=0){
     if(entry)LP_STATE.materialPlan=LP_STATE.materialPlan.filter(d=>!(d.destination===dest&&d.sku===sku));
   }else if(entry){
-    // Update existing
-    entry.requiredQty=newRawQty;
+    entry.requiredQty=newQty;entry.effQty=newQty;
   }else{
-    // Create new
-    LP_STATE.materialPlan.push({destination:dest,sku,requiredQty:newRawQty});
+    LP_STATE.materialPlan.push({destination:dest,sku,requiredQty:newQty,effQty:newQty});
   }
   LP_saveToSupabase();
   LP_render();
@@ -3894,6 +3896,7 @@ function LP_aggregateTruck(items){
 }
 
 function LP_renderPlan(el){
+  LP_recomputeStockHolds();// ensure holds are fresh before plan render
   const plan=LP_STATE.generatedPlan;
   if(!plan.length){el.innerHTML='<div class="lp-empty">No plan generated yet. Upload files to get started.</div>';return}
 
@@ -3963,7 +3966,7 @@ function LP_renderPlan(el){
 
   const lpKpis=[
     {label:'📦 Pallets',value:Math.round(lpTotalPlt).toLocaleString(),color:'var(--ac)'},
-    {label:'📋 Pieces',value:lpTotalPcs.toLocaleString(),color:'#A84444'},
+    {label:'📋 Qty',value:lpTotalPcs.toLocaleString(),color:'#A84444'},
     {label:'🚛 Trucks',value:lpTotalTrucks,color:'var(--gn)'},
     {label:'✅ Ready Full',value:fullCount,color:'var(--gn)',sub:'of '+lpTotalTrucks+' trucks'},
     {label:'🌎 Destinations',value:lpDests,color:'var(--pu)'},
@@ -4063,7 +4066,7 @@ function LP_renderPlan(el){
     h+='<span class="lp-cap-lbl" style="color:'+(isDisp?'var(--gn)':barColor)+'">'+pct+'%</span></div></div>';
     // Row 4: stats + cargo value
     h+='<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">';
-    h+='<span style="font-size:10px;color:var(--tt)">'+aggSkus.length+' SKU'+(aggSkus.length>1?'s':'')+' · '+t.totalQty.toLocaleString()+' pcs · '+t.totalPlt.toFixed(1)+' plt</span>';
+    h+='<span style="font-size:10px;color:var(--tt)">'+aggSkus.length+' SKU'+(aggSkus.length>1?'s':'')+' · '+t.totalQty.toLocaleString()+' qty · '+t.totalPlt.toFixed(1)+' plt</span>';
     if(_cargoVal>0)h+='<span style="font-size:10px;font-weight:600;color:var(--pu);background:var(--ps);padding:1px 6px;border-radius:3px;border:1px solid #D4C5FE;font-family:var(--fm)">$'+Math.round(_cargoVal).toLocaleString()+'</span>';
     h+=rateInputHtml('LP-'+t.id,t.dest,LP_STATE.maxPallets,false,'LP_render()');
     h+='</div>';
@@ -4088,7 +4091,7 @@ function LP_renderPlan(el){
     const dObj=LP_parseLocalDate(d);
     const dayLabel=dObj?dObj.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):d;
     let h='<div class="lp-day-hdr"><span class="dt">'+dayLabel+'</span><span class="ds">'+dateTrucks.length+' truck'+(dateTrucks.length>1?'s':'')+'</span>';
-    h+='<span class="dp">'+dayPlt.toFixed(1)+' plt · '+dayQty.toLocaleString()+' pcs</span></div>';
+    h+='<span class="dp">'+dayPlt.toFixed(1)+' plt · '+dayQty.toLocaleString()+' qty</span></div>';
     h+='<div class="lp-truck-grid" style="margin-bottom:16px">';
     for(const t of dateTrucks)h+=_tc(t);
     h+='</div>';
@@ -4144,7 +4147,7 @@ function LP_renderStatus(el){
     const src=(nom[d.sku]?.source||'').trim();
     const name=nom[d.sku]?.name||d.name||d.sku;
     if(!skuData[d.sku])skuData[d.sku]={sku:d.sku,name,source:src,demandByDest:{},shippedByDest:{},byLsr:{},dests:new Set()};
-    const eq=_lpEffQty(d.sku,d.requiredQty||0);
+    const eq=d.effQty||d.requiredQty||0;
     skuData[d.sku].demandByDest[d.destination]=(skuData[d.sku].demandByDest[d.destination]||0)+eq;
     skuData[d.sku].dests.add(d.destination);
   }
@@ -4386,7 +4389,7 @@ function LP_showTruckModal(truckId){
     if(!isTruckDest(d.destination))continue;
     if(isExcSrc(d.sku,d.destination))continue;
     const k=d.destination+'|'+d.sku;
-    totalDemandByDestSku[k]=(totalDemandByDestSku[k]||0)+d.requiredQty;
+    totalDemandByDestSku[k]=(totalDemandByDestSku[k]||0)+(d.effQty||d.requiredQty||0);
   }
   // ── Cumulative shipped up to and including this truck (by truckId) ──
   const shippedUpToByDestSku={};
@@ -4456,7 +4459,7 @@ function LP_showTruckModal(truckId){
   mh+=`<div class="mdb">
         <div class="mst">
           <div>Pallets: <strong>${totalPlt.toFixed(1)} / ${LP_STATE.maxPallets}</strong></div>
-          <div>Pieces: <strong>${totalQty.toLocaleString()}</strong></div>
+          <div>Qty: <strong>${totalQty.toLocaleString()}</strong></div>
           <div>SKUs: <strong>${aggSkus.length}</strong></div>
           <div>Utilization: <strong>${Math.round((totalPlt/LP_STATE.maxPallets)*100)}%</strong></div>
         </div>
@@ -4945,7 +4948,7 @@ function LP_exportSingleTruck(truckId){
       'Nomenclature name':lmNom.nm||lpNom.name||s.name||s.sku,
       'Source':lpNom.source||'',
       'In Stock':STOCK_SKUS.has(s.sku)?'Yes':'No',
-      'Qty':s.qty// already in UOM
+      'Qty':_lpEffQty(s.sku,s.qty)
     };
   });
   // Append manual items
@@ -5060,10 +5063,9 @@ function _cciAggregateItems(selDests,selSrcs){
     const src=(LP_STATE.nomenclature[d.sku]||{}).source||'';
     if(srcSet.size&&!srcSet.has(src))continue;
     if(!map[d.sku])map[d.sku]={sku:d.sku,qty:0,pallets:0};
-    map[d.sku].qty+=d.requiredQty||0;
+    map[d.sku].qty+=(d.effQty||d.requiredQty||0);// UoM
   }
   for(const it of Object.values(map)){
-    it.qty=_lpEffQty(it.sku,it.qty);
     const n=LP_STATE.nomenclature[it.sku]||{};
     const pq=n.palletQty||0;const ps=n.palletSpc||0;
     it.pallets=(pq>0&&ps>0)?+(it.qty/pq*ps).toFixed(2):0;
@@ -5090,7 +5092,7 @@ function LP_previewCombinedCI(){
   const totalPlt=items.reduce((s,it)=>s+it.pallets,0).toFixed(1);
   const totalVal=items.reduce((s,it)=>s+(it.qty*(_lpCustNom(it.sku).unitPrice||0)),0);
   document.getElementById('cciPreview').innerHTML=
-    `<strong>${items.length} SKUs</strong> · ${totalQty.toLocaleString()} pcs · ${totalPlt} plt · `
+    `<strong>${items.length} SKUs</strong> · ${totalQty.toLocaleString()} qty · ${totalPlt} plt · `
     +`<strong>$${totalVal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> total value`
     +`<br><span style="color:var(--tt)">${selDests.length} destination${selDests.length>1?'s':''}: ${selDests.map(a=>(_CCI_DESTS.find(x=>x.abbr===a)||{label:a}).label.replace(/^..\s/,'')).join(', ')}</span>`;
 }
@@ -5607,7 +5609,7 @@ function LP_exportPlan(){
     agg.forEach(it=>{it.qty=_lpEffQty(it.sku,it.qty)});
     const plt=t.items.reduce((s,r)=>s+(r.pallets||0),0);
     const qty=agg.reduce((s,it)=>s+it.qty,0);
-    return{'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'Arrival Date':LP_getArrivalDate(t.date,t.dest),'Transit Days':LP_getTransitDays(t.dest),'Pallets':+plt.toFixed(1),'Pieces':qty,'SKUs':agg.length,'Utilization':Math.round((plt/LP_STATE.maxPallets)*100)+'%','Locked':LP_dispatched.has(t.id)?'Yes':''};
+    return{'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'Arrival Date':LP_getArrivalDate(t.date,t.dest),'Transit Days':LP_getTransitDays(t.dest),'Pallets':+plt.toFixed(1),'Qty':qty,'SKUs':agg.length,'Utilization':Math.round((plt/LP_STATE.maxPallets)*100)+'%','Locked':LP_dispatched.has(t.id)?'Yes':''};
   });
   const ws2=XLSX.utils.json_to_sheet(tRows);
   ws2['!cols']=[{wch:8},{wch:12},{wch:16},{wch:12},{wch:10},{wch:10},{wch:10},{wch:8},{wch:12},{wch:10}];
@@ -6586,11 +6588,13 @@ function masterBackupExport(){
 
   // 10. LP Material Plan (demand) — aggregated format
   if(LP_STATE.materialPlan.length){
-    const _mpExp=LP_STATE.materialPlan.map(d=>({Destination:d.destination,SKU:d.sku,'Required Qty':d.requiredQty}));
+    const _mpExp=LP_STATE.materialPlan.map(d=>({Destination:d.destination,SKU:d.sku,'Required Qty':d.requiredQty,'Eff Qty':d.effQty||d.requiredQty}));
     const ws=XLSX.utils.json_to_sheet(_mpExp);
     ws['!cols']=[{wch:30},{wch:20},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws,'LP Material Plan');
   }
+
+  // 10b. LP Demand Raw — exported separately via lp-demand-raw key (not loaded in memory)
 
   // 11. LP Arrivals
   if(LP_STATE.arrivals.length){
@@ -6819,8 +6823,23 @@ async function masterBackupRestore(file){
     }
 
     // ── 10. LP Material Plan → LP_STATE.materialPlan ──
-    const lpMpRows=getSheet('LP Material Plan');
-    if(lpMpRows&&lpMpRows.length){LP_STATE.materialPlan=_lpAggregateDemand(lpMpRows);log.push('LP MP: '+LP_STATE.materialPlan.length+' rows (aggregated)')}
+    // Restore raw demand archive first (if available, use for correct per-line ceiling)
+    const lpRawDemRows=getSheet('LP Demand Raw');
+    if(lpRawDemRows&&lpRawDemRows.length){
+      const rawRows=lpRawDemRows.map(r=>({destination:r.Destination,sku:r.SKU,requiredQty:r['Required Qty']||0}));
+      const slim=rawRows.map(r=>({d:r.destination,s:r.sku,q:r.requiredQty}));
+      try{await SB.from('shared_state').upsert({id:'lp-demand-raw',value:JSON.stringify(slim),updated_at:new Date().toISOString()})}catch(e){}
+      LP_STATE.materialPlan=_lpAggregateDemand(rawRows);// per-line ceiling
+      log.push('LP Demand: '+LP_STATE.materialPlan.length+' rows (from raw, '+rawRows.length+' lines)');
+    }else{
+      const lpMpRows=getSheet('LP Material Plan');
+      if(lpMpRows&&lpMpRows.length){
+        LP_STATE.materialPlan=lpMpRows.map(r=>({destination:r.Destination||'',sku:r.SKU||'',requiredQty:r['Required Qty']||0,effQty:r['Eff Qty']||undefined}));
+        // Fallback: compute effQty if missing
+        for(const d of LP_STATE.materialPlan){if(d.effQty===undefined){const ppu=_lpPPU(d.sku);d.effQty=ppu>1?Math.ceil(d.requiredQty/ppu):d.requiredQty}}
+        log.push('LP MP: '+LP_STATE.materialPlan.length+' rows (aggregated, no raw)');
+      }
+    }
 
     // ── 11. LP Arrivals → LP_STATE.arrivals ──
     const lpArrRows=getSheet('LP Arrivals');
@@ -7860,7 +7879,7 @@ function build(venue,venueList,skipNoBi){
     const _rowVt=LM_vtMap[r["Venue"]]||_buildVt;
     const _rowCountry=LM_venueCountry(r["Venue cluster"]||'', r["Venue"]||'');
     const _eff=LM_getEffPallet(s,_rowVt,_rowCountry);
-    const pqUom=_eff.pq;
+    const _bPpu=nm?.ppu||1;const pqUom=_pqUomEff(_eff.pq,_bPpu);
     const psVal=_eff.ps;
     const ct=isCort(s);
     // Track total qty for all CORT items
@@ -8600,8 +8619,8 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
     }
   }
   const _eff=LM_getEffPallet(s,vt,_country);
-  const pq=_eff.pq;const psVal=_eff.ps;
-  if(pq>0&&psVal>0)a[v].ep+=(q/pq)*psVal;a[v].ln++;a[v].it+=q;
+  const ppu=nm?.ppu||1;const pqU=_pqUomEff(_eff.pq,ppu);const psVal=_eff.ps;
+  if(pqU>0&&psVal>0)a[v].ep+=(q/pqU)*psVal;a[v].ln++;a[v].it+=q;
   if(bi&&(!a[v].earlyBI||bi<a[v].earlyBI))a[v].earlyBI=bi;
 }
 LM_vtMap=vtMapLocal;// store globally
@@ -9286,7 +9305,8 @@ function LM_injectKits(){
       const n=NOM[item.sku];
       if(n){
         const _eff=LM_getEffPallet(item.sku,_kitVt,_kitCountry);
-        if(_eff.pq>0&&_eff.ps>0)sumPlt+=(item.qty/_eff.pq)*_eff.ps;
+        const _kPpu=n.ppu||1;const _kPqU=_pqUomEff(_eff.pq,_kPpu);
+        if(_kPqU>0&&_eff.ps>0)sumPlt+=(item.qty/_kPqU)*_eff.ps;
         srcs.add(n.src||'');
       }
       // Get earliest BI from venue demand
@@ -9528,7 +9548,8 @@ function LM_showKitDetail(kitId){
   let sumPlt=0;
   const rows=kit.items.map(item=>{
     const n=NOM[item.sku];const effQty=item.qty;// already in UOM
-    const plt=(n&&n.pq>0&&n.ps>0)?(effQty/n.pq)*n.ps:0;sumPlt+=plt;
+    const _dPqU=_pqUom(item.sku);
+    const plt=(_dPqU>0&&n?.ps>0)?(effQty/_dPqU)*n.ps:0;sumPlt+=plt;
     return`<tr><td class="mono">${item.sku}</td><td class="tcl">${n?.nm||item.sku}</td><td style="font-size:9px;color:var(--tt)">${n?.src||''}</td><td class="mono">${effQty.toLocaleString()}</td><td class="mono">${plt.toFixed(1)}</td>${ROLE!=='viewer'?`<td><button onclick="LM_removeKitItem('${kit.id}','${item.sku}');this.closest('.mo').remove()" style="background:none;border:none;cursor:pointer;color:var(--rd);font-size:12px" title="Remove">✕</button></td>`:''}</tr>`;
   }).join('');
   const hasPltOvr=kit.pq>0&&kit.ps>0;
@@ -9839,9 +9860,9 @@ function _stpBuildTruck(del){
     const nm=NOM[sku];
     const vt=LM_vtMap[del.venue]||'';const country=LM_venueCountry('',del.venue);
     const eff=LM_getEffPallet(sku,vt,country);
-    const pq=eff.pq;const psVal=eff.ps;
-    const plt=pq>0&&psVal>0?(qty/pq)*psVal:0;
-    items.push({sku,nm:nm?.nm||sku,loadQty:qty,loadPlt:plt,pq,ps:psVal,sched:qty,topUp:0,pulled:false,pulledFrom:'',remainder:0,noPallet:pq<=0||psVal<=0,poolAfter:0,biK:del.date||''});
+    const _sPpu=nm?.ppu||1;const pqU=_pqUomEff(eff.pq,_sPpu);const psVal=eff.ps;
+    const plt=pqU>0&&psVal>0?(qty/pqU)*psVal:0;
+    items.push({sku,nm:nm?.nm||sku,loadQty:qty,loadPlt:plt,pq:pqU,ps:psVal,sched:qty,topUp:0,pulled:false,pulledFrom:'',remainder:0,noPallet:pqU<=0||psVal<=0,poolAfter:0,biK:del.date||''});
     totalPlt+=plt;totalPcs+=qty;
   }
   if(!items.length)return null;
@@ -10818,7 +10839,7 @@ function LM_renderDemand(el){
       html+=`<div style="padding:8px 12px;background:#F1F8E9;border-bottom:1px solid #C5E1A5">`;
       for(const kit of venueKits){
         const kPcs=kit.items.reduce((s,i)=>s+i.qty,0);// already UOM
-        let kPlt=0;kit.items.forEach(i=>{const n=NOM[i.sku];if(n&&n.pq>0&&n.ps>0)kPlt+=(i.qty/n.pq)*n.ps});
+        let kPlt=0;kit.items.forEach(i=>{const _kpq=_pqUom(i.sku);const n=NOM[i.sku];if(_kpq>0&&n?.ps>0)kPlt+=(i.qty/_kpq)*n.ps});
         const effPlt=(kit.pq>0&&kit.ps>0)?((kPcs/kit.pq)*kit.ps):kPlt;
         html+=`<div onclick="LM_showKitDetail('${kit.id}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#fff;border:1px solid #A5D6A7;border-radius:6px;cursor:pointer;font-size:11px">
           <span style="font-size:14px">📦</span>
@@ -10916,7 +10937,7 @@ function LM_renderAnalysis(el){
     const abbr=LP_matchTransitAbbr(d.destination);
     if(!abbr)continue;
     const k=abbr+'|'+d.sku;
-    lpByAbbrSku[k]=(lpByAbbrSku[k]||0)+(d.requiredQty||0);
+    lpByAbbrSku[k]=(lpByAbbrSku[k]||0)+_lpEffQty(d.sku,d.requiredQty||0);
   }
 
   // Build LM demand by (abbr, sku) → qty — only LP-tracked SKUs
@@ -12241,7 +12262,7 @@ function resetLP(){
 function doResetLP(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['lp-state','lp-config','lp-nom','lp-demand','lp-arrivals','lp-plan','lp-truck-state']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['lp-state','lp-config','lp-nom','lp-demand','lp-demand-raw','lp-arrivals','lp-plan','lp-truck-state']).then(()=>{}).catch(()=>{});
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
@@ -12351,8 +12372,10 @@ async function goGenerateLP(){
     if(!pE){throw new Error('Material Plan file required.');}
     LP_STATE.nomenclature=LP_parseNomenclature(nE.buf);
     LP_STATE.arrivals=LP_parseArrivals(aE.buf,LP_STATE.turnaround);
-    LP_STATE.materialPlan=_lpAggregateDemand(_lpConvertDemandRowsToUOM(LP_parseMaterialPlan(pE.buf)));
-    // demand already in UOM (ceiling applied per row before aggregation)
+    const _rawDemRows=LP_parseMaterialPlan(pE.buf);
+    _lpSaveRawDemand(_rawDemRows);// archive for PPU recalc
+    LP_STATE.materialPlan=_lpAggregateDemand(_rawDemRows);
+    // demand stored in pieces — _lpEffQty converts to UOM at display/export time
     for(const d of LP_STATE.materialPlan){
       const n=LP_STATE.nomenclature[d.sku];
       if(n&&n.name)d.name=n.name;// enrich display name from nomenclature
@@ -12390,33 +12413,53 @@ function LP_updateNomPrompt(){
       await new Promise(r=>setTimeout(r,30));
       const buf=await f.arrayBuffer();
       const newNom=LP_parseNomenclature(new Uint8Array(buf));
+      // Snapshot old values before merge
+      const oldPpu={},oldPq={},oldPs={};
+      for(const sku in LP_STATE.nomenclature){const n=LP_STATE.nomenclature[sku];oldPpu[sku]=n.ppu||1;oldPq[sku]=n.palletQty||0;oldPs[sku]=n.palletSpc||0}
       let updated=0;
       for(const sku in newNom){
         if(LP_STATE.nomenclature[sku]){
-          // Merge — update metadata fields, preserve palletQty/palletSpc from current nom
-          // Only overwrite HS/country/price if new file has values AND no manual override exists
           const cur=LP_STATE.nomenclature[sku];
           const ovr=LP_customsOverrides[sku]||{};
           const nn=newNom[sku];
           if(nn.name)cur.name=nn.name;
           if(nn.source)cur.source=nn.source;
-          // Only update nom-level fields if no manual override exists for that field
           if(nn.hsCode&&!ovr.hsCode)cur.hsCode=_hsNormalize(nn.hsCode);
           if(nn.country&&!ovr.country)cur.country=nn.country;
           if(nn.unitPrice&&!ovr.price)cur.unitPrice=nn.unitPrice;
-          if(nn.ppu>1&&!ovr.ppu)cur.ppu=nn.ppu;
-          // Never overwrite customsName from nom update — it's manual-only
+          if(nn.ppu>=1&&!ovr.ppu)cur.ppu=nn.ppu;
+          const _pOvr=LP_palletOverrides[sku]||{};
+          if(nn.palletQty>0&&!_pOvr.palletQty)cur.palletQty=nn.palletQty;
+          if(nn.palletSpc>0&&!_pOvr.palletSpc)cur.palletSpc=nn.palletSpc;
         }else{
           LP_STATE.nomenclature[sku]=newNom[sku];
         }
         updated++;
       }
-      await LP_saveToSupabase();
+      // Always re-aggregate demand from raw archive (PPU or palletQty may have changed)
+      let demandMsg='',planChanged=false;
+      const rawRows=await _lpFetchRawDemand();
+      if(rawRows&&rawRows.length){
+        LP_STATE.materialPlan=_lpAggregateDemand(rawRows);
+        for(const d of LP_STATE.materialPlan){const n=LP_STATE.nomenclature[d.sku];if(n&&n.name)d.name=n.name}
+        demandMsg=' Demand re-aggregated.';planChanged=true;
+      }
+      // Detect palletQty changes → regenerate
+      let pltChanged=false;
+      for(const sku in LP_STATE.nomenclature){
+        const n=LP_STATE.nomenclature[sku];
+        if((n.palletQty||0)!==(oldPq[sku]||0)||(n.palletSpc||0)!==(oldPs[sku]||0)){pltChanged=true;break}
+      }
+      if(planChanged||pltChanged){
+        LP_regenerate();
+        demandMsg+=' Plan regenerated (locked trucks preserved).';
+      }else{
+        await LP_saveToSupabase();
+      }
       document.getElementById('pov').style.display='none';
       LP_render();
-      const msg=`Nomenclature updated: ${updated} SKUs refreshed (HS codes, country, prices). Plan unchanged.`;
-      const eb=document.getElementById('lp_eb');
-      if(eb){eb.textContent=msg;eb.style.color='var(--gn)';eb.style.display='block';setTimeout(()=>{eb.style.display='none';eb.style.color=''},4000);}
+      const msg=`✓ Nomenclature updated: ${updated} SKUs refreshed.${demandMsg}`;
+      const _notif=document.createElement('div');_notif.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#E6F5ED;color:#12804A;border:1px solid #B8DFCA;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:600;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.15)';_notif.textContent=msg;document.body.appendChild(_notif);setTimeout(()=>_notif.remove(),5000);
     }catch(e){
       document.getElementById('pov').style.display='none';
       alert('Nom update failed: '+e.message);
@@ -12426,6 +12469,48 @@ function LP_updateNomPrompt(){
   inp.click();
 }
 
+// ── Save raw demand rows (pre-aggregation archive for PPU recalc) ──
+async function _lpSaveRawDemand(rawRows){
+  if(ROLE==='viewer'||!SB)return;
+  const slim=rawRows.map(r=>({d:r.destination,s:r.sku,q:r.requiredQty}));
+  try{await SB.from('shared_state').upsert({id:'lp-demand-raw',value:JSON.stringify(slim),updated_at:new Date().toISOString()})}catch(e){console.warn('Raw demand save:',e)}
+}
+// ── Fetch raw demand rows (only called when PPU changes) ──
+async function _lpFetchRawDemand(){
+  if(!SB)return null;
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','lp-demand-raw').single();if(data){const rows=JSON.parse(data.value);return rows.map(r=>({destination:r.d,sku:r.s,requiredQty:r.q}))}return null}catch(e){return null}
+}
+// ── Update Demand: re-upload material plan file ──
+function LP_updateDemandPrompt(){
+  if(ROLE==='viewer'||!LP_STATE.planGenerated)return;
+  const inp=document.getElementById('lpDemandFileInput');if(!inp)return;
+  inp.onchange=async function(){
+    const f=this.files[0];this.value='';if(!f)return;
+    try{
+      document.getElementById('pov').style.display='flex';
+      await new Promise(r=>setTimeout(r,30));
+      const buf=await f.arrayBuffer();
+      const rawRows=LP_parseMaterialPlan(new Uint8Array(buf));
+      // Save raw rows for future PPU recalc
+      await _lpSaveRawDemand(rawRows);
+      // Aggregate with per-row ceiling using current PPU
+      LP_STATE.materialPlan=_lpAggregateDemand(rawRows);
+      // Enrich names from nomenclature (effQty already correct from _lpAggregateDemand)
+      for(const d of LP_STATE.materialPlan){const n=LP_STATE.nomenclature[d.sku];if(n&&n.name)d.name=n.name}
+      // Regenerate plan (preserves locked trucks)
+      LP_regenerate();
+      document.getElementById('pov').style.display='none';
+      LP_render();
+      const msg=`✓ Demand updated: ${LP_STATE.materialPlan.length} dest+SKU rows. Plan regenerated (locked trucks preserved).`;
+      // Show inline notification in demand tab
+      const _notif=document.createElement('div');_notif.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#E6F5ED;color:#12804A;border:1px solid #B8DFCA;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:600;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.15)';_notif.textContent=msg;document.body.appendChild(_notif);setTimeout(()=>_notif.remove(),5000);
+    }catch(e){
+      document.getElementById('pov').style.display='none';
+      alert('Demand update failed: '+e.message);console.error(e);
+    }
+  };
+  inp.click();
+}
 // ── Wire up LP upload panel events (called once on load) ──
 function initLPUpload(){
   const dz=document.getElementById('lp_dz');
