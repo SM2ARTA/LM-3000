@@ -932,19 +932,21 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   // ── Demand rationing ──
   const totalInv={};for(const a of inv)totalInv[a.sku]=(totalInv[a.sku]||0)+a.qty;
   const rationed=[];
+  const _sortedDests=Object.keys(open).sort();
   for(const sku of arrivedSkus){
     const cap=totalInv[sku]||0;
-    let totalDem=0;for(const dest of Object.keys(open))totalDem+=open[dest]?.[sku]||0;
+    let totalDem=0;for(const dest of _sortedDests)totalDem+=open[dest]?.[sku]||0;
     if(totalDem<=cap)continue;
     const ratio=cap/totalDem;const pq=nom[sku]?.pq||0;
     let allocated=0;const allocs={};
-    for(const dest of Object.keys(open)){
+    for(const dest of _sortedDests){
       if(!open[dest][sku])continue;
       const floored=pq>0?Math.floor(open[dest][sku]*ratio/pq)*pq:0;
       allocs[dest]=floored;allocated+=floored;
     }
-    if(pq>0&&allocated<cap){for(const dest of Object.keys(allocs)){if(allocated+pq>cap)break;if(allocs[dest]===0&&open[dest][sku]>=pq){allocs[dest]=pq;allocated+=pq}}}
-    for(const dest of Object.keys(allocs))open[dest][sku]=allocs[dest];
+    const _sortedAllocs=Object.keys(allocs).sort();
+    if(pq>0&&allocated<cap){for(const dest of _sortedAllocs){if(allocated+pq>cap)break;if(allocs[dest]===0&&open[dest][sku]>=pq){allocs[dest]=pq;allocated+=pq}}}
+    for(const dest of _sortedAllocs)open[dest][sku]=allocs[dest];
     rationed.push(sku);
   }
 
@@ -1532,9 +1534,9 @@ function _lpPPU(sku){return(LP_customsOverrides[sku]||{}).ppu||(LP_STATE.nomencl
 function _lpEffQty(sku,rawQty){return rawQty;}// Identity — all LP quantities now in UoM
 // ── Enrich RW rows with _effQty (UOM) — call after NOM is loaded ──
 function _rwEnrichEffQty(){for(const r of RW){const ppu=(NOM[r.Nomenclature]?.ppu)||1;r._effQty=ppu>1?Math.ceil((parseInt(r.Required)||0)/ppu):(parseInt(r.Required)||0)}}
-// ── Pallet qty in UOM: palletQty (pieces/pallet) ÷ ppu → boxes/pallet ──
-function _pqUom(sku){const n=NOM[sku];if(!n||!n.pq)return 0;const ppu=n.ppu||1;return ppu>1?n.pq/ppu:n.pq}
-function _pqUomEff(pq,ppu){return(ppu>1&&pq>0)?pq/ppu:pq}
+// ── Pallet qty: already UoM-aligned (matches LP logic — no PPU division) ──
+function _pqUom(sku){const n=NOM[sku];return n?.pq||0}
+function _pqUomEff(pq){return pq||0}
 // LP stores pieces in Supabase. _lpEffQty() converts to UOM at display/export time.
 // Recompute effQty on materialPlan rows (call after nomenclature + customsOverrides are loaded)
 function _lpRecomputeEffQty(){
@@ -2923,7 +2925,7 @@ let LP_lastGenSettings={maxPallets:0,maxTrucks:0,maxDests:0,turnaround:0,ricStar
 function _contDateHash(){return JSON.stringify(LP_contDateOverrides)}
 function _palletOvrHash(){return JSON.stringify(LP_palletOverrides)}
 function _holdsHash(){return JSON.stringify([...new Set([...LP_holds,...LP_stockHolds])].sort())}
-function _arrDateHash(){return JSON.stringify(LP_STATE.arrivals.map(a=>a.arrivalDate||'').join(','))}
+function _stockHash(){return JSON.stringify([...STOCK_SKUS].sort())+'|'+JSON.stringify(STOCK_QTYS)}
 function _effectiveStockSkus(){
   if(!STOCK_SKUS.size)return[];
   const demand={};
@@ -2964,10 +2966,11 @@ function LP_settingsChanged(){
     LP_lastGenSettings.holdsHash!==_holdsHash()||
     LP_lastGenSettings.arrDateHash!==_arrDateHash()||
     LP_lastGenSettings.transitHash!==_transitHash()||
-    LP_lastGenSettings.demandHash!==_demandHash();
+    LP_lastGenSettings.demandHash!==_demandHash()||
+    LP_lastGenSettings.stockHash!==_stockHash();
 }
 function LP_snapshotSettings(){
-  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash(),transitHash:_transitHash(),demandHash:_demandHash()};
+  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash(),transitHash:_transitHash(),demandHash:_demandHash(),stockHash:_stockHash()};
 }
 
 // ── Helpers ──
@@ -4307,6 +4310,7 @@ function LP_toggleReadyFilter(){
 function LP_toggleDispatch(truckId,checked){
   if(ROLE==="viewer")return;
   if(checked)LP_dispatched.add(truckId);else LP_dispatched.delete(truckId);
+  LP_recomputeStockHolds();
   LP_saveToSupabase();
   setTimeout(()=>LP_render(),50);
 }
@@ -7265,8 +7269,11 @@ async function loadSharedData(){
     LM_cleanVS();
     if(ROLE==='admin')try{await SB.from('shared_state').upsert({id:'fm-vs',value:JSON.stringify(VS),updated_at:new Date().toISOString()})}catch(e){}
     // Load remaining config in 2 waves (avoid 11 parallel connections)
-    await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),MI_load().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadClusterTA().catch(()=>{})]);
-    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
+    const _loadErrs=[];
+    const _lc=(fn,name)=>fn().catch(e=>{_loadErrs.push(name);console.warn('Load failed:',name,e)});
+    await Promise.all([_lc(stockReportLoad,'Stock Report'),_lc(LM_loadDateOverrides,'Date Overrides'),_lc(MI_load,'Manual Items'),_lc(LM_loadPalletCfg,'Pallet Config'),_lc(LM_loadClusterTA,'Cluster TA')]);
+    await Promise.all([_lc(LM_loadManualDemand,'Manual Demand'),_lc(LM_loadKits,'Kits'),_lc(LM_loadStpDeliveries,'STP Deliveries'),_lc(LM_loadStpStrategy,'STP Strategy'),_lc(DIST_loadOverrides,'Dist Overrides'),_lc(LM_loadDemandAdj,'Demand Adj'),_lc(LM_loadNomOverrides,'Nom Overrides')]);
+    if(_loadErrs.length)console.warn('Failed to load:',_loadErrs.join(', '));
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
@@ -12767,7 +12774,8 @@ function stockReportParse(file){
       LP_recomputeStockHolds();
       STOCK_REPORT_NAME=file.name;
       stockReportSave();
-      if(LP_STATE.planGenerated)LP_saveToSupabase();// persist stock in LP state too
+      // Regenerate LP plan — stock SKUs affect inventory timeline (readyDate=today)
+      if(LP_STATE.planGenerated){LP_regenerate();LP_saveToSupabase();}
       clM();
       stockUpdateBadge();
       // Re-render active views
@@ -12782,10 +12790,11 @@ function stockReportParse(file){
 
 function stockReportReset(){
   if(ROLE==='viewer')return;
-  STOCK_SKUS=new Set();
+  STOCK_SKUS=new Set();STOCK_QTYS={};
   STOCK_REPORT_NAME='';
+  LP_recomputeStockHolds();
   stockReportSave();
-  if(LP_STATE.planGenerated)LP_saveToSupabase();
+  if(LP_STATE.planGenerated){LP_regenerate();LP_saveToSupabase();}
   clM();
   stockUpdateBadge();
   if(typeof rMain==='function')rMain();
