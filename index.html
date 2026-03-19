@@ -11406,11 +11406,13 @@ if(cv==="dashboard"){
   // ── Inject STP deliveries into calMap ──
   const _stpViewNames=new Set(viewVenues.map(v=>v.name));
   for(const del of LM_STP_DELIVERIES){
-    if(!del.date)continue;
     // Only show STP deliveries for venues visible in current dashboard view
     if(!_stpViewNames.has(del.venue))continue;
     const truck=LM_STP_TRUCKS[del.venue];if(!truck||!truck.items.length)continue;
-    const dk2=del.date;
+    // Use explicit date, or fall back to venue's first dispatch date from plan
+    let dk2=del.date;
+    if(!dk2){const P=PLAN_CACHE[del.venue];if(P&&P.days&&P.days.length)dk2=P.days[0].dKey}
+    if(!dk2)continue;
     if(!calMap[dk2])calMap[dk2]={trucks:0,pallets:0,cort:0,cortPcs:0,stp:0,stpPcs:0,stpPlt:0,venues:[],pcs:0,biDate:null,isNoBi:false,truckIds:[],tCap:26};
     calMap[dk2].stp++;
     calMap[dk2].stpPcs+=truck.pcs;
@@ -11440,7 +11442,7 @@ if(cv==="dashboard"){
   const pcsDelta=totPcs-loadedPcs;
   const lmKpiItems=[
     {label:'📦 Pallets',value:Number.isInteger(totPlt)?totPlt.toLocaleString():totPlt.toFixed(1),color:'var(--ac)'},
-    {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444',sub:pcsDelta>0?`${pcsDelta.toLocaleString()} not on trucks`:(pcsDelta===0?'':'')},
+    {label:'📋 Pieces',value:totPcs.toLocaleString(),color:'#A84444'},
     {label:'🚛 LM Trucks',value:totTrucks,color:'var(--gn)'},
     {label:'📅 Dispatch Days',value:totalDays,color:'var(--or)'},
     {label:'📈 Peak/Day',value:peakTrucks,color:'var(--rd)'},
