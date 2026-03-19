@@ -1119,39 +1119,59 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   for(const r of b3)plan.push(r);
 
   // ════════════════════════════════════════════════════════
-  // POST-PROCESSING: Append no-pallet SKUs to last truck per destination
+  // POST-PROCESSING: Append leftover SKUs respecting truck capacity (MAX_PLT)
   // ════════════════════════════════════════════════════════
+  // Collect all leftover items per destination
+  const _loByDest={};// dest -> [{sku, qty, pallets, name}]
+  for(const dest of Object.keys(open)){
+    for(const sku of Object.keys(open[dest]||{})){
+      const q=open[dest][sku]||0;if(q<=0)continue;
+      const n=nom[sku];
+      const avail=Math.min(q,stock[sku]||0);if(avail<=0)continue;
+      open[dest][sku]-=avail;stock[sku]-=avail;
+      const plt=(n&&n.pq>0&&n.ps>0)?Math.round((avail/n.pq)*n.ps*100)/100:0;
+      if(!_loByDest[dest])_loByDest[dest]=[];
+      _loByDest[dest].push({sku,qty:Math.round(avail),pallets:plt,name:n?.nm||sku});
+    }
+  }
+  // No-pallet SKUs not in open (no arrivals but in stock report)
+  for(const d of demand){
+    if(!isTruck(d.destination))continue;
+    if(isExcl(d.sku,d.destination))continue;
+    if(holds.has(d.destination+'|'+d.sku))continue;
+    if(arrivedSkus.has(d.sku))continue;
+    const n=nom[d.sku];if(n&&n.pq>0&&n.ps>0)continue;
+    const qty=d.effQty||d.requiredQty||0;if(qty<=0)continue;
+    if(!stockSet.has(d.sku))continue;
+    if(!_loByDest[d.destination])_loByDest[d.destination]=[];
+    _loByDest[d.destination].push({sku:d.sku,qty:Math.round(qty),pallets:0,name:n?.nm||d.sku});
+  }
+  // Compute current pallet totals per truck
+  const _truckPlt={};for(const r of plan)_truckPlt[r.truckId]=(_truckPlt[r.truckId]||0)+r.pallets;
+  // Find last truck per dest
   const lastTruckByDest={};
   for(const r of plan){
     if(!lastTruckByDest[r.destination]||r.truckId>lastTruckByDest[r.destination].truckId)
       lastTruckByDest[r.destination]={truckId:r.truckId,date:r.date};
   }
-  // Scan open demand for any remaining unallocated qty — add to last truck per destination
-  for(const dest of Object.keys(open)){
-    const lt=lastTruckByDest[dest];if(!lt)continue;
-    for(const sku of Object.keys(open[dest]||{})){
-      const q=open[dest][sku]||0;if(q<=0)continue;
-      const n=nom[sku];
-      // Must have stock available
-      const avail=Math.min(q,stock[sku]||0);if(avail<=0)continue;
-      open[dest][sku]-=avail;stock[sku]-=avail;
-      const _lPlt=(n&&n.pq>0&&n.ps>0)?Math.round((avail/n.pq)*n.ps*100)/100:0;
-      plan.push({date:lt.date,truckId:lt.truckId,destination:dest,sku,name:n?.nm||sku,qty:Math.round(avail),pallets:_lPlt,_leftover:true});
+  // Distribute leftovers into trucks respecting MAX_PLT capacity
+  for(const dest of Object.keys(_loByDest)){
+    const items=_loByDest[dest];if(!items.length)continue;
+    let lt=lastTruckByDest[dest];if(!lt)continue;
+    for(const item of items){
+      const curPlt=_truckPlt[lt.truckId]||0;
+      if(curPlt+item.pallets>MAX_PLT&&curPlt>0){
+        // Spill to new truck
+        truckId++;
+        lt={truckId,date:lt.date};
+        lastTruckByDest[dest]=lt;
+        _truckPlt[lt.truckId]=0;
+      }
+      plan.push({date:lt.date,truckId:lt.truckId,destination:dest,sku:item.sku,name:item.name,qty:item.qty,pallets:item.pallets,_leftover:true});
+      _truckPlt[lt.truckId]=(_truckPlt[lt.truckId]||0)+item.pallets;
     }
   }
-  // Also add no-pallet SKUs that weren't in open (no arrivals but in stock report)
-  for(const d of demand){
-    if(!isTruck(d.destination))continue;
-    if(isExcl(d.sku,d.destination))continue;
-    if(holds.has(d.destination+'|'+d.sku))continue;
-    if(arrivedSkus.has(d.sku))continue;// already in open — handled above
-    const n=nom[d.sku];if(n&&n.pq>0&&n.ps>0)continue;// has pallet data but no arrivals — skip
-    const lt=lastTruckByDest[d.destination];if(!lt)continue;
-    const qty=d.effQty||d.requiredQty||0;if(qty<=0)continue;
-    if(!stockSet.has(d.sku))continue;// must be in stock report
-    plan.push({date:lt.date,truckId:lt.truckId,destination:d.destination,sku:d.sku,name:n?.nm||d.sku,qty:Math.round(qty),pallets:0,_leftover:true});
-  }
-  // Recalc truckTotal for affected trucks
+  // Recalc truckTotal for all trucks
   const ttMap={};for(const r of plan){ttMap[r.truckId]=(ttMap[r.truckId]||0)+r.pallets}
   for(const r of plan)r.truckTotal=+ttMap[r.truckId].toFixed(4);
 
