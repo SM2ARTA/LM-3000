@@ -4,7 +4,7 @@
 Single-page web application for managing ground transport logistics for FWC26. Handles trucks, stadiums, venues, routes, and staffing across USA, Canada, and Mexico host cities.
 
 ## Architecture
-- **Single file**: Everything lives in `index.html` (~11,000 lines). No build step, no bundler.
+- **Single file**: Everything lives in `index.html` (~12,500 lines). No build step, no bundler.
 - **Backend**: Supabase (URL and anon key near the bottom of `index.html`, search for `supabase.createClient`)
 - **External libs** (CDN): `@supabase/supabase-js@2`, `xlsx@0.18.5`, `exceljs@4.4.0`, Google Fonts
 - **No framework** — vanilla JS and CSS with CSS custom properties (design tokens in `:root`)
@@ -318,6 +318,18 @@ Comprehensive audit with dummy data tracing. All findings fixed in commit `0d10c
 6. **CI Packing List ignored overrides** (fixed earlier) — `nm.hsCode/country/unitPrice` used directly instead of `co.hsCode||nm.hsCode` etc.
 7. **HS confirm button not in DOM for empty HS** (fixed earlier) — now always rendered with `display:none`.
 
+## System Audit (2026-03-19)
+Comprehensive automated audit across all subsystems. Fixes in commits `65f8e0d` and `2b64e3f`.
+
+### Bugs Found & Fixed
+1. **LP dirty flag missing stock hash** (CRITICAL) — `LP_settingsChanged()` didn't detect stock report changes. Plan stayed "clean" after stock upload. Fixed: added `_stockHash()` to dirty flag + snapshot.
+2. **LP demand rationing non-deterministic** (HIGH) — `Object.keys(open)` iteration order depended on file row order. Different users could get different allocations. Fixed: sort destination keys alphabetically before rationing.
+3. **LP leftover items exceeded truck capacity** (HIGH) — Post-processing appended all remaining demand to last truck without capacity check, creating 40+ pallet trucks. Fixed: leftovers now respect MAX_PLT, spill into new trucks.
+4. **LP stock holds stale after dispatch** (HIGH) — `LP_toggleDispatch()` didn't recompute stock holds. Fixed: added `LP_recomputeStockHolds()` call.
+5. **Init config loads silently swallowed errors** (MEDIUM) — 13 parallel Supabase loads all had `.catch(()=>{})`. Fixed: errors now logged with config names.
+6. **Dead `_arrDateHash` duplicate** (LOW) — Two definitions, first overwritten by second. Fixed: removed first, replaced with `_stockHash()`.
+7. **Dead `ppu` parameter in `_pqUomEff`** (LOW) — Parameter passed but ignored (identity function). Fixed: removed parameter.
+
 ### Known Acceptable Behaviors
 - `_hsNormalize` truncates beyond 6 digits (e.g., `8301.40.0090` → `8301.40`) — intentional for 6-digit HS level
 - Price of `$0.00` cannot be stored as override (`parseFloat('0')||0` = 0, treated as "clear") — acceptable for this domain
@@ -355,8 +367,9 @@ The entire system operates in UoM (packs, boxes, rolls, etc.), not raw pieces.
 ### LM Module
 - `_rwEnrichEffQty()` — computes `_effQty` on every RW row after NOM is loaded
 - `bV()` and `build()` read `r._effQty` (UoM) — never raw `Required`
-- Pallet calc: `effQty / pqUom * ps` where `pqUom = _pqUomEff(palletQty, ppu)`
-- `palletQty` in NOM is pieces/pallet — must divide by PPU for UoM pallet math
+- Pallet calc: `effQty / pq * ps` — `pq` is already UoM-aligned (no PPU division)
+- `_pqUomEff(pq)` — identity function, returns `pq` as-is (matches LP logic)
+- `_pqUom(sku)` — returns `NOM[sku].pq` directly (no PPU division)
 - Kit items stored in UoM (already ceiling'd at creation)
 - Stock (`STOCK_QTYS`) is in UoM
 
@@ -389,12 +402,21 @@ Tracks plan-invalid state. Includes hashes of:
 - maxPallets, maxTrucks, maxDests, turnaround, ricStartDate
 - LP_contDateOverrides, LP_palletOverrides, LP_holds+LP_stockHolds
 - LP_STATE.arrivals dates, LP_transitDays, demand qty
+- STOCK_SKUS + STOCK_QTYS (via `_stockHash()`) — plan flagged stale after stock report change
 
 ### LP Engine Leftover Logic
-- After 3-bucket allocation, post-processing appends remaining demand to last truck per destination
+- After 3-bucket allocation, post-processing distributes remaining demand across trucks per destination
+- Respects MAX_PLT (26 pallets) capacity — if adding an item would exceed capacity, a new truck is created
 - Includes both no-pallet SKUs (`pallets:0`) and partial-pallet leftovers (actual pallet calc)
 - Requires stock availability
 - `_leftover:true` flag on plan rows (not persisted to Supabase)
+- Demand rationing sorts destination keys alphabetically for deterministic allocation across browsers/sessions
+
+### LP Stock Report Integration
+- Stock report upload triggers `LP_regenerate()` — stock SKUs affect engine's inventory timeline (`readyDate=today`)
+- Stock report reset also triggers `LP_regenerate()` + `LP_recomputeStockHolds()`
+- `LP_toggleDispatch()` calls `LP_recomputeStockHolds()` — holds stay fresh after dispatch changes
+- `LP_settingsChanged()` includes `_stockHash()` — plan flagged dirty when stock changes
 
 ### LP Demand Tab Filters
 - **Chip-style** destination and source filters (same as Status tab)
@@ -416,14 +438,30 @@ Tracks plan-invalid state. Includes hashes of:
 - Supabase key: `fm-stp-strategy`
 
 ### Kit System
-- Kit types: FF&E (`FNKIT-001-xxx`) / Stationery (`OSKIT-001-xxx`)
+- Kit types: FF&E (`FNKIT-002-{truckId}-NN`) / Stationery (`OSKIT-002-{truckId}-NN`)
+- Kit SKUs renamed in `numberAll()` after truck IDs assigned — includes truck ID + sequential number (e.g., `OSKIT-002-LM-2-01`)
 - Kit items in UoM (ceiling applied at creation)
 - Kit readiness: `LM_kitReadiness(kitId)` — compares stock vs component qty (both UoM)
 - Kit OOR export: formatted Excel with government template styling (`_oorSheet`)
 - Truck export: two tabs — Kit (aggregated) + All (expanded components)
+- **Kit list modal**: `LM_showKitList()` — click kit badge in demand view to see all kits; filter by FF&E/Stationery; click row to inspect
+- **Batch OOR export**: `_klExportSelected()` — select kits via checkboxes, download as ZIP of individual OOR Excel files (uses `fflate.zipSync`)
+- **ASN Inbound Form**: `_klExportASN()` — generates government-template Excel per truck with kit details (Ship from: WHS Kitting, UoM: Kit, Qty: 1)
+- **Cluster demand view**: Add/Kit/STP buttons hidden when multiple venues selected (only show for single-venue view via `prefillV`)
 
 ### LP Supabase Keys
 `lp-config`, `lp-nom`, `lp-demand`, `lp-demand-raw`, `lp-arrivals`, `lp-plan`, `lp-truck-state`
+
+## LM Dashboard KPIs
+- **Pallets**: total demand pallets from VN (consistent with sidebar labels)
+- **Pieces**: total venue effQty including ALL sources (STP items counted in `bV()` via `a[v].it`)
+- **LM Trucks**: sum of `calMap[d].trucks` — only freight trucks, not STP/CORT
+- **Dispatch Days**: counts only days with LM freight trucks (`calMap[d].trucks > 0`), excludes STP-only and CORT-only days
+- **Peak/Day**: max LM freight trucks on any single day
+- **CORT card**: shows when `totalCort > 0` — count + pcs
+- **Staples card**: shows when venue has STP truck in `LM_STP_TRUCKS` (not just dated deliveries) — count + qty + days
+- **STP in DDD**: undated STP deliveries fall back to venue's first LM dispatch date from `PLAN_CACHE`
+- **Staples truck/qty counting**: iterates `LM_STP_TRUCKS` directly (not calMap) so all venues with STP trucks appear regardless of delivery date
 
 ## Editing
 - File is large (~12,000 lines) — always use `offset` + `limit` when reading sections
