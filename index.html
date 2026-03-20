@@ -230,9 +230,8 @@
   z-index:65;
   background:var(--sf);
   border-top:1px solid var(--bd);
-  display:none;
   box-shadow:0 -2px 8px rgba(0,0,0,.06);
-  display:flex;align-items:center;gap:6px;
+  display:none;align-items:center;gap:6px;
   padding:5px 16px;height:44px;
   box-sizing:border-box;
 }
@@ -540,6 +539,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
   </div>
   <div id="gsb-lp" style="display:none;align-items:center;gap:4px">
     <button class="rbtn" id="lpExportBtn" onclick="LP_exportPlan()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">⬇ Export</button>
+    <button class="rbtn admin-only" onclick="stockReportUpload()" id="lpStockBtn" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">📦 Stock Report</button>
     <button class="rbtn admin-only" id="lpUpdateNomBtn" onclick="LP_updateNomPrompt()" style="display:none">📋 Update Nom</button>
     <input type="file" accept=".xlsx,.xls" id="lpNomFileInput" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
     <button class="rbtn admin-only" id="lpUpdateDemBtn" onclick="LP_updateDemandPrompt()" style="display:none">📋 Update Demand</button>
@@ -12822,14 +12822,16 @@ function stockReportReset(){
 }
 
 function stockUpdateBadge(){
-  const btn=document.getElementById('stockBtn');
-  if(!btn)return;
-  if(STOCK_SKUS.size>0){
-    btn.textContent='📦 Stock: '+STOCK_SKUS.size+' SKUs';
-    btn.style.background='var(--gs)';btn.style.color='var(--gn)';btn.style.borderColor='#B8DFCA';
-  }else{
-    btn.textContent='📦 Stock Report';
-    btn.style.background='var(--os)';btn.style.color='var(--or)';btn.style.borderColor='#F5D6B8';
+  const ids=['stockBtn','lpStockBtn'];
+  for(const id of ids){
+    const btn=document.getElementById(id);if(!btn)continue;
+    if(STOCK_SKUS.size>0){
+      btn.textContent='📦 Stock: '+STOCK_SKUS.size+' SKUs';
+      btn.style.background='var(--gs)';btn.style.color='var(--gn)';btn.style.borderColor='#B8DFCA';
+    }else{
+      btn.textContent='📦 Stock Report';
+      btn.style.background='var(--os)';btn.style.color='var(--or)';btn.style.borderColor='#F5D6B8';
+    }
   }
 }
 
