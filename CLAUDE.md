@@ -330,6 +330,17 @@ Comprehensive automated audit across all subsystems. Fixes in commits `65f8e0d` 
 6. **Dead `_arrDateHash` duplicate** (LOW) — Two definitions, first overwritten by second. Fixed: removed first, replaced with `_stockHash()`.
 7. **Dead `ppu` parameter in `_pqUomEff`** (LOW) — Parameter passed but ignored (identity function). Fixed: removed parameter.
 
+## System Audit (2026-03-20)
+LP Engine V4.5 audit. All findings verified.
+
+### LP Engine V4.5 Changes
+1. **SR deferral guard in buildOneTruck** — defers non-SR loading when future SR arrivals expected. Truck goes to pending buffer, topped up daily with SR-only items.
+2. **SR-only guard in _topUpPending** — pending trucks only receive SR items while future SR arrivals exist. Non-SR allowed only when no more SR coming.
+3. **trucksToday counting fixed** — deferred trucks now count toward maxTrk per day.
+4. **maxTrk on emit date** — `_emitByDate` counter prevents emitting too many trucks on one date. Force-flush at end of planning bypasses limit.
+5. **Dead code removed** — `floorFullPallets`, `floorSpaces`, `READY_MIN`, `destIsReady`, `destHasFuture` removed. `advBlk` unused but retained.
+6. **Stale comment** — line 897 says "pieces per pallet" but pq is UoM per pallet. Cosmetic only.
+
 ### Known Acceptable Behaviors
 - `_hsNormalize` truncates beyond 6 digits (e.g., `8301.40.0090` → `8301.40`) — intentional for 6-digit HS level
 - Price of `$0.00` cannot be stored as override (`parseFloat('0')||0` = 0, treated as "clear") — acceptable for this domain
@@ -404,13 +415,41 @@ Tracks plan-invalid state. Includes hashes of:
 - LP_STATE.arrivals dates, LP_transitDays, demand qty
 - STOCK_SKUS + STOCK_QTYS (via `_stockHash()`) — plan flagged stale after stock report change
 
+### LP Engine V4.5 Architecture
+Two buckets: MEX/CAN first (with consolidation + SR deferral), then USA/RIC.
+
+**buildOneTruck** — 4-pass loading with SR deferral:
+1. SR whole pallets (greedy, largest pallet space first)
+2. SR partial pallets (sub-pallet quantities)
+3. **Deferral guard**: if truck has SR items but isn't full, AND destination has remaining SR demand, AND future SR arrivals exist in `delta` → return `{pending:true}` instead of loading non-SR items
+4. Non-SR whole pallets (only if not deferred)
+5. Non-SR partial pallets
+
+**planStream** — day-by-day planner with consolidation buffer:
+- `pending[dest]` holds partial/deferred trucks
+- `_topUpPending(dest, date)`: fills pending trucks with newly available stock; SR-only while future SR arrivals expected, all items when no more SR coming
+- `_emitPending(dest, force)`: emits truck to plan; respects `maxTrk` per date via `_emitByDate` counter; force=true for end-of-planning flush
+- `FULL_THRESH` = 90% of MAX_PLT — pending trucks emit when reaching this threshold
+- Deferred trucks count toward `trucksToday` (prevents exceeding maxTrk on build day)
+
+**Constraint enforcement**:
+- `maxTrk` per day: enforced in build loop (`trucksToday`) AND emit path (`_emitByDate`)
+- `maxDst` per day: enforced in scoring (`allowed` set)
+- `MAX_PLT` per truck: enforced in `_loadWhole`/`_loadPartial` capacity checks
+- Bucket order: MEX/CAN consumes stock first, USA gets remainder (no fPtr reset)
+
 ### LP Engine Leftover Logic
-- After 3-bucket allocation, post-processing distributes remaining demand across trucks per destination
+- After both buckets, post-processing distributes remaining demand across trucks per destination
 - Respects MAX_PLT (26 pallets) capacity — if adding an item would exceed capacity, a new truck is created
 - Includes both no-pallet SKUs (`pallets:0`) and partial-pallet leftovers (actual pallet calc)
 - Requires stock availability
 - `_leftover:true` flag on plan rows (not persisted to Supabase)
 - Demand rationing sorts destination keys alphabetically for deterministic allocation across browsers/sessions
+
+### LP Engine pq (palletQty) Basis
+- `pq` is in UoM units per pallet — NOT pieces per pallet
+- `pq` is NOT divided by PPU in the engine — data must be UoM-aligned before input
+- Engine comment at line 897 says "pieces per pallet" but this is stale — pq is UoM per pallet
 
 ### LP Stock Report Integration
 - Stock report upload triggers `LP_regenerate()` — stock SKUs affect engine's inventory timeline (`readyDate=today`)
