@@ -623,6 +623,7 @@ function _undoSnap(){
     lp_palletOvr:JSON.stringify(LP_palletOverrides||{}),
     lp_customsOvr:JSON.stringify(LP_customsOverrides||{}),
     lp_excludeStaples:LP_excludeStaples,
+
     lp_holds:JSON.stringify([...(LP_holds||[])]),
     lp_arrived:JSON.stringify([...(LP_arrivedConts||[])]),
     lp_turnaround:LP_STATE.turnaround,
@@ -683,6 +684,7 @@ function UNDO_restore(){
     LP_palletOverrides=JSON.parse(snap.lp_palletOvr);
     LP_customsOverrides=JSON.parse(snap.lp_customsOvr||'{}');
     LP_excludeStaples=snap.lp_excludeStaples!==undefined?snap.lp_excludeStaples:true;
+
     LP_holds=new Set(JSON.parse(snap.lp_holds||'[]'));
     LP_arrivedConts=new Set(JSON.parse(snap.lp_arrived));
     LP_STATE.turnaround=snap.lp_turnaround;
@@ -896,10 +898,6 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   const nom={};const _cn=cfg.nomenclature||{};
   for(const d of demand){if(!nom[d.sku]){const n=_cn[d.sku];nom[d.sku]={pq:n?.palletQty||d.palletQty||0,ps:n?.palletSpc||d.palletSpc||0,nm:n?.name||d.name||''}}}
 
-  // ── Pallet math (quantities and pq both in UOM) ──
-  const floorFullPallets=(sku,units)=>{const n=nom[sku];return(n&&n.pq>0)?Math.floor(units/n.pq):0};
-  const floorSpaces=(sku,units)=>{const n=nom[sku];return(n&&n.pq>0&&n.ps>0)?Math.floor(units/n.pq)*n.ps:0};
-
   // ── Preprocessing ──
   const nomRef=cfg.nomenclature||{};
   const isTruck=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
@@ -954,7 +952,6 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   const stock={};
   const plan=[];let truckId=START_ID;
   const advBlk=d=>{let dt=d;while(BLOCKED.has(dt))dt=LP_nextWorkday(LP_addDays(dt,1));return dt};
-  const READY_MIN=Math.ceil(MAX_PLT*0.9);// 90% threshold
 
   // Pre-load on-hand stock (readyDate <= today)
   for(const dt of Object.keys(delta)){
@@ -964,86 +961,118 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   }
 
   // ── Shared helpers ──
-  const scoreDest=dest=>{let s=0;for(const sku of Object.keys(open[dest]||{})){const q=open[dest][sku]||0;if(q<=0)continue;s+=floorSpaces(sku,Math.min(q,stock[sku]||0))}return s};
+  const scoreDest=dest=>{let s=0;for(const sku of Object.keys(open[dest]||{})){const q=open[dest][sku]||0;if(q<=0)continue;const avail=Math.min(q,stock[sku]||0);if(avail<=0)continue;const n=nom[sku];s+=(n&&n.pq>0&&n.ps>0)?(avail/n.pq)*n.ps:0}return s};
 
+  // LP Engine V4: build ONE truck — SR items first (whole + partial), then non-SR
   const buildOneTruck=(dest,date)=>{
     const skus=[];
     for(const sku of Object.keys(open[dest]||{})){
       const q=open[dest][sku]||0;if(q<=0)continue;
-      const spc=floorSpaces(sku,Math.min(q,stock[sku]||0));
-      if(spc>=1)skus.push({sku,spc});
+      const avail=Math.min(q,stock[sku]||0);if(avail<=0)continue;
+      const n=nom[sku];const pq=n?.pq||0;const ps=n?.ps||0;
+      if(pq<=0||ps<=0)continue;
+      const inSR=stockSet.has(sku);
+      skus.push({sku,pq,ps,avail,nm:n?.nm||sku,inSR});
     }
     if(!skus.length)return null;
-    skus.sort((a,b)=>b.spc-a.spc);
+    const srSkus=skus.filter(s=>s.inSR).sort((a,b)=>(b.avail/b.pq)*b.ps-(a.avail/a.pq)*a.ps);
+    const nonSrSkus=skus.filter(s=>!s.inSR).sort((a,b)=>(b.avail/b.pq)*b.ps-(a.avail/a.pq)*a.ps);
     truckId++;const rows=[];let loaded=0;
-    for(const{sku}of skus){
-      if(loaded>=MAX_PLT)break;
-      const avail=Math.min(open[dest][sku]||0,stock[sku]||0);
-      const fullPlt=floorFullPallets(sku,avail);
-      const ps=nom[sku]?.ps||1;
-      const maxFit=Math.floor((MAX_PLT-loaded)/ps);
-      const plt=Math.min(fullPlt,maxFit);
-      if(plt<1)continue;
-      const units=plt*(nom[sku]?.pq||0);const spc=plt*ps;
-      if(units<1||spc<1)continue;
-      open[dest][sku]-=units;stock[sku]-=units;
-      rows.push({date,truckId,destination:dest,sku,name:nom[sku]?.nm||sku,qty:Math.round(units),pallets:spc});
-      loaded+=spc;
-    }
+    const _loadWhole=(list)=>{for(const s of list){if(loaded>=MAX_PLT)break;
+      const avail=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);if(avail<=0)continue;
+      const plt=Math.min(Math.floor(avail/s.pq),Math.floor((MAX_PLT-loaded)/s.ps));
+      if(plt>=1){const units=plt*s.pq;const spc=plt*s.ps;open[dest][s.sku]-=units;stock[s.sku]-=units;
+        rows.push({date,truckId,destination:dest,sku:s.sku,name:s.nm,qty:Math.round(units),pallets:spc});loaded+=spc}}};
+    const _loadPartial=(list)=>{for(const s of list){if(loaded>=MAX_PLT)break;
+      const avail=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);if(avail<=0)continue;
+      const maxUnits=Math.min(avail,Math.floor((MAX_PLT-loaded)/s.ps)*s.pq);if(maxUnits<1)continue;
+      const spc=Math.round((maxUnits/s.pq)*s.ps*100)/100;open[dest][s.sku]-=maxUnits;stock[s.sku]-=maxUnits;
+      const existing=rows.find(r=>r.sku===s.sku);
+      if(existing){existing.qty+=Math.round(maxUnits);existing.pallets=Math.round((existing.pallets+spc)*100)/100}
+      else{rows.push({date,truckId,destination:dest,sku:s.sku,name:s.nm,qty:Math.round(maxUnits),pallets:spc})}
+      loaded+=spc}};
+    _loadWhole(srSkus);_loadPartial(srSkus);_loadWhole(nonSrSkus);_loadPartial(nonSrSkus);
     if(!rows.length){truckId--;return null}
     const tt=+loaded.toFixed(4);
     for(const r of rows)r.truckTotal=tt;
     return rows;
   };
 
-  const destIsReady=dest=>{
-    for(const sku of Object.keys(open[dest]||{})){if((open[dest][sku]||0)>0&&!stockSet.has(sku))return false}
-    return Object.keys(open[dest]||{}).some(sku=>(open[dest][sku]||0)>0);
-  };
-
   // Future dates (sorted, pointer-based) — shared across streams
   const futDates=Object.keys(delta).sort();
   let fPtr=0;
-  const destHasFuture=dest=>{
-    if(fPtr>=futDates.length)return false;
-    for(const sku of Object.keys(open[dest]||{})){
-      if((open[dest][sku]||0)<=0)continue;
-      for(let i=fPtr;i<futDates.length;i++){if(delta[futDates[i]]?.[sku]>0)return true}
-    }
-    return false;
-  };
 
   // ── Generic day-by-day planner for a filtered set of destinations ──
   // destFilter: function(dest) => boolean
   // priSort: function(a,b) => sort comparator for dests
   // startDate: first date to plan from
   // maxDst/maxTrk: caps for this stream
-  // opts: { readyOnly, markReady, deferNonFull }
+  // opts.consolidate: hold partial trucks in buffer, top up with new stock daily
+  const FULL_THRESH=Math.ceil(MAX_PLT*0.9);// 90% = truck considered full
+
   const planStream=(destFilter,priSort,startDate,maxDst,maxTrk,opts)=>{
     const streamPlan=[];
+    const pending={};// dest → {rows:[], loaded, truckId, date}
     const genWorkdays=from=>{const wd=[];let c=LP_nextWorkday(from);for(let i=0;i<365;i++){wd.push(c);c=LP_addDays(c,1);while(LP_isNonWorkday(c)&&i<365){c=LP_addDays(c,1);i++}}return wd};
     const workdays=genWorkdays(opts.startBefore||today);
 
+    const _emitPending=(dest)=>{
+      const p=pending[dest];if(!p||!p.rows.length)return;
+      const tt=+p.loaded.toFixed(4);
+      for(const r of p.rows)r.truckTotal=tt;
+      for(const r of p.rows)streamPlan.push(r);
+      delete pending[dest];
+    };
+    const _topUpPending=(dest,date)=>{
+      const p=pending[dest];if(!p)return;
+      const skus=[];
+      for(const sku of Object.keys(open[dest]||{})){
+        const q=open[dest][sku]||0;if(q<=0)continue;
+        const avail=Math.min(q,stock[sku]||0);if(avail<=0)continue;
+        const n=nom[sku];const pq=n?.pq||0;const ps=n?.ps||0;
+        if(pq<=0||ps<=0)continue;
+        const inSR=stockSet.has(sku);
+        skus.push({sku,pq,ps,avail,nm:n?.nm||sku,inSR});
+      }
+      if(!skus.length)return;
+      skus.sort((a,b)=>(b.inSR?1:0)-(a.inSR?1:0)||(b.avail/b.pq)*b.ps-(a.avail/a.pq)*a.ps);
+      for(const s of skus){if(p.loaded>=MAX_PLT)break;
+        const avail=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);if(avail<=0)continue;
+        const plt=Math.min(Math.floor(avail/s.pq),Math.floor((MAX_PLT-p.loaded)/s.ps));
+        if(plt>=1){const units=plt*s.pq;const spc=plt*s.ps;open[dest][s.sku]-=units;stock[s.sku]-=units;
+          const existing=p.rows.find(r=>r.sku===s.sku);
+          if(existing){existing.qty+=Math.round(units);existing.pallets=Math.round((existing.pallets+spc)*100)/100}
+          else{p.rows.push({date:p.date,truckId:p.truckId,destination:dest,sku:s.sku,name:s.nm,qty:Math.round(units),pallets:spc})}
+          p.loaded=Math.round((p.loaded+spc)*100)/100}}
+      if(p.loaded<MAX_PLT){for(const s of skus){if(p.loaded>=MAX_PLT)break;
+        const avail=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);if(avail<=0)continue;
+        const maxUnits=Math.min(avail,Math.floor((MAX_PLT-p.loaded)/s.ps)*s.pq);if(maxUnits<1)continue;
+        const spc=Math.round((maxUnits/s.pq)*s.ps*100)/100;open[dest][s.sku]-=maxUnits;stock[s.sku]-=maxUnits;
+        const existing=p.rows.find(r=>r.sku===s.sku);
+        if(existing){existing.qty+=Math.round(maxUnits);existing.pallets=Math.round((existing.pallets+spc)*100)/100}
+        else{p.rows.push({date:p.date,truckId:p.truckId,destination:dest,sku:s.sku,name:s.nm,qty:Math.round(maxUnits),pallets:spc})}
+        p.loaded=Math.round((p.loaded+spc)*100)/100}}
+      for(const r of p.rows)r.date=date;p.date=date;
+      if(p.loaded>=FULL_THRESH)_emitPending(dest);
+    };
+
     for(const date of workdays){
-      if(date<startDate)continue;// skip until start date
-      // Add future stock arriving on or before this workday
+      if(date<startDate)continue;
       while(fPtr<futDates.length&&futDates[fPtr]<=date){
         for(const[sku,qty]of Object.entries(delta[futDates[fPtr]]))stock[sku]=(stock[sku]||0)+qty;
         fPtr++;
       }
       if(BLOCKED.has(date))continue;
+      if(opts.consolidate)for(const dest of Object.keys(pending)){_topUpPending(dest,date)}
 
-      // Score filtered destinations
       const scored=[];
       for(const dest of Object.keys(open)){
         if(!destFilter(dest))continue;
-        if(opts.readyOnly&&!destIsReady(dest))continue;
+        if(opts.consolidate&&pending[dest])continue;
         const s=scoreDest(dest);
-        if(opts.readyOnly){if(s>=READY_MIN||s>=MAX_PLT)scored.push({dest,score:s})}
-        else{if(s>=1)scored.push({dest,score:s})}
+        if(s>=1)scored.push({dest,score:s});
       }
-      if(!scored.length){
-        // Check if ANY filtered dest still has open demand
+      if(!scored.length&&!Object.keys(pending).length){
         let anyOpen=false;
         for(const dest of Object.keys(open)){if(destFilter(dest)&&Object.values(open[dest]||{}).some(v=>v>0)){anyOpen=true;break}}
         if(!anyOpen)break;
@@ -1059,32 +1088,28 @@ function LP_buildPlanV3(demand,arrivals,cfg){
         progress=false;
         const rs=[];
         for(const dest of allowed){
-          if(opts.readyOnly&&!destIsReady(dest))continue;
+          if(opts.consolidate&&pending[dest])continue;
           const s=scoreDest(dest);
-          if(opts.readyOnly){if(s>=READY_MIN||s>=MAX_PLT)rs.push({dest,score:s})}
-          else{if(s>=1)rs.push({dest,score:s})}
+          if(s>=1)rs.push({dest,score:s});
         }
         rs.sort(priSort);
 
         for(const{dest,score}of rs){
           if(trucksToday>=maxTrk)break;
-          // Deferral for non-full trucks in forecast mode
-          if(opts.deferNonFull&&score<MAX_PLT&&destHasFuture(dest))continue;
           const rows=buildOneTruck(dest,date);
           if(!rows)continue;
-          if(opts.markReady){
-            const truckPlt=rows.reduce((s,r)=>s+r.pallets,0);
-            const isFull=Math.round((truckPlt/MAX_PLT)*100)>=95;
-            const isLastForDest=scoreDest(dest)<1;// nothing left for this dest after building
-            if(isFull||isLastForDest)for(const r of rows)r._ready=true;
+          const truckPlt=rows.reduce((s,r)=>s+r.pallets,0);
+          if(opts.consolidate&&truckPlt<FULL_THRESH){
+            pending[dest]={rows,loaded:truckPlt,truckId:rows[0].truckId,date};
+          }else{
+            for(const r of rows)streamPlan.push(r);
           }
-          for(const r of rows)streamPlan.push(r);
           trucksToday++;progress=true;
           break;// re-score
         }
       }
-      if(opts.readyOnly&&trucksToday===0)break;// no more ready trucks above threshold
     }
+    for(const dest of Object.keys(pending))_emitPending(dest);
     return streamPlan;
   };
 
@@ -1094,29 +1119,21 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   const usSort=(a,b)=>b.score-a.score;
 
   // ════════════════════════════════════════════════════════
-  // BUCKET 1: Ready full MEX/CAN → start after latest locked truck
+  // BUCKET 1: MEX/CAN — ship whatever stock is available, no waiting
   // ════════════════════════════════════════════════════════
   const _lastLocked=cfg.lastLockedDate||'';
   const b1Start=_lastLocked?advBlk(LP_nextWorkday(LP_addDays(_lastLocked,1))):advBlk(LP_nextWorkday(today));
   const b1=planStream(d=>isMC(d), mcSort, b1Start, MAX_DST, MAX_TRK,
-    {readyOnly:true, markReady:true, deferNonFull:false, startBefore:today});
+    {startBefore:today, consolidate:true});
   for(const r of b1)plan.push(r);
 
   // ════════════════════════════════════════════════════════
-  // BUCKET 2: Non-ready MEX/CAN (forecast) → after bucket 1
+  // BUCKET 2: USA (RIC) → from RIC start date, ship whatever available
   // ════════════════════════════════════════════════════════
-  const b2=planStream(d=>isMC(d), mcSort, b1Start, MAX_DST, MAX_TRK,
-    {readyOnly:false, markReady:false, deferNonFull:true, startBefore:today});
+  // NOTE: fPtr NOT reset — future arrivals consumed by Bucket 1 are already in stock pool
+  const b2=planStream(d=>isRic(d), usSort, RIC_START, MAX_DST, MAX_TRK,
+    {startBefore:today});
   for(const r of b2)plan.push(r);
-
-  // ════════════════════════════════════════════════════════
-  // BUCKET 3: USA (RIC) → from RIC start date, parallel constraints
-  // ════════════════════════════════════════════════════════
-  // Reset fPtr for USA stream (USA may need stock arriving before RIC_START)
-  fPtr=0;// re-scan — future dates already consumed are in stock pool
-  const b3=planStream(d=>isRic(d), usSort, RIC_START, MAX_DST, MAX_TRK,
-    {readyOnly:false, markReady:false, deferNonFull:true, startBefore:today});
-  for(const r of b3)plan.push(r);
 
   // ════════════════════════════════════════════════════════
   // POST-PROCESSING: Append leftover SKUs respecting truck capacity (MAX_PLT)
@@ -2824,6 +2841,7 @@ async function LP_loadFromSupabase(){
       LP_palletOverrides=truck?.palletOverrides||{};
       LP_customsOverrides=truck?.customsOverrides||{};
       LP_excludeStaples=truck?.excludeStaples!==undefined?truck.excludeStaples:true;
+
       LP_arrivedConts=new Set(truck?.arrivedConts||[]);
       LP_holds=new Set(truck?.holds||[]);
       if(truck?.transitDays)LP_transitDays={...LP_TRANSIT_DEFAULTS,...truck.transitDays};
@@ -2868,6 +2886,7 @@ async function LP_loadFromSupabase(){
     LP_palletOverrides=p.palletOverrides||{};
     LP_customsOverrides=p.customsOverrides||{};
     LP_excludeStaples=p.excludeStaples!==undefined?p.excludeStaples:true;
+
     LP_arrivedConts=new Set(p.arrivedConts||[]);
     LP_holds=new Set(p.holds||[]);
     if(p.transitDays)LP_transitDays={...LP_TRANSIT_DEFAULTS,...p.transitDays};
