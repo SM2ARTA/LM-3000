@@ -5639,6 +5639,44 @@ function LP_exportPlan(){
   ws2['!cols']=[{wch:8},{wch:12},{wch:16},{wch:12},{wch:10},{wch:10},{wch:10},{wch:8},{wch:12},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws2,'Truck Summary');
 
+  // Sheet 3: Arrivals
+  if(LP_STATE.arrivals.length){
+    const nom=LP_STATE.nomenclature||{};
+    const arrRows=LP_STATE.arrivals.map(a=>{const n=nom[a.sku]||{};return{
+      'Container':a.container||(a._localName?'Local: '+a._localName:'')||'—','SKU':a.sku,'Name':n.name||a.name||'','Source':(n.source||'').trim(),
+      'Qty':a.qty||0,'Pallet Qty':n.palletQty||0,'Pallet Spc':n.palletSpc||0,
+      'Pallets':n.palletQty>0&&n.palletSpc>0?+((a.qty/n.palletQty)*n.palletSpc).toFixed(2):0,
+      'Arrival Date':a.arrivalDate||'','Ready Date':a.readyDate||'','Arrived':LP_arrivedConts.has(a.container||'')?'Yes':'','Manual':a._manual?'Yes':''}});
+    const ws3=XLSX.utils.json_to_sheet(arrRows);
+    ws3['!cols']=[{wch:18},{wch:18},{wch:36},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:12},{wch:12},{wch:8},{wch:8}];
+    XLSX.utils.book_append_sheet(wb,ws3,'Arrivals');
+  }
+
+  // Sheet 4: Demand
+  if(LP_STATE.materialPlan.length){
+    const nom=LP_STATE.nomenclature||{};
+    const demRows=LP_STATE.materialPlan.map(d=>{const n=nom[d.sku]||{};const co=LP_customsOverrides[d.sku]||{};
+      return{'Destination':d.destination,'SKU':d.sku,'Name':n.name||d.name||'','Source':(n.source||'').trim(),
+        'Qty':d.effQty||d.requiredQty||0,'Pallet Qty':n.palletQty||0,'Pallet Spc':n.palletSpc||0,
+        'Pallets':n.palletQty>0&&n.palletSpc>0?+(((d.effQty||d.requiredQty||0)/n.palletQty)*n.palletSpc).toFixed(2):0,
+        'HS Code':co.hsCode||n.hsCode||'','Country':co.country||n.country||'','Unit Price':co.price||n.unitPrice||'',
+        'Customs Name':co.customsName||'','Confirmed':co.hsConfirmed?'Yes':''}});
+    const ws4=XLSX.utils.json_to_sheet(demRows);
+    ws4['!cols']=[{wch:18},{wch:18},{wch:36},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:12},{wch:10},{wch:10},{wch:20},{wch:8}];
+    XLSX.utils.book_append_sheet(wb,ws4,'Demand');
+  }
+
+  // Sheet 5: Nomenclature
+  if(Object.keys(LP_STATE.nomenclature).length){
+    const nomRows=Object.entries(LP_STATE.nomenclature).sort((a,b)=>a[0].localeCompare(b[0])).map(([sku,n])=>{const co=LP_customsOverrides[sku]||{};
+      return{'SKU':sku,'Name':n.name||'','Source':n.source||'','Pallet Qty':n.palletQty||0,'Pallet Spc':n.palletSpc||0,'PPU':n.ppu||1,
+        'HS Code':co.hsCode||n.hsCode||'','Country':co.country||n.country||'','Unit Price':co.price||n.unitPrice||'',
+        'Customs Name':co.customsName||'','Confirmed':co.hsConfirmed?'Yes':''}});
+    const ws5=XLSX.utils.json_to_sheet(nomRows);
+    ws5['!cols']=[{wch:18},{wch:36},{wch:10},{wch:8},{wch:8},{wch:6},{wch:12},{wch:10},{wch:10},{wch:20},{wch:8}];
+    XLSX.utils.book_append_sheet(wb,ws5,'Nomenclature');
+  }
+
   XLSX.writeFile(wb,'LP_LoadPlan_Export.xlsx');
 }
 
@@ -12137,6 +12175,58 @@ function exportXL(){
     const ws3=XLSX.utils.json_to_sheet(venRows);
     ws3['!cols']=[{wch:28},{wch:8},{wch:10},{wch:7},{wch:12},{wch:14},{wch:6},{wch:10},{wch:6},{wch:10},{wch:12},{wch:12},{wch:9},{wch:12},{wch:10}];
     XLSX.utils.book_append_sheet(wb,ws3,'Venue Summary');
+  }
+
+  // ── Sheet 4: Demand (all venues, by venue + SKU) ──
+  const demandRows=[];
+  const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
+  for(const v of VN){
+    for(const r of RW){
+      if(r.Venue!==v.name)continue;
+      const s=r.Nomenclature;if(!s||!NOM[s])continue;
+      const eq=r._effQty||0;if(eq<=0)continue;
+      const nm=NOM[s];
+      const adjK=v.name+'|'+s;
+      const adj=LM_demandAdj[adjK];
+      demandRows.push({
+        'Venue':v.name,'SKU':s,'Item':nm.nm||s,'Source':nm.src||'','UoM':nm.uom||'Each',
+        'Qty':eq,'Adjusted':adj!==undefined?adj:'',
+        'Kit':r._kit?'Yes':'','Manual':r._manual?'Yes':'',
+        'Bump-In':r['Estimated bump-in date']||''
+      });
+    }
+  }
+  if(demandRows.length){
+    const ws4=XLSX.utils.json_to_sheet(demandRows);
+    ws4['!cols']=[{wch:28},{wch:18},{wch:30},{wch:10},{wch:8},{wch:8},{wch:10},{wch:6},{wch:8},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws4,'Demand');
+  }
+
+  // ── Sheet 5: Nomenclature ──
+  const nomRows=Object.entries(NOM).filter(([,n])=>!n._kitNom).sort((a,b)=>a[0].localeCompare(b[0])).map(([sku,n])=>({
+    'SKU':sku,'Name':n.nm||'','Source':n.src||'','UoM':n.uom||'Each','PPU':n.ppu||1,
+    'Dis Qty':n.pq||0,'Dis Spc':n.ps||0,'Asm Qty':n.pqA||0,'Asm Spc':n.psA||0
+  }));
+  if(nomRows.length){
+    const ws5=XLSX.utils.json_to_sheet(nomRows);
+    ws5['!cols']=[{wch:18},{wch:30},{wch:10},{wch:8},{wch:6},{wch:8},{wch:8},{wch:8},{wch:8}];
+    XLSX.utils.book_append_sheet(wb,ws5,'Nomenclature');
+  }
+
+  // ── Sheet 6: Kits ──
+  if(LM_KITS.length){
+    const kitRows=[];
+    for(const kit of LM_KITS){
+      const effPcs=kit.items.reduce((s,i)=>s+i.qty,0);
+      for(const item of kit.items){
+        const n=NOM[item.sku];
+        kitRows.push({'Kit SKU':kit.sku,'Kit Name':kit.name,'Venue':kit.venue,
+          'Component SKU':item.sku,'Component Name':n?.nm||item.sku,'Qty':item.qty});
+      }
+    }
+    const ws6=XLSX.utils.json_to_sheet(kitRows);
+    ws6['!cols']=[{wch:22},{wch:28},{wch:28},{wch:18},{wch:28},{wch:8}];
+    XLSX.utils.book_append_sheet(wb,ws6,'Kits');
   }
 
   XLSX.writeFile(wb,'ML3000_Last_Mile_Plan.xlsx');
