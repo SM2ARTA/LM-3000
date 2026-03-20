@@ -978,20 +978,33 @@ function LP_buildPlanV3(demand,arrivals,cfg){
     const srSkus=skus.filter(s=>s.inSR).sort((a,b)=>(b.avail/b.pq)*b.ps-(a.avail/a.pq)*a.ps);
     const nonSrSkus=skus.filter(s=>!s.inSR).sort((a,b)=>(b.avail/b.pq)*b.ps-(a.avail/a.pq)*a.ps);
     truckId++;const rows=[];let loaded=0;
-    const _loadWhole=(list)=>{for(const s of list){if(loaded>=MAX_PLT)break;
-      const avail=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);if(avail<=0)continue;
+    const _loadW=(s)=>{
+      const avail=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);if(avail<=0)return;
       const plt=Math.min(Math.floor(avail/s.pq),Math.floor((MAX_PLT-loaded)/s.ps));
       if(plt>=1){const units=plt*s.pq;const spc=plt*s.ps;open[dest][s.sku]-=units;stock[s.sku]-=units;
-        rows.push({date,truckId,destination:dest,sku:s.sku,name:s.nm,qty:Math.round(units),pallets:spc});loaded+=spc}}};
-    const _loadPartial=(list)=>{for(const s of list){if(loaded>=MAX_PLT)break;
-      const avail=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);if(avail<=0)continue;
-      const maxUnits=Math.min(avail,Math.floor((MAX_PLT-loaded)/s.ps)*s.pq);if(maxUnits<1)continue;
-      const spc=Math.round((maxUnits/s.pq)*s.ps*100)/100;open[dest][s.sku]-=maxUnits;stock[s.sku]-=maxUnits;
-      const existing=rows.find(r=>r.sku===s.sku);
-      if(existing){existing.qty+=Math.round(maxUnits);existing.pallets=Math.round((existing.pallets+spc)*100)/100}
-      else{rows.push({date,truckId,destination:dest,sku:s.sku,name:s.nm,qty:Math.round(maxUnits),pallets:spc})}
-      loaded+=spc}};
-    _loadWhole(srSkus);_loadPartial(srSkus);_loadWhole(nonSrSkus);_loadPartial(nonSrSkus);
+        const existing=rows.find(r=>r.sku===s.sku);
+        if(existing){existing.qty+=Math.round(units);existing.pallets=Math.round((existing.pallets+spc)*100)/100}
+        else{rows.push({date,truckId,destination:dest,sku:s.sku,name:s.nm,qty:Math.round(units),pallets:spc})}
+        loaded+=spc}};
+    // Pass 1: SR whole pallets (greedy, largest first)
+    for(const s of srSkus){if(loaded>=MAX_PLT)break;_loadW(s)}
+    // Pass 2: non-SR whole pallets
+    if(loaded<MAX_PLT){
+      for(const s of nonSrSkus){if(loaded>=MAX_PLT)break;_loadW(s)}
+    }
+    // Pass 3: sub-pallet partials (SR first, then non-SR) — only avail < pq
+    if(loaded<MAX_PLT){
+      const _subs=[...srSkus,...nonSrSkus].filter(s=>{const a=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);return a>0&&a<s.pq});
+      _subs.sort((a,b)=>(b.inSR?1:0)-(a.inSR?1:0));
+      for(const s of _subs){if(loaded>=MAX_PLT)break;
+        const avail=Math.min(open[dest][s.sku]||0,stock[s.sku]||0);if(avail<=0)continue;
+        const maxUnits=Math.min(avail,Math.floor((MAX_PLT-loaded)/s.ps)*s.pq);if(maxUnits<1)continue;
+        const spc=Math.round((maxUnits/s.pq)*s.ps*100)/100;open[dest][s.sku]-=maxUnits;stock[s.sku]-=maxUnits;
+        const existing=rows.find(r=>r.sku===s.sku);
+        if(existing){existing.qty+=Math.round(maxUnits);existing.pallets=Math.round((existing.pallets+spc)*100)/100}
+        else{rows.push({date,truckId,destination:dest,sku:s.sku,name:s.nm,qty:Math.round(maxUnits),pallets:spc})}
+        loaded+=spc}
+    }
     if(!rows.length){truckId--;return null}
     const tt=+loaded.toFixed(4);
     for(const r of rows)r.truckTotal=tt;
@@ -3959,11 +3972,15 @@ function LP_renderPlan(el){
   // ── Sequential stock allocation waterfall ──
   // Walk trucks in date order, deduct from available stock, mark ready/not-ready
   const _stockPool={};// running available balance
+  window._lpWaterfallBefore={};// truckId → {sku: availQty BEFORE this truck's deduction}
   if(STOCK_SKUS.size>0){
     for(const sku of STOCK_SKUS){const sq=STOCK_QTYS[sku];_stockPool[sku]=sq!==undefined?sq:Infinity}
   }
   for(const t of truckList){
     if(STOCK_SKUS.size===0){t.stockReady=false;t.oorSubmitted=false;continue}
+    // Snapshot stock available BEFORE this truck deducts
+    const _snap={};for(const sku in _stockPool)_snap[sku]=_stockPool[sku];
+    window._lpWaterfallBefore[t.id]=_snap;
     const agg=LP_aggregateTruck(t.items);
     t.oorSubmitted=LP_oorTrucks.has(t.id);
     // OOR trucks: stock already reserved by warehouse, no deduction from pool
@@ -4450,13 +4467,14 @@ function LP_showTruckModal(truckId){
     const totalDemand=totalDemandByDestSku[demKey]||0;
     const shippedUpTo=shippedUpToByDestSku[demKey]||0;
     const remain=Math.max(0,totalDemand-shippedUpTo);
-    const _inSSet=STOCK_SKUS.has(s.sku);const _sq=STOCK_QTYS[s.sku];
-    // Dispatched trucks: stock already allocated, skip qty check
-    const _sqOk=isDisp||!_inSSet||_sq===undefined||_sq>=(_tpBySku[s.sku]||0);
-    const inStock=_inSSet&&_sqOk;
-    const _dotClr=!_inSSet?'var(--rd)':(_sqOk?'var(--gn)':'var(--or)');
-    const _dotTtl=!_inSSet?'Not in stock':(!_sqOk?'In stock but qty ('+_sq+') < planned ('+(_tpBySku[s.sku]||0)+')':'In stock'+(isDisp?' (dispatched)':''));
-    const dot='<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+_dotClr+'" title="'+_dotTtl+'"></span>';
+    const _wfSnap=window._lpWaterfallBefore?.[truckId]||{};
+    const _wfAvail=_wfSnap[s.sku]!==undefined?_wfSnap[s.sku]:null;
+    const _inSSet=STOCK_SKUS.has(s.sku);
+    const _hasSuff=_wfAvail!==null&&_wfAvail>=s.qty;
+    const _dotClr=!_inSSet?'var(--rd)':(_hasSuff?'var(--gn)':'var(--or)');
+    const _avlLbl=_wfAvail!==null&&_wfAvail!==Infinity?Math.round(_wfAvail).toLocaleString():'—';
+    const _dotTtl=!_inSSet?'Not in stock':(_hasSuff?'In stock: '+_avlLbl+' avail'+(isDisp?' (dispatched)':''):'In stock but only '+_avlLbl+' avail (need '+s.qty.toLocaleString()+')');
+    const dot='<span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+_dotClr+';flex-shrink:0" title="'+_dotTtl+'"></span><span style="font-size:8px;color:'+_dotClr+';font-family:var(--fm);min-width:16px" title="'+_dotTtl+'">'+(_inSSet?_avlLbl:'')+'</span></span>';
     rows+=`<tr>
       <td>${dot}</td>
       <td class="mono">${s.sku}</td>
