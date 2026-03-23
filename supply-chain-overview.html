@@ -151,9 +151,10 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
 .tl-label{position:absolute;font-size:10px;font-weight:600;white-space:nowrap;top:-16px}
 
 /* Print */
+@page{size:20in 11.25in;margin:0}
 @media print{
-  body{background:#fff}
-  .S{page-break-after:always;margin:0;box-shadow:none}
+  body{background:#fff;margin:0;padding:0}
+  .S{page-break-after:always;margin:0;box-shadow:none;width:20in;height:11.25in;padding:0.75in 0.9375in}
 }
 </style>
 </head>
@@ -663,7 +664,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </div>
 
   <h2 style="margin-bottom:4px">~<span class="mono text-pri">93</span> Trucks to <span class="mono text-pri">8</span> Destinations</h2>
-  <div style="font-size:14px;color:var(--ts);margin-bottom:16px">Load Plan (LP) dispatches palletized freight from Dallas to regional and satellite warehouses across North America.</div>
+  <div class="sub" style="margin-bottom:16px">Load Plan (LP) dispatches palletized freight from Dallas to regional and satellite warehouses across North America.</div>
 
   <div style="display:flex;gap:32px">
     <!-- Map -->
@@ -923,7 +924,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </div>
 
   <h2>Mexico &amp; Canada — Full Regional Last Mile Model</h2>
-  <div style="font-size:14px;color:var(--ts);margin-bottom:8px">Five regional warehouses operated by RIC, serving <span class="mono bold">37</span> venues across two countries.</div>
+  <div class="sub" style="margin-bottom:8px">Five regional warehouses operated by RIC, serving <span class="mono bold">37</span> venues across two countries.</div>
 
   <!-- Operations flow -->
   <div style="display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:8px;background:var(--bg);border-radius:10px;padding:10px 20px">
@@ -1084,7 +1085,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </div>
 
   <h2>USA Last Mile — Every Destination from Dallas</h2>
-  <div style="font-size:14px;color:var(--ts);margin-bottom:12px">Last Mile (LM) delivers to stadiums via satellite warehouses and to CORT cross-docks for <span class="mono bold">159+</span> USA non-stadium venues.</div>
+  <div class="sub" style="margin-bottom:12px">Last Mile (LM) delivers to stadiums via satellite warehouses and to CORT cross-docks for <span class="mono bold">159+</span> USA non-stadium venues.</div>
 
   <div style="display:grid;grid-template-columns:3fr 2fr;gap:10px;margin-bottom:6px">
     <!-- USA Map — stadiums + CORT -->
@@ -1338,7 +1339,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </div>
 
   <h2 style="margin-bottom:4px"><span class="mono text-pri" style="font-size:52px">6,658</span> Items Requiring Assembly at RGS Venues</h2>
-  <div style="font-size:15px;color:var(--ts);margin-bottom:16px">This is the physical work — unpacking, connecting, positioning. Every one of these needs hands, tools, and time at the venue.</div>
+  <div class="sub" style="margin-bottom:16px">This is the physical work — unpacking, connecting, positioning. Every one of these needs hands, tools, and time at the venue.</div>
 
   <!-- KPI row -->
   <div style="display:flex;gap:14px;margin-bottom:16px">
@@ -1701,21 +1702,21 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   <!-- Product visuals -->
   <div style="display:flex;gap:24px;justify-content:center;margin-bottom:16px">
     <div style="text-align:center;flex:1;max-width:300px">
-      <div style="background:var(--sf);border-radius:14px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06)">
+      <div style="background:var(--sf);border-radius:10px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06)">
         <img src="Table 1.png" alt="Table 1 — 1.6m Premium" style="width:100%;height:140px;object-fit:contain">
       </div>
       <div style="font-size:12px;font-weight:700;color:#00897B;margin-top:8px">Table 1 — 1.6m Premium</div>
       <div style="font-size:10px;color:var(--ts)">White, Re-Board · FoH / Media</div>
     </div>
     <div style="text-align:center;flex:1;max-width:300px">
-      <div style="background:var(--sf);border-radius:14px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06)">
+      <div style="background:var(--sf);border-radius:10px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06)">
         <img src="Table 4.png" alt="Table 4 — 1.2m Basic" style="width:100%;height:140px;object-fit:contain">
       </div>
       <div style="font-size:12px;font-weight:700;color:#00897B;margin-top:8px">Table 4 — 1.2m Basic</div>
       <div style="font-size:10px;color:var(--ts)">Craft, Re-Board · BoH Pilot</div>
     </div>
     <div style="text-align:center;flex:1;max-width:300px">
-      <div style="background:var(--sf);border-radius:14px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06)">
+      <div style="background:var(--sf);border-radius:10px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06)">
         <img src="Welcome desk.png" alt="Welcome Desk" style="width:100%;height:140px;object-fit:contain">
       </div>
       <div style="font-size:12px;font-weight:700;color:var(--pri);margin-top:8px">Welcome Desk</div>
@@ -1799,19 +1800,19 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
     </thead>
     <tbody>
       <!-- MEX -->
-      <tr style="background:#F3E5F5">
+      <tr style="background:var(--pri-s)">
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:var(--pri)">🇲🇽 Mexico — Stadiums</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">3</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">25,440</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">681</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~98</td>
-        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:#C62828">2,544</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:var(--rd)">2,544</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-size:10px">Dallas → Regional WHS → Stadium</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Regional (RIC)</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
       </tr>
-      <tr style="background:#FAFAFA">
+      <tr style="background:var(--bg)">
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);color:var(--pri)">🇲🇽 Mexico — Non-Stadiums</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">32</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">4,821</td>
@@ -1824,19 +1825,19 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
       </tr>
       <!-- CAN -->
-      <tr style="background:#F3E5F5">
+      <tr style="background:var(--pri-s)">
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:var(--pri)">🇨🇦 Canada — Stadiums</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">2</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">13,146</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">389</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~40</td>
-        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:#C62828">1,567</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:var(--rd)">1,567</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-size:10px">Dallas → Regional WHS → Stadium</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Regional (RIC)</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
       </tr>
-      <tr style="background:#FAFAFA">
+      <tr style="background:var(--bg)">
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);color:var(--pri)">🇨🇦 Canada — Non-Stadiums</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">21</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">2,720</td>
@@ -1849,20 +1850,20 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
       </tr>
       <!-- USA RGS -->
-      <tr style="background:#E8EAF6">
-        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:#304FFE">🇺🇸 USA / RGS — Stadiums</td>
+      <tr style="background:var(--a3-s)">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:var(--a3)">🇺🇸 USA / RGS — Stadiums</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">4</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">37,633</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">1,092</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~43</td>
-        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:#C62828">4,597</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:var(--rd)">4,597</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-size:10px">Dallas → Satellite WHS → Stadium<br><span style="color:var(--ts)">Dallas STA: direct from central WHS</span></td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Satellite, rented (RIC)</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
       </tr>
-      <tr style="background:#FAFAFA">
-        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);color:#304FFE">🇺🇸 USA / RGS — International Broadcast Centre</td>
+      <tr style="background:var(--bg)">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);color:var(--a3)">🇺🇸 USA / RGS — International Broadcast Centre</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">1</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">3,746</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">92</td>
@@ -1874,20 +1875,20 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
       </tr>
       <!-- USA CORT -->
-      <tr style="background:#E0F2F1">
-        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:#03BFA5">🇺🇸 USA / CORT — Stadiums</td>
+      <tr style="background:var(--a4-s)">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:var(--a4)">🇺🇸 USA / CORT — Stadiums</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">7</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">53,593</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">356</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~14</td>
-        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:#C62828">2,128</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:var(--rd)">2,128</td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-size:10px">RGS: Dallas → Satellite → Stadium<br><span style="color:var(--ts)">CORT: CORT facility → Stadium</span></td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Satellite (RGS items)<br><span style="font-size:10px;color:var(--ts)">CORT facility (CORT items)</span></td>
         <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
-        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)"><b>RIC</b> (RGS items)<br><b style="color:#03BFA5">CORT</b> (CORT items)</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)"><b>RIC</b> (RGS items)<br><b style="color:var(--a4)">CORT</b> (CORT items)</td>
       </tr>
-      <tr style="background:#FAFAFA">
-        <td style="padding:10px 12px;border-bottom:2px solid var(--pri);color:#03BFA5">🇺🇸 USA / CORT — Non-Stadiums</td>
+      <tr style="background:var(--bg)">
+        <td style="padding:10px 12px;border-bottom:2px solid var(--pri);color:var(--a4)">🇺🇸 USA / CORT — Non-Stadiums</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:2px solid var(--pri);font-family:var(--fm);font-weight:700">134</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:2px solid var(--pri);font-family:var(--fm)">25,212</td>
         <td style="padding:10px 8px;text-align:center;border-bottom:2px solid var(--pri);font-family:var(--fm)">179</td>
@@ -1896,7 +1897,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
         <td style="padding:10px 12px;border-bottom:2px solid var(--pri);font-size:10px">Dallas → CORT cross-dock → Venue<br><span style="color:var(--ts)">118 FF&amp;E + 83 Staples kits</span></td>
         <td style="padding:10px 12px;border-bottom:2px solid var(--pri)">CORT cross-dock</td>
         <td style="padding:10px 12px;border-bottom:2px solid var(--pri)">At venue</td>
-        <td style="padding:10px 12px;border-bottom:2px solid var(--pri);font-weight:700;color:#03BFA5">CORT (all items)</td>
+        <td style="padding:10px 12px;border-bottom:2px solid var(--pri);font-weight:700;color:var(--a4)">CORT (all items)</td>
       </tr>
       <!-- TOTALS -->
       <tr style="background:var(--pri);color:#fff;font-weight:700">
@@ -1914,17 +1915,17 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </table>
 
   <div style="display:flex;gap:12px;margin-top:14px">
-    <div style="flex:1;background:#F3E5F5;border:1px solid #CE93D8;border-radius:8px;padding:12px;font-size:11px;line-height:1.6">
+    <div style="flex:1;background:var(--pri-s);border:1px solid var(--pri-b);border-radius:10px;padding:12px;font-size:11px;line-height:1.6">
       <b style="color:var(--pri)">🇲🇽🇨🇦 MEX/CAN (58 venues, ~177 LM trucks)</b><br>
       RIC operates everything. Assembly at WHS for non-stadiums (9 items). Shelving assembled at venue. All Staples kitted.
     </div>
-    <div style="flex:1;background:#E8EAF6;border:1px solid #9FA8DA;border-radius:8px;padding:12px;font-size:11px;line-height:1.6">
-      <b style="color:#304FFE">🇺🇸 USA / RGS (5 venues, ~292 LM trucks)</b><br>
+    <div style="flex:1;background:var(--a3-s);border:1px solid var(--a3-b);border-radius:10px;padding:12px;font-size:11px;line-height:1.6">
+      <b style="color:var(--a3)">🇺🇸 USA / RGS (5 venues, ~292 LM trucks)</b><br>
       Dallas Stadium + IBC served direct from central WHS. All other USA stadiums via satellite warehouses (pallet space, cross-dock model). RIC operates all satellites and assembles at venue.
     </div>
-    <div style="flex:1;background:#E0F2F1;border:1px solid #80CBC4;border-radius:8px;padding:12px;font-size:11px;line-height:1.6">
-      <b style="color:#03BFA5">🇺🇸 USA / CORT (141 venues)</b><br>
-      CORT handles ALL non-stadium venues (assembly included). At CORT stadiums: CORT assembles CORT items, <b style="color:#C62828">RIC assembles RGS items (2,128)</b>. FF&E pre-kitted in Dallas.
+    <div style="flex:1;background:var(--a4-s);border:1px solid var(--a4-b);border-radius:10px;padding:12px;font-size:11px;line-height:1.6">
+      <b style="color:var(--a4)">🇺🇸 USA / CORT (141 venues)</b><br>
+      CORT handles ALL non-stadium venues (assembly included). At CORT stadiums: CORT assembles CORT items, <b style="color:var(--rd)">RIC assembles RGS items (2,128)</b>. FF&E pre-kitted in Dallas.
     </div>
   </div>
 
@@ -1944,7 +1945,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </div>
 
   <h2>What Each Workstream Needs to Handle</h2>
-  <div style="font-size:14px;color:var(--ts);margin-bottom:12px">Six stakeholders, clear ownership. Here's what each team delivers for FWC26 FF&amp;E.</div>
+  <div class="sub" style="margin-bottom:12px">Six stakeholders, clear ownership. Here's what each team delivers for FWC26 FF&amp;E.</div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;align-items:stretch">
     <!-- Materials -->
@@ -2063,7 +2064,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </div>
 
   <h2><span class="mono text-pri">94</span> Days — March 9 to June 11</h2>
-  <div style="font-size:14px;color:var(--ts);margin-bottom:28px">Two phases running in parallel. Every day counts.</div>
+  <div class="sub" style="margin-bottom:28px">Two phases running in parallel. Every day counts.</div>
 
   <svg viewBox="0 0 1700 460" width="1700" height="460">
     <!-- Timeline axis -->

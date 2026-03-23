@@ -6201,7 +6201,8 @@ function V26_render(){
     const cCnt=(cat.cort||[]).filter(c=>!c.excluded).length;
     html+=`<button class="tbtn${isOn?' on':''}" onclick="window._v26Filter='${key}';V26_render()" style="font-size:11px">${cat.label} <span style="font-size:9px;opacity:.6">(${tCnt}${cCnt>0?'+'+cCnt+'C':''})</span></button>`;
   }
-  html+=`<button class="rbtn" onclick="showNetworkMap()" style="font-size:9px;padding:4px 8px;background:var(--ps);color:var(--pu);border-color:#D4C5FE;margin-left:auto">🗺 Network</button></div>`;
+  html+=`<button class="rbtn" onclick="window.open('supply-chain-overview.html','_blank')" style="font-size:9px;padding:4px 8px;background:var(--as);color:var(--ac);border-color:var(--ab);margin-left:auto">📊 Supply Chain</button>`;
+  html+=`<button class="rbtn" onclick="showNetworkMap()" style="font-size:9px;padding:4px 8px;background:var(--ps);color:var(--pu);border-color:#D4C5FE">🗺 Network</button></div>`;
 
   // Filtered peak for timeline
   const fPeakDate=fDates.length?fDates.reduce((pk,d)=>{const ac=(fByDate[d]||[]).filter(t=>!t.excluded).length;const pkc=(fByDate[pk]||[]).filter(t=>!t.excluded).length;return ac>pkc?d:pk},fDates[0]):'';
