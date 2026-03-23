@@ -1,0 +1,1936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<title>FWC26 FF&amp;E Supply Chain — SM²ARTA™</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+:root{--pri:#4A148C;--sec:#751312;--a1:#82B1FF;--a2:#EEFF42;--a3:#304FFE;--a4:#03BFA5;--a5:#64FFDA;--tp:#1A1A2E;--ts:#555570;--tt:#8888A0;--bg:#F5F5FA;--sf:#FFF;--bd:#E0E0EE;--rd:#C62828;--rs:#FDEBED;--fd:'Noto Sans',sans-serif;--fm:'IBM Plex Mono',monospace;--r:10px;--pri-s:#EDE7F6;--pri-b:#C5B3E6;--a4-s:#E0F7F3;--a4-b:#80CBC4;--a3-s:#E8EAF6;--a3-b:#8C9EFF;--sec-s:#FBE9E7;--sec-b:#D4A09F;--rd-s:#FDEBED;--rd-b:#F5B8BA}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--fd);background:var(--bg);color:var(--tp)}
+
+/* Slide frame */
+.S{width:1920px;height:1080px;padding:72px 90px;position:relative;page-break-after:always;background:var(--sf);overflow:hidden}
+
+/* Header / footer */
+.hd{display:flex;justify-content:flex-end;align-items:center;margin-bottom:36px;padding-bottom:14px;border-bottom:1px solid var(--bd)}
+.logo{display:none}
+.li{display:none}
+.lt{display:none}
+.badge{padding:7px 18px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.badge-pri{background:var(--pri);color:#fff}
+.badge-sec{background:var(--sec);color:#fff}
+.badge-a3{background:var(--a3);color:#fff}
+.badge-a4{background:var(--a4);color:#fff}
+.badge-rd{background:var(--rd);color:#fff}
+.badge-soft{background:var(--pri-s);color:var(--pri);border:1px solid var(--pri-b)}
+.ft{position:absolute;bottom:28px;right:90px;display:flex;align-items:center;color:var(--tt);font-size:11px}
+.ft>span{display:none}
+.sn{background:var(--pri);color:#fff;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+
+/* Typography */
+h1{font-size:56px;font-weight:800;line-height:1.12;margin-bottom:14px}
+h2{font-size:34px;font-weight:700;margin-bottom:6px}
+h3{font-size:18px;font-weight:700;margin-bottom:10px}
+.sub{font-size:17px;color:var(--ts);font-weight:500;margin-bottom:32px;max-width:900px;line-height:1.55}
+.dv{width:56px;height:3px;background:var(--pri);border-radius:2px;margin-bottom:22px}
+
+/* Cards */
+.c{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:24px 28px}
+.cv{font-size:36px;font-weight:800;color:var(--pri);font-family:var(--fm);margin-bottom:2px}
+.cl{font-size:13px;color:var(--ts);font-weight:600}
+.cd{font-size:11px;color:var(--tt);margin-top:6px;line-height:1.5}
+
+/* Tags */
+.tag{display:inline-block;padding:3px 10px;border-radius:5px;font-size:11px;font-weight:700}
+.ta{background:var(--pri-s);color:var(--pri);border:1px solid var(--pri-b)}
+.tg{background:var(--a4-s);color:#00897B;border:1px solid var(--a4-b)}
+.tb{background:var(--a3-s);color:var(--a3);border:1px solid var(--a3-b)}
+.tp2{background:var(--pri-s);color:var(--pri);border:1px solid var(--pri-b)}
+.to{background:var(--sec-s);color:var(--sec);border:1px solid var(--sec-b)}
+.tr{background:var(--rd-s);color:var(--rd);border:1px solid var(--rd-b)}
+
+/* Tables */
+.tbl{width:100%;border-collapse:collapse;margin-top:10px}
+.tbl th{text-align:left;padding:9px 14px;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.7px;border-bottom:2px solid var(--bd);background:var(--bg)}
+.tbl td{padding:8px 14px;font-size:12px;border-bottom:1px solid var(--bd);line-height:1.5}
+.tbl td.num,.tbl th.num{font-family:var(--fm);font-weight:600;text-align:right}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr.total td{font-weight:800;border-top:2px solid var(--tp);border-bottom:none;background:var(--bg)}
+
+/* Flow arrows */
+.fl{display:flex;align-items:center;gap:0;margin:20px 0}
+.fn{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:16px 20px;text-align:center;min-width:150px}
+.fn.pri{background:var(--pri-s);border-color:var(--pri-b)}
+.fn.a4{background:var(--a4-s);border-color:var(--a4-b)}
+.fn.a3{background:var(--a3-s);border-color:var(--a3-b)}
+.fn.sec{background:var(--sec-s);border-color:var(--sec-b)}
+.fa{font-size:22px;color:var(--tt);padding:0 6px;flex-shrink:0}
+.ft2{font-size:13px;font-weight:700;margin-bottom:3px}
+.fs{font-size:10px;color:var(--ts);line-height:1.4}
+
+/* Grids */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px}
+
+/* Bar chart rows */
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.bar-label{width:140px;font-size:12px;font-weight:600;text-align:right;flex-shrink:0}
+.bar-h{height:28px;border-radius:5px;display:flex;align-items:center;padding:0 10px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap;min-width:20px}
+.bar-val{font-size:11px;font-weight:700;font-family:var(--fm);color:var(--ts);margin-left:6px;flex-shrink:0}
+
+/* Callout */
+.callout{border:2px solid var(--pri);border-radius:10px;padding:16px 22px;background:var(--pri-s);font-size:13px;line-height:1.6}
+.callout b{color:var(--pri)}
+.callout-blue{border-color:var(--a3);background:var(--a3-s)}
+.callout-blue b{color:var(--a3)}
+.callout-red{border-color:var(--rd);background:var(--rd-s)}
+.callout-red b{color:var(--rd)}
+.callout-teal{border-color:var(--a4);background:var(--a4-s)}
+.callout-teal b{color:var(--a4)}
+.callout-sec{border-color:var(--sec);background:var(--sec-s)}
+.callout-sec b{color:var(--sec)}
+
+/* Misc */
+.chip{background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:4px 11px;font-size:11px;font-weight:600;display:inline-block;margin:2px}
+.chip .n{color:var(--pri);font-family:var(--fm);margin-left:3px}
+.hl{background:var(--pri-s);border:1px solid var(--pri-b);border-radius:10px;padding:14px 20px;margin-top:12px}
+.mono{font-family:var(--fm)}
+.text-pri{color:var(--pri)}
+.text-a3{color:var(--a3)}
+.text-a4{color:var(--a4)}
+.text-sec{color:var(--sec)}
+.text-rd{color:var(--rd)}
+.text-tt{color:var(--tt)}
+.bold{font-weight:700}
+.mt{margin-top:16px}
+.mt-sm{margin-top:8px}
+.mb{margin-bottom:16px}
+.mb-sm{margin-bottom:8px}
+
+/* Phase pills */
+.phase{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:6px;font-size:12px;font-weight:700}
+.phase-lp{background:var(--pri-s);color:var(--pri);border:1px solid var(--pri-b)}
+.phase-lm{background:var(--a3-s);color:var(--a3);border:1px solid var(--a3-b)}
+
+/* Stat row */
+.stat-bar{display:flex;gap:16px;margin-top:16px;flex-wrap:wrap}
+.stat-bar .c{flex:1;min-width:120px;text-align:center;padding:14px 16px}
+
+/* Split columns */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+.split-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px}
+
+/* Colored top border cards */
+.c-pri{border-top:3px solid var(--pri)}
+.c-a4{border-top:3px solid var(--a4)}
+.c-a3{border-top:3px solid var(--a3)}
+.c-sec{border-top:3px solid var(--sec)}
+.c-rd{border-top:3px solid var(--rd)}
+
+/* Item list */
+.ilist{list-style:none;padding:0;margin:0}
+.ilist li{padding:5px 0;font-size:12px;line-height:1.5;border-bottom:1px solid var(--bd)}
+.ilist li:last-child{border-bottom:none}
+.ilist li::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;vertical-align:middle}
+.ilist.pri li::before{background:var(--pri)}
+.ilist.a4 li::before{background:var(--a4)}
+.ilist.a3 li::before{background:var(--a3)}
+.ilist.sec li::before{background:var(--sec)}
+
+/* Hero number */
+.hero-num{font-family:var(--fm);font-weight:800;color:var(--pri);line-height:1}
+
+/* Timeline */
+.tl-lane{display:flex;align-items:center;height:48px;position:relative;margin-bottom:4px}
+.tl-bar{height:12px;border-radius:6px;position:absolute}
+.tl-dot{width:14px;height:14px;border-radius:50%;position:absolute;z-index:2;border:2px solid #fff}
+.tl-star{position:absolute;z-index:2;font-size:20px}
+.tl-label{position:absolute;font-size:10px;font-weight:600;white-space:nowrap;top:-16px}
+
+/* Print */
+@media print{
+  body{background:#fff}
+  .S{page-break-after:always;margin:0;box-shadow:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 1 — TITLE
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-rd">CONFIDENTIAL</span>
+  </div>
+
+  <div style="margin-top:60px">
+    <div style="font-size:18px;font-weight:600;color:var(--ts);letter-spacing:2px;margin-bottom:16px">FIFA WORLD CUP 2026™</div>
+    <h1 style="font-size:72px;line-height:1.05;margin-bottom:8px">FF&amp;E Supply Chain</h1>
+    <div style="font-size:20px;color:var(--ts);font-weight:500;margin-bottom:6px">Furniture, Fixtures &amp; Equipment — from factory floor to final space</div>
+    <div style="font-size:15px;color:var(--tt);margin-bottom:40px">How <span class="mono bold text-pri">166,311</span> items reach <span class="mono bold text-pri">214</span> venues across <span class="mono bold text-pri">3</span> countries before kickoff</div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:40px">
+      <span class="tag ta"><span class="mono">214</span> Venues</span>
+      <span class="tag ta"><span class="mono">16</span> Host Cities</span>
+      <span class="tag ta"><span class="mono">3</span> Countries</span>
+      <span class="tag tb">~<span class="mono">93</span> Load Plan Trucks</span>
+      <span class="tag tg">~<span class="mono">280</span> Last Mile Trucks</span>
+    </div>
+
+    <div style="max-width:820px;padding:14px 24px;border-left:3px solid var(--bd);color:var(--tt);font-size:12px;line-height:1.6">
+      All numbers are forecast as of March 2026 and subject to further changes.
+    </div>
+  </div>
+
+  <div style="position:absolute;bottom:80px;left:90px;right:90px">
+    <div style="font-size:13px;color:var(--ts);font-weight:500">Prepared by <b>Materials Management</b></div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">1</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 2 — THE JOURNEY
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-a3">THE BIG PICTURE</span>
+  </div>
+
+  <h2>From Supplier to Final Space — The Journey</h2>
+  <div class="sub">Every item has its own journey — from a plastic folding chair shipped in a container from China, to a ballpoint pen delivered directly by Staples. Here is how they all get to the right venue, on time.</div>
+
+  <!-- 6-step flow -->
+  <div style="display:flex;align-items:stretch;justify-content:center;gap:0;margin:28px auto 8px;max-width:1500px">
+    <div style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:18px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:13px;font-weight:700;color:var(--tp);margin-bottom:4px">1. Supplier</div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.5">International &amp; local USA<br>Manufactured &amp; shipped to Dallas</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 4px;color:var(--tt);font-size:20px;flex-shrink:0">→</div>
+    <div style="flex:1;background:var(--pri-s);border:1.5px solid var(--pri-b);border-radius:10px;padding:18px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:13px;font-weight:700;color:var(--pri);margin-bottom:4px">2. Dallas Warehouse</div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.5">Received, inspected,<br>kitted, palletized</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 4px;color:var(--tt);font-size:20px;flex-shrink:0">→</div>
+    <div style="flex:1;background:var(--pri-s);border:1.5px solid var(--pri-b);border-radius:10px;padding:18px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:13px;font-weight:700;color:var(--pri);margin-bottom:4px">3. Load Plan Truck</div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.5">~<span class="mono" style="font-weight:700">93</span> trucks · <span class="mono" style="font-weight:700">26</span> pallets each<br>to <span class="mono" style="font-weight:700">8</span> destinations</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 4px;color:var(--tt);font-size:20px;flex-shrink:0">→</div>
+    <div style="flex:1;background:var(--a3-s);border:1.5px solid var(--a3-b);border-radius:10px;padding:18px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:13px;font-weight:700;color:var(--a3);margin-bottom:4px">4. Destination WHS</div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.5">Regional · Satellite · CORT<br>MEX / CAN / USA</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 4px;color:var(--tt);font-size:20px;flex-shrink:0">→</div>
+    <div style="flex:1;background:var(--a3-s);border:1.5px solid var(--a3-b);border-radius:10px;padding:18px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:13px;font-weight:700;color:var(--a3);margin-bottom:4px">5. Last Mile Truck</div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.5">~<span class="mono" style="font-weight:700">280</span> trucks<br>to <span class="mono" style="font-weight:700">214</span> venues</div>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 4px;color:var(--tt);font-size:20px;flex-shrink:0">→</div>
+    <div style="flex:1;background:var(--a4-s);border:1.5px solid var(--a4-b);border-radius:10px;padding:18px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:13px;font-weight:700;color:#00897B;margin-bottom:4px">6. Final Space</div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.5">Assembled, positioned,<br>ready for the world</div>
+    </div>
+  </div>
+  <!-- Staples direct note -->
+  <div style="text-align:right;max-width:1500px;margin:4px auto 16px;font-size:11px;color:var(--ts)">
+    <span style="color:var(--a4);font-weight:700">↗ Staples</span> also delivers directly to select USA venues (bypassing steps 3–5)
+  </div>
+
+  <!-- Two phases — full width cards -->
+  <div style="margin-bottom:16px">
+    <h3 style="margin-bottom:16px;text-align:center">A <span class="text-pri">two-phase</span> supply chain</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1500px;margin:0 auto">
+      <div style="background:var(--pri-s);border:1.5px solid var(--pri-b);border-radius:12px;padding:28px 36px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span class="phase phase-lp" style="padding:6px 16px;font-size:13px">PHASE 1</span>
+          <span style="font-size:17px;font-weight:700;color:var(--pri)">Load Plan (LP)</span>
+        </div>
+        <div style="font-size:26px;font-weight:800;color:var(--pri);margin-bottom:10px;letter-spacing:-0.5px">PUSH Model</div>
+        <div style="font-size:14px;color:var(--ts);line-height:1.75">Ship everything out as it arrives in Dallas. Don't wait — push it to the <span class="mono" style="font-weight:700">8</span> regional and satellite warehouses as fast as possible. Clear Dallas warehouse space. Time is the enemy.</div>
+      </div>
+      <div style="background:var(--a3-s);border:1.5px solid var(--a3-b);border-radius:12px;padding:28px 36px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span class="phase phase-lm" style="padding:6px 16px;font-size:13px">PHASE 2</span>
+          <span style="font-size:17px;font-weight:700;color:var(--a3)">Last Mile (LM)</span>
+        </div>
+        <div style="font-size:26px;font-weight:800;color:var(--a3);margin-bottom:10px;letter-spacing:-0.5px">PULL Model</div>
+        <div style="font-size:14px;color:var(--ts);line-height:1.75">Deliver based on venue bump-in dates. Each venue "pulls" its delivery when it is required. Destination warehouse to venue, on schedule.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline overlap — polished -->
+  <div style="max-width:1500px;margin:0 auto;background:var(--bg);border-radius:12px;padding:24px 40px 20px">
+    <div style="font-size:11px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px;text-align:center">Timeline — Both Phases Run in Parallel</div>
+    <svg viewBox="0 0 1400 96" width="100%" height="96" style="display:block">
+      <!-- Date tick marks -->
+      <g stroke="#D0D0E0" stroke-width="1">
+        <line x1="60" y1="18" x2="60" y2="72"/>
+        <line x1="400" y1="18" x2="400" y2="72"/>
+        <line x1="570" y1="18" x2="570" y2="72"/>
+        <line x1="1360" y1="18" x2="1360" y2="72"/>
+      </g>
+      <!-- Date labels -->
+      <g font-family="'IBM Plex Mono',monospace" font-size="10" fill="#8888A0" font-weight="600" text-anchor="middle">
+        <text x="60" y="88">Mar 16</text>
+        <text x="400" y="88">Apr 1</text>
+        <text x="570" y="88">Apr 29</text>
+        <text x="1360" y="88">Jun 11</text>
+      </g>
+      <!-- Overlap zone background -->
+      <rect x="400" y="16" width="170" height="58" rx="4" fill="#03BFA5" opacity="0.08"/>
+      <!-- LP bar (row 1) -->
+      <rect x="60" y="22" width="510" height="22" rx="11" fill="#4A148C"/>
+      <text x="315" y="37" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#fff">Load Plan (LP) — PUSH</text>
+      <!-- LM bar (row 2) -->
+      <rect x="400" y="50" width="960" height="22" rx="11" fill="#304FFE"/>
+      <text x="880" y="65" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#fff">Last Mile (LM) — PULL</text>
+      <!-- Overlap label -->
+      <text x="485" y="12" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#03BFA5">OVERLAP</text>
+      <!-- Kickoff star -->
+      <text x="1360" y="44" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="16" fill="#4A148C">★</text>
+    </svg>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">2</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 3 — SUPPLIERS
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-pri">SUPPLIERS</span>
+  </div>
+
+  <h2>Eight Suppliers — One Warehouse</h2>
+  <div class="sub">Everything converges on Dallas, Texas. Here's who makes what.</div>
+
+  <table class="tbl" style="font-size:12px;max-width:1500px;margin-left:auto;margin-right:auto">
+    <thead>
+      <tr>
+        <th style="width:130px">Supplier</th>
+        <th style="width:320px">What They Supply</th>
+        <th>How It Gets to Dallas</th>
+        <th class="num" style="width:70px">SKUs</th>
+        <th class="num" style="width:90px">Qty</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b style="color:var(--pri)">RGS Events</b></td>
+        <td>Core FF&amp;E: desks, chairs, tables, barriers, shelving, lockers, signage</td>
+        <td><span class="mono bold">40</span> containers from China (Mar 9 – Apr 10) + <span class="mono bold">20</span> local deliveries</td>
+        <td class="num"><span class="mono">36</span></td>
+        <td class="num"><span class="mono">44,209</span></td>
+      </tr>
+      <tr>
+        <td><b style="color:var(--a4)">FCWC25 Legacy</b></td>
+        <td>Reused items from FIFA Club World Cup 2025</td>
+        <td>Already in Dallas warehouse</td>
+        <td class="num"><span class="mono">134</span></td>
+        <td class="num"><span class="mono">13,404</span></td>
+      </tr>
+      <tr>
+        <td><b style="color:var(--a3)">Home Depot</b></td>
+        <td>Equipment: hand trucks, caution tape, safety vests, gas cans, drills</td>
+        <td>Delivered to Dallas</td>
+        <td class="num"><span class="mono">64</span></td>
+        <td class="num"><span class="mono">27,350</span></td>
+      </tr>
+      <tr>
+        <td><b style="color:var(--a3)">ULINE</b></td>
+        <td>Packing &amp; warehouse supplies: stretch wrap, pallet strapping, corrugated pads</td>
+        <td>Delivered to Dallas</td>
+        <td class="num"><span class="mono">24</span></td>
+        <td class="num"><span class="mono">2,369</span></td>
+      </tr>
+      <tr>
+        <td><b style="color:#00897B">Re-Board</b></td>
+        <td>Sustainable cardboard tables: 1.6m premium (FoH) and 1.2m basic (BoH)</td>
+        <td><span class="mono bold">2</span> containers from Sweden (DDP), late April / early May</td>
+        <td class="num"><span class="mono">2</span></td>
+        <td class="num"><span class="mono">900</span></td>
+      </tr>
+      <tr>
+        <td><b style="color:#00897B">The LOOK Co.</b></td>
+        <td>Cardboard welcome desks (branded, per venue)</td>
+        <td><span class="tag to" style="font-size:10px">HYBRID</span> <span class="mono bold">95</span> direct to USA venues + <span class="mono bold">183</span> via Dallas for MEX/CAN and stadiums</td>
+        <td class="num"><span class="mono">1</span></td>
+        <td class="num"><span class="mono">278</span></td>
+      </tr>
+      <tr>
+        <td><b style="color:var(--sec)">Staples</b></td>
+        <td>Stationery: pens, paper, office supplies</td>
+        <td><span class="tag to" style="font-size:10px">HYBRID</span> Direct delivery to predefined USA venues. Kits shipped to Dallas for select USA cities</td>
+        <td class="num"><span class="mono">166</span></td>
+        <td class="num"><span class="mono">42,034</span></td>
+      </tr>
+      <tr>
+        <td><b style="color:var(--a4)">CORT</b></td>
+        <td>Rental furniture for USA venues: desks, chairs, filing cabinets</td>
+        <td><span class="tag tg" style="font-size:10px">DIRECT</span> CORT delivers directly to venues, not shipped through Dallas</td>
+        <td class="num"><span class="mono">49</span></td>
+        <td class="num"><span class="mono">32,607</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- RGS Arrivals Timeline -->
+  <div style="margin-top:20px;background:var(--bg);border-radius:12px;padding:24px 32px 20px;max-width:1500px;margin-left:auto;margin-right:auto">
+    <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:16px;justify-content:center">
+      <h3 style="font-size:15px;margin:0">RGS Arrivals at Dallas</h3>
+      <div style="display:flex;gap:16px;font-size:12px">
+        <span style="display:flex;align-items:center;gap:6px"><svg width="12" height="12"><circle cx="6" cy="6" r="5" fill="#4A148C"/></svg><span class="mono" style="font-weight:700;color:var(--pri)">40</span> <span style="color:var(--ts)">containers from China</span></span>
+        <span style="display:flex;align-items:center;gap:6px"><svg width="12" height="12"><rect x="1" y="1" width="10" height="10" rx="2" fill="#03BFA5"/></svg><span class="mono" style="font-weight:700;color:#00897B">20</span> <span style="color:var(--ts)">local USA deliveries</span></span>
+      </div>
+    </div>
+    <svg width="1400" height="120" viewBox="0 0 1400 120" style="display:block">
+      <defs>
+        <linearGradient id="contGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#4A148C" stop-opacity="0.06"/>
+          <stop offset="100%" stop-color="#4A148C" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="localGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#03BFA5" stop-opacity="0.06"/>
+          <stop offset="100%" stop-color="#03BFA5" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Row backgrounds -->
+      <rect x="40" y="8" width="1320" height="44" rx="6" fill="url(#contGrad)"/>
+      <rect x="40" y="58" width="1320" height="44" rx="6" fill="url(#localGrad)"/>
+
+      <!-- Row labels -->
+      <text x="52" y="34" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#4A148C" opacity="0.5">CONTAINERS</text>
+      <text x="52" y="84" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#03BFA5" opacity="0.5">LOCAL</text>
+
+      <!-- Date axis -->
+      <line x1="140" y1="108" x2="1340" y2="108" stroke="#D0D0E0" stroke-width="1.5"/>
+      <g font-family="'IBM Plex Mono',monospace" font-size="10" fill="#8888A0" font-weight="600" text-anchor="middle">
+        <text x="140" y="120">Mar 9</text><line x1="140" y1="104" x2="140" y2="108" stroke="#B0B0C0" stroke-width="1.5"/>
+        <text x="480" y="120">Mar 20</text><line x1="480" y1="104" x2="480" y2="108" stroke="#B0B0C0" stroke-width="1.5"/>
+        <text x="820" y="120">Mar 31</text><line x1="820" y1="104" x2="820" y2="108" stroke="#B0B0C0" stroke-width="1.5"/>
+        <text x="1140" y="120">Apr 10</text><line x1="1140" y1="104" x2="1140" y2="108" stroke="#B0B0C0" stroke-width="1.5"/>
+      </g>
+      <!-- Vertical gridlines -->
+      <g stroke="#E8E8F0" stroke-width="0.5" stroke-dasharray="3,3">
+        <line x1="140" y1="8" x2="140" y2="104"/>
+        <line x1="480" y1="8" x2="480" y2="104"/>
+        <line x1="820" y1="8" x2="820" y2="104"/>
+        <line x1="1140" y1="8" x2="1140" y2="104"/>
+      </g>
+
+      <!-- x scale: Mar 9 = day 0 at x=140, Apr 10 = day 32 at x=1140. Per day = (1140-140)/32 = 31.25px -->
+      <!-- Container circles — stacked vertically when multiple on same day -->
+      <!-- Mar 9 (day 0): 2 -->
+      <circle cx="140" cy="34" r="6" fill="#4A148C"/><circle cx="140" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 10 (day 1): 2 -->
+      <circle cx="171" cy="34" r="6" fill="#4A148C"/><circle cx="171" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 11 (day 2): 2 -->
+      <circle cx="203" cy="34" r="6" fill="#4A148C"/><circle cx="203" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 12 (day 3): 2 -->
+      <circle cx="234" cy="34" r="6" fill="#4A148C"/><circle cx="234" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 13 (day 4): 2 -->
+      <circle cx="265" cy="34" r="6" fill="#4A148C"/><circle cx="265" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 16 (day 7): 2 -->
+      <circle cx="359" cy="34" r="6" fill="#4A148C"/><circle cx="359" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 17 (day 8): 2 -->
+      <circle cx="390" cy="34" r="6" fill="#4A148C"/><circle cx="390" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 18 (day 9): 2 -->
+      <circle cx="421" cy="34" r="6" fill="#4A148C"/><circle cx="421" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 19 (day 10): 2 -->
+      <circle cx="453" cy="34" r="6" fill="#4A148C"/><circle cx="453" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 20 (day 11): 2 -->
+      <circle cx="484" cy="34" r="6" fill="#4A148C"/><circle cx="484" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 23 (day 14): 2 -->
+      <circle cx="578" cy="34" r="6" fill="#4A148C"/><circle cx="578" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 24 (day 15): 2 -->
+      <circle cx="609" cy="34" r="6" fill="#4A148C"/><circle cx="609" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 25 (day 16): 2 -->
+      <circle cx="640" cy="34" r="6" fill="#4A148C"/><circle cx="640" cy="20" r="6" fill="#4A148C"/>
+      <!-- Mar 30 (day 21): 3 -->
+      <circle cx="796" cy="34" r="6" fill="#4A148C"/><circle cx="796" cy="20" r="6" fill="#4A148C"/><circle cx="810" cy="34" r="6" fill="#4A148C"/>
+      <!-- Mar 31 (day 22): 4 -->
+      <circle cx="828" cy="34" r="6" fill="#4A148C"/><circle cx="828" cy="20" r="6" fill="#4A148C"/><circle cx="842" cy="34" r="6" fill="#4A148C"/><circle cx="842" cy="20" r="6" fill="#4A148C"/>
+      <!-- Apr 1 (day 23): 1 -->
+      <circle cx="859" cy="34" r="6" fill="#4A148C"/>
+      <!-- Apr 2 (day 24): 1 -->
+      <circle cx="890" cy="34" r="6" fill="#4A148C"/>
+      <!-- Apr 8 (day 30): 2 -->
+      <circle cx="1078" cy="34" r="6" fill="#4A148C"/><circle cx="1078" cy="20" r="6" fill="#4A148C"/>
+      <!-- Apr 9 (day 31): 2 -->
+      <circle cx="1109" cy="34" r="6" fill="#4A148C"/><circle cx="1109" cy="20" r="6" fill="#4A148C"/>
+      <!-- Apr 10 (day 32): 1 -->
+      <circle cx="1140" cy="34" r="6" fill="#4A148C"/>
+
+      <!-- Local deliveries — diamonds spread across the timeline (20 groups) -->
+      <g fill="#03BFA5">
+        <rect x="136" y="76" width="9" height="9" rx="2" transform="rotate(45 140.5 80.5)"/>
+        <rect x="198" y="76" width="9" height="9" rx="2" transform="rotate(45 202.5 80.5)"/>
+        <rect x="260" y="76" width="9" height="9" rx="2" transform="rotate(45 264.5 80.5)"/>
+        <rect x="292" y="76" width="9" height="9" rx="2" transform="rotate(45 296.5 80.5)"/>
+        <rect x="354" y="76" width="9" height="9" rx="2" transform="rotate(45 358.5 80.5)"/>
+        <rect x="386" y="76" width="9" height="9" rx="2" transform="rotate(45 390.5 80.5)"/>
+        <rect x="448" y="76" width="9" height="9" rx="2" transform="rotate(45 452.5 80.5)"/>
+        <rect x="510" y="76" width="9" height="9" rx="2" transform="rotate(45 514.5 80.5)"/>
+        <rect x="572" y="76" width="9" height="9" rx="2" transform="rotate(45 576.5 80.5)"/>
+        <rect x="604" y="76" width="9" height="9" rx="2" transform="rotate(45 608.5 80.5)"/>
+        <rect x="666" y="76" width="9" height="9" rx="2" transform="rotate(45 670.5 80.5)"/>
+        <rect x="728" y="76" width="9" height="9" rx="2" transform="rotate(45 732.5 80.5)"/>
+        <rect x="790" y="76" width="9" height="9" rx="2" transform="rotate(45 794.5 80.5)"/>
+        <rect x="852" y="76" width="9" height="9" rx="2" transform="rotate(45 856.5 80.5)"/>
+        <rect x="884" y="76" width="9" height="9" rx="2" transform="rotate(45 888.5 80.5)"/>
+        <rect x="946" y="76" width="9" height="9" rx="2" transform="rotate(45 950.5 80.5)"/>
+        <rect x="978" y="76" width="9" height="9" rx="2" transform="rotate(45 982.5 80.5)"/>
+        <rect x="1010" y="76" width="9" height="9" rx="2" transform="rotate(45 1014.5 80.5)"/>
+        <rect x="1072" y="76" width="9" height="9" rx="2" transform="rotate(45 1076.5 80.5)"/>
+        <rect x="1134" y="76" width="9" height="9" rx="2" transform="rotate(45 1138.5 80.5)"/>
+      </g>
+
+      <!-- Weekend shading (Sat-Sun gaps visible in container arrivals) -->
+      <rect x="293" y="8" width="62" height="96" rx="3" fill="#4A148C" opacity="0.02"/>
+      <rect x="514" y="8" width="62" height="96" rx="3" fill="#4A148C" opacity="0.02"/>
+      <rect x="920" y="8" width="156" height="96" rx="3" fill="#4A148C" opacity="0.02"/>
+
+      <!-- Count badges -->
+      <rect x="1200" y="16" width="130" height="28" rx="14" fill="#4A148C"/>
+      <text x="1265" y="35" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" font-weight="700" fill="#fff">40 containers</text>
+      <rect x="1200" y="62" width="130" height="28" rx="14" fill="#03BFA5"/>
+      <text x="1265" y="81" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" font-weight="700" fill="#fff">20 local</text>
+    </svg>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">3</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 4 — DALLAS WAREHOUSE
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-pri">CENTRAL WAREHOUSE</span>
+  </div>
+
+  <h2>Dallas — The Engine Room</h2>
+  <div class="sub">First furniture arrived March 9. First truck out March 16. Seven days.</div>
+
+  <!-- Hero KPIs -->
+  <div style="display:flex;gap:10px;margin-bottom:16px">
+    <div class="c" style="flex:1;text-align:center;padding:14px 6px;border-top:3px solid var(--pri)">
+      <div class="cv" style="font-size:26px;color:var(--pri)">&gt;192</div>
+      <div class="cl">SKUs Through Dallas</div>
+    </div>
+    <div class="c" style="flex:1;text-align:center;padding:14px 6px;border-top:3px solid var(--pri)">
+      <div class="cv" style="font-size:26px;color:var(--pri)">57,566</div>
+      <div class="cl">Load Plan Units</div>
+    </div>
+    <div class="c" style="flex:1;text-align:center;padding:14px 6px;border-top:3px solid var(--pri)">
+      <div class="cv" style="font-size:26px;color:var(--pri)">~93</div>
+      <div class="cl">LP Trucks · 2,403 pallets</div>
+    </div>
+    <div class="c" style="flex:1;text-align:center;padding:14px 6px;border-top:3px solid var(--a4)">
+      <div class="cv" style="font-size:26px;color:var(--a4)">201</div>
+      <div class="cl">Kits (118 FF&amp;E + 83 Staples)</div>
+    </div>
+    <div class="c" style="flex:1;text-align:center;padding:14px 6px;border-top:3px solid var(--a3)">
+      <div class="cv" style="font-size:26px;color:var(--a3)">~32</div>
+      <div class="cl">Trucks to 8 Stadiums</div>
+    </div>
+    <div class="c" style="flex:1;text-align:center;padding:14px 6px;border-top:3px solid var(--a3)">
+      <div class="cv" style="font-size:26px;color:var(--a3)">~23</div>
+      <div class="cl">Trucks to CORT</div>
+    </div>
+    <div class="c" style="flex:1;text-align:center;padding:14px 6px;border-top:3px solid var(--sec)">
+      <div class="cv" style="font-size:26px;color:var(--sec)">850</div>
+      <div class="cl">Assembly Items</div>
+    </div>
+  </div>
+
+  <!-- 2x2 process cards -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="c c-a4" style="padding:16px 20px">
+      <div style="margin-bottom:8px"><span class="tag tg">RECEIVING</span></div>
+      <ul class="ilist a4" style="margin:0">
+        <li><span class="mono bold">40</span> containers from China (RGS)</li>
+        <li><span class="mono bold">20</span> local RGS deliveries</li>
+        <li>Multiple deliveries: Home Depot, ULINE, Re-Board, The LOOK Co.</li>
+        <li>RGS project manager QCs every RGS arrival</li>
+      </ul>
+    </div>
+    <div class="c c-pri" style="padding:16px 20px">
+      <div style="margin-bottom:8px"><span class="tag ta">KIT PACKING</span></div>
+      <ul class="ilist pri" style="margin:0">
+        <li><span class="mono bold">118</span> FF&amp;E kits for <span class="mono bold">23</span> CORT clusters</li>
+        <li><span class="mono bold">83</span> Stationery kits (Staples, pre-packed)</li>
+        <li>CORT can't pick-and-pack — pre-built in Dallas</li>
+        <li>Each kit tailored for venue — ready to go</li>
+      </ul>
+    </div>
+    <div class="c" style="padding:16px 20px;border-top:3px solid var(--a3)">
+      <div style="margin-bottom:8px"><span class="tag tb">LOAD PLAN DISPATCH</span></div>
+      <ul class="ilist a3" style="margin:0">
+        <li>Max <span class="mono bold">26</span> pallets per truck, <span class="mono bold">4</span> trucks/day</li>
+        <li>MEX/CAN ships first (customs clearance time)</li>
+        <li>USA domestic starts April 1</li>
+        <li>CI + Packing List per truck</li>
+      </ul>
+    </div>
+    <div class="c" style="padding:16px 20px;border-top:3px solid var(--sec)">
+      <div style="margin-bottom:8px"><span class="tag" style="background:var(--sec-s);color:var(--sec);border:1px solid var(--sec-b)">LAST MILE FROM DALLAS</span></div>
+      <ul class="ilist sec" style="margin:0">
+        <li>Satellite warehouse for <b>AT&amp;T Stadium</b> and <b>IBC</b></li>
+        <li>FF&amp;E assembly: <span class="mono bold">850</span> items at warehouse</li>
+        <li>LP trucks dispatched to all satellite warehouses</li>
+        <li>FF&amp;E kits shipped to all <span class="mono bold">23</span> CORT locations</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Bottom: Dallas venues + Assembly table -->
+  <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="c" style="padding:16px 20px;border-left:4px solid var(--sec);flex:1">
+        <div style="font-size:10px;font-weight:700;color:var(--sec);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Dallas Stadium (AT&amp;T)</div>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span class="mono" style="font-size:30px;font-weight:700;color:var(--sec)">6,527</span>
+          <div style="font-size:10px;color:var(--ts);line-height:1.5">items<br><span class="mono" style="font-weight:600">301</span> pallets · <span class="mono" style="font-weight:600">~16</span> trucks</div>
+        </div>
+      </div>
+      <div class="c" style="padding:16px 20px;border-left:4px solid var(--sec);flex:1">
+        <div style="font-size:10px;font-weight:700;color:var(--sec);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">International Broadcast Centre</div>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span class="mono" style="font-size:30px;font-weight:700;color:var(--sec)">2,773</span>
+          <div style="font-size:10px;color:var(--ts);line-height:1.5">items<br><span class="mono" style="font-weight:600">139</span> pallets · <span class="mono" style="font-weight:600">5</span> trucks</div>
+        </div>
+      </div>
+    </div>
+    <div style="background:var(--bg);border-radius:10px;padding:16px 22px">
+      <div style="font-size:12px;font-weight:700;color:var(--sec);margin-bottom:10px">FF&amp;E Assembly at Dallas Warehouse — <span class="mono">850</span> items</div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:2px solid var(--bd)">
+            <th style="text-align:left;padding:5px 10px;color:var(--ts);font-weight:600;width:auto">Item</th>
+            <th style="padding:5px 8px;color:var(--sec);font-weight:700;width:80px;text-align:center;font-family:var(--fm)">DAL STA</th>
+            <th style="padding:5px 8px;color:var(--sec);font-weight:700;width:80px;text-align:center;font-family:var(--fm)">IBC</th>
+            <th style="padding:5px 8px;color:var(--tp);font-weight:700;width:80px;text-align:center;font-family:var(--fm)">Total</th>
+          </tr>
+        </thead>
+        <tbody style="font-family:var(--fm)">
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px">Task Chair with Arms</td><td style="padding:4px 8px;text-align:center">318</td><td style="padding:4px 8px;text-align:center">256</td><td style="padding:4px 8px;text-align:center;font-weight:700">574</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px">Four Tier Locker</td><td style="padding:4px 8px;text-align:center">70</td><td style="padding:4px 8px;text-align:center">5</td><td style="padding:4px 8px;text-align:center;font-weight:700">75</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px">Barrier with Belt</td><td style="padding:4px 8px;text-align:center">63</td><td style="padding:4px 8px;text-align:center">0</td><td style="padding:4px 8px;text-align:center;font-weight:700">63</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px">Double Tier Locker</td><td style="padding:4px 8px;text-align:center">33</td><td style="padding:4px 8px;text-align:center">0</td><td style="padding:4px 8px;text-align:center;font-weight:700">33</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px">Bar Chair with Arms</td><td style="padding:4px 8px;text-align:center">19</td><td style="padding:4px 8px;text-align:center">30</td><td style="padding:4px 8px;text-align:center;font-weight:700">49</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px">Other (racks, mirrors, desks, etc.)</td><td style="padding:4px 8px;text-align:center">56</td><td style="padding:4px 8px;text-align:center">0</td><td style="padding:4px 8px;text-align:center;font-weight:700">56</td></tr>
+          <tr style="border-top:2px solid var(--sec)"><td style="padding:5px 10px;font-weight:700;font-family:var(--fd)">Total</td><td style="padding:5px 8px;text-align:center;font-weight:700;color:var(--sec)">559</td><td style="padding:5px 8px;text-align:center;font-weight:700;color:var(--sec)">291</td><td style="padding:5px 8px;text-align:center;font-weight:700;color:var(--sec)">850</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">4</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 5 — THE MAP
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-pri">PHASE 1 — LOAD PLAN</span>
+  </div>
+
+  <h2 style="margin-bottom:4px">~<span class="mono text-pri">93</span> Trucks to <span class="mono text-pri">8</span> Destinations</h2>
+  <div style="font-size:14px;color:var(--ts);margin-bottom:16px">Load Plan (LP) dispatches palletized freight from Dallas to regional and satellite warehouses across North America.</div>
+
+  <div style="display:flex;gap:32px">
+    <!-- Map -->
+    <div style="flex:1">
+      <svg viewBox="0 0 900 440" width="900" height="440">
+        <!-- Canada -->
+        <path d="M110,90 L150,72 L230,62 L330,58 L430,54 L530,58 L610,64 L690,58 L770,68 L810,85 L800,52 L760,34 L700,24 L620,18 L540,14 L460,12 L380,16 L300,22 L220,30 L160,42 L125,56 L100,74 Z" fill="#F5F5FA" stroke="#E0E0EE" stroke-width="1"/>
+        <!-- USA -->
+        <path d="M110,90 L150,72 L230,62 L330,58 L430,54 L530,58 L610,64 L690,58 L770,68 L810,85 L825,120 L820,158 L802,188 L812,225 L798,258 L778,278 L755,288 L735,302 L715,315 L695,325 L665,330 L635,325 L605,335 L565,330 L525,340 L485,345 L445,350 L405,355 L365,360 L330,362 L290,358 L250,352 L210,342 L170,328 L140,310 L118,282 L108,252 L98,218 L92,182 L95,142 L102,110 Z" fill="#EDEDF5" stroke="#D8D8E8" stroke-width="1.5"/>
+        <!-- Mexico -->
+        <path d="M210,342 L250,352 L290,358 L330,362 L365,360 L365,388 L345,410 L318,424 L290,432 L260,436 L232,428 L210,412 L192,394 L182,372 L195,350 Z" fill="#F5F5FA" stroke="#D8D8E8" stroke-width="1"/>
+
+        <!-- Dallas hub -->
+        <circle cx="430" cy="290" r="20" fill="#4A148C" opacity="0.08"/>
+        <circle cx="430" cy="290" r="12" fill="#4A148C" stroke="#fff" stroke-width="3"/>
+        <text x="430" y="318" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="800" fill="#4A148C">DALLAS</text>
+
+        <!-- BUCKET 1 — MEX/CAN -->
+        <g stroke="#4A148C" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.5">
+          <line x1="430" y1="290" x2="308" y2="418"/>
+          <line x1="430" y1="290" x2="245" y2="398"/>
+          <line x1="430" y1="290" x2="345" y2="375"/>
+          <line x1="430" y1="290" x2="648" y2="68"/>
+          <line x1="430" y1="290" x2="178" y2="62"/>
+        </g>
+        <!-- CDMX -->
+        <circle cx="308" cy="418" r="7" fill="#4A148C" stroke="#fff" stroke-width="2"/>
+        <text x="325" y="432" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#4A148C">CDMX</text>
+        <!-- GDL -->
+        <circle cx="245" cy="398" r="6" fill="#4A148C" stroke="#fff" stroke-width="2"/>
+        <text x="225" y="393" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#4A148C">GDL</text>
+        <!-- MTY -->
+        <circle cx="345" cy="375" r="6" fill="#4A148C" stroke="#fff" stroke-width="2"/>
+        <text x="365" y="372" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#4A148C">MTY</text>
+        <!-- TOR -->
+        <circle cx="648" cy="68" r="6" fill="#4A148C" stroke="#fff" stroke-width="2"/>
+        <text x="665" y="65" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#4A148C">TOR</text>
+        <!-- VAN -->
+        <circle cx="178" cy="62" r="6" fill="#4A148C" stroke="#fff" stroke-width="2"/>
+        <text x="160" y="55" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#4A148C">VAN</text>
+
+        <!-- BUCKET 2 — USA -->
+        <g stroke="#304FFE" stroke-width="2" opacity="0.6">
+          <line x1="430" y1="290" x2="735" y2="162"/>
+          <line x1="430" y1="290" x2="445" y2="215"/>
+          <line x1="430" y1="290" x2="425" y2="335"/>
+        </g>
+        <!-- NY/NJ -->
+        <circle cx="735" cy="162" r="7" fill="#304FFE" stroke="#fff" stroke-width="2"/>
+        <text x="755" y="165" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#304FFE">NY/NJ</text>
+        <!-- KC -->
+        <circle cx="445" cy="215" r="6" fill="#304FFE" stroke="#fff" stroke-width="2"/>
+        <text x="465" y="212" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#304FFE">KC</text>
+        <!-- HOU -->
+        <circle cx="425" cy="335" r="6" fill="#304FFE" stroke="#fff" stroke-width="2"/>
+        <text x="445" y="345" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#304FFE">HOU</text>
+      </svg>
+      <!-- Legend below map -->
+      <div style="display:flex;gap:24px;justify-content:center;margin-top:4px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ts);font-weight:600">
+          <svg width="28" height="3"><line x1="0" y1="1.5" x2="28" y2="1.5" stroke="#4A148C" stroke-width="2" stroke-dasharray="5,3"/></svg>
+          Bucket 1 — MEX/CAN (priority, customs)
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ts);font-weight:600">
+          <svg width="28" height="3"><line x1="0" y1="1.5" x2="28" y2="1.5" stroke="#304FFE" stroke-width="2"/></svg>
+          Bucket 2 — USA (domestic, starts Apr 1)
+        </div>
+      </div>
+    </div>
+
+    <!-- Destination table -->
+    <div style="width:440px">
+      <div style="font-size:11px;font-weight:700;color:var(--pri);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Bucket 1 — MEX/CAN</div>
+      <table class="tbl" style="margin-top:0;margin-bottom:20px">
+        <thead><tr><th>Destination</th><th class="num">Trucks</th><th class="num">Pallets</th><th class="num">Units</th></tr></thead>
+        <tbody>
+          <tr><td>Mexico City</td><td class="num"><span class="mono">~15</span></td><td class="num"><span class="mono">389</span></td><td class="num"><span class="mono">9,810</span></td></tr>
+          <tr><td>Toronto</td><td class="num"><span class="mono">~12</span></td><td class="num"><span class="mono">304</span></td><td class="num"><span class="mono">7,392</span></td></tr>
+          <tr><td>Guadalajara</td><td class="num"><span class="mono">~12</span></td><td class="num"><span class="mono">294</span></td><td class="num"><span class="mono">7,129</span></td></tr>
+          <tr><td>Monterrey</td><td class="num"><span class="mono">~10</span></td><td class="num"><span class="mono">243</span></td><td class="num"><span class="mono">6,743</span></td></tr>
+          <tr><td>Vancouver</td><td class="num"><span class="mono">~9</span></td><td class="num"><span class="mono">233</span></td><td class="num"><span class="mono">5,494</span></td></tr>
+          <tr class="total"><td>Subtotal</td><td class="num"><span class="mono">~58</span></td><td class="num"><span class="mono">1,463</span></td><td class="num"><span class="mono">36,568</span></td></tr>
+        </tbody>
+      </table>
+
+      <div style="font-size:11px;font-weight:700;color:var(--a3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Bucket 2 — USA</div>
+      <table class="tbl" style="margin-top:0">
+        <thead><tr><th>Destination</th><th class="num">Trucks</th><th class="num">Pallets</th><th class="num">Units</th></tr></thead>
+        <tbody>
+          <tr><td>New York / NJ</td><td class="num"><span class="mono">~16</span></td><td class="num"><span class="mono">401</span></td><td class="num"><span class="mono">9,007</span></td></tr>
+          <tr><td>Kansas City</td><td class="num"><span class="mono">~11</span></td><td class="num"><span class="mono">275</span></td><td class="num"><span class="mono">5,729</span></td></tr>
+          <tr><td>Houston</td><td class="num"><span class="mono">~11</span></td><td class="num"><span class="mono">264</span></td><td class="num"><span class="mono">6,262</span></td></tr>
+          <tr class="total"><td>Subtotal</td><td class="num"><span class="mono">~38</span></td><td class="num"><span class="mono">940</span></td><td class="num"><span class="mono">20,998</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div style="display:flex;gap:12px;margin-top:12px">
+    <div class="c" style="flex:1;padding:12px 18px;border-left:3px solid var(--pri)">
+      <div style="font-size:12px;font-weight:700;color:var(--pri)">MEX/CAN — ~<span class="mono">58</span> trucks (62%)</div>
+      <div style="font-size:11px;color:var(--ts);margin-top:2px">Ships first · <span class="mono">7</span> days transit · Customs clearance required</div>
+    </div>
+    <div class="c" style="flex:1;padding:12px 18px;border-left:3px solid var(--a3)">
+      <div style="font-size:12px;font-weight:700;color:var(--a3)">USA — ~<span class="mono">38</span> trucks (38%)</div>
+      <div style="font-size:11px;color:var(--ts);margin-top:2px">Starts April 1 · <span class="mono">1–3</span> days transit · Domestic</div>
+    </div>
+    <div class="c" style="flex:1;padding:12px 18px;border-left:3px solid var(--a4)">
+      <div style="font-size:12px;font-weight:700;color:#00897B">Trucks grouped by commodity — <span class="mono">&gt;94%</span> utilization</div>
+      <div style="font-size:11px;color:var(--ts);margin-top:2px">LP trucks do not follow bump-in dates — they push as fast as possible</div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">5</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 6 — THREE TYPES OF WAREHOUSE
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-a3">DESTINATION WAREHOUSES</span>
+  </div>
+
+  <h2>Where Load Plan Trucks Arrive</h2>
+  <div class="sub" style="margin-bottom:14px">Transform LP cargo into Last Mile deliveries. Partially assemble FF&amp;E at warehouse.</div>
+
+  <!-- KPI banner -->
+  <div style="display:flex;gap:10px;margin-bottom:14px">
+    <div class="c c-pri" style="flex:1;text-align:center;padding:14px 8px">
+      <div class="cv" style="font-size:26px;color:var(--pri)">5</div>
+      <div class="cl">Regional Warehouses</div>
+    </div>
+    <div class="c c-a3" style="flex:1;text-align:center;padding:14px 8px">
+      <div class="cv" style="font-size:26px;color:var(--a3)">3</div>
+      <div class="cl">Satellite Warehouses</div>
+    </div>
+    <div class="c" style="flex:1;text-align:center;padding:14px 8px;border-top:3px solid var(--sec)">
+      <div class="cv" style="font-size:26px;color:var(--sec)">4,258</div>
+      <div class="cl">Items Assembled at WHS</div>
+    </div>
+    <div class="c" style="flex:1;text-align:center;padding:14px 8px;border-top:3px solid var(--ts)">
+      <div class="cv" style="font-size:26px">10</div>
+      <div class="cl">Tool Kits (3 sets each)</div>
+    </div>
+  </div>
+
+  <!-- Two warehouse cards -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div style="background:var(--pri-s);border:1.5px solid var(--pri-b);border-radius:12px;padding:18px 22px">
+      <div style="font-size:15px;font-weight:800;color:var(--pri);margin-bottom:2px">Regional Warehouse</div>
+      <div style="font-size:10px;color:var(--ts);margin-bottom:10px">MEX/CAN — Mini Dallas, same model and SOPs</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:11px;margin-bottom:10px">
+        <div><span style="color:var(--tt)">Locations:</span> TOR · VAN · CDMX · GDL · MTY</div>
+        <div><span style="color:var(--tt)">Operated by:</span> <b style="color:var(--pri)">RIC</b></div>
+        <div><span style="color:var(--tt)">Serves:</span> Stadiums + non-stadium venues</div>
+        <div><span style="color:var(--tt)">Assembly:</span> <span class="mono bold">3,422</span> items</div>
+      </div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.7;border-top:1px solid var(--pri-b);padding-top:8px">
+        Receiving + QC of LP trucks · Inbound for Staples CAN/MEX kits · FF&amp;E assembly for stadium and non-stadium venues · Transform cargo → Last Mile · Deliver on bump-in schedule
+      </div>
+      <div style="margin-top:8px;font-size:9px;color:var(--ts);background:var(--sf);border-radius:6px;padding:8px 12px;border:1px solid var(--pri-b)">
+        <b style="color:var(--pri)">Why assemble here?</b> Non-stadium venues too small for on-site assembly. <b>Exception:</b> plastic shelving ships flat, clips together at venue.
+      </div>
+    </div>
+
+    <div style="background:var(--a3-s);border:1.5px solid var(--a3-b);border-radius:12px;padding:18px 22px">
+      <div style="font-size:15px;font-weight:800;color:var(--a3);margin-bottom:2px">Satellite Warehouse, Space Rent Model</div>
+      <div style="font-size:10px;color:var(--ts);margin-bottom:10px">USA — Rented space model, stadiums only</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:11px;margin-bottom:10px">
+        <div><span style="color:var(--tt)">Locations:</span> NY · KC · HOU</div>
+        <div><span style="color:var(--tt)">Operated by:</span> <b style="color:var(--a3)">RIC</b></div>
+        <div><span style="color:var(--tt)">Serves:</span> 3 stadiums only (+ Dallas from central)</div>
+        <div><span style="color:var(--tt)">Assembly:</span> <span class="mono bold">836</span> items</div>
+      </div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.7;border-top:1px solid var(--a3-b);padding-top:8px">
+        Receiving LP trucks · FF&amp;E assembly (chairs, lockers, cabinets) · Transform cargo → Last Mile · Deliver to stadium on bump-in schedule
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <div style="flex:1;background:var(--sf);border-radius:6px;padding:6px 10px;text-align:center;border:1px solid var(--a3-b)">
+          <div class="mono" style="font-size:14px;font-weight:700;color:var(--a3)">10,000</div>
+          <div style="font-size:8px;color:var(--ts)">sq ft · NY/NJ</div>
+        </div>
+        <div style="flex:1;background:var(--sf);border-radius:6px;padding:6px 10px;text-align:center;border:1px solid var(--a3-b)">
+          <div class="mono" style="font-size:14px;font-weight:700;color:var(--a3)">5,000</div>
+          <div style="font-size:8px;color:var(--ts)">sq ft · Kansas City</div>
+        </div>
+        <div style="flex:1;background:var(--sf);border-radius:6px;padding:6px 10px;text-align:center;border:1px solid var(--a3-b)">
+          <div class="mono" style="font-size:14px;font-weight:700;color:var(--a3)">5,000</div>
+          <div style="font-size:8px;color:var(--ts)">sq ft · Houston</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom: Assembly table + Tools — side by side -->
+  <div style="display:grid;grid-template-columns:5fr 2fr;gap:14px">
+    <div style="background:var(--bg);border-radius:10px;padding:14px 20px">
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+        <span style="font-size:13px;font-weight:700;color:var(--sec)">FF&amp;E Assembly at Destination Warehouses</span>
+        <span class="mono" style="font-size:12px;color:var(--sec);font-weight:600">4,258</span>
+        <span style="font-size:10px;color:var(--ts)">RGS items requiring assembly</span>
+      </div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--sf);border-bottom:2px solid var(--bd)">
+            <th style="text-align:left;padding:6px 12px;color:var(--tp);font-weight:700">Item</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--pri);font-weight:700;font-family:var(--fd);width:100px;font-size:10px;line-height:1.3"><span style="font-size:10px">Regional</span><br><span style="font-size:11px">Stadium</span></th>
+            <th style="text-align:center;padding:6px 8px;color:#00897B;font-weight:700;font-family:var(--fd);width:100px;font-size:10px;line-height:1.3"><span style="font-size:10px">Regional</span><br><span style="font-size:11px">Non-Stadium</span></th>
+            <th style="text-align:center;padding:6px 8px;color:var(--a3);font-weight:700;font-family:var(--fd);width:100px;font-size:10px;line-height:1.3"><span style="font-size:10px">Satellite</span><br><span style="font-size:11px">Stadium</span></th>
+            <th style="text-align:center;padding:6px 8px;color:var(--tp);font-weight:700;font-family:var(--fm);width:70px">Total</th>
+          </tr>
+        </thead>
+        <tbody style="font-family:var(--fm)">
+          <tr><td colspan="5" style="padding:5px 12px;font-family:var(--fd);font-size:10px;font-weight:700;color:var(--sec);background:var(--sec-s);border-left:3px solid var(--sec)">Assembled at warehouse for all venue types</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Task Chair with Arms</td><td style="padding:5px 8px;text-align:center">1,125</td><td style="padding:5px 8px;text-align:center">117</td><td style="padding:5px 8px;text-align:center">586</td><td style="padding:5px 8px;text-align:center;font-weight:700">1,828</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Storage Cabinet, Steel</td><td style="padding:5px 8px;text-align:center">250</td><td style="padding:5px 8px;text-align:center">13</td><td style="padding:5px 8px;text-align:center">160</td><td style="padding:5px 8px;text-align:center;font-weight:700">423</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Four Tier Locker</td><td style="padding:5px 8px;text-align:center">171</td><td style="padding:5px 8px;text-align:center">29</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center;font-weight:700">200</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Double Tier Locker</td><td style="padding:5px 8px;text-align:center">105</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center">46</td><td style="padding:5px 8px;text-align:center;font-weight:700">151</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Bar Chair with Arms</td><td style="padding:5px 8px;text-align:center">58</td><td style="padding:5px 8px;text-align:center">28</td><td style="padding:5px 8px;text-align:center">44</td><td style="padding:5px 8px;text-align:center;font-weight:700">130</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Football Table</td><td style="padding:5px 8px;text-align:center">10</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center;font-weight:700">10</td></tr>
+          <tr><td colspan="5" style="padding:5px 12px;font-family:var(--fd);font-size:10px;font-weight:700;color:#00897B;background:var(--a4-s);border-left:3px solid var(--a4)">Assembled at WHS for non-stadiums only (at venue for stadiums)</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Barrier with Belt</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center">1,342</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center;font-weight:700">1,342</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Clothes Racks</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center">94</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center;font-weight:700">94</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Desks (4ft + 5.5ft)</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center">54</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center;font-weight:700">54</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:5px 12px;font-family:var(--fd)">Umbrella Bases</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center">26</td><td style="padding:5px 8px;text-align:center;color:var(--tt)">—</td><td style="padding:5px 8px;text-align:center;font-weight:700">26</td></tr>
+          <tr style="border-top:2px solid var(--sec);background:var(--bg)"><td style="padding:6px 12px;font-weight:700;font-family:var(--fd);font-size:12px">Total</td><td style="padding:6px 8px;text-align:center;font-weight:700;color:var(--pri);font-size:12px">1,719</td><td style="padding:6px 8px;text-align:center;font-weight:700;color:#00897B;font-size:12px">1,703</td><td style="padding:6px 8px;text-align:center;font-weight:700;color:var(--a3);font-size:12px">836</td><td style="padding:6px 8px;text-align:center;font-weight:700;color:var(--sec);font-size:12px">4,258</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="background:var(--bg);border-radius:10px;padding:14px 16px">
+      <div style="font-size:12px;font-weight:700;color:var(--a3);margin-bottom:2px">Tool Kit per Warehouse</div>
+      <div style="font-size:9px;color:var(--ts);margin-bottom:8px">Ordered direct · 3 sets each</div>
+      <table style="width:100%;font-size:10px;border-collapse:collapse">
+        <tbody style="font-family:var(--fm)">
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Allen Keys</td><td style="padding:2px 6px;text-align:center;width:30px">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Rubber Mallet</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Drill Set</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Adjustable Wrench</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Pliers Set</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Nail Punch Set</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Socket Set</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Cordless Drill</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Driver Bit Set</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:2px 6px">Toolset</td><td style="padding:2px 6px;text-align:center">3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout callout-red" style="margin-top:10px;padding:10px 16px;font-size:11px">
+    <b>Additional items may require assembly</b> — trolleys, mirrors, sofas, coffee tables, etc. Numbers above reflect confirmed RGS assembly scope only.
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">6</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 7 — MEXICO & CANADA REGIONAL MODEL (NEW)
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-pri">REGIONAL OPERATIONS</span>
+  </div>
+
+  <h2>Mexico &amp; Canada — Full Regional Last Mile Model</h2>
+  <div style="font-size:14px;color:var(--ts);margin-bottom:14px">Five regional warehouses operated by RIC, serving <span class="mono bold">37</span> venues across two countries.</div>
+
+  <!-- Operations flow -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:16px;background:var(--bg);border-radius:10px;padding:12px 20px">
+    <div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:8px 16px;text-align:center">
+      <div style="font-size:11px;font-weight:700">Receiving</div>
+      <div style="font-size:9px;color:var(--ts)">LP trucks + Staples kits</div>
+    </div>
+    <div style="padding:0 8px;color:var(--tt);font-size:18px">→</div>
+    <div style="background:var(--pri-s);border:1.5px solid var(--pri-b);border-radius:8px;padding:8px 16px;text-align:center">
+      <div style="font-size:11px;font-weight:700;color:var(--pri)">FF&amp;E Assembly</div>
+      <div style="font-size:9px;color:var(--ts)"><span class="mono bold">3,422</span> RGS items</div>
+    </div>
+    <div style="padding:0 8px;color:var(--tt);font-size:18px">→</div>
+    <div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:8px 16px;text-align:center">
+      <div style="font-size:11px;font-weight:700">Pick &amp; Pack</div>
+      <div style="font-size:9px;color:var(--ts)">for Last Mile</div>
+    </div>
+    <div style="padding:0 8px;color:var(--tt);font-size:18px">→</div>
+    <div style="background:var(--a3-s);border:1.5px solid var(--a3-b);border-radius:8px;padding:8px 16px;text-align:center">
+      <div style="font-size:11px;font-weight:700;color:var(--a3)">LM Dispatch</div>
+      <div style="font-size:9px;color:var(--ts)">to all venues</div>
+    </div>
+  </div>
+
+  <!-- Maps row: Mexico | Canada | Vancouver example -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:12px">
+    <!-- Mexico map -->
+    <div style="background:var(--bg);border-radius:10px;padding:12px 16px">
+      <div style="font-size:11px;font-weight:700;color:var(--pri);margin-bottom:6px">Mexico — 3 Regional Warehouses · 23 Venues</div>
+      <svg viewBox="0 0 260 180" width="100%" height="160">
+        <path d="M30,15 L230,15 L240,28 L245,45 L235,62 L218,85 L200,108 L190,125 L182,138 L165,155 L148,168 L130,175 L112,178 L95,175 L80,168 L65,155 L55,138 L45,115 L38,85 L35,55 Z" fill="#F5F5FA" stroke="#E0E0EE" stroke-width="1"/>
+        <circle cx="200" cy="8" r="5" fill="#4A148C" stroke="#fff" stroke-width="1.5"/>
+        <text x="212" y="12" font-family="'Noto Sans',sans-serif" font-size="7" font-weight="800" fill="#4A148C">DAL</text>
+        <g stroke="#4A148C" stroke-width="1" stroke-dasharray="4,3" opacity="0.4">
+          <line x1="200" y1="13" x2="148" y2="125"/><line x1="200" y1="13" x2="100" y2="108"/><line x1="200" y1="13" x2="178" y2="68"/>
+        </g>
+        <circle cx="148" cy="125" r="5" fill="#4A148C" stroke="#fff" stroke-width="1.5"/>
+        <text x="158" y="128" font-family="'Noto Sans',sans-serif" font-size="8" font-weight="700" fill="#4A148C">CDMX</text>
+        <text x="158" y="138" font-family="'IBM Plex Mono',monospace" font-size="7" fill="#555570">965</text>
+        <circle cx="100" cy="108" r="4" fill="#4A148C" stroke="#fff" stroke-width="1.5"/>
+        <text x="80" y="105" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="8" font-weight="700" fill="#4A148C">GDL</text>
+        <text x="80" y="115" text-anchor="end" font-family="'IBM Plex Mono',monospace" font-size="7" fill="#555570">719</text>
+        <circle cx="178" cy="68" r="4" fill="#4A148C" stroke="#fff" stroke-width="1.5"/>
+        <text x="192" y="66" font-family="'Noto Sans',sans-serif" font-size="8" font-weight="700" fill="#4A148C">MTY</text>
+        <text x="192" y="76" font-family="'IBM Plex Mono',monospace" font-size="7" fill="#555570">587</text>
+      </svg>
+    </div>
+    <!-- Canada map -->
+    <div style="background:var(--bg);border-radius:10px;padding:12px 16px">
+      <div style="font-size:11px;font-weight:700;color:var(--pri);margin-bottom:6px">Canada — 2 Regional Warehouses · 14 Venues</div>
+      <svg viewBox="0 0 260 180" width="100%" height="160">
+        <path d="M20,55 L48,42 L95,32 L142,28 L190,35 L210,52 L205,75 L195,98 L205,120 L195,138 L178,148 L148,150 L118,148 L88,150 L58,145 L35,135 L22,118 L18,92 Z" fill="#F5F5FA" stroke="#E0E0EE" stroke-width="1"/>
+        <circle cx="135" cy="160" r="5" fill="#4A148C" stroke="#fff" stroke-width="1.5"/>
+        <text x="148" y="164" font-family="'Noto Sans',sans-serif" font-size="7" font-weight="800" fill="#4A148C">DAL</text>
+        <g stroke="#4A148C" stroke-width="1" stroke-dasharray="4,3" opacity="0.4">
+          <line x1="135" y1="155" x2="170" y2="72"/><line x1="135" y1="155" x2="52" y2="82"/>
+        </g>
+        <circle cx="170" cy="72" r="5" fill="#4A148C" stroke="#fff" stroke-width="1.5"/>
+        <text x="182" y="70" font-family="'Noto Sans',sans-serif" font-size="8" font-weight="700" fill="#4A148C">TOR</text>
+        <text x="182" y="80" font-family="'IBM Plex Mono',monospace" font-size="7" fill="#555570">613</text>
+        <circle cx="52" cy="82" r="5" fill="#4A148C" stroke="#fff" stroke-width="1.5"/>
+        <text x="40" y="78" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="8" font-weight="700" fill="#4A148C">VAN</text>
+        <text x="40" y="88" text-anchor="end" font-family="'IBM Plex Mono',monospace" font-size="7" fill="#555570">538</text>
+      </svg>
+    </div>
+    <!-- Vancouver example -->
+    <div style="background:var(--bg);border-radius:10px;padding:12px 16px">
+      <div style="font-size:11px;font-weight:700;color:var(--pri);margin-bottom:6px">Example: Vancouver WHS → 7 Venues</div>
+      <svg viewBox="0 0 260 180" width="100%" height="160">
+        <circle cx="50" cy="90" r="12" fill="#4A148C" opacity="0.08"/>
+        <circle cx="50" cy="90" r="7" fill="#4A148C" stroke="#fff" stroke-width="2"/>
+        <text x="50" y="112" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="7" font-weight="800" fill="#4A148C">VAN WHS</text>
+        <g stroke="#4A148C" stroke-width="1" opacity="0.3">
+          <line x1="57" y1="90" x2="140" y2="22"/><line x1="57" y1="90" x2="155" y2="48"/>
+          <line x1="57" y1="90" x2="165" y2="72"/><line x1="57" y1="90" x2="170" y2="98"/>
+          <line x1="57" y1="90" x2="160" y2="122"/><line x1="57" y1="90" x2="145" y2="145"/>
+          <line x1="57" y1="90" x2="125" y2="165"/>
+        </g>
+        <circle cx="140" cy="22" r="5" fill="#4A148C" stroke="#fff" stroke-width="1.5"/>
+        <text x="150" y="25" font-family="'Noto Sans',sans-serif" font-size="7" font-weight="600" fill="#4A148C">Stadium</text>
+        <g fill="#4A148C" opacity="0.5">
+          <circle cx="155" cy="48" r="3"/><text x="163" y="51" font-family="'Noto Sans',sans-serif" font-size="6" fill="#555570">Accreditation Centre</text>
+          <circle cx="165" cy="72" r="3"/><text x="173" y="75" font-family="'Noto Sans',sans-serif" font-size="6" fill="#555570">Fleet Depot</text>
+          <circle cx="170" cy="98" r="3"/><text x="178" y="101" font-family="'Noto Sans',sans-serif" font-size="6" fill="#555570">Uniform Distribution</text>
+          <circle cx="160" cy="122" r="3"/><text x="168" y="125" font-family="'Noto Sans',sans-serif" font-size="6" fill="#555570">Volunteer Centre</text>
+          <circle cx="145" cy="145" r="3"/><text x="153" y="148" font-family="'Noto Sans',sans-serif" font-size="6" fill="#555570">VIP Hotel</text>
+          <circle cx="125" cy="165" r="3"/><text x="133" y="168" font-family="'Noto Sans',sans-serif" font-size="6" fill="#555570">Airport</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Assembly table — all 5 regions -->
+  <div style="background:var(--bg);border-radius:10px;padding:16px 22px;margin-bottom:12px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">
+      <span style="font-size:13px;font-weight:700;color:var(--sec)">FF&amp;E Assembly per Region</span>
+      <span class="mono" style="font-size:12px;color:var(--sec);font-weight:600">3,422</span>
+      <span style="font-size:10px;color:var(--ts)">RGS items at regional warehouses</span>
+    </div>
+    <table style="width:100%;font-size:11px;border-collapse:collapse">
+      <thead>
+        <tr style="background:var(--sf);border-bottom:2px solid var(--bd)">
+          <th style="text-align:left;padding:6px 10px;color:var(--tp);font-weight:700">Item</th>
+          <th style="text-align:center;padding:6px 6px;color:var(--pri);font-weight:700;font-family:var(--fd);width:70px;font-size:10px;line-height:1.3">CDMX</th>
+          <th style="text-align:center;padding:6px 6px;color:var(--pri);font-weight:700;font-family:var(--fd);width:70px;font-size:10px;line-height:1.3">GDL</th>
+          <th style="text-align:center;padding:6px 6px;color:var(--pri);font-weight:700;font-family:var(--fd);width:70px;font-size:10px;line-height:1.3">MTY</th>
+          <th style="text-align:center;padding:6px 6px;color:var(--pri);font-weight:700;font-family:var(--fd);width:70px;font-size:10px;line-height:1.3">TOR</th>
+          <th style="text-align:center;padding:6px 6px;color:var(--pri);font-weight:700;font-family:var(--fd);width:70px;font-size:10px;line-height:1.3">VAN</th>
+          <th style="text-align:center;padding:6px 6px;color:var(--tp);font-weight:700;font-family:var(--fm);width:60px">Total</th>
+        </tr>
+      </thead>
+      <tbody style="font-family:var(--fm)">
+        <tr><td colspan="7" style="padding:4px 10px;font-family:var(--fd);font-size:10px;font-weight:700;color:var(--sec);background:var(--sec-s);border-left:3px solid var(--sec)">Stadium — assembled at warehouse</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Task Chair</td><td style="padding:4px 6px;text-align:center">320</td><td style="padding:4px 6px;text-align:center">273</td><td style="padding:4px 6px;text-align:center">204</td><td style="padding:4px 6px;text-align:center">205</td><td style="padding:4px 6px;text-align:center">123</td><td style="padding:4px 6px;text-align:center;font-weight:700">1,125</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Cabinet, Steel</td><td style="padding:4px 6px;text-align:center">60</td><td style="padding:4px 6px;text-align:center">50</td><td style="padding:4px 6px;text-align:center">45</td><td style="padding:4px 6px;text-align:center">45</td><td style="padding:4px 6px;text-align:center">50</td><td style="padding:4px 6px;text-align:center;font-weight:700">250</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Four Tier Locker</td><td style="padding:4px 6px;text-align:center">48</td><td style="padding:4px 6px;text-align:center">38</td><td style="padding:4px 6px;text-align:center">48</td><td style="padding:4px 6px;text-align:center">32</td><td style="padding:4px 6px;text-align:center">5</td><td style="padding:4px 6px;text-align:center;font-weight:700">171</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Double Tier Locker</td><td style="padding:4px 6px;text-align:center">33</td><td style="padding:4px 6px;text-align:center">18</td><td style="padding:4px 6px;text-align:center">8</td><td style="padding:4px 6px;text-align:center">18</td><td style="padding:4px 6px;text-align:center">28</td><td style="padding:4px 6px;text-align:center;font-weight:700">105</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Bar Chair</td><td style="padding:4px 6px;text-align:center">16</td><td style="padding:4px 6px;text-align:center">16</td><td style="padding:4px 6px;text-align:center">10</td><td style="padding:4px 6px;text-align:center">16</td><td style="padding:4px 6px;text-align:center;color:var(--tt)">—</td><td style="padding:4px 6px;text-align:center;font-weight:700">58</td></tr>
+        <tr style="border-bottom:2px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Football Table</td><td style="padding:4px 6px;text-align:center">2</td><td style="padding:4px 6px;text-align:center">2</td><td style="padding:4px 6px;text-align:center">2</td><td style="padding:4px 6px;text-align:center">2</td><td style="padding:4px 6px;text-align:center">2</td><td style="padding:4px 6px;text-align:center;font-weight:700">10</td></tr>
+        <tr><td colspan="7" style="padding:4px 10px;font-family:var(--fd);font-size:10px;font-weight:700;color:#00897B;background:var(--a4-s);border-left:3px solid var(--a4)">Non-Stadium — assembled at warehouse (at venue for stadiums)</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Barrier with Belt</td><td style="padding:4px 6px;text-align:center">389</td><td style="padding:4px 6px;text-align:center">246</td><td style="padding:4px 6px;text-align:center">189</td><td style="padding:4px 6px;text-align:center">249</td><td style="padding:4px 6px;text-align:center">269</td><td style="padding:4px 6px;text-align:center;font-weight:700">1,342</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Task Chair</td><td style="padding:4px 6px;text-align:center">32</td><td style="padding:4px 6px;text-align:center">23</td><td style="padding:4px 6px;text-align:center">29</td><td style="padding:4px 6px;text-align:center">15</td><td style="padding:4px 6px;text-align:center">18</td><td style="padding:4px 6px;text-align:center;font-weight:700">117</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Clothes Rack</td><td style="padding:4px 6px;text-align:center">22</td><td style="padding:4px 6px;text-align:center">18</td><td style="padding:4px 6px;text-align:center">18</td><td style="padding:4px 6px;text-align:center">18</td><td style="padding:4px 6px;text-align:center">18</td><td style="padding:4px 6px;text-align:center;font-weight:700">94</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Desks (4ft + 5.5ft)</td><td style="padding:4px 6px;text-align:center">15</td><td style="padding:4px 6px;text-align:center">13</td><td style="padding:4px 6px;text-align:center">13</td><td style="padding:4px 6px;text-align:center">4</td><td style="padding:4px 6px;text-align:center">9</td><td style="padding:4px 6px;text-align:center;font-weight:700">54</td></tr>
+        <tr style="border-bottom:1px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Umbrella Base</td><td style="padding:4px 6px;text-align:center">12</td><td style="padding:4px 6px;text-align:center">8</td><td style="padding:4px 6px;text-align:center">6</td><td style="padding:4px 6px;text-align:center;color:var(--tt)">—</td><td style="padding:4px 6px;text-align:center;color:var(--tt)">—</td><td style="padding:4px 6px;text-align:center;font-weight:700">26</td></tr>
+        <tr style="border-bottom:2px solid var(--bd)"><td style="padding:4px 10px;font-family:var(--fd)">Other (Cabinet, 4Tier, Bar)</td><td style="padding:4px 6px;text-align:center">16</td><td style="padding:4px 6px;text-align:center">14</td><td style="padding:4px 6px;text-align:center">15</td><td style="padding:4px 6px;text-align:center">9</td><td style="padding:4px 6px;text-align:center">16</td><td style="padding:4px 6px;text-align:center;font-weight:700">70</td></tr>
+        <tr style="border-top:2px solid var(--sec);background:var(--sf)"><td style="padding:6px 10px;font-weight:700;font-family:var(--fd);font-size:12px">Total</td><td style="padding:6px 6px;text-align:center;font-weight:700;color:var(--sec);font-size:12px">965</td><td style="padding:6px 6px;text-align:center;font-weight:700;color:var(--sec);font-size:12px">719</td><td style="padding:6px 6px;text-align:center;font-weight:700;color:var(--sec);font-size:12px">587</td><td style="padding:6px 6px;text-align:center;font-weight:700;color:var(--sec);font-size:12px">613</td><td style="padding:6px 6px;text-align:center;font-weight:700;color:var(--sec);font-size:12px">538</td><td style="padding:6px 6px;text-align:center;font-weight:700;color:var(--sec);font-size:12px">3,422</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <div class="callout callout-red" style="margin-top:8px;padding:10px 16px;font-size:11px">
+    <b>Additional items may require assembly</b> — trolleys, mirrors, sofas, coffee tables, etc. Numbers above reflect confirmed RGS assembly scope only.
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">7</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 8 — USA FULL PICTURE
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-a3">PHASE 2 — USA LAST MILE</span>
+  </div>
+
+  <h2>USA Distribution — Every Destination from Dallas</h2>
+  <div style="font-size:14px;color:var(--ts);margin-bottom:16px">Last Mile (LM) delivers from satellite warehouses and CORT cross-docks to <span class="mono bold">159+</span> USA venues.</div>
+
+  <div style="display:flex;gap:28px">
+    <!-- USA Map -->
+    <div style="flex:1">
+      <svg viewBox="0 0 880 480" width="880" height="480">
+        <!-- Simplified USA outline -->
+        <path d="M60,120 L100,100 L160,95 L220,90 L280,88 L340,85 L400,82 L460,80 L520,85 L560,92 L600,100 L660,95 L720,100 L780,110 L810,130 L820,160 L810,200 L800,230 L810,260 L800,290 L780,310 L760,330 L730,340 L700,345 L670,340 L640,350 L600,360 L560,365 L520,360 L480,370 L440,375 L400,380 L360,375 L320,365 L280,370 L240,365 L200,355 L160,340 L130,320 L110,290 L90,260 L75,230 L65,200 L60,170 Z" fill="#F9F9FC" stroke="#E0E0EE" stroke-width="1.5"/>
+
+        <!-- Dallas hub -->
+        <circle cx="400" cy="330" r="11" fill="#4A148C" stroke="#fff" stroke-width="3"/>
+        <text x="400" y="354" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="800" fill="#4A148C">DALLAS</text>
+
+        <!-- Satellite WHS — blue, thick lines -->
+        <!-- NY -->
+        <line x1="400" y1="330" x2="720" y2="150" stroke="#304FFE" stroke-width="3"/>
+        <circle cx="720" cy="150" r="8" fill="#304FFE" stroke="#fff" stroke-width="2"/>
+        <text x="740" y="147" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#304FFE">NY</text>
+        <text x="740" y="159" font-family="'IBM Plex Mono',monospace" font-size="8" fill="#304FFE">Stadium</text>
+        <!-- KC -->
+        <line x1="400" y1="330" x2="430" y2="220" stroke="#304FFE" stroke-width="3"/>
+        <circle cx="430" cy="220" r="8" fill="#304FFE" stroke="#fff" stroke-width="2"/>
+        <text x="450" y="218" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#304FFE">KC</text>
+        <text x="450" y="230" font-family="'IBM Plex Mono',monospace" font-size="8" fill="#304FFE">Stadium</text>
+        <!-- HOU -->
+        <line x1="400" y1="330" x2="380" y2="370" stroke="#304FFE" stroke-width="3"/>
+        <circle cx="380" cy="370" r="8" fill="#304FFE" stroke="#fff" stroke-width="2"/>
+        <text x="354" y="385" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#304FFE">HOU</text>
+        <text x="354" y="397" text-anchor="end" font-family="'IBM Plex Mono',monospace" font-size="8" fill="#304FFE">Stadium</text>
+
+        <!-- CORT clusters — teal, dashed -->
+        <!-- Atlanta -->
+        <line x1="400" y1="330" x2="600" y2="300" stroke="#03BFA5" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <circle cx="600" cy="300" r="6" fill="#03BFA5" stroke="#fff" stroke-width="2"/>
+        <text x="614" y="303" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#03BFA5">ATL</text>
+        <!-- Boston -->
+        <line x1="400" y1="330" x2="740" y2="115" stroke="#03BFA5" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <circle cx="740" cy="115" r="5" fill="#03BFA5" stroke="#fff" stroke-width="2"/>
+        <text x="755" y="118" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#03BFA5">BOS</text>
+        <!-- LA -->
+        <line x1="400" y1="330" x2="130" y2="290" stroke="#03BFA5" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <circle cx="130" cy="290" r="6" fill="#03BFA5" stroke="#fff" stroke-width="2"/>
+        <text x="110" y="285" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#03BFA5">LA</text>
+        <!-- Miami -->
+        <line x1="400" y1="330" x2="650" y2="370" stroke="#03BFA5" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <circle cx="650" cy="370" r="6" fill="#03BFA5" stroke="#fff" stroke-width="2"/>
+        <text x="664" y="373" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#03BFA5">MIA</text>
+        <!-- SF -->
+        <line x1="400" y1="330" x2="95" y2="200" stroke="#03BFA5" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <circle cx="95" cy="200" r="5" fill="#03BFA5" stroke="#fff" stroke-width="2"/>
+        <text x="76" y="198" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#03BFA5">SF</text>
+        <!-- Seattle -->
+        <line x1="400" y1="330" x2="110" y2="110" stroke="#03BFA5" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <circle cx="110" cy="110" r="5" fill="#03BFA5" stroke="#fff" stroke-width="2"/>
+        <text x="90" y="108" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#03BFA5">SEA</text>
+        <!-- Philadelphia -->
+        <line x1="400" y1="330" x2="700" y2="175" stroke="#03BFA5" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <circle cx="700" cy="175" r="5" fill="#03BFA5" stroke="#fff" stroke-width="2"/>
+        <text x="715" y="178" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#03BFA5">PHL</text>
+
+        <!-- Smaller CORT dots -->
+        <line x1="400" y1="330" x2="630" y2="270" stroke="#03BFA5" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        <circle cx="630" cy="270" r="3.5" fill="#03BFA5" opacity="0.7"/>
+        <text x="644" y="273" font-family="'Noto Sans',sans-serif" font-size="8" fill="#03BFA5" opacity="0.8">CLT</text>
+        <line x1="400" y1="330" x2="680" y2="200" stroke="#03BFA5" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        <circle cx="680" cy="200" r="3.5" fill="#03BFA5" opacity="0.7"/>
+        <text x="694" y="203" font-family="'Noto Sans',sans-serif" font-size="8" fill="#03BFA5" opacity="0.8">DC</text>
+        <line x1="400" y1="330" x2="540" y2="270" stroke="#03BFA5" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        <circle cx="540" cy="270" r="3.5" fill="#03BFA5" opacity="0.7"/>
+        <text x="554" y="273" font-family="'Noto Sans',sans-serif" font-size="8" fill="#03BFA5" opacity="0.8">NSH</text>
+        <line x1="400" y1="330" x2="200" y2="310" stroke="#03BFA5" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        <circle cx="200" cy="310" r="3.5" fill="#03BFA5" opacity="0.7"/>
+        <text x="185" y="307" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="8" fill="#03BFA5" opacity="0.8">PHX</text>
+        <line x1="400" y1="330" x2="145" y2="320" stroke="#03BFA5" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        <circle cx="145" cy="320" r="3.5" fill="#03BFA5" opacity="0.7"/>
+        <text x="130" y="333" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="8" fill="#03BFA5" opacity="0.8">SD</text>
+        <line x1="400" y1="330" x2="215" y2="185" stroke="#03BFA5" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        <circle cx="215" cy="185" r="3.5" fill="#03BFA5" opacity="0.7"/>
+        <text x="200" y="180" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="8" fill="#03BFA5" opacity="0.8">SLC</text>
+        <line x1="400" y1="330" x2="370" y2="360" stroke="#03BFA5" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        <circle cx="350" cy="350" r="3.5" fill="#03BFA5" opacity="0.7"/>
+        <text x="335" y="348" text-anchor="end" font-family="'Noto Sans',sans-serif" font-size="8" fill="#03BFA5" opacity="0.8">AUS</text>
+
+        <!-- Legend -->
+        <g transform="translate(20,440)">
+          <circle cx="6" cy="6" r="6" fill="#304FFE"/>
+          <text x="18" y="10" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570" font-weight="600">Satellite WHS — Stadiums only (RIC operates)</text>
+          <circle cx="306" cy="6" r="5" fill="#03BFA5"/>
+          <text x="318" y="10" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570" font-weight="600">CORT Cross-dock — All non-stadium venues</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Stats sidebar -->
+    <div style="width:260px;display:flex;flex-direction:column;gap:12px;padding-top:20px">
+      <div class="c" style="text-align:center;padding:16px">
+        <div class="cv" style="font-size:28px;color:var(--a3)">12</div>
+        <div class="cl">USA Stadiums</div>
+      </div>
+      <div class="c" style="text-align:center;padding:16px">
+        <div class="cv" style="font-size:28px;color:var(--a4)">23</div>
+        <div class="cl">CORT Clusters</div>
+      </div>
+      <div class="c" style="text-align:center;padding:16px">
+        <div class="cv" style="font-size:28px;color:var(--a4)">147+</div>
+        <div class="cl">Non-Stadium Venues</div>
+      </div>
+      <div class="c" style="text-align:center;padding:16px;background:var(--rd-s);border-color:var(--rd-b)">
+        <div class="cv" style="font-size:28px;color:var(--rd)">145</div>
+        <div class="cl">FF&E Kits to CORT</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CORT kitting risk callout -->
+  <div style="display:flex;gap:16px;margin-top:12px">
+    <div style="flex:1;background:var(--rd-s);border:1px solid var(--rd-b);border-radius:8px;padding:14px 18px">
+      <div style="font-size:13px;font-weight:700;color:var(--rd);margin-bottom:4px">⚠ Distribution Risk — CORT FF&E Kits</div>
+      <div style="font-size:11px;color:var(--ts);line-height:1.6">
+        <span class="mono bold">145</span> FF&E kits pre-built in Dallas for <span class="mono bold">23</span> CORT facilities. Ideal: all kits for a facility in <b>one truck</b> by first venue bump-in.
+        <b style="color:var(--rd)">If containers arrive late</b>, kits for later-bumping venues won't be ready → multiple deliveries needed to same CORT facility.
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-content:flex-start;width:480px">
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">S.Florida 18</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">New York 14</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">Kansas City 13</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">Dallas 12</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">Houston 11</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">LA 11</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">Boston 10</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">Seattle 10</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">SF 10</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">Philly 10</span>
+      <span style="background:var(--pri-s);color:var(--pri);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700">Atlanta 8</span>
+      <span style="background:var(--bd);color:var(--ts);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600">+12 minor (1–3 each)</span>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">8</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 9 — STAPLES (NEW)
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-sec">STAPLES</span>
+  </div>
+
+  <h2>Staples — Stationery for Every Venue</h2>
+  <div class="sub" style="margin-bottom:24px">Every venue needs office supplies. Staples delivers them — but differently by region.</div>
+
+  <div class="g3" style="gap:24px;margin-bottom:24px">
+    <!-- USA STADIUMS -->
+    <div class="c c-a4" style="padding:22px 24px">
+      <div style="margin-bottom:8px">
+        <span class="tag tg" style="font-size:10px;margin-bottom:6px">USA STADIUMS</span>
+      </div>
+      <div style="font-size:16px;font-weight:800;color:var(--a4);margin-bottom:8px">Direct Delivery</div>
+      <div style="font-size:12px;color:var(--ts);line-height:1.6;margin-bottom:12px">
+        Staples delivers directly to stadium. Also direct to: Accreditation centres, ticketing, VIP hotels, volunteer centres, uniform centres, HQ, IBC, referee camps.
+      </div>
+      <div class="callout callout-teal" style="padding:10px 14px;font-size:10px">
+        <b>Large venues with receiving capacity</b> get direct Staples delivery
+      </div>
+    </div>
+
+    <!-- USA SMALLER -->
+    <div class="c c-a3" style="padding:22px 24px">
+      <div style="margin-bottom:8px">
+        <span class="tag tb" style="font-size:10px;margin-bottom:6px">USA SMALLER VENUES</span>
+      </div>
+      <div style="font-size:16px;font-weight:800;color:var(--a3);margin-bottom:8px">Kits via Dallas</div>
+      <div style="font-size:12px;color:var(--ts);line-height:1.6;margin-bottom:12px">
+        Staples packs stationery kits, ships to Dallas WHS. FIFA loads onto LP trucks alongside FF&amp;E. Delivered via satellite WHS or CORT cross-dock.
+      </div>
+      <div style="font-size:11px;color:var(--ts);margin-bottom:8px"><b>Applies to:</b> Airports, training sites, fleet depots</div>
+      <div class="callout callout-blue" style="padding:10px 14px;font-size:10px">
+        <b>Smaller venues can't receive separately</b> — stationery rides with FF&amp;E
+      </div>
+    </div>
+
+    <!-- MEX/CAN -->
+    <div class="c c-pri" style="padding:22px 24px">
+      <div style="margin-bottom:8px">
+        <span class="tag ta" style="font-size:10px;margin-bottom:6px">MEXICO &amp; CANADA</span>
+      </div>
+      <div style="font-size:16px;font-weight:800;color:var(--pri);margin-bottom:8px">All Kitted</div>
+      <div style="font-size:12px;color:var(--ts);line-height:1.6;margin-bottom:12px">
+        ALL stationery kitted by Staples. Shipped to regional warehouses (not Dallas). FIFA/RIC handles last mile delivery. No direct Staples deliveries in MEX/CAN.
+      </div>
+      <div class="callout" style="padding:10px 14px;font-size:10px">
+        <b>Different supplier agreements per region</b> — FIFA/RIC handles all last mile
+      </div>
+    </div>
+  </div>
+
+  <!-- Stationery Kit Detail -->
+  <div style="display:flex;gap:20px">
+    <div class="c" style="flex:1;padding:18px 24px;background:var(--bg)">
+      <h3 style="font-size:14px;margin-bottom:12px">Stationery Kit Details</h3>
+      <div style="display:flex;gap:24px">
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--ts);line-height:1.6;margin-bottom:8px">
+            Kits are per venue (small venues) or per functional area (stadiums).
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <span class="chip">Per venue <span class="n">(small)</span></span>
+            <span class="chip">Per functional area <span class="n">(stadiums)</span></span>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px">
+          <div class="c" style="text-align:center;padding:14px 20px;min-width:120px">
+            <div class="cv" style="font-size:26px;color:var(--sec)">166</div>
+            <div class="cl">SKUs across 3 catalogs</div>
+          </div>
+          <div class="c" style="text-align:center;padding:14px 20px;min-width:120px">
+            <div class="cv" style="font-size:26px;color:var(--pri)">85</div>
+            <div class="cl">Kit items in ML3K</div>
+          </div>
+          <div class="c" style="text-align:center;padding:14px 20px;min-width:120px">
+            <div class="cv" style="font-size:26px;color:var(--a3)">69</div>
+            <div class="cl">STP delivery records</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Regional catalog breakdown -->
+  <div style="display:flex;gap:16px;margin-top:14px">
+    <div class="c" style="flex:1;padding:12px 18px;border-left:3px solid var(--a3)">
+      <div style="font-size:12px;font-weight:700;color:var(--a3)">USA Catalog — <span class="mono">62</span> SKUs</div>
+    </div>
+    <div class="c" style="flex:1;padding:12px 18px;border-left:3px solid var(--pri)">
+      <div style="font-size:12px;font-weight:700;color:var(--pri)">Canada Catalog — <span class="mono">59</span> SKUs</div>
+    </div>
+    <div class="c" style="flex:1;padding:12px 18px;border-left:3px solid var(--sec)">
+      <div style="font-size:12px;font-weight:700;color:var(--sec)">Mexico Catalog — <span class="mono">45</span> SKUs</div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">9</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 10 — CORT STADIUM QUESTION
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-rd">CRITICAL FOR RIC</span>
+  </div>
+
+  <h2>CORT Stadiums — What's Ours, What's Theirs</h2>
+  <div class="sub" style="margin-bottom:20px">CORT supplies rental furniture to <span class="mono bold">7</span> USA stadiums. But that's not the whole story.</div>
+
+  <div class="split" style="gap:36px">
+    <!-- Left column — what CORT handles -->
+    <div>
+      <div style="padding:16px 20px;background:var(--a4-s);border-radius:10px 10px 0 0;border:1px solid var(--a4-b);border-bottom:none">
+        <div style="font-size:15px;font-weight:700;color:#00897B">What CORT Handles</div>
+      </div>
+      <div class="c" style="border-radius:0 0 10px 10px;border-top:none">
+        <ul class="ilist a4" style="font-size:13px">
+          <li style="padding:10px 0">Rental furniture (desks, chairs, cabinets) — <span class="mono bold">33</span> rental + <span class="mono bold">16</span> retail SKUs</li>
+          <li style="padding:10px 0">Delivery and setup of CORT items at venue</li>
+          <li style="padding:10px 0">ALL assembly at <b>non-stadium</b> venues (including our RGS items)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Right column — what RIC must handle -->
+    <div>
+      <div style="padding:16px 20px;background:var(--rd-s);border-radius:10px 10px 0 0;border:1px solid var(--rd-b);border-bottom:none">
+        <div style="font-size:15px;font-weight:700;color:var(--rd)">What RIC Must Handle at CORT Stadiums</div>
+      </div>
+      <div class="c" style="border-radius:0 0 10px 10px;border-top:none">
+        <div style="font-size:12px;color:var(--ts);margin-bottom:12px;line-height:1.5">RGS-supplied items shipped from Dallas through satellite WHS. CORT does <b>not</b> assemble these — RIC crew required.</div>
+        <table class="tbl" style="margin-top:0">
+          <thead><tr><th>Stadium</th><th class="num">Items to Assemble</th></tr></thead>
+          <tbody>
+            <tr><td>Miami</td><td class="num"><span class="mono">1,061</span></td></tr>
+            <tr><td>Boston</td><td class="num"><span class="mono">1,038</span></td></tr>
+            <tr><td>Atlanta</td><td class="num"><span class="mono">932</span></td></tr>
+            <tr><td>Philadelphia</td><td class="num"><span class="mono">704</span></td></tr>
+            <tr><td>SF Bay Area</td><td class="num"><span class="mono">670</span></td></tr>
+            <tr><td>Seattle</td><td class="num"><span class="mono">610</span></td></tr>
+            <tr><td>Los Angeles</td><td class="num"><span class="mono">504</span></td></tr>
+            <tr class="total"><td>TOTAL</td><td class="num"><span class="mono">5,519</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Big red number callout -->
+  <div style="margin-top:24px;text-align:center">
+    <div class="callout callout-red" style="display:inline-block;padding:20px 48px;text-align:center">
+      <div style="font-family:var(--fm);font-size:52px;font-weight:800;color:var(--rd);line-height:1">5,519</div>
+      <div style="font-size:14px;font-weight:700;color:var(--rd);margin-top:6px">items at CORT stadiums need RIC assembly</div>
+      <div style="font-size:12px;color:var(--ts);margin-top:4px">These are RGS Events items. CORT does not touch them. RIC crew required.</div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">10</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 11 — ASSEMBLY NUMBERS
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-sec">ASSEMBLY WORKLOAD</span>
+  </div>
+
+  <div style="display:flex;align-items:flex-start;gap:32px">
+    <!-- Left: hero + breakdown -->
+    <div style="flex:1">
+      <h2 style="margin-bottom:4px"><span class="mono text-pri" style="font-size:52px">21,672</span> Items Need Assembly</h2>
+      <div style="font-size:14px;color:var(--ts);margin-bottom:24px">This is the physical work — unpacking, connecting, positioning. Every one of these needs hands.</div>
+
+      <!-- Three-way split -->
+      <div class="g3" style="margin-bottom:20px">
+        <div class="c c-pri" style="text-align:center;padding:16px">
+          <div class="cv" style="font-size:28px">14,227</div>
+          <div class="cl">At <span class="mono">16</span> Stadiums</div>
+          <div class="cd">Assembled at venue by RIC</div>
+        </div>
+        <div class="c" style="text-align:center;padding:16px;border-top:3px solid var(--pri)">
+          <div class="cv" style="font-size:28px">1,459</div>
+          <div class="cl">At MEX/CAN WHS</div>
+          <div class="cd">Pre-assembled before Last Mile delivery by RIC</div>
+        </div>
+        <div class="c" style="text-align:center;padding:16px;border-top:3px solid var(--a4)">
+          <div class="cv" style="font-size:28px;color:var(--a4)">5,986</div>
+          <div class="cl">At USA Non-Stadiums</div>
+          <div class="cd">Assembled at venue by CORT</div>
+        </div>
+      </div>
+
+      <!-- Item breakdown -->
+      <table class="tbl" style="font-size:11px">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th class="num">Quantity</th>
+            <th>Assembly Method</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Barriers with Belt</td><td class="num"><span class="mono">6,366</span></td><td>Extend retractable belt, lock, position</td></tr>
+          <tr><td>Desks, Large (5ft)</td><td class="num"><span class="mono">2,459</span></td><td>Attach 4 legs to desk top</td></tr>
+          <tr><td>Shelving, Plastic</td><td class="num"><span class="mono">2,875</span></td><td>Clip shelves onto frame (4 shelves each)</td></tr>
+          <tr><td>Desks, Standard (4ft)</td><td class="num"><span class="mono">2,090</span></td><td>Attach 4 legs to desk top</td></tr>
+          <tr><td>Umbrella Bases</td><td class="num"><span class="mono">910</span></td><td>Insert pole into weighted base</td></tr>
+          <tr><td>Tables (3 types)</td><td class="num"><span class="mono">283</span></td><td>Fold out legs, lock in position</td></tr>
+          <tr><td>Clothes Racks</td><td class="num"><span class="mono">113</span></td><td>Extend telescoping rail</td></tr>
+          <tr><td>Floor Mirrors</td><td class="num"><span class="mono">59</span></td><td>Attach mirror panel to stand</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: tools -->
+    <div style="width:340px">
+      <div class="c" style="background:var(--bg);padding:22px 24px">
+        <h3 style="margin-bottom:4px">Assembly Tools</h3>
+        <div style="font-size:12px;color:var(--ts);margin-bottom:14px"><span class="mono bold text-pri">832</span> tool kits distributed to <span class="mono bold">16</span> warehouses and <span class="mono bold">16</span> stadiums</div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <span class="chip">Allen keys</span>
+          <span class="chip">Rubber mallets</span>
+          <span class="chip">Drill sets</span>
+          <span class="chip">Adjustable wrenches</span>
+          <span class="chip">Pliers</span>
+          <span class="chip">Nail punch sets</span>
+          <span class="chip">Socket sets</span>
+          <span class="chip">Cordless drills</span>
+          <span class="chip">Driver bit sets</span>
+          <span class="chip">Toolsets</span>
+        </div>
+
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--bd)">
+          <div style="font-size:11px;font-weight:700;color:var(--ts);margin-bottom:6px">Distribution</div>
+          <div style="font-size:11px;color:var(--ts);line-height:1.6">
+            Each warehouse and stadium receives toolkits proportional to its assembly workload. Kits are packed on LP trucks alongside FF&amp;E.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">11</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 12 — OPERATIONS MATRIX
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <div class="badge">OPERATIONS MATRIX</div>
+  </div>
+  <h2>The Full Picture — Who Does What, Where</h2>
+  <div class="dv"></div>
+
+  <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:var(--fd)">
+    <thead>
+      <tr style="background:var(--pr);color:#fff">
+        <th style="padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">Category</th>
+        <th style="padding:10px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">Venues</th>
+        <th style="padding:10px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">Pieces</th>
+        <th style="padding:10px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">Pallets</th>
+        <th style="padding:10px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">LM Trucks</th>
+        <th style="padding:10px 8px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">Assembly Items</th>
+        <th style="padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">LP Route</th>
+        <th style="padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">WHS Type</th>
+        <th style="padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid rgba(255,255,255,.2)">Assembly Where</th>
+        <th style="padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Assembly By</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- MEX -->
+      <tr style="background:#F3E5F5">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:var(--pr)">🇲🇽 Mexico — Stadiums</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">3</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">25,440</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">681</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~27</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:#C62828">2,544</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Dallas → Regional WHS</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Regional (RIC)</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
+      </tr>
+      <tr style="background:#FAFAFA">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);color:var(--pr)">🇲🇽 Mexico — Non-Stadiums</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">32</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">4,821</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">85</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~4</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">1,065</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Dallas → Regional WHS</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Regional (RIC)</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">9 items at WHS<br><span style="font-size:10px;color:var(--ts)">Shelving at venue</span></td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
+      </tr>
+      <!-- CAN -->
+      <tr style="background:#F3E5F5">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:var(--pr)">🇨🇦 Canada — Stadiums</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">2</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">13,146</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">389</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~15</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:#C62828">1,567</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Dallas → Regional WHS</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Regional (RIC)</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
+      </tr>
+      <tr style="background:#FAFAFA">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);color:var(--pr)">🇨🇦 Canada — Non-Stadiums</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">21</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">2,720</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">60</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~3</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">724</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Dallas → Regional WHS</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Regional (RIC)</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">9 items at WHS<br><span style="font-size:10px;color:var(--ts)">Shelving at venue</span></td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
+      </tr>
+      <!-- USA RGS -->
+      <tr style="background:#E8EAF6">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:#304FFE">🇺🇸 USA / RGS — Stadiums</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">4</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">37,633</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">1,092</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~43</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:#C62828">4,597</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Dallas → Satellite WHS<br><span style="font-size:10px;color:var(--ts)">Dallas STA direct</span></td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Satellite, rented (RIC)</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
+      </tr>
+      <tr style="background:#FAFAFA">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);color:#304FFE">🇺🇸 USA / RGS — Non-Stadium</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">1</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">3,746</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">92</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~4</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">357</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Dallas direct</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Central WHS (Dallas)</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700">RIC crew</td>
+      </tr>
+      <!-- USA CORT -->
+      <tr style="background:#E0F2F1">
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd);font-weight:700;color:#03BFA5">🇺🇸 USA / CORT — Stadiums</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700">7</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">53,593</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">356</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm)">~14</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:1px solid var(--bd);font-family:var(--fm);font-weight:700;color:#C62828">5,519</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">RGS items: Dallas → Satellite<br><span style="font-size:10px;color:var(--ts)">CORT items: CORT direct</span></td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">Satellite (RGS items)<br><span style="font-size:10px;color:var(--ts)">CORT facility (CORT items)</span></td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)">At venue</td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--bd)"><b>RIC</b> (RGS items)<br><b style="color:#03BFA5">CORT</b> (CORT items)</td>
+      </tr>
+      <tr style="background:#FAFAFA">
+        <td style="padding:10px 12px;border-bottom:2px solid var(--pr);color:#03BFA5">🇺🇸 USA / CORT — Non-Stadiums</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:2px solid var(--pr);font-family:var(--fm);font-weight:700">134</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:2px solid var(--pr);font-family:var(--fm)">25,212</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:2px solid var(--pr);font-family:var(--fm)">179</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:2px solid var(--pr);font-family:var(--fm)">~7</td>
+        <td style="padding:10px 8px;text-align:center;border-bottom:2px solid var(--pr);font-family:var(--fm)">5,299</td>
+        <td style="padding:10px 12px;border-bottom:2px solid var(--pr)">Dallas → CORT cross-dock<br><span style="font-size:10px;color:var(--ts)">145 pre-built FF&E kits</span></td>
+        <td style="padding:10px 12px;border-bottom:2px solid var(--pr)">CORT cross-dock</td>
+        <td style="padding:10px 12px;border-bottom:2px solid var(--pr)">At venue</td>
+        <td style="padding:10px 12px;border-bottom:2px solid var(--pr);font-weight:700;color:#03BFA5">CORT (all items)</td>
+      </tr>
+      <!-- TOTALS -->
+      <tr style="background:var(--pr);color:#fff;font-weight:700">
+        <td style="padding:12px;font-size:12px">TOTAL</td>
+        <td style="padding:12px;text-align:center;font-family:var(--fm);font-size:13px">214</td>
+        <td style="padding:12px;text-align:center;font-family:var(--fm);font-size:13px">166,311</td>
+        <td style="padding:12px;text-align:center;font-family:var(--fm);font-size:13px">2,934</td>
+        <td style="padding:12px;text-align:center;font-family:var(--fm);font-size:13px">~117</td>
+        <td style="padding:12px;text-align:center;font-family:var(--fm);font-size:13px">21,672</td>
+        <td style="padding:12px;font-size:11px">~93 Load Plan trucks</td>
+        <td style="padding:12px;font-size:11px">5 Regional + 3 Satellite + 23 CORT</td>
+        <td colspan="2" style="padding:12px;font-size:11px;text-align:center">RIC: 15,854 items · CORT: 5,818 items</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="display:flex;gap:16px;margin-top:20px">
+    <div style="flex:1;background:#F3E5F5;border:1px solid #CE93D8;border-radius:8px;padding:14px;font-size:11px;line-height:1.6">
+      <b style="color:var(--pr)">🇲🇽🇨🇦 MEX/CAN (58 venues)</b><br>
+      RIC operates everything. Assembly at WHS for non-stadiums (9 items). Shelving assembled at venue. All Staples kitted, no direct deliveries. Customs clearance at regional WHS.
+    </div>
+    <div style="flex:1;background:#E8EAF6;border:1px solid #9FA8DA;border-radius:8px;padding:14px;font-size:11px;line-height:1.6">
+      <b style="color:#304FFE">🇺🇸 USA / RGS (5 venues)</b><br>
+      Dallas Stadium + IBC served direct. NY/KC/HOU stadiums via satellite WHS. RIC operates satellites and assembles at venue.
+    </div>
+    <div style="flex:1;background:#E0F2F1;border:1px solid #80CBC4;border-radius:8px;padding:14px;font-size:11px;line-height:1.6">
+      <b style="color:#03BFA5">🇺🇸 USA / CORT (141 venues)</b><br>
+      CORT handles ALL non-stadium venues (assembly included). At CORT stadiums: CORT assembles CORT items, <b style="color:#C62828">RIC assembles RGS items (5,519)</b>. FF&E pre-kitted in Dallas.
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:700">SM&sup2;ARTA&trade;</span></span>
+    <div class="sn">12</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 13 — ACTION ITEMS
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-rd">ACTION ITEMS</span>
+  </div>
+
+  <h2>What Materials Needs from Each Workstream</h2>
+  <div style="font-size:14px;color:var(--ts);margin-bottom:20px">Clear asks for clear ownership. Here's what we need from each of you.</div>
+
+  <div class="split-3" style="gap:20px">
+    <!-- Distribution -->
+    <div>
+      <div style="padding:14px 20px;background:var(--pri-s);border-radius:10px 10px 0 0;border:1px solid var(--pri-b);border-bottom:none">
+        <div style="font-size:15px;font-weight:800;color:var(--pri)">Distribution</div>
+        <div style="font-size:11px;color:var(--ts);margin-top:2px">Getting trucks from A to B</div>
+      </div>
+      <div class="c" style="border-radius:0 0 10px 10px;border-top:none;padding:16px 20px">
+        <ul class="ilist pri" style="font-size:11.5px">
+          <li>Dispatch ~<span class="mono bold">93</span> Load Plan trucks from Dallas (Mar 16 – Apr 29)</li>
+          <li>Manage customs clearance for MEX/CAN shipments (<span class="mono bold">5</span> destinations, <span class="mono bold">45</span> trucks)</li>
+          <li>Coordinate with CORT for cross-dock delivery schedules at <span class="mono bold">23</span> USA facilities</li>
+          <li>Deliver FF&amp;E kits to CORT by first venue bump-in date per cluster</li>
+          <li>Handle late-arriving items: additional trucks may be needed if containers delayed</li>
+          <li>Plan ~<span class="mono bold">280</span> Last Mile trucks from destination WHS to venues</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Warehousing -->
+    <div>
+      <div style="padding:14px 20px;background:var(--a3-s);border-radius:10px 10px 0 0;border:1px solid var(--a3-b);border-bottom:none">
+        <div style="font-size:15px;font-weight:800;color:var(--a3)">Warehousing</div>
+        <div style="font-size:11px;color:var(--ts);margin-top:2px">Receiving, assembling, kitting, shipping</div>
+      </div>
+      <div class="c" style="border-radius:0 0 10px 10px;border-top:none;padding:16px 20px">
+        <ul class="ilist a3" style="font-size:11.5px">
+          <li>Set up <span class="mono bold">3</span> satellite warehouses in NY, KC, HOU by April 1</li>
+          <li>Operate <span class="mono bold">5</span> regional WHS in MEX/CAN (customs, QC, assembly, kitting)</li>
+          <li>Pre-assemble <span class="mono bold">1,459</span> FF&amp;E items at MEX/CAN WHS before Last Mile delivery</li>
+          <li>Pack FF&amp;E kits for CORT non-stadium venues in Dallas</li>
+          <li>Distribute <span class="mono bold">832</span> tool kits to warehouses and stadiums</li>
+          <li>Maintain contingency stock at Dallas for assembly damages</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Venue Logistics -->
+    <div>
+      <div style="padding:14px 20px;background:var(--a4-s);border-radius:10px 10px 0 0;border:1px solid var(--a4-b);border-bottom:none">
+        <div style="font-size:15px;font-weight:800;color:#00897B">Venue Logistics</div>
+        <div style="font-size:11px;color:var(--ts);margin-top:2px">Last mile to final space</div>
+      </div>
+      <div class="c" style="border-radius:0 0 10px 10px;border-top:none;padding:16px 20px">
+        <ul class="ilist a4" style="font-size:11.5px">
+          <li>Coordinate bump-in schedules with Venue Logistics Managers (pull model)</li>
+          <li>Receive FF&amp;E at logistics compound per venue</li>
+          <li>Assemble <span class="mono bold">14,227</span> items at <span class="mono bold">16</span> stadiums (RIC crew)</li>
+          <li>Coordinate with CORT for space allocation at CORT stadiums</li>
+          <li>Assemble shelving units at all non-stadium venues (shipped unassembled)</li>
+          <li>Position all items to final spaces per CAD layout plans</li>
+          <li>Report assembly damage — replacement stock available from Dallas</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">13</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 14 — TIMELINE
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-pri">TIMELINE</span>
+  </div>
+
+  <h2><span class="mono text-pri">94</span> Days — March 9 to June 11</h2>
+  <div style="font-size:14px;color:var(--ts);margin-bottom:28px">Two phases running in parallel. Every day counts.</div>
+
+  <svg viewBox="0 0 1700 460" width="1700" height="460">
+    <!-- Timeline axis -->
+    <line x1="140" y1="200" x2="1600" y2="200" stroke="#E0E0EE" stroke-width="2"/>
+
+    <!-- Date markers -->
+    <g font-family="'IBM Plex Mono',monospace" font-size="10" fill="#8888A0" font-weight="600" text-anchor="middle">
+      <text x="180" y="215">Mar 9</text><line x1="180" y1="195" x2="180" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+      <text x="270" y="215">Mar 16</text><line x1="270" y1="195" x2="270" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+      <text x="295" y="215">Mar 18</text><line x1="295" y1="195" x2="295" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+      <text x="600" y="215">Apr 1</text><line x1="600" y1="195" x2="600" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+      <text x="850" y="215">Apr 15</text><line x1="850" y1="195" x2="850" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+      <text x="900" y="215">Apr 20</text><line x1="900" y1="195" x2="900" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+      <text x="1020" y="215">Apr 29</text><line x1="1020" y1="195" x2="1020" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+      <text x="1200" y="215">May 15</text><line x1="1200" y1="195" x2="1200" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+      <text x="1520" y="215">Jun 11</text><line x1="1520" y1="195" x2="1520" y2="205" stroke="#E0E0EE" stroke-width="1.5"/>
+    </g>
+
+    <!-- PHASE 1 — LOAD PLAN (above the line) -->
+    <text x="60" y="90" font-family="'Noto Sans',sans-serif" font-size="14" font-weight="800" fill="#4A148C">PHASE 1</text>
+    <text x="60" y="108" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="600" fill="#555570">Load Plan</text>
+
+    <!-- First furniture in Dallas -->
+    <circle cx="180" cy="145" r="6" fill="#4A148C" stroke="#fff" stroke-width="2"/>
+    <text x="180" y="132" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#4A148C">First furniture</text>
+    <text x="180" y="142" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#4A148C">in Dallas</text>
+    <line x1="180" y1="151" x2="180" y2="195" stroke="#4A148C" stroke-width="1" stroke-dasharray="3,2"/>
+
+    <!-- First LP truck -->
+    <circle cx="270" cy="145" r="6" fill="#4A148C" stroke="#fff" stroke-width="2"/>
+    <text x="270" y="135" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#4A148C">First LP truck</text>
+    <line x1="270" y1="151" x2="270" y2="195" stroke="#4A148C" stroke-width="1" stroke-dasharray="3,2"/>
+
+    <!-- 40 containers bar -->
+    <rect x="295" y="80" width="605" height="18" rx="9" fill="#EDE7F6" stroke="#C5B3E6" stroke-width="1"/>
+    <text x="598" y="93" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#4A148C">40 containers arriving (Mar 9 – Apr 10)</text>
+
+    <!-- LP dispatch bar - Bucket 1 -->
+    <rect x="270" y="108" width="750" height="14" rx="7" fill="#4A148C" opacity="0.8"/>
+    <text x="645" y="119" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Bucket 1 — MEX/CAN dispatch (Mar 16 – Apr 29)</text>
+
+    <!-- LP dispatch bar - Bucket 2 -->
+    <rect x="600" y="128" width="420" height="14" rx="7" fill="#4A148C" opacity="0.45"/>
+    <text x="810" y="139" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Bucket 2 — USA dispatch (Apr 1 – Apr 29)</text>
+
+    <!-- PHASE 2 — LAST MILE (below the line) -->
+    <text x="60" y="260" font-family="'Noto Sans',sans-serif" font-size="14" font-weight="800" fill="#304FFE">PHASE 2</text>
+    <text x="60" y="278" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="600" fill="#555570">Last Mile</text>
+
+    <!-- Trucks arrive -->
+    <circle cx="620" cy="250" r="6" fill="#304FFE" stroke="#fff" stroke-width="2"/>
+    <text x="620" y="242" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#304FFE">Trucks arrive at destinations</text>
+    <line x1="620" y1="256" x2="620" y2="205" stroke="#304FFE" stroke-width="1" stroke-dasharray="3,2"/>
+
+    <!-- WHS processing bar -->
+    <rect x="620" y="265" width="400" height="14" rx="7" fill="#304FFE" opacity="0.4"/>
+    <text x="820" y="276" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">WHS processing: receiving + QC + assembly + kit packing</text>
+
+    <!-- Last Mile trucks bar -->
+    <rect x="700" y="290" width="750" height="14" rx="7" fill="#304FFE" opacity="0.6"/>
+    <text x="1075" y="301" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Last Mile trucks: WHS → venues</text>
+
+    <!-- FF&E assembly bar -->
+    <rect x="800" y="315" width="700" height="14" rx="7" fill="#304FFE" opacity="0.8"/>
+    <text x="1150" y="326" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">FF&amp;E assembly at venues</text>
+
+    <!-- Tournament -->
+    <text x="1520" y="360" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="22" fill="#4A148C">★</text>
+    <text x="1520" y="380" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="800" fill="#4A148C">KICKOFF</text>
+    <text x="1520" y="394" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="600" fill="#555570">June 11</text>
+    <line x1="1520" y1="205" x2="1520" y2="350" stroke="#4A148C" stroke-width="2" stroke-dasharray="4,3"/>
+
+    <!-- Parallel note -->
+    <rect x="140" y="420" width="1460" height="30" rx="8" fill="#F5F5FA" stroke="#E0E0EE" stroke-width="1"/>
+    <text x="870" y="440" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="600" fill="#555570">LP and LM run in parallel — not sequential. As Load Plan trucks arrive, Last Mile can begin immediately.</text>
+  </svg>
+
+  <!-- Summary chips -->
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;justify-content:center">
+    <span class="chip">~<span class="n">93</span> LP trucks</span>
+    <span class="chip">~<span class="n">280</span> LM trucks</span>
+    <span class="chip"><span class="n">2,403</span> LP pallets</span>
+    <span class="chip"><span class="n">2,934</span> LM pallets</span>
+    <span class="chip"><span class="n">57,566</span> LP units</span>
+    <span class="chip"><span class="n">166,311</span> total pieces</span>
+    <span class="chip"><span class="n">21,672</span> assembly items</span>
+    <span class="chip"><span class="n">832</span> tool kits</span>
+    <span class="chip"><span class="n">214</span> venues</span>
+    <span class="chip"><span class="n">16</span> cities</span>
+    <span class="chip"><span class="n">3</span> countries</span>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">14</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 15 — PLATFORM
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-pri">ML3K</span>
+  </div>
+
+  <h2>All Planned in ML3K — SM²ARTA™ Platform</h2>
+  <div class="sub">Every number in this presentation comes from one system.</div>
+
+  <div class="g3" style="margin-bottom:28px">
+    <!-- Load Plan -->
+    <div class="c c-pri" style="padding:24px 26px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span class="tag ta">LP</span>
+        <span style="font-size:16px;font-weight:700">Load Plan</span>
+      </div>
+      <div style="font-size:13px;color:var(--ts);line-height:1.6">
+        Plans warehouse dispatch: truck loading, stock management, customs documents. Generates Commercial Invoices, Packing Lists, and ASN Inbound Forms per truck.
+      </div>
+    </div>
+
+    <!-- Last Mile -->
+    <div class="c c-a3" style="padding:24px 26px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span class="tag tb">LM</span>
+        <span style="font-size:16px;font-weight:700">Last Mile</span>
+      </div>
+      <div style="font-size:13px;color:var(--ts);line-height:1.6">
+        Plans venue delivery: per-venue trucks, bump-in scheduling, kit management. Handles the pull model — each venue gets exactly what it needs, when it needs it.
+      </div>
+    </div>
+
+    <!-- Vision 2026 -->
+    <div class="c c-a4" style="padding:24px 26px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span class="tag tg">V26</span>
+        <span style="font-size:16px;font-weight:700">Vision 2026</span>
+      </div>
+      <div style="font-size:13px;color:var(--ts);line-height:1.6">
+        Command dashboard: real-time visibility across all operations. Cross-module KPIs, venue status tracking, and exportable reports for stakeholders.
+      </div>
+    </div>
+  </div>
+
+  <!-- Capabilities -->
+  <div class="g2" style="gap:20px">
+    <div class="c" style="padding:20px 24px;background:var(--bg)">
+      <h3 style="font-size:14px;margin-bottom:12px">Key Capabilities</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd)">Real-time sync via Supabase</div>
+        <div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd)">Auto-generated CI, Packing List, ASN, OOR</div>
+        <div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd)">Stock report tracking with READY badges</div>
+        <div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd)">Undo history (<span class="mono">15</span> levels) + Master backup</div>
+        <div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd)">Admin / Viewer role-based access</div>
+        <div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--bd)">Export to Excel for offline planning</div>
+        <div style="font-size:12px;padding:6px 0">HS Code classification with AI assistance</div>
+        <div style="font-size:12px;padding:6px 0">Kit management &amp; batch OOR exports</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="c" style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--ts);margin-bottom:8px">Access ML3K</div>
+          <div style="font-family:var(--fm);font-size:22px;font-weight:700;color:var(--pri);padding:12px 28px;background:var(--pri-s);border-radius:10px;border:1px solid var(--pri-b)">ml3k.sm2arta.com</div>
+        </div>
+      </div>
+      <div class="callout" style="padding:14px 18px;font-size:12px">
+        <b>Built for FIFA WC26.</b> The platform plans, tracks, and documents every movement of FF&amp;E across <span class="mono bold">3</span> countries, <span class="mono bold">16</span> cities, and <span class="mono bold">214</span> venues — from the moment it leaves the factory to the moment it's positioned in its final space.
+      </div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">15</div>
+  </div>
+</div>
+
+</body>
+</html>
