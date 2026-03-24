@@ -1254,6 +1254,33 @@ function _lpTailReconstruct(plan,maxPlt){
   }
   for(const id of Object.keys(protectedFP))protectedFP[id]=protectedFP[id].sort().join('\n');
 
+  // ── Stock waterfall: walk trucks in date+id order, deduct from pool ──
+  // Mirrors the render waterfall at LP_renderPlan (line 4690).
+  // Records per-truck snapshot so reconstruction knows what's actually available.
+  const _wfPool={};// running stock balance
+  const _wfByTruck={};// truckId → {sku: availQty BEFORE this truck deducts}
+  if(STOCK_SKUS&&STOCK_SKUS.size>0){
+    for(const sku of STOCK_SKUS){const sq=STOCK_QTYS[sku];_wfPool[sku]=sq!==undefined?sq:Infinity}
+    // Build truck list in date+id order (same as render)
+    const _wfTrucks={};
+    for(const r of plan){
+      if(!_wfTrucks[r.truckId])_wfTrucks[r.truckId]={id:r.truckId,date:r.date,items:[]};
+      _wfTrucks[r.truckId].items.push(r);
+    }
+    const _wfList=Object.values(_wfTrucks).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+    for(const t of _wfList){
+      // Snapshot BEFORE deduction
+      const snap={};for(const sku in _wfPool)snap[sku]=_wfPool[sku];
+      _wfByTruck[t.id]=snap;
+      // OOR trucks don't deduct
+      if(oor.has(t.id))continue;
+      // Deduct
+      const agg={};for(const r of t.items){agg[r.sku]=(agg[r.sku]||0)+(r.qty||0)}
+      const canFill=Object.keys(agg).every(sku=>(_wfPool[sku]||0)>=agg[sku]);
+      if(canFill){for(const sku in agg)_wfPool[sku]=(_wfPool[sku]||0)-agg[sku]}
+    }
+  }
+
   // Snapshot
   const snapQty={},snapPlt={};const snapLockedIds=new Set();const snapOorIds=new Set();const snapTruckIds=new Set();
   for(const r of plan){
@@ -1359,9 +1386,11 @@ function _lpTailReconstruct(plan,maxPlt){
     // remainder also goes to truckA. Find the combination closest to maxPlt.
     // Tiebreaker: prefer solutions with more in-stock (ready) pallets on truckA.
     const reconSkus=skuList.filter(s=>reconstructable.has(s));
-    const _stockAvail={};// sku → available stock qty
+    // Use waterfall snapshot for truckA: stock available BEFORE this pair deducts
+    const _wfSnap=_wfByTruck[idA]||{};
+    const _stockAvail={};
     for(const sku of reconSkus){
-      _stockAvail[sku]=STOCK_SKUS&&STOCK_SKUS.has(sku)?(STOCK_QTYS[sku]!==undefined?STOCK_QTYS[sku]:Infinity):0;
+      _stockAvail[sku]=STOCK_SKUS&&STOCK_SKUS.has(sku)?(_wfSnap[sku]!==undefined?_wfSnap[sku]:0):0;
     }
     const reconData=reconSkus.map(sku=>{
       const p=pool[sku];const wp=Math.floor(p.totalQty/p.pq);
