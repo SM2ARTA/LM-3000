@@ -878,7 +878,7 @@ function LP_parseArrivals(buf,turnaround){
   return arrivals;
 }
 
-// ── LP Planning Engine V3: three-bucket, parallel streams ──
+// ── LP Planning Engine V5: two-bucket parallel streams + post-build tail reconstruction ──
 // Bucket 1: Ready full MEX/CAN → earliest dates
 // Bucket 2: Non-ready MEX/CAN (forecast) → after bucket 1
 // Bucket 3: USA (RIC) → from RIC start date, own constraints, parallel
@@ -963,7 +963,7 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   // ── Shared helpers ──
   const scoreDest=dest=>{let s=0;for(const sku of Object.keys(open[dest]||{})){const q=open[dest][sku]||0;if(q<=0)continue;const avail=Math.min(q,stock[sku]||0);if(avail<=0)continue;const n=nom[sku];s+=(n&&n.pq>0&&n.ps>0)?(avail/n.pq)*n.ps:0}return s};
 
-  // LP Engine V4: build ONE truck — SR first, defer non-SR if future SR arrivals expected
+  // LP Engine V5: build ONE truck — SR first, defer non-SR if future SR arrivals expected
   const buildOneTruck=(dest,date)=>{
     const skus=[];
     for(const sku of Object.keys(open[dest]||{})){
@@ -1235,9 +1235,9 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   return plan;
 }
 
-// ── Post-build tail reconstruct: unified local optimizer for last 2 unlocked trucks per (dest,date) ──
-// Replaces the previous chained _lpTailMerge + _lpTailRebalance passes.
-// Handles merge (combined ≤ MAX_PLT) and whole-pallet rebalance (combined > MAX_PLT) in one pass.
+// ── LP Engine V5: Post-build tail reconstruction — unified local optimizer ──
+// Optimizes last 2 unlocked trucks per (dest,date): merge or exhaustive pallet search.
+// Stock-readiness aware via waterfall. Prefers dispatchable trucks over max fill.
 function _lpTailReconstruct(plan,maxPlt){
   if(!Array.isArray(plan)||!plan.length)return plan;
   const nom=LP_STATE.nomenclature||{};

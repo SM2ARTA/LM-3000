@@ -331,9 +331,9 @@ Comprehensive automated audit across all subsystems. Fixes in commits `65f8e0d` 
 7. **Dead `ppu` parameter in `_pqUomEff`** (LOW) — Parameter passed but ignored (identity function). Fixed: removed parameter.
 
 ## System Audit (2026-03-20)
-LP Engine V4.5 audit. All findings verified.
+LP Engine V4.5 audit (now V5). All findings verified.
 
-### LP Engine V4.5 Changes
+### LP Engine V4.5 → V5 Changes
 1. **SR deferral guard in buildOneTruck** — defers non-SR loading when future SR arrivals expected. Truck goes to pending buffer, topped up daily with SR-only items.
 2. **SR-only guard in _topUpPending** — pending trucks only receive SR items while future SR arrivals exist. Non-SR allowed only when no more SR coming.
 3. **trucksToday counting fixed** — deferred trucks now count toward maxTrk per day.
@@ -415,8 +415,9 @@ Tracks plan-invalid state. Includes hashes of:
 - LP_STATE.arrivals dates, LP_transitDays, demand qty
 - STOCK_SKUS + STOCK_QTYS (via `_stockHash()`) — plan flagged stale after stock report change
 
-### LP Engine V4.5 Architecture
+### LP Engine V5 Architecture
 Two buckets: MEX/CAN first (with consolidation + SR deferral), then USA/RIC.
+Post-build: `_lpTailReconstruct` optimizes last 2 unlocked trucks per (dest,date).
 
 **buildOneTruck** — 4-pass loading with SR deferral:
 1. SR whole pallets (greedy, largest pallet space first)
@@ -437,6 +438,21 @@ Two buckets: MEX/CAN first (with consolidation + SR deferral), then USA/RIC.
 - `maxDst` per day: enforced in scoring (`allowed` set)
 - `MAX_PLT` per truck: enforced in `_loadWhole`/`_loadPartial` capacity checks
 - Bucket order: MEX/CAN consumes stock first, USA gets remainder (no fPtr reset)
+
+### LP Engine V5 Tail Reconstruction (`_lpTailReconstruct`)
+- Runs after `LP_buildPlanV3` returns, before save/render
+- Groups plan rows by `(destination, date)`, selects last 2 unlocked non-OOR trucks per group
+- **Merge**: if combined pallets ≤ MAX_PLT, merge into one truck (lower ID survives)
+- **Reconstruct**: if combined > MAX_PLT, pools both trucks' items and repacks via exhaustive search
+- **Exhaustive search**: for each reconstructable SKU, tries 0..N whole pallets ± sub-pallet remainder; finds combination closest to MAX_PLT
+- **Stock-readiness**: tracks per-SKU availability via waterfall (same as render). Prefers all-ready solutions at ≥90% fill over higher-fill solutions with unready items
+- **Waterfall**: walks all trucks in date+id order, deducts stock consumed by earlier trucks; OOR trucks skip deduction
+- **Passthrough SKUs**: items with no nom or <1 whole pallet keep original truck assignment
+- **Invariants**: qty per (dest,sku), pallets per dest (±0.01), no overflow, locked/OOR fingerprints, no new dests/dates, truck count, no negative values
+- **Abort**: any invariant failure → returns original plan unchanged; LSR cleanup deferred until after invariants pass
+- **Protected trucks**: locked (`LP_dispatched`) and OOR (`LP_oorTrucks`) are fingerprinted before/after; never touched as candidates, donors, or receivers
+- **Legacy**: `_lpTailMerge` and `_lpTailRebalance` preserved as inactive code for rollback
+- **Call sites**: `LP_regenerate()` (full + partial) and `goGenerateLP()` — single `_lpTailReconstruct(plan, maxPlt)` call
 
 ### LP Engine Leftover Logic
 - After both buckets, post-processing distributes remaining demand across trucks per destination
