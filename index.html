@@ -1240,7 +1240,7 @@ function _lpTailMerge(plan,maxPlt){
   if(!Array.isArray(plan)||!plan.length)return plan;
   const locked=new Set(LP_dispatched);
   const oor=new Set(LP_oorTrucks);
-  const log=[];let mergeCount=0,skipCount=0;
+  const log=[];let mergeCount=0,skipCount=0;const _eliminatedIds=[];
 
   // Fingerprint every locked truck before any changes
   const lockedFP={};
@@ -1317,9 +1317,7 @@ function _lpTailMerge(plan,maxPlt){
     // Update truckTotal for all rows now under truckA
     for(const r of rows){if(r.truckId===idA)r.truckTotal=tt}
 
-    // Clean up LP_lsrNumbers for eliminated truckId
-    if(LP_lsrNumbers&&LP_lsrNumbers[idB]!=null)delete LP_lsrNumbers[idB];
-
+    _eliminatedIds.push(idB);
     log.push({dest,date,action:'merged',idA,idB,pltA:+pltA.toFixed(2),pltB:+pltB.toFixed(2),combined,tt});
     mergeCount++;
   }
@@ -1377,7 +1375,12 @@ function _lpTailMerge(plan,maxPlt){
 
   if(!ok){
     console.error('[TailMerge] ABORT — invariant violations:',violations);
-    return plan;// return original unchanged
+    return plan;// return original unchanged — no side effects
+  }
+
+  // Deferred cleanup: only mutate external state after all invariants pass
+  for(const id of _eliminatedIds){
+    if(LP_lsrNumbers&&LP_lsrNumbers[id]!=null)delete LP_lsrNumbers[id];
   }
 
   return out;
