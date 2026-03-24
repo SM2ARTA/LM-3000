@@ -1357,37 +1357,64 @@ function _lpTailReconstruct(plan,maxPlt){
     // Bounded exhaustive search: for each reconstructable SKU, choose
     // how many whole pallets (0..wp) go to truckA and whether its sub-pallet
     // remainder also goes to truckA. Find the combination closest to maxPlt.
-    // With typical ≤10 SKUs, branching is capped at maxFit+1 per SKU with
-    // aggressive pruning (skip when already over capacity).
+    // Tiebreaker: prefer solutions with more in-stock (ready) pallets on truckA.
     const reconSkus=skuList.filter(s=>reconstructable.has(s));
+    const _stockAvail={};// sku → available stock qty
+    for(const sku of reconSkus){
+      _stockAvail[sku]=STOCK_SKUS&&STOCK_SKUS.has(sku)?(STOCK_QTYS[sku]!==undefined?STOCK_QTYS[sku]:Infinity):0;
+    }
     const reconData=reconSkus.map(sku=>{
       const p=pool[sku];const wp=Math.floor(p.totalQty/p.pq);
       const rq=p.totalQty-wp*p.pq;
       const rp=rq>0?Math.round((p.totalPlt-wp*p.ps)*100)/100:0;
-      return{sku,wp,ps:p.ps,pq:p.pq,remQty:rq,remPlt:rp};
+      const avail=_stockAvail[sku]||0;
+      return{sku,wp,ps:p.ps,pq:p.pq,remQty:rq,remPlt:rp,avail};
     });
     const target=Math.round((maxPlt-passthroughA)*100)/100;
-    let bestFill=-1;let bestChoices=null;
-    const _search=(idx,fill,choices)=>{
+    let bestFill=-1;let bestReady=-1;let bestAllReady=false;let bestChoices=null;
+    const _search=(idx,fill,ready,allReady,choices)=>{
       if(fill>target+0.01)return;// prune: over capacity
       if(idx===reconData.length){
-        if(fill>bestFill){bestFill=fill;bestChoices=[...choices]}
+        // Prefer: (1) all-ready solution ≥ 90% fill over non-ready at 100%
+        // (2) among same readiness class → highest fill
+        // (3) tiebreak → highest ready pallets
+        const isFull=Math.round((fill+passthroughA)*100)/100>=maxPlt;
+        const bestIsFull=Math.round((bestFill+passthroughA)*100)/100>=maxPlt;
+        const good=fill>=target*0.9;// ≥90% of available reconstructable capacity
+        const bestGood=bestFill>=target*0.9;
+        let dominated=false;
+        if(bestChoices){
+          // An all-ready solution that's ≥90% beats a non-all-ready solution
+          if(allReady&&good&&!bestAllReady)dominated=false;// new wins
+          else if(!allReady&&bestAllReady&&bestGood)dominated=true;// old wins
+          else if(fill>bestFill)dominated=false;
+          else if(fill===bestFill&&ready>bestReady)dominated=false;
+          else dominated=true;
+        }
+        if(!dominated){
+          bestFill=fill;bestReady=ready;bestAllReady=allReady;bestChoices=[...choices];
+        }
         return;
       }
       const d=reconData[idx];
       const maxN=Math.min(d.wp,Math.floor(Math.round((target-fill)*100)/100/d.ps));
-      // Try from maxN down to 0 (early termination: once fill exceeds best, skip lower)
       for(let n=maxN;n>=0;n--){
         const wpSpc=Math.round(n*d.ps*100)/100;
+        const qtyOnA_wp=n*d.pq;
+        const readyAdd_wp=Math.round(Math.min(qtyOnA_wp,d.avail)/d.pq*d.ps*100)/100;
+        const wpReady=allReady&&(qtyOnA_wp===0||d.avail>=qtyOnA_wp);
         // Without remainder
-        _search(idx+1,Math.round((fill+wpSpc)*100)/100,[...choices,{n,wr:false}]);
+        _search(idx+1,Math.round((fill+wpSpc)*100)/100,Math.round((ready+readyAdd_wp)*100)/100,wpReady,[...choices,{n,wr:false}]);
         // With remainder
         if(d.remPlt>0){
-          _search(idx+1,Math.round((fill+wpSpc+d.remPlt)*100)/100,[...choices,{n,wr:true}]);
+          const qtyOnA_full=qtyOnA_wp+d.remQty;
+          const fullReady=allReady&&(qtyOnA_full===0||d.avail>=qtyOnA_full);
+          const readyAdd_full=Math.round(Math.min(qtyOnA_full,d.avail)/d.pq*d.ps*100)/100;
+          _search(idx+1,Math.round((fill+wpSpc+d.remPlt)*100)/100,Math.round((ready+readyAdd_full)*100)/100,fullReady,[...choices,{n,wr:true}]);
         }
       }
     };
-    _search(0,0,[]);
+    _search(0,0,0,true,[]);
 
     const allocA={};const remA={};
     let filledA=passthroughA;
