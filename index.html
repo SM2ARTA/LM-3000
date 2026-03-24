@@ -1235,6 +1235,154 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   return plan;
 }
 
+// ── Post-build tail merge: merge last 2 unlocked trucks per (dest,date) if combined ≤ MAX_PLT ──
+function _lpTailMerge(plan,maxPlt){
+  if(!Array.isArray(plan)||!plan.length)return plan;
+  const locked=new Set(LP_dispatched);
+  const oor=new Set(LP_oorTrucks);
+  const log=[];let mergeCount=0,skipCount=0;
+
+  // Fingerprint every locked truck before any changes
+  const lockedFP={};
+  for(const r of plan){
+    if(!locked.has(r.truckId))continue;
+    if(!lockedFP[r.truckId])lockedFP[r.truckId]=[];
+    lockedFP[r.truckId].push(r.sku+'|'+r.qty+'|'+r.pallets+'|'+r.date+'|'+r.destination);
+  }
+  for(const id of Object.keys(lockedFP))lockedFP[id]=lockedFP[id].sort().join('\n');
+
+  // Snapshot: qty per (dest,sku), pallets per dest, row count, locked count
+  const snapQty={},snapPlt={};let snapRows=plan.length;
+  const snapLockedIds=new Set();
+  for(const r of plan){
+    const qk=r.destination+'|'+r.sku;snapQty[qk]=(snapQty[qk]||0)+(r.qty||0);
+    snapPlt[r.destination]=(snapPlt[r.destination]||0)+(r.pallets||0);
+    if(locked.has(r.truckId))snapLockedIds.add(r.truckId);
+  }
+
+  // Work on a shallow copy (each row cloned so original rows untouched)
+  const out=plan.map(r=>({...r}));
+
+  // Group by (destination, date)
+  const groups={};
+  for(const r of out){
+    const gk=r.destination+'|'+r.date;
+    if(!groups[gk])groups[gk]=[];
+    groups[gk].push(r);
+  }
+
+  const sortedKeys=Object.keys(groups).sort();
+  for(const gk of sortedKeys){
+    const rows=groups[gk];
+    const dest=rows[0].destination;const date=rows[0].date;
+
+    // Distinct unlocked truckIds, sorted numerically
+    const allIds=new Set();for(const r of rows)allIds.add(r.truckId);
+    const unlocked=[...allIds].filter(id=>!locked.has(id)&&!oor.has(id)).sort((a,b)=>a-b);
+
+    if(unlocked.length<2){
+      log.push({dest,date,action:'skip',reason:'<2 unlocked',total:allIds.size,locked:allIds.size-unlocked.length,unlocked:unlocked.length});
+      skipCount++;continue;
+    }
+
+    const idA=unlocked[unlocked.length-2];
+    const idB=unlocked[unlocked.length-1];
+
+    // Defensive: verify not locked (should be impossible after filter, but belt-and-suspenders)
+    if(locked.has(idA)||locked.has(idB)){
+      log.push({dest,date,action:'abort',reason:'candidate in locked set'});
+      console.error('[TailMerge] ABORT: candidate in locked set',{idA,idB});
+      return plan;// full abort — return original
+    }
+
+    const rowsA=rows.filter(r=>r.truckId===idA);
+    const rowsB=rows.filter(r=>r.truckId===idB);
+    if(!rowsA.length||!rowsB.length){
+      log.push({dest,date,action:'skip',reason:'empty candidate',idA,idB});
+      skipCount++;continue;
+    }
+
+    let pltA=0;for(const r of rowsA)pltA+=(r.pallets||0);
+    let pltB=0;for(const r of rowsB)pltB+=(r.pallets||0);
+    const combined=Math.round((pltA+pltB)*100)/100;
+
+    if(combined>maxPlt){
+      log.push({dest,date,action:'skip',reason:'capacity',idA,pltA:+pltA.toFixed(2),idB,pltB:+pltB.toFixed(2),combined});
+      skipCount++;continue;
+    }
+
+    // Merge: reassign truckB rows to truckA
+    const tt=Math.round(combined*10000)/10000;
+    for(const r of rowsB)r.truckId=idA;
+    // Update truckTotal for all rows now under truckA
+    for(const r of rows){if(r.truckId===idA)r.truckTotal=tt}
+
+    // Clean up LP_lsrNumbers for eliminated truckId
+    if(LP_lsrNumbers&&LP_lsrNumbers[idB]!=null)delete LP_lsrNumbers[idB];
+
+    log.push({dest,date,action:'merged',idA,idB,pltA:+pltA.toFixed(2),pltB:+pltB.toFixed(2),combined,tt});
+    mergeCount++;
+  }
+
+  // ── Invariant checks on the modified copy ──
+  let ok=true;const violations=[];
+
+  // I1: qty per (dest,sku) unchanged
+  const chkQty={};
+  for(const r of out){const qk=r.destination+'|'+r.sku;chkQty[qk]=(chkQty[qk]||0)+(r.qty||0)}
+  for(const k of new Set([...Object.keys(snapQty),...Object.keys(chkQty)])){
+    if((snapQty[k]||0)!==(chkQty[k]||0)){ok=false;violations.push('qty mismatch: '+k)}
+  }
+
+  // I2: pallets per dest unchanged (±0.01)
+  const chkPlt={};
+  for(const r of out)chkPlt[r.destination]=(chkPlt[r.destination]||0)+(r.pallets||0);
+  for(const d of new Set([...Object.keys(snapPlt),...Object.keys(chkPlt)])){
+    if(Math.abs((snapPlt[d]||0)-(chkPlt[d]||0))>0.01){ok=false;violations.push('pallet mismatch: '+d)}
+  }
+
+  // I3: no truck exceeds maxPlt
+  const chkTT={};for(const r of out)chkTT[r.truckId]=(chkTT[r.truckId]||0)+(r.pallets||0);
+  for(const id of Object.keys(chkTT)){
+    if(Math.round(chkTT[id]*100)/100>maxPlt){ok=false;violations.push('truck overflow: '+id)}
+  }
+
+  // I4: locked trucks identical
+  const chkFP={};
+  for(const r of out){
+    if(!locked.has(r.truckId))continue;
+    if(!chkFP[r.truckId])chkFP[r.truckId]=[];
+    chkFP[r.truckId].push(r.sku+'|'+r.qty+'|'+r.pallets+'|'+r.date+'|'+r.destination);
+  }
+  for(const id of Object.keys(chkFP))chkFP[id]=chkFP[id].sort().join('\n');
+  for(const id of Object.keys(lockedFP)){
+    if(lockedFP[id]!==chkFP[id]){ok=false;violations.push('locked truck modified: '+id)}
+  }
+  const chkLockedIds=new Set();for(const r of out)if(locked.has(r.truckId))chkLockedIds.add(r.truckId);
+  if(snapLockedIds.size!==chkLockedIds.size){ok=false;violations.push('locked truck count changed')}
+
+  // I5/I6: no new destinations or dates
+  const origDests=new Set(plan.map(r=>r.destination)),origDates=new Set(plan.map(r=>r.date));
+  for(const r of out){
+    if(!origDests.has(r.destination)){ok=false;violations.push('new dest: '+r.destination)}
+    if(!origDates.has(r.date)){ok=false;violations.push('new date: '+r.date)}
+  }
+
+  // I7: row count unchanged
+  if(out.length!==snapRows){ok=false;violations.push('row count changed: '+snapRows+' → '+out.length)}
+
+  // Summary log
+  console.log('[TailMerge] '+mergeCount+' merged, '+skipCount+' skipped, '+(mergeCount+skipCount)+' groups evaluated'+(ok?', invariants OK':' INVARIANT FAIL: '+violations.join('; ')));
+  if(log.length)console.log('[TailMerge] details:',log);
+
+  if(!ok){
+    console.error('[TailMerge] ABORT — invariant violations:',violations);
+    return plan;// return original unchanged
+  }
+
+  return out;
+}
+
 // ── LP State (will be populated by UI in Phase 3) ──
 let LP_STATE={
   materialPlan:[],nomenclature:{},arrivals:[],
@@ -3075,7 +3223,7 @@ function LP_regenerate(){
     const dispatchedRows=(LP_STATE.generatedPlan||[]).filter(r=>LP_dispatched.has(r.truckId));
     if(!dispatchedRows.length){
       // Nothing locked — full regenerate
-      LP_STATE.generatedPlan=LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg);
+      LP_STATE.generatedPlan=_lpTailMerge(LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS);
       LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();return;
     }
     // Aggregate locked consumption by dest+sku and by sku
@@ -3097,7 +3245,7 @@ function LP_regenerate(){
     const maxId=Math.max(0,...LP_dispatched);
     const lastLockedDate=dispatchedRows.reduce((m,r)=>r.date>m?r.date:m,'');
     const newRows=LP_buildPlanV3(remainDemand,remainArrivals,{..._cfg,startTruckId:maxId,lastLockedDate});
-    LP_STATE.generatedPlan=[...dispatchedRows,...newRows];
+    LP_STATE.generatedPlan=[...dispatchedRows,..._lpTailMerge(newRows,_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS)];
     LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();
   }catch(e){alert('Re-generate error: '+e.message);console.error(e)}
 }
@@ -6201,8 +6349,7 @@ function V26_render(){
     const cCnt=(cat.cort||[]).filter(c=>!c.excluded).length;
     html+=`<button class="tbtn${isOn?' on':''}" onclick="window._v26Filter='${key}';V26_render()" style="font-size:11px">${cat.label} <span style="font-size:9px;opacity:.6">(${tCnt}${cCnt>0?'+'+cCnt+'C':''})</span></button>`;
   }
-  html+=`<button class="rbtn" onclick="window.open('supply-chain-overview.html','_blank')" style="font-size:9px;padding:4px 8px;background:var(--as);color:var(--ac);border-color:var(--ab);margin-left:auto">📊 Supply Chain</button>`;
-  html+=`<button class="rbtn" onclick="showNetworkMap()" style="font-size:9px;padding:4px 8px;background:var(--ps);color:var(--pu);border-color:#D4C5FE">🗺 Network</button></div>`;
+  html+=`<button class="rbtn" onclick="window.open('supply-chain-overview.html','_blank')" style="font-size:9px;padding:4px 8px;background:var(--ps);color:var(--pu);border-color:#D4C5FE;margin-left:auto">📊 Supply Chain</button></div>`;
 
   // Filtered peak for timeline
   const fPeakDate=fDates.length?fDates.reduce((pk,d)=>{const ac=(fByDate[d]||[]).filter(t=>!t.excluded).length;const pkc=(fByDate[pk]||[]).filter(t=>!t.excluded).length;return ac>pkc?d:pk},fDates[0]):'';
@@ -12745,10 +12892,10 @@ async function goGenerateLP(){
       const n=LP_STATE.nomenclature[d.sku];
       if(n&&n.name)d.name=n.name;// enrich display name from nomenclature
     }
-    LP_STATE.generatedPlan=LP_buildPlanV3(
+    LP_STATE.generatedPlan=_lpTailMerge(LP_buildPlanV3(
       LP_STATE.materialPlan,LP_STATE.arrivals,
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate}
-    );
+    ),LP_STATE.maxPallets||LP_DEFAULT_MAX_PALLETS);
     LP_STATE.planGenerated=true;
     LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
     LP_snapshotSettings();
