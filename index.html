@@ -1235,7 +1235,308 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   return plan;
 }
 
-// ── Post-build tail merge: merge last 2 unlocked trucks per (dest,date) if combined ≤ MAX_PLT ──
+// ── Post-build tail reconstruct: unified local optimizer for last 2 unlocked trucks per (dest,date) ──
+// Replaces the previous chained _lpTailMerge + _lpTailRebalance passes.
+// Handles merge (combined ≤ MAX_PLT) and whole-pallet rebalance (combined > MAX_PLT) in one pass.
+function _lpTailReconstruct(plan,maxPlt){
+  if(!Array.isArray(plan)||!plan.length)return plan;
+  const nom=LP_STATE.nomenclature||{};
+  const locked=new Set(LP_dispatched);
+  const oor=new Set(LP_oorTrucks);
+  const log=[];let mergeCount=0,reconCount=0,skipCount=0;const _eliminatedIds=[];
+
+  // Fingerprint locked + OOR trucks
+  const protectedFP={};
+  for(const r of plan){
+    if(!locked.has(r.truckId)&&!oor.has(r.truckId))continue;
+    if(!protectedFP[r.truckId])protectedFP[r.truckId]=[];
+    protectedFP[r.truckId].push(r.sku+'|'+r.qty+'|'+r.pallets+'|'+r.date+'|'+r.destination);
+  }
+  for(const id of Object.keys(protectedFP))protectedFP[id]=protectedFP[id].sort().join('\n');
+
+  // Snapshot
+  const snapQty={},snapPlt={};const snapLockedIds=new Set();const snapOorIds=new Set();const snapTruckIds=new Set();
+  for(const r of plan){
+    const qk=r.destination+'|'+r.sku;snapQty[qk]=(snapQty[qk]||0)+(r.qty||0);
+    snapPlt[r.destination]=(snapPlt[r.destination]||0)+(r.pallets||0);
+    if(locked.has(r.truckId))snapLockedIds.add(r.truckId);
+    if(oor.has(r.truckId))snapOorIds.add(r.truckId);
+    snapTruckIds.add(r.truckId);
+  }
+
+  // Work on a copy — eligible-pair rows will be replaced; all other rows cloned as-is
+  const out=plan.map(r=>({...r}));
+
+  // Group by (destination, date)
+  const groups={};
+  for(const r of out){const gk=r.destination+'|'+r.date;if(!groups[gk])groups[gk]=[];groups[gk].push(r)}
+
+  const sortedKeys=Object.keys(groups).sort();
+  for(const gk of sortedKeys){
+    const rows=groups[gk];
+    const dest=rows[0].destination;const date=rows[0].date;
+
+    const allIds=new Set();for(const r of rows)allIds.add(r.truckId);
+    const unlocked=[...allIds].filter(id=>!locked.has(id)&&!oor.has(id)).sort((a,b)=>a-b);
+
+    if(unlocked.length<2){log.push({dest,date,action:'skip',reason:'<2 unlocked'});skipCount++;continue}
+
+    const idA=unlocked[unlocked.length-2];
+    const idB=unlocked[unlocked.length-1];
+
+    // Defensive: verify not protected
+    if(locked.has(idA)||locked.has(idB)||oor.has(idA)||oor.has(idB)){
+      console.error('[TailReconstruct] ABORT: candidate is protected',{idA,idB});
+      return plan;
+    }
+
+    // Collect rows for the eligible pair
+    const pairRows=rows.filter(r=>r.truckId===idA||r.truckId===idB);
+    if(!pairRows.length){skipCount++;continue}
+    const rowsA=pairRows.filter(r=>r.truckId===idA);
+    const rowsB=pairRows.filter(r=>r.truckId===idB);
+    if(!rowsA.length||!rowsB.length){skipCount++;continue}
+
+    let pltA=0;for(const r of rowsA)pltA+=(r.pallets||0);
+    let pltB=0;for(const r of rowsB)pltB+=(r.pallets||0);
+    pltA=Math.round(pltA*100)/100;pltB=Math.round(pltB*100)/100;
+    const combined=Math.round((pltA+pltB)*100)/100;
+
+    // Both trucks full — nothing to improve
+    if(pltA>=maxPlt&&pltB>=maxPlt){log.push({dest,date,action:'skip',reason:'both full'});skipCount++;continue}
+
+    // ── CASE 1: Merge — combined fits in one truck ──
+    if(combined<=maxPlt){
+      const tt=Math.round(combined*10000)/10000;
+      for(const r of pairRows)r.truckId=idA;
+      for(const r of pairRows)r.truckTotal=tt;
+      _eliminatedIds.push(idB);
+      log.push({dest,date,action:'merged',idA,idB,pltA,pltB,combined});
+      mergeCount++;continue;
+    }
+
+    // ── CASE 2: Reconstruct — combined > MAX_PLT, rebuild 2-truck pair ──
+    // truckA already at capacity
+    if(pltA>=maxPlt){log.push({dest,date,action:'skip',reason:'A full',pltA});skipCount++;continue}
+
+    // Build a per-SKU pool from both trucks
+    const pool={};// sku → {totalQty, totalPlt, pq, ps, name, rows:[refs]}
+    let hasValidSku=false;
+    for(const r of pairRows){
+      const sku=r.sku;
+      if(!pool[sku])pool[sku]={totalQty:0,totalPlt:0,pq:0,ps:0,name:r.name||sku,rows:[]};
+      pool[sku].totalQty+=(r.qty||0);
+      pool[sku].totalPlt+=(r.pallets||0);
+      pool[sku].rows.push(r);
+      const n=nom[sku];
+      if(n&&n.palletQty>0&&n.palletSpc>0){
+        pool[sku].pq=n.palletQty;pool[sku].ps=n.palletSpc;hasValidSku=true;
+      }
+    }
+
+    if(!hasValidSku){log.push({dest,date,action:'skip',reason:'no nom metadata'});skipCount++;continue}
+
+    // Determine how to pack truckA up to MAX_PLT using whole pallets
+    // Sort SKUs: largest ps first (fill bulk capacity), then fine-grained to close gap, sku tiebreak
+    const skuList=Object.keys(pool).sort((a,b)=>(pool[b].ps||0)-(pool[a].ps||0)||a.localeCompare(b));
+
+    // Pre-compute pallets from passthrough SKUs (no nom or sub-pallet only) that stay on truckA
+    let passthroughA=0;
+    const reconstructable=new Set();
+    for(const sku of skuList){
+      const p=pool[sku];
+      if(p.pq>0&&p.ps>0&&Math.floor(p.totalQty/p.pq)>=1){
+        reconstructable.add(sku);
+      }else{
+        // Passthrough: original rows keep their truckId — count truckA contribution
+        for(const r of p.rows){if(r.truckId===idA)passthroughA+=(r.pallets||0)}
+      }
+    }
+    passthroughA=Math.round(passthroughA*100)/100;
+
+    // Allocate whole pallets to truckA greedily, remainder stays on truckB
+    const allocA={};// sku → qty allocated to truckA
+    let filledA=passthroughA;// start from passthrough contribution
+
+    for(const sku of skuList){
+      if(!reconstructable.has(sku))continue;
+      const p=pool[sku];
+      const wholePallets=Math.floor(p.totalQty/p.pq);
+      const maxFit=Math.floor(Math.round((maxPlt-filledA)*100)/100/p.ps);
+      const take=Math.min(wholePallets,maxFit);
+      allocA[sku]=take>=1?take*p.pq:0;// 0 means all goes to truckB
+      if(take>=1){
+        const pltForA=Math.round(take*p.ps*100)/100;
+        filledA=Math.round((filledA+pltForA)*100)/100;
+      }
+    }
+
+    // Also handle remainder (sub-pallet portions) — these stay on whichever truck has the SKU in truckA
+    // and partial qty goes to truckB. We need to rebuild rows.
+
+    // Check if reconstruction actually improved truckA
+    if(filledA<=pltA){
+      log.push({dest,date,action:'skip',reason:'no improvement',pltA,filledA});skipCount++;continue;
+    }
+
+    // ── Rebuild rows for the pair ──
+    // For each SKU: allocA[sku] whole-pallet qty goes to truckA, remainder to truckB
+    // SKUs without nom metadata keep their original truck assignment
+    const newPairRows=[];
+    const handled=new Set();
+
+    for(const sku of skuList){
+      const p=pool[sku];
+      handled.add(sku);
+
+      if(p.pq<=0||p.ps<=0||allocA[sku]===undefined){
+        // No nom or not reconstructable: preserve original rows as-is (keep original truckId)
+        for(const r of p.rows)newPairRows.push(r);
+        continue;
+      }
+
+      const qtyA=allocA[sku];
+      const qtyB=p.totalQty-qtyA;
+      const pltAsku=Math.round((qtyA/p.pq)*p.ps*100)/100;
+      const pltBsku=Math.round(((p.totalPlt*100-pltAsku*100)/100)*100)/100;// preserve total exactly
+
+      // Create truckA row
+      if(qtyA>0){
+        newPairRows.push({truckId:idA,destination:dest,date,sku,name:p.name,qty:Math.round(qtyA),pallets:pltAsku,truckTotal:0});
+      }
+      // Create truckB row (may include sub-pallet remainder)
+      if(qtyB>0){
+        newPairRows.push({truckId:idB,destination:dest,date,sku,name:p.name,qty:Math.round(qtyB),pallets:pltBsku,truckTotal:0});
+      }
+      // Preserve _leftover flag if original had it
+      const hadLeftover=p.rows.some(r=>r._leftover);
+      if(hadLeftover){
+        const bRow=newPairRows.find(r=>r.sku===sku&&r.truckId===idB);
+        if(bRow)bRow._leftover=true;
+      }
+    }
+
+    // Sanity: verify no SKU was lost
+    for(const sku of Object.keys(pool)){
+      if(!handled.has(sku)){for(const r of pool[sku].rows)newPairRows.push(r)}
+    }
+
+    // Compute truckTotals
+    let ttA=0,ttB=0;
+    for(const r of newPairRows){
+      if(r.truckId===idA)ttA+=(r.pallets||0);
+      if(r.truckId===idB)ttB+=(r.pallets||0);
+    }
+    ttA=Math.round(ttA*10000)/10000;ttB=Math.round(ttB*10000)/10000;
+    for(const r of newPairRows){
+      if(r.truckId===idA)r.truckTotal=ttA;
+      if(r.truckId===idB)r.truckTotal=ttB;
+    }
+
+    // Verify truckB still has rows (if not, this should have been a merge — anomaly)
+    if(!newPairRows.some(r=>r.truckId===idB)){
+      console.error('[TailReconstruct] ABORT: truckB emptied during reconstruction');
+      return plan;
+    }
+
+    // Replace pair rows in output array
+    // Find indices of old pair rows and splice in new ones
+    const pairIdxs=[];
+    for(let i=0;i<out.length;i++){
+      if((out[i].truckId===idA||out[i].truckId===idB)&&out[i].destination===dest&&out[i].date===date){
+        pairIdxs.push(i);
+      }
+    }
+    // Remove old pair rows (from end to preserve indices)
+    for(let i=pairIdxs.length-1;i>=0;i--)out.splice(pairIdxs[i],1);
+    // Insert new pair rows at the position of the first removed row
+    const insertAt=pairIdxs.length?pairIdxs[0]:out.length;
+    out.splice(insertAt,0,...newPairRows);
+
+    const skusRecon=Object.keys(allocA);
+    log.push({dest,date,action:'reconstructed',idA,idB,pltA,pltB,newA:ttA,newB:ttB,skus:skusRecon.length});
+    reconCount++;
+  }
+
+  // ── Invariant checks ──
+  let ok=true;const violations=[];
+
+  // I1: qty per (dest,sku)
+  const chkQty={};
+  for(const r of out){const qk=r.destination+'|'+r.sku;chkQty[qk]=(chkQty[qk]||0)+(r.qty||0)}
+  for(const k of new Set([...Object.keys(snapQty),...Object.keys(chkQty)])){
+    if((snapQty[k]||0)!==(chkQty[k]||0)){ok=false;violations.push('qty mismatch: '+k)}
+  }
+
+  // I2: pallets per dest (±0.01)
+  const chkPlt={};
+  for(const r of out)chkPlt[r.destination]=(chkPlt[r.destination]||0)+(r.pallets||0);
+  for(const d of new Set([...Object.keys(snapPlt),...Object.keys(chkPlt)])){
+    if(Math.abs((snapPlt[d]||0)-(chkPlt[d]||0))>0.01){ok=false;violations.push('pallet mismatch: '+d)}
+  }
+
+  // I3: no truck exceeds maxPlt
+  const chkTT={};for(const r of out)chkTT[r.truckId]=(chkTT[r.truckId]||0)+(r.pallets||0);
+  for(const id of Object.keys(chkTT)){
+    if(Math.round(chkTT[id]*100)/100>maxPlt){ok=false;violations.push('truck overflow: '+id)}
+  }
+
+  // I4: protected trucks (locked + OOR) identical
+  const chkFP={};
+  for(const r of out){
+    if(!locked.has(r.truckId)&&!oor.has(r.truckId))continue;
+    if(!chkFP[r.truckId])chkFP[r.truckId]=[];
+    chkFP[r.truckId].push(r.sku+'|'+r.qty+'|'+r.pallets+'|'+r.date+'|'+r.destination);
+  }
+  for(const id of Object.keys(chkFP))chkFP[id]=chkFP[id].sort().join('\n');
+  for(const id of Object.keys(protectedFP)){
+    if(protectedFP[id]!==chkFP[id]){ok=false;violations.push('protected truck modified: '+id)}
+  }
+  const chkLockedIds=new Set();const chkOorIds=new Set();
+  for(const r of out){
+    if(locked.has(r.truckId))chkLockedIds.add(r.truckId);
+    if(oor.has(r.truckId))chkOorIds.add(r.truckId);
+  }
+  if(snapLockedIds.size!==chkLockedIds.size){ok=false;violations.push('locked truck count changed')}
+  if(snapOorIds.size!==chkOorIds.size){ok=false;violations.push('OOR truck count changed')}
+
+  // I5/I6: no new destinations or dates
+  const origDests=new Set(plan.map(r=>r.destination)),origDates=new Set(plan.map(r=>r.date));
+  for(const r of out){
+    if(!origDests.has(r.destination)){ok=false;violations.push('new dest: '+r.destination)}
+    if(!origDates.has(r.date)){ok=false;violations.push('new date: '+r.date)}
+  }
+
+  // I7: truck count (merges reduce by 1 per merge, otherwise unchanged)
+  const chkTruckIds=new Set();for(const r of out)chkTruckIds.add(r.truckId);
+  const expectedTrucks=snapTruckIds.size-mergeCount;
+  if(chkTruckIds.size!==expectedTrucks){ok=false;violations.push('truck count: expected '+expectedTrucks+' got '+chkTruckIds.size)}
+
+  // I8: no row has negative qty or pallets
+  for(const r of out){
+    if((r.qty||0)<0||(r.pallets||0)<0){ok=false;violations.push('negative row: '+r.sku+' t'+r.truckId)}
+  }
+
+  // I9: rows outside eligible pairs unchanged — verified structurally by copy semantics + splice
+
+  console.log('[TailReconstruct] '+mergeCount+' merged, '+reconCount+' reconstructed, '+skipCount+' skipped, '+(mergeCount+reconCount+skipCount)+' groups'+(ok?', invariants OK':' FAIL: '+violations.join('; ')));
+  if(log.length)console.log('[TailReconstruct] details:',log);
+
+  if(!ok){
+    console.error('[TailReconstruct] ABORT — invariant violations:',violations);
+    return plan;
+  }
+
+  // Deferred cleanup: only after invariants pass
+  for(const id of _eliminatedIds){
+    if(LP_lsrNumbers&&LP_lsrNumbers[id]!=null)delete LP_lsrNumbers[id];
+  }
+
+  return out;
+}
+
+// ── Legacy tail passes (inactive — preserved for rollback) ──
+// To revert: replace _lpTailReconstruct calls with _lpTailRebalance(_lpTailMerge(...))
 function _lpTailMerge(plan,maxPlt){
   if(!Array.isArray(plan)||!plan.length)return plan;
   const locked=new Set(LP_dispatched);
@@ -3409,7 +3710,7 @@ function LP_regenerate(){
     const dispatchedRows=(LP_STATE.generatedPlan||[]).filter(r=>LP_dispatched.has(r.truckId));
     if(!dispatchedRows.length){
       // Nothing locked — full regenerate
-      LP_STATE.generatedPlan=_lpTailRebalance(_lpTailMerge(LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS);
+      LP_STATE.generatedPlan=_lpTailReconstruct(LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS);
       LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();return;
     }
     // Aggregate locked consumption by dest+sku and by sku
@@ -3431,7 +3732,7 @@ function LP_regenerate(){
     const maxId=Math.max(0,...LP_dispatched);
     const lastLockedDate=dispatchedRows.reduce((m,r)=>r.date>m?r.date:m,'');
     const newRows=LP_buildPlanV3(remainDemand,remainArrivals,{..._cfg,startTruckId:maxId,lastLockedDate});
-    LP_STATE.generatedPlan=[...dispatchedRows,..._lpTailRebalance(_lpTailMerge(newRows,_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS)];
+    LP_STATE.generatedPlan=[...dispatchedRows,..._lpTailReconstruct(newRows,_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS)];
     LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();
   }catch(e){alert('Re-generate error: '+e.message);console.error(e)}
 }
@@ -13078,10 +13379,10 @@ async function goGenerateLP(){
       const n=LP_STATE.nomenclature[d.sku];
       if(n&&n.name)d.name=n.name;// enrich display name from nomenclature
     }
-    LP_STATE.generatedPlan=_lpTailRebalance(_lpTailMerge(LP_buildPlanV3(
+    LP_STATE.generatedPlan=_lpTailReconstruct(LP_buildPlanV3(
       LP_STATE.materialPlan,LP_STATE.arrivals,
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate}
-    ),LP_STATE.maxPallets||LP_DEFAULT_MAX_PALLETS),LP_STATE.maxPallets||LP_DEFAULT_MAX_PALLETS);
+    ),LP_STATE.maxPallets||LP_DEFAULT_MAX_PALLETS);
     LP_STATE.planGenerated=true;
     LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
     LP_snapshotSettings();
