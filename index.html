@@ -1354,25 +1354,57 @@ function _lpTailReconstruct(plan,maxPlt){
     }
     passthroughA=Math.round(passthroughA*100)/100;
 
-    // Allocate whole pallets to truckA greedily, remainder stays on truckB
-    const allocA={};// sku → qty allocated to truckA
+    // Allocate to truckA greedily: for each SKU, try whole pallets + sub-pallet remainder
+    const allocA={};// sku → qty allocated to truckA (whole pallet qty only)
+    const remA={};// sku → {qty, plt} sub-pallet remainder assigned to truckA
     let filledA=passthroughA;// start from passthrough contribution
 
     for(const sku of skuList){
       if(!reconstructable.has(sku))continue;
       const p=pool[sku];
       const wholePallets=Math.floor(p.totalQty/p.pq);
-      const maxFit=Math.floor(Math.round((maxPlt-filledA)*100)/100/p.ps);
-      const take=Math.min(wholePallets,maxFit);
-      allocA[sku]=take>=1?take*p.pq:0;// 0 means all goes to truckB
-      if(take>=1){
-        const pltForA=Math.round(take*p.ps*100)/100;
-        filledA=Math.round((filledA+pltForA)*100)/100;
+      const remQty=p.totalQty-wholePallets*p.pq;
+      const remPlt=remQty>0?Math.round((p.totalPlt-wholePallets*p.ps)*100)/100:0;
+      const gap=Math.round((maxPlt-filledA)*100)/100;
+
+      // Option A: fit whole pallets + remainder together
+      const maxWhole=Math.floor(gap/p.ps);
+      const takeWithRem=Math.min(wholePallets,maxWhole);
+      const pltWithRem=Math.round((takeWithRem*p.ps+remPlt)*100)/100;
+
+      // Option B: fit whole pallets only (possibly more since no remainder space needed)
+      const takeWholeOnly=Math.min(wholePallets,Math.floor(gap/p.ps));
+      const pltWholeOnly=Math.round(takeWholeOnly*p.ps*100)/100;
+
+      // Choose: if remainder fits alongside whole pallets, prefer that (fills more)
+      if(takeWithRem>=1&&remPlt>0&&pltWithRem<=gap){
+        allocA[sku]=takeWithRem*p.pq;
+        remA[sku]={qty:remQty,plt:remPlt};
+        filledA=Math.round((filledA+pltWithRem)*100)/100;
+      }else if(takeWholeOnly>=1){
+        // Whole pallets only — try to fit without remainder
+        allocA[sku]=takeWholeOnly*p.pq;
+        filledA=Math.round((filledA+pltWholeOnly)*100)/100;
+      }else{
+        allocA[sku]=0;// all to truckB
       }
     }
 
-    // Also handle remainder (sub-pallet portions) — these stay on whichever truck has the SKU in truckA
-    // and partial qty goes to truckB. We need to rebuild rows.
+    // Second pass: try remainders for SKUs that only got whole pallets (no remainder in first pass)
+    for(const sku of skuList){
+      if(!reconstructable.has(sku))continue;
+      if(remA[sku])continue;// already assigned
+      const p=pool[sku];
+      const wholePallets=Math.floor(p.totalQty/p.pq);
+      const remQty=p.totalQty-wholePallets*p.pq;
+      if(remQty<=0)continue;
+      const remPlt=Math.round((p.totalPlt-wholePallets*p.ps)*100)/100;
+      if(remPlt<=0)continue;
+      const newA=Math.round((filledA+remPlt)*100)/100;
+      if(newA>maxPlt)continue;
+      remA[sku]={qty:remQty,plt:remPlt};
+      filledA=newA;
+    }
 
     // Check if reconstruction actually improved truckA
     if(filledA<=pltA){
@@ -1395,16 +1427,19 @@ function _lpTailReconstruct(plan,maxPlt){
         continue;
       }
 
-      const qtyA=allocA[sku];
+      const wholePltQty=allocA[sku];
+      const rem=remA[sku];// sub-pallet remainder assigned to truckA (may be undefined)
+      const qtyA=wholePltQty+(rem?rem.qty:0);
+      const pltAsku=Math.round((wholePltQty/p.pq)*p.ps*100)/100+(rem?rem.plt:0);
+      const pltAround=Math.round(pltAsku*100)/100;
       const qtyB=p.totalQty-qtyA;
-      const pltAsku=Math.round((qtyA/p.pq)*p.ps*100)/100;
-      const pltBsku=Math.round(((p.totalPlt*100-pltAsku*100)/100)*100)/100;// preserve total exactly
+      const pltBsku=Math.round((p.totalPlt-pltAround)*100)/100;
 
       // Create truckA row
       if(qtyA>0){
-        newPairRows.push({truckId:idA,destination:dest,date,sku,name:p.name,qty:Math.round(qtyA),pallets:pltAsku,truckTotal:0});
+        newPairRows.push({truckId:idA,destination:dest,date,sku,name:p.name,qty:Math.round(qtyA),pallets:pltAround,truckTotal:0});
       }
-      // Create truckB row (may include sub-pallet remainder)
+      // Create truckB row
       if(qtyB>0){
         newPairRows.push({truckId:idB,destination:dest,date,sku,name:p.name,qty:Math.round(qtyB),pallets:pltBsku,truckTotal:0});
       }
