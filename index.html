@@ -9738,23 +9738,35 @@ function LM_getEffPallet(sku,venueType,country){
 }
 
 function LM_isAssembled(sku,venueType,country){
+  // Returns true when this SKU needs physical assembly at WHS for the given venue context.
+  //
+  // Decision matrix (all paths):
+  //   Stadium/IBC — base from cfg.mode (typically 'dis'):
+  //     Override present → D→A (explicit assembly)    → TRUE
+  //     No override     → stays dis                   → false
+  //   Non-stadium, base=asm (CAN/MEX):
+  //     Override present → A→D (user wants dis)        → false
+  //     No override     → stays asm (default assembly) → TRUE
+  //   Non-stadium, base=dis (USA):
+  //     Override present → D→A cross-country artifact   → false (not intentional)
+  //     No override     → stays dis                    → false
+  //
   const nm=NOM[sku];if(!nm)return false;
-  if(!venueType)return false;// no venue type → cannot determine
-  if(!nm.pqA||!nm.psA)return false;// no assembled dims at all → not assemblable
+  if(!venueType)return false;
+  if(!nm.pqA||!nm.psA)return false;// no assembled dims → cannot be assembled
   const isStaIbc=venueType==='Stadium'||venueType==='International Broadcast Centre';
   const cfg=LM_palletCfg[venueType];
-  if(!cfg)return false;// no pallet config for this venue type
-  const baseMode=isStaIbc?(cfg?.mode||'dis'):(LM_COUNTRY_DEFAULTS[country||'USA']||'dis');
+  if(!cfg)return false;
+  const baseMode=isStaIbc?(cfg.mode||'dis'):(LM_COUNTRY_DEFAULTS[country||'USA']||'dis');
   const isOverride=cfg.overrides.has(sku);
   // Effective mode: override flips the base
   const useDis=baseMode==='dis'?!isOverride:isOverride;
-  if(useDis)return false;// disassembled mode → no assembly
-  // Non-stadium venues: base mode comes from country defaults (USA=dis, CAN/MEX=asm).
-  // An override set in asm-base country (to make item dis) accidentally flips dis-base items to asm.
-  // Skip this cross-country side effect. Stadium/IBC overrides are always intentional (cfg.mode based).
-  if(!isStaIbc&&baseMode==='dis'&&isOverride)return false;
-  // Only explicit overrides count as assembly — no auto-detection
-  return isOverride;
+  if(useDis)return false;// disassembled → no assembly
+  // At this point effective mode is assembled. Determine if it's intentional:
+  if(isStaIbc)return isOverride;// Stadium/IBC: only explicit D→A overrides
+  if(baseMode==='asm')return !isOverride;// CAN/MEX: assembled by default (no override = stays asm)
+  // USA non-stadium with override making it asm: cross-country artifact → skip
+  return false;
 }
 function LM_getVenueType(venueName){return LM_vtMap[venueName]||''}
 
