@@ -100,8 +100,12 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-even
 .Mx{float:right;background:none;border:1px solid var(--dm);color:var(--dm);width:20px;height:20px;border-radius:2px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
 .Mx:hover{border-color:var(--rd);color:var(--rd)}
 
-/* Radial */
-.RG{display:flex;gap:8px;justify-content:center;padding:6px 0}
+/* Radial panel */
+.RG{display:flex;gap:12px;justify-content:center;padding:10px 16px;background:var(--pn);border:1px solid var(--bd);border-radius:4px;margin-bottom:6px;position:relative;box-shadow:inset 0 0 15px rgba(0,0,0,0.3)}
+.RG::before{content:'⊕';position:absolute;top:4px;left:6px;font-size:6px;color:var(--bd)}
+.RG::after{content:'⊕';position:absolute;top:4px;right:6px;font-size:6px;color:var(--bd)}
+.RG-bl{content:'⊕';position:absolute;font-size:6px;color:var(--bd)}
+
 
 /* Btn */
 .btn{padding:3px 10px;background:transparent;color:var(--gn);border:1px solid var(--gn);border-radius:2px;font-family:var(--mn);font-size:9px;cursor:pointer;letter-spacing:1px}
@@ -224,16 +228,24 @@ async function gen(){
 
   // Radial SVG
   function rg(pct,clr,lbl,sub,sz){
-    const r=sz/2-6,cx=sz/2,cy=sz/2,c=2*Math.PI*r,o=c-(pct/100)*c;
-    const ticks=Array.from({length:12},(_,i)=>{const a=(i*30-90)*Math.PI/180;return'<line x1="'+(cx+Math.cos(a)*(r+1))+'" y1="'+(cy+Math.sin(a)*(r+1))+'" x2="'+(cx+Math.cos(a)*(r+4))+'" y2="'+(cy+Math.sin(a)*(r+4))+'" stroke="var(--dm)" stroke-width="0.7"/>'}).join('');
-    return'<div style="text-align:center"><svg width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'" style="filter:drop-shadow(0 0 6px rgba(0,255,136,0.1))">'
-      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--bz)" stroke-width="3"/>'
-      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-8)+'" fill="none" stroke="var(--bz)" stroke-width="0.5" stroke-dasharray="1.5,3"/>'
+    const r=sz/2-8,cx=sz/2,cy=sz/2,c=2*Math.PI*r,o=c-(pct/100)*c;
+    // 24 fine ticks + 4 bold cardinal ticks
+    const ticks=Array.from({length:24},(_,i)=>{const a=(i*15-90)*Math.PI/180;const bold=i%6===0;const l1=r+(bold?1:2),l2=r+(bold?6:4);return'<line x1="'+(cx+Math.cos(a)*l1)+'" y1="'+(cy+Math.sin(a)*l1)+'" x2="'+(cx+Math.cos(a)*l2)+'" y2="'+(cy+Math.sin(a)*l2)+'" stroke="'+(bold?'var(--dm)':'rgba(74,85,104,0.5)')+'" stroke-width="'+(bold?1:0.5)+'"/>'}).join('');
+    return'<div style="text-align:center"><svg width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'" style="filter:drop-shadow(0 0 8px rgba(0,255,136,0.08))">'
+      // Outer bezel ring
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+(r+7)+'" fill="none" stroke="var(--bd)" stroke-width="1"/>'
+      // Track ring
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--bz)" stroke-width="5"/>'
+      // Inner reference ring
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-12)+'" fill="none" stroke="var(--bz)" stroke-width="0.5" stroke-dasharray="2,4"/>'
       +ticks
-      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+clr+'" stroke-width="4" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+o+'" transform="rotate(-90 '+cx+' '+cy+')" style="transition:stroke-dashoffset 0.8s"/>'
-      +'<text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-family="var(--mn)" font-size="16" font-weight="700" fill="'+clr+'" style="text-shadow:0 0 6px '+clr+'">'+pct+'%</text>'
-      +'<text x="'+cx+'" y="'+(cy+10)+'" text-anchor="middle" font-family="var(--mn)" font-size="7" fill="var(--dm)">'+sub+'</text>'
-      +'</svg><div style="font-size:7px;letter-spacing:1.5px;color:var(--dm);margin-top:2px">'+lbl+'</div></div>';
+      // Progress arc with glow
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+clr+'" stroke-width="5" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+o+'" transform="rotate(-90 '+cx+' '+cy+')" style="filter:drop-shadow(0 0 3px '+clr+');transition:stroke-dashoffset 0.8s"/>'
+      // Center percentage
+      +'<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-family="var(--mn)" font-size="22" font-weight="700" fill="'+clr+'" style="text-shadow:0 0 8px '+clr+'">'+pct+'%</text>'
+      // Subtitle
+      +'<text x="'+cx+'" y="'+(cy+12)+'" text-anchor="middle" font-family="var(--mn)" font-size="8" fill="var(--dm)">'+sub+'</text>'
+      +'</svg><div style="font-size:8px;letter-spacing:2px;color:var(--dm);margin-top:3px">'+lbl+'</div></div>';
   }
 
   // ═══ LEFT ═══
@@ -252,12 +264,12 @@ async function gen(){
   // ═══ CENTER ═══
   let C='';
   // Radial gauges
-  C+='<div class="RG">'+rg(lpP,'var(--gn)','LP PROGRESS',dC+'/'+tot,100)+rg(lmP,'var(--cy)','LM PROGRESS',lmD+'/'+lmT,100)+rg(ovP,'var(--am)','OVERALL',lpP+'%LP · '+lmP+'%LM',100)+'</div>';
+  C+='<div class="RG"><span style="position:absolute;bottom:4px;left:6px;font-size:6px;color:var(--bd)">⊕</span><span style="position:absolute;bottom:4px;right:6px;font-size:6px;color:var(--bd)">⊕</span>'+rg(lpP,'var(--gn)','LP PROGRESS',dC+'/'+tot+' TRUCKS',140)+rg(lmP,'var(--cy)','LM PROGRESS',lmD+'/'+lmT+' VENUES',140)+rg(ovP,'var(--am)','OVERALL',lpP+'% LP · '+lmP+'% LM',140)+'</div>';
   // Destinations
   C+='<div class="S">DESTINATIONS</div>';
   const bd={};for(const t of tl){if(!bd[t.dest])bd[t.dest]={t:0,d:0,r:0,p:0,o:0,pl:0};bd[t.dest].t++;bd[t.dest].pl+=t.plt;if(_di.has(t.id))bd[t.dest].d++;else if(_oo.has(t.id))bd[t.dest].o++;else if(t._r)bd[t.dest].r++;else bd[t.dest].p++}
   const dk=Object.keys(bd).sort((a,b)=>{const am=a.toUpperCase().includes('MEX'),bm=b.toUpperCase().includes('MEX'),ac=a.toUpperCase().includes('CAN'),bc=b.toUpperCase().includes('CAN');return(am?0:ac?1:2)-(bm?0:bc?1:2)||a.localeCompare(b)});
-  C+='<div class="dg">';
+  C+='<div class="dg" style="background:var(--pn);border:1px solid var(--bd);border-radius:4px;padding:6px;position:relative;box-shadow:inset 0 0 12px rgba(0,0,0,0.2)"><span style="position:absolute;top:3px;left:5px;font-size:5px;color:var(--bd)">⊕</span><span style="position:absolute;top:3px;right:5px;font-size:5px;color:var(--bd)">⊕</span><span style="position:absolute;bottom:3px;left:5px;font-size:5px;color:var(--bd)">⊕</span><span style="position:absolute;bottom:3px;right:5px;font-size:5px;color:var(--bd)">⊕</span>';
   for(const d of dk){
     const s=bd[d],pc=s.t?Math.round(s.d/s.t*100):0;
     const mx=d.toUpperCase().includes('MEX'),ca=d.toUpperCase().includes('CAN');
