@@ -9739,9 +9739,11 @@ function LM_getEffPallet(sku,venueType,country){
 
 function LM_isAssembled(sku,venueType,country){
   const nm=NOM[sku];if(!nm)return false;
+  if(!venueType)return false;// no venue type → cannot determine
   if(!nm.pqA||!nm.psA)return false;// no assembled dims at all → not assemblable
   const isStaIbc=venueType==='Stadium'||venueType==='International Broadcast Centre';
   const cfg=LM_palletCfg[venueType];
+  if(!cfg)return false;// no pallet config for this venue type
   const baseMode=isStaIbc?(cfg?.mode||'dis'):(LM_COUNTRY_DEFAULTS[country||'USA']||'dis');
   const isOverride=cfg?cfg.overrides.has(sku):false;
   // Effective mode: override flips the base
@@ -12666,15 +12668,19 @@ if(cv==="dashboard"){
       } else if(isClusterOv){
         if(label!==clusterOvName&&!(CLUSTERS[clusterOvName]?.venues.includes(label)))continue;
       }
-      const _isClPlan=!!CLUSTERS[label];
-      const _vt=LM_vtMap[label]||(_isClPlan&&CLUSTERS[label].venues[0]?LM_vtMap[CLUSTERS[label].venues[0]]:'');
-      const _cty=LM_venueCountry(_isClPlan?label:'',_isClPlan?CLUSTERS[label].venues[0]||'':label);
       P2.allT.forEach(t=>{
         if(LM_excluded.has(t.id))return;
         const dd=t.dd||'';
+        // Resolve venue type per-truck from destLabel (actual venue/cluster)
+        const _tLabel=t.destLabel||label;
+        const _tIsCluster=!!CLUSTERS[_tLabel];
+        const _tVenue=_tIsCluster?(CLUSTERS[_tLabel].venues[0]||''):_tLabel;
+        const _tVt=LM_vtMap[_tVenue]||'';
+        const _tCty=LM_venueCountry(_tIsCluster?_tLabel:'',_tVenue);
         t.items.forEach(it=>{
           if(NOM[it.sku]?._kitNom)return;
-          if(!LM_isAssembled(it.sku,_vt,_cty))return;
+          if(!_tVt)return;// no venue type → cannot determine assembly
+          if(!LM_isAssembled(it.sku,_tVt,_tCty))return;
           const k=dd+'|'+it.sku+'|'+t.id;
           if(_asmSeen.has(k))return;_asmSeen.add(k);
           _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label});
