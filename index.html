@@ -11568,135 +11568,394 @@ function showNoBi(){
 }
 
 function showHelp(){
-  const h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stopPropagation()" style="max-width:780px;max-height:90vh">
+  const _ht=`
+<style>
+.hlp-tabs{display:flex;gap:2px;border-bottom:2px solid var(--bd);margin-bottom:16px;padding-bottom:0}
+.hlp-tab{padding:8px 14px;font-size:11px;font-weight:600;color:var(--tt);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;border-radius:6px 6px 0 0;transition:all .15s;font-family:var(--fd);background:none;border-left:none;border-right:none;border-top:none}
+.hlp-tab:hover{color:var(--tp);background:var(--bg)}
+.hlp-tab.act{color:var(--ac);border-bottom-color:var(--ac);background:var(--as)}
+.hlp-sec{display:none}.hlp-sec.act{display:block}
+.hlp-card{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:14px 16px;margin-bottom:10px}
+.hlp-card h5{font-size:12px;font-weight:700;color:var(--tp);margin:0 0 6px;display:flex;align-items:center;gap:6px}
+.hlp-card p,.hlp-card li{font-size:11px;color:var(--ts);line-height:1.65;margin:0}
+.hlp-card ul{margin:4px 0 0;padding-left:18px}
+.hlp-card li{margin-bottom:3px}
+.hlp-flow{display:flex;align-items:center;gap:0;margin:10px 0 6px;flex-wrap:wrap}
+.hlp-step{background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:6px 10px;font-size:10px;font-weight:600;color:var(--tp);text-align:center;min-width:70px}
+.hlp-step span{display:block;font-size:9px;font-weight:400;color:var(--tt);margin-top:2px}
+.hlp-arr{color:var(--tt);font-size:14px;padding:0 2px;flex-shrink:0}
+.hlp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.hlp-kpi{background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;text-align:center}
+.hlp-kpi .hlp-kv{font-size:16px;font-weight:700;color:var(--tp)}
+.hlp-kpi .hlp-kl{font-size:9px;color:var(--tt);margin-top:2px}
+.hlp-badge{display:inline-flex;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;vertical-align:middle}
+.hlp-tbl{width:100%;border-collapse:collapse;font-size:10px;margin:6px 0}
+.hlp-tbl th{text-align:left;padding:5px 8px;color:var(--tt);font-size:9px;font-weight:600;text-transform:uppercase;border-bottom:2px solid var(--bd);background:var(--sf)}
+.hlp-tbl td{padding:5px 8px;border-bottom:1px solid var(--bl);color:var(--ts)}
+.hlp-tbl tr:hover td{background:#FAFBFC}
+.hlp-ico{width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.hlp-callout{border-left:3px solid var(--ac);background:var(--as);border-radius:0 6px 6px 0;padding:8px 12px;font-size:10px;color:var(--ac);font-weight:500;margin:8px 0}
+.hlp-callout.grn{border-left-color:var(--gn);background:var(--gs);color:var(--gn)}
+.hlp-callout.pur{border-left-color:var(--pu);background:var(--ps);color:var(--pu)}
+.hlp-callout.orn{border-left-color:var(--or);background:var(--os);color:var(--or)}
+.hlp-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.hlp-hdr-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.hlp-hdr div h4{font-size:14px;font-weight:700;color:var(--tp);margin:0}
+.hlp-hdr div p{font-size:10px;color:var(--tt);margin:2px 0 0}
+.hlp-divider{height:1px;background:var(--bd);margin:14px 0}
+.hlp-flags{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.hlp-flag{display:flex;align-items:center;gap:6px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:5px 10px;font-size:10px;flex:1 1 180px;min-width:170px}
+.hlp-flag .hlp-fl{font-weight:600;color:var(--tp)}.hlp-flag .hlp-fd{color:var(--tt)}
+</style>`;
+
+  const _hb=`
+<div class="hlp-tabs">
+  <button class="hlp-tab act" onclick="_hlpTab(this,'hlp-overview')">Overview</button>
+  <button class="hlp-tab" onclick="_hlpTab(this,'hlp-lp')">Load Plan</button>
+  <button class="hlp-tab" onclick="_hlpTab(this,'hlp-lm')">Last Mile</button>
+  <button class="hlp-tab" onclick="_hlpTab(this,'hlp-v26')">Vision 2026</button>
+  <button class="hlp-tab" onclick="_hlpTab(this,'hlp-ops')">Operations</button>
+</div>
+
+<!-- ═══ OVERVIEW ═══ -->
+<div id="hlp-overview" class="hlp-sec act">
+  <div class="hlp-hdr">
+    <div class="hlp-hdr-ico" style="background:var(--as)">⚽</div>
+    <div><h4>ML3K — Logistics Manager</h4><p>FIFA World Cup 2026 supply chain platform</p></div>
+  </div>
+  <p style="font-size:11px;color:var(--ts);line-height:1.65;margin:0 0 12px">ML3K manages the complete FF&E supply chain for FWC26 — from warehouse stock accumulation to final venue delivery across <strong style="color:var(--tp)">200+ venues</strong> in the USA, Canada, and Mexico. Three integrated modules handle the full lifecycle.</p>
+
+  <div class="hlp-flow">
+    <div class="hlp-step" style="border-color:var(--ac);background:var(--as)">Containers<span>40 arrivals</span></div>
+    <div class="hlp-arr">→</div>
+    <div class="hlp-step" style="border-color:var(--gn);background:var(--gs)">Stock Pool<span>Dallas WHS</span></div>
+    <div class="hlp-arr">→</div>
+    <div class="hlp-step" style="border-color:var(--pu);background:var(--ps)">LP Engine<span>~93 trucks</span></div>
+    <div class="hlp-arr">→</div>
+    <div class="hlp-step" style="border-color:var(--or);background:var(--os)">Regional WHS<span>5 regional + 8 satellite</span></div>
+    <div class="hlp-arr">→</div>
+    <div class="hlp-step" style="border-color:var(--ac);background:var(--as)">LM Engine<span>469+ trucks</span></div>
+    <div class="hlp-arr">→</div>
+    <div class="hlp-step" style="border-color:var(--gn);background:var(--gs)">Venues<span>200+ locations</span></div>
+  </div>
+
+  <div class="hlp-divider"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+    <div class="hlp-card" style="border-left:3px solid var(--pu);cursor:pointer" onclick="_hlpTab(document.querySelectorAll('.hlp-tab')[1],'hlp-lp')">
+      <h5><span class="hlp-ico" style="background:var(--ps);color:var(--pu)">📦</span> Load Plan</h5>
+      <p>Warehouse dispatch to 8 destinations. Container arrivals → stock pool → optimized truck building with LP Engine V5.</p>
+      <div style="margin-top:6px"><span class="hlp-badge" style="background:var(--ps);color:var(--pu)">~93 trucks</span> <span class="hlp-badge" style="background:var(--gs);color:var(--gn)">2,403 pallets</span></div>
+    </div>
+    <div class="hlp-card" style="border-left:3px solid var(--ac);cursor:pointer" onclick="_hlpTab(document.querySelectorAll('.hlp-tab')[2],'hlp-lm')">
+      <h5><span class="hlp-ico" style="background:var(--as);color:var(--ac)">🚛</span> Last Mile</h5>
+      <p>Venue delivery planning. Regional hubs → optimized truck loading → per-venue delivery with bump-in scheduling.</p>
+      <div style="margin-top:6px"><span class="hlp-badge" style="background:var(--as);color:var(--ac)">469+ trucks</span> <span class="hlp-badge" style="background:var(--gs);color:var(--gn)">166K items</span></div>
+    </div>
+    <div class="hlp-card" style="border-left:3px solid var(--gn);cursor:pointer" onclick="_hlpTab(document.querySelectorAll('.hlp-tab')[3],'hlp-v26')">
+      <h5><span class="hlp-ico" style="background:var(--gs);color:var(--gn)">🌍</span> Vision 2026</h5>
+      <p>Unified command view. Aggregates LP + LM into a single dashboard with calendar, timeline, and KPI overview.</p>
+      <div style="margin-top:6px"><span class="hlp-badge" style="background:var(--gs);color:var(--gn)">All modules</span></div>
+    </div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Truck Numbering</h5>
+    <table class="hlp-tbl">
+      <tr><th>Prefix</th><th>Type</th><th>Description</th></tr>
+      <tr><td style="font-family:var(--fm);font-weight:700;color:var(--pu)">LP-1, LP-2…</td><td>Load Plan</td><td>Warehouse dispatch trucks to MEX/CAN/RIC</td></tr>
+      <tr><td style="font-family:var(--fm);font-weight:700;color:var(--ac)">LM-1, LM-2…</td><td>Last Mile</td><td>Venue delivery freight trucks</td></tr>
+      <tr><td style="font-family:var(--fm);font-weight:700;color:var(--rd)">C-1, C-2…</td><td>CORT</td><td>Direct rental/retail deliveries (bypass pallets)</td></tr>
+      <tr><td style="font-family:var(--fm);font-weight:700;color:var(--or)">STP-1, STP-2…</td><td>Staples</td><td>Vendor-delivered stationery/supplies</td></tr>
+    </table>
+    <p style="margin-top:4px">Numbers assigned globally at plan generation, sorted by dispatch date. Consistent across all views.</p>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Roles & Access</h5>
+    <div class="hlp-grid" style="margin-top:6px">
+      <div style="background:var(--sf);border:1px solid var(--gn);border-radius:6px;padding:8px 10px">
+        <div style="font-size:11px;font-weight:700;color:var(--gn);margin-bottom:4px">Admin</div>
+        <p style="font-size:10px">Full access — upload files, edit constraints, generate plans, lock trucks, manage kits, system reset. Changes sync to cloud in real-time.</p>
+      </div>
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:8px 10px">
+        <div style="font-size:11px;font-weight:700;color:var(--tt);margin-bottom:4px">Viewer</div>
+        <p style="font-size:10px">Read-only — browse plans, export to Excel, inspect trucks. Cannot modify constraints, upload files, or lock trucks.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LOAD PLAN ═══ -->
+<div id="hlp-lp" class="hlp-sec">
+  <div class="hlp-hdr">
+    <div class="hlp-hdr-ico" style="background:var(--ps)">📦</div>
+    <div><h4>Load Plan — Warehouse Dispatch</h4><p>Central warehouse to 8 international destinations</p></div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>How LP Engine V5 Works</h5>
+    <p style="margin-bottom:8px">FF&E arrives in containers, accumulates in stock, and is dispatched when full truckloads are possible. The engine runs in three stages:</p>
+    <div class="hlp-flow">
+      <div class="hlp-step" style="border-color:var(--pu);background:var(--ps)"><strong>Plan</strong><span>Two-bucket scoring</span></div>
+      <div class="hlp-arr">→</div>
+      <div class="hlp-step" style="border-color:var(--gn);background:var(--gs)"><strong>Build</strong><span>4-pass SR-first loading</span></div>
+      <div class="hlp-arr">→</div>
+      <div class="hlp-step" style="border-color:var(--or);background:var(--os)"><strong>Optimize</strong><span>Tail reconstruction</span></div>
+    </div>
+    <ul>
+      <li><strong>Plan</strong> — MEX/CAN destinations first, then USA. Each day, the engine scores destinations by available stock and assigns truck slots.</li>
+      <li><strong>Build</strong> — 4-pass loading per truck: SR whole pallets → SR partial → non-SR whole → non-SR partial. If a truck has SR items but future SR arrivals exist, it defers to a pending buffer.</li>
+      <li><strong>Optimize</strong> — Post-build tail reconstruction: for each (dest, date), takes the last 2 unlocked trucks and repacks them using exhaustive search (162B+ combinations) to maximize utilization and stock readiness.</li>
+    </ul>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Tabs</h5>
+    <table class="hlp-tbl">
+      <tr><th>Tab</th><th>What it does</th></tr>
+      <tr><td style="font-weight:700">📥 Arrivals</td><td>Container arrival schedule — SKUs, quantities, expected dates. Stock available after turnaround period.</td></tr>
+      <tr><td style="font-weight:700">📋 Demand</td><td>Per-destination demand. Filter by source/destination. Inline-edit: Price, HS Code (🔍 AI), Country, Customs Name, Pallet dims. Hold by Source. Combined CI export.</td></tr>
+      <tr><td style="font-weight:700">🚛 Plan</td><td>Generated truck plan with truck cards showing destination, date, manifest, pallet utilization. Lock trucks to preserve on regeneration.</td></tr>
+      <tr><td style="font-weight:700">⚠ Late</td><td>Containers arriving too late for LM dispatch. Shows which SKUs/destinations have LP arrival after LM truck departs. Live-updates with LM changes.</td></tr>
+    </table>
+  </div>
+
+  <div class="hlp-card">
+    <h5>🔒 Locking Trucks</h5>
+    <p>Check the box on any truck card to lock it. Locked trucks are preserved exactly as-is on regeneration — the engine only replans remaining unlocked inventory. Lock shipments as they go out the door while keeping the future plan flexible.</p>
+    <div class="hlp-callout grn">Locked trucks also protect LSR numbers, pallet overrides, and dispatch status.</div>
+  </div>
+
+  <div class="hlp-grid">
+    <div class="hlp-card">
+      <h5>📄 Commercial Invoice</h5>
+      <p>Each LP truck has a 📄 button generating formatted Excel with CI + Packing List — shipper details, HS codes, country of origin, declared values. Ready for customs.</p>
+      <p style="margin-top:4px"><strong>Combined CI</strong> — in Demand tab, pick any combination of 8 destinations and sources. Auto-filtered. Single CI summing all demand.</p>
+    </div>
+    <div class="hlp-card">
+      <h5>🔍 HS Code Assistant</h5>
+      <p>3-step wizard from the 🔍 icon in Demand table:</p>
+      <ul>
+        <li><strong>Sibling SKUs</strong> — same family codes with confirmed HS</li>
+        <li><strong>AI</strong> — paste product URL, AI suggests HS + customs name + country (Claude, ChatGPT, or Gemini)</li>
+        <li><strong>Manual</strong> — browse categories → headings → subheadings</li>
+      </ul>
+      <p style="margin-top:3px">All codes normalized to XXXX.XX format.</p>
+    </div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Stock Report</h5>
+    <p>Upload a stock report to inject current warehouse inventory into the engine. Stock items get <code style="font-family:var(--fm);font-size:10px;background:var(--bg);padding:1px 4px;border-radius:3px">readyDate = today</code> — available immediately. The engine uses a <strong>waterfall</strong> model: walks trucks in date order, deducting stock consumed by earlier trucks. Stock changes flag the plan as dirty (needs regeneration).</p>
+  </div>
+</div>
+
+<!-- ═══ LAST MILE ═══ -->
+<div id="hlp-lm" class="hlp-sec">
+  <div class="hlp-hdr">
+    <div class="hlp-hdr-ico" style="background:var(--as)">🚛</div>
+    <div><h4>Last Mile — Venue Distribution</h4><p>Regional hubs to 200+ individual venues</p></div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>How the LM Engine Works</h5>
+    <p style="margin-bottom:8px">Takes a Nomenclature file (SKU master) and Material Plan (what goes where), then generates optimized truck loading per venue.</p>
+    <div class="hlp-flow">
+      <div class="hlp-step" style="border-color:var(--ac);background:var(--as)"><strong>Dates</strong><span>Bump-in − lead time</span></div>
+      <div class="hlp-arr">→</div>
+      <div class="hlp-step" style="border-color:var(--gn);background:var(--gs)"><strong>3-Pass Fill</strong><span>Scheduled → top-up → pool</span></div>
+      <div class="hlp-arr">→</div>
+      <div class="hlp-step" style="border-color:var(--or);background:var(--os)"><strong>Day Loop</strong><span>Overflow & carry-over</span></div>
+    </div>
+    <ul>
+      <li><strong>Dispatch date</strong> = bump-in date − lead time (MEX/CAN: 0 days from regional WHS, USA: 0–3 days from Dallas)</li>
+      <li><strong>Pass 1</strong> — load items scheduled for this date</li>
+      <li><strong>Pass 2</strong> — top-up partial pallets from the pool to maximize utilization</li>
+      <li><strong>Pass 3</strong> — fill remaining space with full pallets from pool (current date first, then future)</li>
+      <li><strong>Overflow</strong> — if max trucks/day reached, remaining items carry forward to next working day</li>
+      <li><strong>No-BI items</strong> — items without bump-in date go into a low-priority pool, topped into trucks with space</li>
+    </ul>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Venue Categories</h5>
+    <table class="hlp-tbl">
+      <tr><th>Type</th><th>Code</th><th>Planning</th></tr>
+      <tr><td style="font-weight:700">Stadium</td><td style="font-family:var(--fm)">STA</td><td>Individual direct trucks per stadium</td></tr>
+      <tr><td style="font-weight:700">IBC</td><td style="font-family:var(--fm)">IBC</td><td>Individual direct trucks</td></tr>
+      <tr><td style="font-weight:700">USA Cluster</td><td style="font-family:var(--fm)">Other US</td><td>Cluster trucks + individual venue trucks</td></tr>
+      <tr><td style="font-weight:700">CAN / MEX</td><td style="font-family:var(--fm)">CAN / MEX</td><td>Individual venues, no cluster trucks</td></tr>
+    </table>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Views</h5>
+    <div class="hlp-grid" style="margin-top:6px">
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:8px 10px">
+        <div style="font-size:11px;font-weight:700;color:var(--tp);margin-bottom:3px">📊 Dashboard</div>
+        <p style="font-size:10px">Calendar heatmap (green → amber → red), daily dispatch detail table, venue/cluster workload breakdown. Select venue or "All Venues".</p>
+      </div>
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:8px 10px">
+        <div style="font-size:11px;font-weight:700;color:var(--tp);margin-bottom:3px">🚛 Trucks</div>
+        <p style="font-size:10px">Truck cards grouped by dispatch → arrival date. Click to inspect: full manifest, loaded qty, pool remaining. Download individual Excel.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="hlp-grid">
+    <div class="hlp-card">
+      <h5><span class="hlp-badge" style="background:#E31837;color:#fff">CORT</span>&nbsp; Direct Deliveries</h5>
+      <p>SKUs from <strong>CT RNT</strong> (Rental) or <strong>CT RTL</strong> (Retail) bypass pallets entirely. Separate CORT deliveries with C-1, C-2… numbering. Red dots in calendar, red badges in sidebar.</p>
+    </div>
+    <div class="hlp-card">
+      <h5><span class="hlp-badge" style="background:#EF6C00;color:#fff">STP</span>&nbsp; Staples Deliveries</h5>
+      <p>Vendor-delivered directly to venues. One STP delivery per venue max. Manual rate + delivery date. Orange dots in calendar, orange cards in trucks view.</p>
+    </div>
+  </div>
+
+  <div class="hlp-grid">
+    <div class="hlp-card">
+      <h5>📦 Kits <span class="hlp-badge" style="background:var(--gs);color:var(--gn)">Admin</span></h5>
+      <p>Bundle multiple SKUs into a single virtual item. Kit gets aggregated pallet dims, inherits bump-in dates. Components subtracted from demand — no double-counting.</p>
+    </div>
+    <div class="hlp-card">
+      <h5>📐 Pallet Config</h5>
+      <p>Per venue type: <strong>Assembled</strong> or <strong>Disassembled</strong> mode controls which pallet dims are used. Override individual SKUs or per-SKU pallet qty/spaces from truck detail.</p>
+    </div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Venue Constraints <span class="hlp-badge" style="background:var(--gs);color:var(--gn)">Admin</span></h5>
+    <table class="hlp-tbl">
+      <tr><th>Parameter</th><th>Default</th><th>What it controls</th></tr>
+      <tr><td style="font-weight:600">Truck capacity</td><td style="font-family:var(--fm)">26 plt</td><td>Max pallets per truck. Lower for limited dock access.</td></tr>
+      <tr><td style="font-weight:600">Max trucks/day</td><td style="font-family:var(--fm)">2</td><td>Daily truck limit per venue.</td></tr>
+      <tr><td style="font-weight:600">Lead time</td><td style="font-family:var(--fm)">0 days</td><td>Working days before bump-in to dispatch.</td></tr>
+      <tr><td style="font-weight:600">Bump-in start</td><td style="font-family:var(--fm)">—</td><td>Earliest planning date. Items before this flagged "Early".</td></tr>
+    </table>
+    <p style="margin-top:6px">Purple border = overridden. Click <strong>↻ Reset</strong> to restore defaults.</p>
+  </div>
+</div>
+
+<!-- ═══ VISION 2026 ═══ -->
+<div id="hlp-v26" class="hlp-sec">
+  <div class="hlp-hdr">
+    <div class="hlp-hdr-ico" style="background:var(--gs)">🌍</div>
+    <div><h4>Vision 2026 — Unified Command View</h4><p>Aggregated dashboard across all modules</p></div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>What Vision Shows</h5>
+    <p>Aggregates Load Plan + Last Mile into a single dashboard — every truck, every delivery, every destination. Use this for the big picture.</p>
+    <div class="hlp-grid" style="margin-top:8px;grid-template-columns:1fr 1fr 1fr">
+      <div class="hlp-kpi"><div class="hlp-kv" style="color:var(--pu)">KPIs</div><div class="hlp-kl">Pallets, pieces, trucks, CORT, peak/day</div></div>
+      <div class="hlp-kpi"><div class="hlp-kv" style="color:var(--gn)">Calendar</div><div class="hlp-kl">Heatmap by day — click for breakdown</div></div>
+      <div class="hlp-kpi"><div class="hlp-kv" style="color:var(--ac)">Timeline</div><div class="hlp-kl">Chronological + truck cards + exports</div></div>
+    </div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Dispatch Calendar</h5>
+    <p>Month-grid color-coded by daily intensity (green → amber → red). Click any active day to see a full breakdown of all destinations, trucks, pallets, and pieces. Each truck has click-to-inspect modal and Excel/CI export.</p>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Shipping Timeline</h5>
+    <p>Chronological list of every shipping day. Click to expand — see individual truck cards with destination, pallet count, and one-click exports. LP trucks show 📄 CI (Commercial Invoice) button; all trucks show ⬇ Excel.</p>
+  </div>
+
+  <div class="hlp-callout">Pallets are calculated once from demand (nomenclature × material plan) — not double-counted across modules.</div>
+</div>
+
+<!-- ═══ OPERATIONS ═══ -->
+<div id="hlp-ops" class="hlp-sec">
+  <div class="hlp-hdr">
+    <div class="hlp-hdr-ico" style="background:var(--bg)">⚙️</div>
+    <div><h4>Operations & System</h4><p>Exports, data sync, flags, and tips</p></div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Exports</h5>
+    <table class="hlp-tbl">
+      <tr><th>Export</th><th>Module</th><th>Contents</th></tr>
+      <tr><td style="font-weight:600">⬇ Export</td><td>Last Mile</td><td>Truck Plan + Dispatch Summary + Venue Summary + Arrivals + Demand + Nomenclature + Kits sheets</td></tr>
+      <tr><td style="font-weight:600">⬇ Export</td><td>Load Plan</td><td>Truck plan + CI summary + per-truck detail + Arrivals + Demand + Nomenclature sheets</td></tr>
+      <tr><td style="font-weight:600">⬇ Export</td><td>Vision</td><td>Unified truck list + CORT + STP + By Date/Destination summaries + Demand + Nomenclature sheets</td></tr>
+      <tr><td style="font-weight:600">📄 CI</td><td>LP trucks</td><td>Commercial Invoice + Packing List — HS codes, country, declared values</td></tr>
+      <tr><td style="font-weight:600">📄 Combined CI</td><td>LP Demand</td><td>Multi-destination CI — pick destinations + sources, quantities summed</td></tr>
+      <tr><td style="font-weight:600">⬇ Truck Excel</td><td>All</td><td>Individual shipping order — nomenclature, names, UoM, quantities. Kits expanded.</td></tr>
+      <tr><td style="font-weight:600">💾 Backup</td><td>All</td><td>Full system backup (20 sheets). Use 📂 Restore to reload.</td></tr>
+    </table>
+  </div>
+
+  <div class="hlp-card">
+    <h5>📋 Demand Adjustments & Manual Demand</h5>
+    <div class="hlp-grid" style="margin-top:6px">
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:8px 10px">
+        <div style="font-size:11px;font-weight:700;color:var(--tp);margin-bottom:3px">Adjustments</div>
+        <p style="font-size:10px">Click any SKU quantity in Demand tab to override. Persist across regenerations. ★ badge shows active count.</p>
+      </div>
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:8px 10px">
+        <div style="font-size:11px;font-weight:700;color:var(--tp);margin-bottom:3px">Manual Demand</div>
+        <p style="font-size:10px">Add new SKU/venue combinations not in the original plan. Injected into demand, participates in truck loading.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>💰 Rate Overrides</h5>
+    <p>Each truck shows distribution cost based on default rates per destination. Click rate input to override (shown in purple). Reset with ✕. All rates roll up into Vision 2026 distribution cost KPI.</p>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Database & Sync</h5>
+    <p>Supabase real-time persistence. Admin changes save to cloud — viewers see latest plan automatically. Green indicator = connected. Red = offline (works locally, won't persist). Use the <strong>🔄 Sync</strong> button in the header to refresh data from the database.</p>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Bottom Support Bar</h5>
+    <p>Fixed bar at the bottom — consistent across all modules. Left side: module-specific buttons (Venues, Stock, Pallets for LM; Export for LP/Vision). Right side: shared buttons (Backup, Restore, Undo, Help).</p>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Warnings & Flags</h5>
+    <div class="hlp-flags">
+      <div class="hlp-flag"><span class="bg bgs bg-rd" style="flex-shrink:0">⚠ Weekend</span><span class="hlp-fd">Dispatch/arrival on Sat/Sun</span></div>
+      <div class="hlp-flag"><span class="bg bgs bg-or" style="flex-shrink:0">Overflow</span><span class="hlp-fd">Max trucks/day exceeded → next day</span></div>
+      <div class="hlp-flag"><span class="bg bgs bg-pu" style="flex-shrink:0">Early</span><span class="hlp-fd">Before venue bump-in start</span></div>
+      <div class="hlp-flag"><span class="bg bgs bg-pu" style="flex-shrink:0">No BI</span><span class="hlp-fd">No bump-in date, pool items</span></div>
+      <div class="hlp-flag"><span style="background:var(--os);color:var(--or);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;flex-shrink:0">⚠ No Pallet</span><span class="hlp-fd">Missing pallet dims — click banner</span></div>
+    </div>
+  </div>
+
+  <div class="hlp-card">
+    <h5>Quick Tips</h5>
+    <ul>
+      <li>Click any truck card to inspect its full manifest — works in all modules</li>
+      <li>Use the search box in the sidebar to quickly find a venue</li>
+      <li>Sidebar shows pallet count and line count per venue. CORT = red badge, STP = orange badge</li>
+      <li>Click calendar day cells in Dashboard for a detailed popup breakdown</li>
+      <li>📋 Demand tab lets you adjust quantities, add manual demand, create kits, and manage STP</li>
+      <li>📐 Pallet button opens asm/dis config — changes apply immediately across all trucks</li>
+      <li>📡 SITREP opens the FF&E RADAR — automated 72-hour operational status cockpit with live data</li>
+    </ul>
+    <div class="hlp-callout orn">System Reset (↻ icon next to title) erases everything and returns to upload screen. Affects all users — use with caution.</div>
+  </div>
+</div>`;
+
+  const h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stopPropagation()" style="max-width:860px;max-height:90vh">
   <div class="mdh"><div><h3>ML3K — System Guide</h3><div class="mds">Complete reference for all modules</div></div><button class="mdc" onclick="clM()">✕</button></div>
-  <div class="mdb" style="font-size:12px;line-height:1.7;color:var(--ts)">
-
-  <h4 style="color:var(--tp);margin:0 0 8px">What is this system?</h4>
-  <p>ML3K is a logistics planning platform built for FIFA World Cup 2026. It manages the entire supply chain — from warehouse stock accumulation to final venue delivery — across 200+ venues in the USA, Canada, and Mexico. The system has three modules that work together.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">🌍 Vision 2026 — Unified Command View</h4>
-  <p>The big picture. Vision 2026 aggregates data from both Load Plan and Last Mile into a single dashboard showing every truck, every delivery, every destination. Use this to understand the full scale of the operation.</p>
-  <p><strong>KPI cards</strong> — total pallets (calculated from demand, not truck loads), pieces, truck counts per module, CORT deliveries, ship dates, peak day load.<br>
-  <strong>Dispatch Calendar</strong> — month-grid calendar color-coded by daily intensity (green → amber → red). Click any active day to see a full breakdown of all destinations, trucks, pallets, and pieces for that date. Each truck has a click-to-inspect modal and Excel/CI export.<br>
-  <strong>Shipping Timeline</strong> — chronological list of every shipping day. Click to expand and see individual truck cards with destination, pallet count, and one-click exports. LP trucks show a 📄 CI (Commercial Invoice) button; all trucks show ⬇ Excel.<br>
-  <strong>Pallets</strong> — calculated once from demand (nomenclature × material plan), not double-counted across modules.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">📦 Load Plan — Warehouse Dispatch Planning</h4>
-  <p>Manages outbound logistics from the central warehouse. FF&E (Furniture, Fixtures & Equipment) arrives in containers on scheduled dates, accumulates in stock, and is dispatched to MEX/CAN/RIC destinations when full truckloads are possible.</p>
-  <p><strong>How it works:</strong><br>
-  1. <strong>Arrivals</strong> — container arrival schedule with SKUs, quantities, and expected dates. Stock becomes available after a configurable turnaround period.<br>
-  2. <strong>Demand</strong> — what each destination needs (SKUs and quantities).<br>
-  3. <strong>Greedy Dispatch</strong> — the engine scans available stock daily. When enough inventory accumulates to fill trucks for a destination, it dispatches. Destinations are prioritized by how many full pallets can ship.<br>
-  4. <strong>Split Handling</strong> — if stock is short, the engine allocates proportionally across destinations so no single venue gets starved.</p>
-  <p><strong>Tabs:</strong><br>
-  <strong>📥 Arrivals</strong> — view the container arrival schedule, see what's coming and when.<br>
-  <strong>📋 Demand</strong> — destination-level demand summary showing required quantities per SKU. Filter by source, destination (multi-select), or search. Each row shows inline-editable fields: Price, HS Code (with 🔍 AI lookup), Country of Origin, Customs Name, and Pallet dimensions. Includes Hold by Source tool to hold/release SKU groups, and <strong>📄 Combined CI</strong> button for multi-destination customs invoice.<br>
-  <strong>🚛 Plan</strong> — the generated truck plan. Each truck card shows destination, date, SKU manifest, and pallet utilization. Trucks can be marked as "locked" (checkbox) — locked trucks won't change on re-generation. New trucks start after the last locked date.<br>
-  <strong>⚠ Late</strong> — analysis of containers that may arrive too late for their LM dispatch window. Shows which SKUs at which destinations have LP arrival dates after the LM truck departs. Sidebar lets you exclude destinations from analysis. Live-updates when LM truck dates change.</p>
-  <p><strong>Lock:</strong> Check the box on a truck to lock it. When you regenerate the plan (e.g., after new arrivals data), locked trucks are preserved exactly as-is, and the engine only replans the remaining unlocked inventory. This lets you lock in shipments as they go out the door while keeping the future plan flexible.</p>
-  <p><strong>Commercial Invoice (CI):</strong> Each LP truck has a 📄 button that generates a formatted Excel with Combined Invoice & Packing List — includes shipper details, HS codes, country of origin, unit values, and total values. Ready for customs clearance.<br>
-  <strong>📄 Combined CI:</strong> In the Demand tab, the Combined CI button opens a modal where you pick any combination of the 8 LP destinations and sources. Sources auto-filter based on selected destinations. Export generates a single CI summing all demand quantities across your selection — useful for multi-destination customs filings.</p>
-  <p><strong>🔍 HS Code Assistant:</strong> Click the 🔍 icon next to any HS Code field in the Demand table. The wizard offers three ways to classify:
-  <br>1. <strong>Sibling SKUs</strong> — if other SKUs in the same family (e.g., CTBAR-001-xxx) already have HS codes, they're suggested at the top
-  <br>2. <strong>AI Classification</strong> (Claude or Gemini) — paste a product URL and click the AI button. The AI analyzes the product from the URL to suggest HS code, customs name, and country of origin with confidence levels. Setup requires a free API key.
-  <br>3. <strong>Manual Category</strong> — select a product category, refine with material/usage, browse matching HS codes from the built-in database
-  <br>All methods let you edit the customs description and country before saving. HS codes are normalized to XXXX.XX format.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">🚛 Last Mile — Venue Distribution</h4>
-  <p>Final mile delivery from regional hubs to individual venues. Takes a Nomenclature file (SKU master with pallet dimensions) and Material Plan (what goes where and when), then generates an optimized truck loading plan.</p>
-  <p><strong>How the engine works:</strong><br>
-  1. <strong>Pallet Calculation</strong> — each SKU's quantity ÷ pallet quantity × pallet spaces = exact pallet count.<br>
-  2. <strong>Date Grouping</strong> — items are grouped by bump-in date. Dispatch date = bump-in minus lead time (skipping weekends).<br>
-  3. <strong>Truck Packing</strong> — items are packed into trucks up to capacity (default 26 pallets). When full, a new truck starts (up to max trucks/day).<br>
-  4. <strong>Top-Up</strong> — if a SKU has a partial pallet, the engine pulls extra quantity from the pool to complete a full pallet, maximizing utilization.<br>
-  5. <strong>Fill-Up</strong> — trucks with remaining space pull full pallets from the pool (current date first, then future dates).<br>
-  6. <strong>Overflow</strong> — when max trucks/day is reached, remaining items carry forward to the next working day.<br>
-  7. <strong>No-BI Items</strong> — items without a bump-in date go into a low-priority pool and are topped up into trucks with space. Leftovers ship on the last day.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Venue Categories</h4>
-  <p><strong>Stadiums (STA)</strong> — venues whose Venue code contains "STA". Each gets individual direct trucks.<br>
-  <strong>IBC</strong> — venues whose Venue code contains "IBC". Each gets individual direct trucks.<br>
-  <strong>USA Clusters</strong> — all other US venues grouped into clusters. Each cluster gets consolidated cluster-level trucks AND each individual venue also gets its own trucks.<br>
-  <strong>CAN / MEX</strong> — Canadian and Mexican venues, each planned individually. No cluster trucks are created for CAN/MEX clusters.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Truck Numbering</h4>
-  <p>Trucks are numbered globally across the entire plan, sorted by dispatch date:<br>
-  <strong>LM-1, LM-2, ...</strong> — Last Mile palletized freight trucks<br>
-  <strong>LP-1, LP-2, ...</strong> — Load Plan warehouse dispatch trucks<br>
-  <strong>C-1, C-2, ...</strong> — CORT direct deliveries<br>
-  <strong>STP-1, STP-2, ...</strong> — Staples direct deliveries<br>
-  Numbers are assigned once at plan generation and stay consistent across all views.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px"><span style="background:#E31837;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">CORT</span> Direct Deliveries</h4>
-  <p>SKUs sourced from <strong>CT RNT</strong> (CORT Rental) or <strong>CT RTL</strong> (CORT Retail) are direct deliveries — they bypass the pallet engine entirely. They don't go on freight trucks. Instead, they're shown as separate CORT deliveries grouped by date, with their own numbering (C-1, C-2...). CORT items appear in the calendar with a red dot, in the sidebar with a red badge, and in venue summaries.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px"><span style="background:#EF6C00;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">🏪 STP</span> Staples Direct Deliveries</h4>
-  <p>SKUs sourced from <strong>STP</strong> (Staples, STP CAN, STP MEX) are vendor-delivered directly to venues. One STP delivery per venue max. Create from the Demand tab. Each STP delivery has a manual rate, delivery date, and automatically pulls all STP-sourced items from that venue's demand (respecting demand adjustments and kit allocations). STP deliveries appear with an orange dot in calendars, orange cards in trucks view, and a dedicated 🏪 Staples KPI card in dashboard and Vision.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">📦 Kits (Admin only)</h4>
-  <p>Kits bundle multiple component SKUs into a single virtual item for truck planning. Create from the venue's Demand tab. The kit gets its own nomenclature code, aggregated pallet dimensions, and inherits bump-in dates from its components. Component quantities are subtracted from individual demand to avoid double-counting. Kits are included in truck loads, exports, and backup/restore.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">📐 Pallet Configuration</h4>
-  <p>Each venue type (Volunteer Centre, Ticketing, etc.) can be set to <strong>Assembled</strong> or <strong>Disassembled</strong> mode via the 📐 Pallets button. This controls which pallet dimensions (asm qty/spc vs dis qty/spc) are used for pallet calculations. Individual SKUs can be overridden to use the opposite mode. Pallet dim overrides (per-SKU pallet quantity/spaces) can also be set from the truck detail modal.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">📋 Demand Adjustments & Manual Demand</h4>
-  <p><strong>Demand Adjustments</strong> — in the Demand tab, click any SKU quantity to override it. Adjustments persist across plan regenerations. A ★ badge shows how many adjustments are active.<br>
-  <strong>Manual Demand</strong> — add entirely new SKU/venue combinations not in the original material plan. Added items are injected into the venue's demand and participate in truck loading like regular items.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">💰 Rate Overrides</h4>
-  <p>Each truck shows a distribution cost (💰) based on default rates per destination. Admins can override any truck's rate by clicking the rate input on the truck card. Overrides are shown in purple. Reset by clicking ✕. All rates roll up into the Vision 2026 distribution cost KPI.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Last Mile Views</h4>
-  <p><strong>📊 Dashboard</strong> — calendar heatmap showing dispatch intensity across all venues, daily dispatch detail table, and venue/cluster workload breakdown. Select a specific venue or "All Venues" for the aggregate view.<br>
-  <strong>🚛 Trucks</strong> — truck cards grouped by dispatch date → arrival date. Click any truck to inspect: full SKU manifest with venue total, requested qty, loaded qty, pool remaining. Download individual shipping orders (⬇ Excel).</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Venue Constraints (Admin only)</h4>
-  <p>Admins can tune planning parameters per venue in the sidebar:<br>
-  <strong>Truck capacity</strong> — max pallets per truck (default: 26). Set lower for venues with limited dock access.<br>
-  <strong>Max trucks/day</strong> — daily truck limit (default: 2). Controls how many trucks can arrive per day.<br>
-  <strong>Lead time</strong> — working days before bump-in to dispatch (default: 0). Ensures goods arrive with buffer time.<br>
-  <strong>Bump-in start</strong> — earliest date planning starts. Items before this date are flagged as "Early".<br>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Roles & Access</h4>
-  <p><strong>Admin</strong> — full access: upload files, edit venue constraints, generate/regenerate plans, lock trucks, system reset. All changes sync to the database and are visible to viewers in real-time.<br>
-  <strong>Viewer</strong> — read-only access: browse all plans, export to Excel, inspect truck details. Cannot modify constraints, upload files, or lock trucks.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Database & Sync</h4>
-  <p>The system uses Supabase for real-time data persistence. When an admin uploads files or changes constraints, the data is saved to the cloud. Viewers loading the page will see the latest published plan automatically. The connection status indicator (green = connected, red = offline) shows database health. When offline, the system works locally but changes won't persist.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Exports</h4>
-  <p><strong>⬇ Export (Last Mile)</strong> — full plan as Excel: Truck Plan sheet (every item on every truck incl. STP + kits), Dispatch Summary (daily totals + STP rows), Venue Summary (per-venue stats with CORT/STP columns).<br>
-  <strong>⬇ Export (Load Plan)</strong> — truck plan with destination breakdowns, CI summary sheet, and per-truck detail sheets.<br>
-  <strong>⬇ Export (Vision)</strong> — unified truck list across both modules with separate CORT + STP sheets, By Date/Destination summaries with LP/LM/STP/CORT columns.<br>
-  <strong>📄 CI (LP trucks only)</strong> — formatted Commercial Invoice + Packing List Excel for customs. Includes shipper info, HS codes, country of origin, declared values.<br>
-  <strong>📄 Combined CI</strong> — multi-destination CI from the Demand tab. Select any combination of the 8 LP destinations and sources; quantities summed from demand data.<br>
-  <strong>⬇ Per-truck Excel</strong> — individual shipping order with nomenclature codes, names, UoM, and order quantities. Kit items are expanded as sub-rows.<br>
-  <strong>💾 Backup</strong> — full system backup (20 sheets covering all data + settings). Use 📂 Restore to reload from a backup file.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Bottom Support Bar</h4>
-  <p>All support buttons (Export, Backup, Restore, Undo, Help) are in a fixed bar at the bottom of the screen — consistent across all three modules so the interface doesn't jump when switching. Module-specific buttons (Venues toggle, Stock Report, Pallets for LM; Export for LP/Vision) appear on the left side of the bar. Shared buttons (Backup, Restore, Undo, Help) are always on the right.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Warnings & Flags</h4>
-  <p><span class="bg bgs bg-rd">⚠ Weekend</span> — dispatch or arrival falls on Saturday/Sunday. Rows are highlighted red.<br>
-  <span class="bg bgs bg-or">Overflow</span> — items that couldn't fit within max trucks/day, pushed to next working day.<br>
-  <span class="bg bgs bg-pu">Early</span> — dispatch date is before the venue's bump-in start date.<br>
-  <span class="bg bgs bg-pu">No BI</span> — items without a bump-in date, filled into trucks from the pool.<br>
-  <span style="background:var(--os);color:var(--or);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600">⚠ No Pallet Data</span> — SKUs missing pallet dimensions. Click the warning banner to see the full list.</p>
-
-  <h4 style="color:var(--tp);margin:16px 0 8px">Quick Tips</h4>
-  <p>• Click any truck card to inspect its full manifest — works in all modules.<br>
-  • Use the search box in the sidebar to quickly find a venue.<br>
-  • The sidebar shows pallet count and line count per venue. CORT venues have a red badge, STP venues an orange badge.<br>
-  • In Dashboard view, click calendar day cells for a detailed popup breakdown.<br>
-  • STP deliveries created for individual venues inside a cluster correctly bubble up to cluster-level views.<br>
-  • The Demand tab (📋) lets you adjust quantities, add manual demand, create kits, and manage STP deliveries.<br>
-  • 📐 Pallet button opens the asm/dis mode config — changes take effect immediately across all trucks.</p>
-  • System Reset (↻ icon next to title) erases everything and returns to the upload screen. Use with caution — it affects all users.</p>
-
-  <div style="margin-top:20px;padding-top:12px;border-top:1px solid var(--bl);font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | SM²ARTA™ licensed to SM2ARTA LLC</div>
+  <div class="mdb" style="font-size:12px;line-height:1.7;color:var(--ts)">${_ht}${_hb}
+  <div style="margin-top:16px;padding-top:10px;border-top:1px solid var(--bl);font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | SM²ARTA™ licensed to SM2ARTA LLC</div>
   </div></div></div>`;
   document.getElementById("mr").innerHTML=h;
+}
+function _hlpTab(btn,id){
+  document.querySelectorAll('.hlp-tab').forEach(t=>t.classList.remove('act'));
+  document.querySelectorAll('.hlp-sec').forEach(s=>s.classList.remove('act'));
+  btn.classList.add('act');
+  document.getElementById(id)?.classList.add('act');
 }
 
 function rConstraints(){
