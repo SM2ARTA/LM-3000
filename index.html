@@ -8523,6 +8523,7 @@ function renderTruckCard(t,opts){
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">🔒 Locked</span></div>':''}
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
       ${(()=>{if(!t.items)return'';const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom);if(!kitItems.length)return'';const badges=kitItems.map(it=>{const r=LM_kitReadiness(NOM[it.sku]._kitId);if(!r.total)return'';const sc=STOCK_SKUS.size===0?'var(--tt)':(r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)');const bg=STOCK_SKUS.size===0?'var(--bg)':(r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)');return`<span class="bg bgs" style="background:${bg};color:${sc};border:1px solid ${sc}40">📦 Kit ${STOCK_SKUS.size===0?'—':r.pct+'%'} (${r.inStock}/${r.total})</span>`}).filter(Boolean).join(' ');return badges?`<div style="font-size:9px;margin-top:2px">${badges}</div>`:''})()}
+      ${(()=>{if(!t.items||!opts.venueType)return'';const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,opts.venueType,opts.country)).length;return ac>0?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:var(--os);color:var(--or);border:1px solid var(--or)40">🔧 ${ac} assembly</span></div>`:''})()}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
@@ -8812,10 +8813,35 @@ function build(venue,venueList,skipNoBi){
       const n=Math.max(1,Math.ceil(ep/tCap));
       const trucks=Array.from({length:n},()=>({items:[],pallets:0,pcs:0}));
       [...loaded].sort((a,b)=>b.loadPlt-a.loadPlt).forEach(it=>{
-        let best=null,br=Infinity;
-        for(const t of trucks){const rem=tCap-t.pallets;if(rem>=it.loadPlt-0.001&&rem<br){best=t;br=rem}}
-        if(!best)best=trucks.reduce((a,b)=>(tCap-a.pallets)>(tCap-b.pallets)?a:b);
-        best.items.push(it);best.pallets+=it.loadPlt;best.pcs+=it.loadQty;
+        let rem={...it};
+        while(rem.loadQty>0){
+          // Find truck with enough space
+          let best=null,br=Infinity;
+          const remPlt=(rem.loadQty/rem.pq)*rem.ps;
+          for(const t of trucks){const sp=tCap-t.pallets;if(sp>=remPlt-0.001&&sp<br){best=t;br=sp}}
+          if(!best){
+            // No truck fits entire item — find truck with most space
+            best=trucks.reduce((a,b)=>(tCap-a.pallets)>(tCap-b.pallets)?a:b);
+            const space=tCap-best.pallets;
+            if(space>=rem.ps-0.001&&rem.pq>0){
+              // Fit as many full pallets as possible
+              const fitPallets=Math.floor(space/rem.ps);
+              if(fitPallets>0){
+                const fitQty=fitPallets*rem.pq;const fitPlt=fitPallets*rem.ps;
+                best.items.push({...rem,loadQty:fitQty,loadPlt:Math.round(fitPlt*100)/100});
+                best.pallets+=fitPlt;best.pcs+=fitQty;
+                rem.loadQty-=fitQty;rem.sched=0;
+                continue;
+              }
+            }
+            // Can't fit even 1 pallet — need a new truck
+            const nt={items:[],pallets:0,pcs:0};trucks.push(nt);best=nt;
+          }
+          const plt=(rem.loadQty/rem.pq)*rem.ps;
+          best.items.push({...rem,loadPlt:Math.round(plt*100)/100});
+          best.pallets+=plt;best.pcs+=rem.loadQty;
+          rem.loadQty=0;
+        }
       });
       trucks.forEach(t=>{t.pallets=Math.round(t.pallets*100)/100});
       const dDate=disp(new Date(biK+"T12:00:00"),lt);
@@ -9338,13 +9364,23 @@ function build(venue,venueList,skipNoBi){
             sw.loadQty-=fitQty;sw.loadPlt=Math.round((sw.loadQty/sw.pq)*sw.ps*100)/100;
           }
         }
-        // Remaining goes to new truck
-        if(sw.loadQty>0){
+        // Remaining goes to new truck(s) — loop to respect tCap
+        while(sw.loadQty>0){
           const lastDay=days[days.length-1];
           _swTruck={items:[],pallets:0,pcs:0,biK:lastDay.biK,dd:lastDay.dKey,idealDisp:lastDay.dKey,isOverflow:false,isEarly:false};
           lastDay.trucks.push(_swTruck);
-          _swTruck.items.push({...sw,poolAfter:0});
-          _swTruck.pallets+=sw.loadPlt;_swTruck.pcs+=sw.loadQty;
+          const swPlt=(sw.loadQty/sw.pq)*sw.ps;
+          if(swPlt<=tCap+0.001||sw.pq<=0){
+            _swTruck.items.push({...sw,poolAfter:0});
+            _swTruck.pallets+=sw.loadPlt;_swTruck.pcs+=sw.loadQty;
+            sw.loadQty=0;
+          } else {
+            const fitPlt=Math.floor(tCap/sw.ps);
+            const fitQty=fitPlt*sw.pq;const fitPltV=fitPlt*sw.ps;
+            _swTruck.items.push({sku:sw.sku,nm:sw.nm,loadQty:fitQty,loadPlt:Math.round(fitPltV*100)/100,pq:sw.pq,ps:sw.ps,biK:sw.biK,sched:0,topUp:fitQty,pulled:true,pulledFrom:'pool-sweep',remainder:0,poolAfter:0});
+            _swTruck.pallets+=fitPltV;_swTruck.pcs+=fitQty;
+            sw.loadQty-=fitQty;sw.loadPlt=Math.round((sw.loadQty/sw.pq)*sw.ps*100)/100;
+          }
         }
       }
       pool[sw.sku].remaining=0;
@@ -9701,6 +9737,16 @@ function LM_getEffPallet(sku,venueType,country){
   return{pq:nm.pqA>0?nm.pqA:(nm.pq||0),ps:nm.psA>0?nm.psA:(nm.ps||0)};
 }
 
+function LM_isAssembled(sku,venueType,country){
+  const nm=NOM[sku];if(!nm)return false;
+  if(!nm.pqA||!nm.psA)return false;// no assembled dims → not assembled
+  const isStaIbc=venueType==='Stadium'||venueType==='International Broadcast Centre';
+  const cfg=LM_palletCfg[venueType];
+  const baseMode=isStaIbc?(cfg?.mode||'dis'):(LM_COUNTRY_DEFAULTS[country||'USA']||'dis');
+  const isOverride=cfg?cfg.overrides.has(sku):false;
+  const useDis=baseMode==='dis'?!isOverride:isOverride;
+  return !useDis;
+}
 function LM_getVenueType(venueName){return LM_vtMap[venueName]||''}
 
 // Venue name → venue type map (from Venues master file)
@@ -11298,11 +11344,13 @@ const pDisp=Number.isInteger(t.pallets)?t.pallets:t.pallets.toFixed(1);
 const ovLabel=t.isOverflow?' · <span style="color:var(--or);font-weight:600">Overflow</span> (ideal: '+fS(new Date(t.idealDisp+"T12:00:00"))+')':'';
 const isClusterTruck=!!(selCluster&&CLUSTERS[selCluster]);
 const _mCacheKey=isClusterTruck?selCluster:sel;
+const _mVt=LM_vtMap[sel]||'';
+const _mCountry=LM_venueCountry(selCluster||'',sel||'');
 const _mLpAbbrs=LM_isLPFed(_mCacheKey)?LM_getLPDestAbbrs(_mCacheKey):[];
 const _mIsLpFed=_mLpAbbrs.length>0&&Object.keys(LP_ARRIVAL_MAP).length>0;
 let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stopPropagation()">
 <div class="mdh"><div><h3>🚛 ${t.id}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
-<div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${LP.tCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span></div>${PB(t.pallets,LP.tCap)}
+<div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${LP.tCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span>${(()=>{const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,_mVt,_mCountry)).length;return ac>0?`<span style="color:var(--or)">🔧 <strong>${ac}</strong> assembly</span>`:''})()}</div>${PB(t.pallets,LP.tCap)}
 ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10px 0;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:11px;flex-wrap:wrap">
   <input type="checkbox" ${LM_isDispatched(t)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_isDispatched(t)?'🔒 Locked':'Lock'}</span>
   <span style="color:var(--bd)">|</span>
@@ -11355,7 +11403,8 @@ if(it.noPallet){
   reqPltHtml=`<span style="color:var(--tt);font-size:10px">${lPltD} / ${denomPltD}</span>`;
 }
 const _isKit=!!NOM[it.sku]?._kitNom;
-h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}</td><td class="mono">${it.sku}${_isKit?' <span onclick="event.stopPropagation();LM_showKitDetail(\''+NOM[it.sku]._kitId+'\')" style="cursor:pointer;font-size:10px" title="View kit contents">📦</span>':''}</td><td class="tcl" style="color:var(--ts)">${it.nm}${_isKit?' <span style="font-size:8px;color:#43A047;font-weight:700">KIT</span>':''}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
+const _isAsm=!_isKit&&LM_isAssembled(it.sku,_mVt,_mCountry);
+h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}</td><td class="mono">${it.sku}${_isKit?' <span onclick="event.stopPropagation();LM_showKitDetail(\''+NOM[it.sku]._kitId+'\')" style="cursor:pointer;font-size:10px" title="View kit contents">📦</span>':''}</td><td class="tcl" style="color:var(--ts)">${it.nm}${_isKit?' <span style="font-size:8px;color:#43A047;font-weight:700">KIT</span>':''}${_isAsm?' <span style="font-size:8px;color:var(--or);font-weight:700;background:var(--os);padding:1px 4px;border-radius:3px" title="Assembly required at WHS">A</span>':''}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
 <td class="fw6">${totalForSku.toLocaleString()}</td><td class="cgr" style="border-right:2px solid var(--bl)" title="${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'Pallet qty '+(it.pq*_ppu)+' ÷ PPU '+_ppu+' = '+it.pq:'Pallet qty per UOM';})()}">${it.pq||'—'}${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'<span style="font-size:8px;color:var(--tt)"> ×'+_ppu+'</span>':'';})()}</td>
 ${isClusterTruck?'':`<td style="border-right:none">${reqQtyHtml}</td><td style="border-right:2px solid var(--bl)">${reqPltHtml}</td>`}
 <td class="fw7 cgn">${_isKit?'1':it.loadQty.toLocaleString()}</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.noPallet?'<span style="color:var(--or);font-size:10px">—</span>':(Number.isInteger(it.loadPlt)?it.loadPlt:it.loadPlt.toFixed(1))}</td>
@@ -12703,7 +12752,7 @@ ${day.isEarly?B("Early","pu"):""} ${day.hasOverflow?B("Overflow","or"):""} ${day
 <div class="dpr">${day.dayP}% · ${day.cumP}% cum</div></div><div class="tgr">`;
 day.trucks.forEach(tr=>{const ti=LP.allT.indexOf(tr);
 const arrLabel=day.isNoBi?'':'📅 '+fS(day.dDate)+(day.biDate?' → '+fS(day.biDate):'');
-h+=renderTruckCard(tr,{tCap:P.tCap,displayName:displayName,dayLabel:arrLabel,onClickFn:`showM(${ti})`,exportFn:`exportTruck(${ti})`,showExcludeCheckbox:true,truckIdx:ti,lpFedAbbrs:_lpFedAbbrs})});
+h+=renderTruckCard(tr,{tCap:P.tCap,displayName:displayName,dayLabel:arrLabel,onClickFn:`showM(${ti})`,exportFn:`exportTruck(${ti})`,showExcludeCheckbox:true,truckIdx:ti,lpFedAbbrs:_lpFedAbbrs,venueType:LM_vtMap[sel]||'',country:LM_venueCountry(selCluster||'',sel||'')})});
 h+=`</div></div>`})}
 // ── Late Arrival List (LP-fed locations only) ──
 if(_lpFedAbbrs.length&&Object.keys(LP_ARRIVAL_MAP).length){
