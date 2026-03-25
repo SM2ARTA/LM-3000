@@ -5,474 +5,300 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FF&E RADAR</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
-:root{--bg:#080C10;--panel:#0D1117;--bezel:#1B2130;--bd:#253040;--glow:#00FF88;--glow2:#00CC6A;--amber:#FFB300;--amber2:#FF8F00;--red:#FF3D3D;--cyan:#00D4FF;--white:#D0D8E8;--dim:#4A5568;--mono:'Share Tech Mono',monospace;--fm:'IBM Plex Mono',monospace}
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+:root{--bg:#080C10;--pn:#0D1117;--bz:#1B2130;--bd:#253040;--gn:#00FF88;--am:#FFB300;--rd:#FF3D3D;--cy:#00D4FF;--wh:#D0D8E8;--dm:#4A5568;--mn:'Share Tech Mono',monospace;--fm:'IBM Plex Mono',monospace}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:var(--mono);background:var(--bg);color:var(--glow);min-height:100vh;overflow-x:hidden}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--mn);background:var(--bg);color:var(--gn)}
 
-/* Scanline overlay */
-body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,0.012) 2px,rgba(0,255,136,0.012) 4px);z-index:999}
+/* Scanlines */
+body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,0.01) 2px,rgba(0,255,136,0.01) 4px);z-index:999}
 
-/* Radar sweep */
+/* Radar bg */
 @keyframes sweep{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-.radar-bg{position:fixed;top:50%;left:50%;width:900px;height:900px;margin:-450px 0 0 -450px;pointer-events:none;z-index:0;opacity:0.06}
-.radar-bg::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:50%;border:1px solid var(--glow)}
-.radar-bg::after{content:'';position:absolute;top:0;left:50%;width:50%;height:50%;transform-origin:bottom left;background:linear-gradient(90deg,transparent,rgba(0,255,136,0.3));animation:sweep 8s linear infinite;border-radius:0 100% 0 0}
-.radar-ring{position:fixed;border-radius:50%;border:1px solid rgba(0,255,136,0.05);pointer-events:none;z-index:0}
-.radar-ring-1{top:50%;left:50%;width:600px;height:600px;margin:-300px 0 0 -300px}
-.radar-ring-2{top:50%;left:50%;width:400px;height:400px;margin:-200px 0 0 -200px}
-.radar-ring-3{top:50%;left:50%;width:200px;height:200px;margin:-100px 0 0 -100px}
-.radar-cross{position:fixed;pointer-events:none;z-index:0;opacity:0.05}
-.radar-cross-h{top:50%;left:50%;width:900px;height:1px;margin-top:0;margin-left:-450px;background:var(--glow)}
-.radar-cross-v{top:50%;left:50%;width:1px;height:900px;margin-top:-450px;margin-left:0;background:var(--glow)}
+.rbg{position:fixed;top:50%;left:50%;width:800px;height:800px;margin:-400px 0 0 -400px;pointer-events:none;opacity:0.05}
+.rbg::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:50%;border:1px solid var(--gn)}
+.rbg::after{content:'';position:absolute;top:0;left:50%;width:50%;height:50%;transform-origin:bottom left;background:linear-gradient(90deg,transparent,rgba(0,255,136,0.3));animation:sweep 8s linear infinite;border-radius:0 100% 0 0}
+.rr{position:fixed;border-radius:50%;border:1px solid rgba(0,255,136,0.04);pointer-events:none}
+.rr1{top:50%;left:50%;width:550px;height:550px;margin:-275px 0 0 -275px}
+.rr2{top:50%;left:50%;width:300px;height:300px;margin:-150px 0 0 -150px}
 
-/* Top HUD */
-.hud{display:flex;justify-content:space-between;align-items:center;padding:10px 24px;background:linear-gradient(180deg,var(--panel),var(--bg));border-bottom:1px solid var(--glow);position:relative;z-index:1}
-.hud::before{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 5%,var(--glow) 50%,transparent 95%);opacity:0.7}
-.hud::after{content:'';position:absolute;bottom:-6px;left:0;right:0;height:6px;background:linear-gradient(180deg,rgba(0,255,136,0.08),transparent)}
-.hud-title{font-size:15px;letter-spacing:5px;color:var(--glow);text-shadow:0 0 12px rgba(0,255,136,0.6)}
-.hud-clock{font-size:22px;color:var(--glow);text-shadow:0 0 20px rgba(0,255,136,0.6),0 0 4px rgba(0,255,136,0.4)}
-.hud-kickoff{font-size:13px;color:var(--amber);text-shadow:0 0 10px rgba(255,179,0,0.4);background:rgba(255,179,0,0.1);padding:4px 14px;border:1px solid rgba(255,179,0,0.3);border-radius:2px}
+/* HUD top */
+.hud{display:flex;justify-content:space-between;align-items:center;padding:6px 20px;background:linear-gradient(180deg,var(--pn),var(--bg));border-bottom:1px solid var(--gn);position:relative;z-index:2;height:38px}
+.hud::after{content:'⊕                                                                                                          ⊕';position:absolute;bottom:4px;left:8px;right:8px;font-size:6px;color:rgba(37,48,64,0.8);display:flex;justify-content:space-between}
+.hud-t{font-size:14px;letter-spacing:5px;text-shadow:0 0 10px rgba(0,255,136,0.5)}
+.hud-c{font-size:20px;text-shadow:0 0 16px rgba(0,255,136,0.5)}
+.hud-k{font-size:12px;color:var(--am);background:rgba(255,179,0,0.1);padding:3px 12px;border:1px solid rgba(255,179,0,0.3);border-radius:2px;text-shadow:0 0 6px rgba(255,179,0,0.3)}
 
-/* Instrument bezel */
-.instr{background:var(--panel);border:1px solid var(--bd);border-radius:6px;padding:10px 12px;margin-bottom:6px;position:relative;box-shadow:inset 0 0 20px rgba(0,0,0,0.3),0 1px 4px rgba(0,0,0,0.4)}
-.instr::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,255,136,0.2),transparent)}
-.instr::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,255,136,0.08),transparent)}
-.instr-label{font-size:8px;letter-spacing:2px;color:var(--dim);margin-bottom:4px}
-.instr-value{font-size:26px;font-weight:700;line-height:1;text-shadow:0 0 10px currentColor}
-.instr-sub{font-size:9px;color:var(--dim);margin-top:3px}
+/* Main grid: fixed height */
+.main{display:grid;grid-template-columns:220px 1fr 260px;height:calc(100vh - 38px);position:relative;z-index:1}
+.col{padding:8px;overflow:hidden}
+.col-l{border-right:1px solid var(--bd);position:relative}
+.col-l::after{content:'⊕\\A⊕\\A⊕\\A⊕';white-space:pre;position:absolute;top:20px;right:-4px;font-size:6px;color:var(--bd);line-height:80px}
+.col-r{border-left:1px solid var(--bd);position:relative}
+.col-r::after{content:'⊕\\A⊕\\A⊕\\A⊕';white-space:pre;position:absolute;top:20px;left:-4px;font-size:6px;color:var(--bd);line-height:80px}
 
-/* Gauge bar */
-.gbar{height:4px;background:var(--bezel);border-radius:2px;margin-top:4px;position:relative;overflow:hidden}
-.gbar::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(90deg,transparent,transparent 10px,rgba(0,0,0,0.2) 10px,rgba(0,0,0,0.2) 11px)}
-.gbar-fill{height:100%;border-radius:2px;box-shadow:0 0 8px currentColor,0 0 3px currentColor}
+/* Instrument */
+.I{background:var(--pn);border:1px solid var(--bd);border-radius:4px;padding:6px 8px;margin-bottom:4px;position:relative;box-shadow:inset 0 0 12px rgba(0,0,0,0.3)}
+.I::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,255,136,0.15),transparent)}
+/* Bolt screws on instruments */
+.I::after{content:'⊕    ⊕';position:absolute;top:3px;right:6px;font-size:6px;color:var(--bd);letter-spacing:0}
+.I-l{font-size:7px;letter-spacing:2px;color:var(--dm)}
+.I-v{font-size:22px;font-weight:700;line-height:1;text-shadow:0 0 8px currentColor}
+.I-s{font-size:8px;color:var(--dm);margin-top:2px}
 
-/* Grid layout */
-.cockpit{display:grid;grid-template-columns:260px 1fr 320px;gap:0;min-height:calc(100vh - 44px);position:relative;z-index:1}
-.col-l{background:var(--bg);padding:10px;border-right:1px solid var(--bd)}
-.col-c{background:var(--bg);padding:10px 14px;position:relative}
-.col-c::before{content:'';position:absolute;top:0;left:0;bottom:0;width:1px;background:linear-gradient(180deg,var(--glow),transparent);opacity:0.1}
-.col-r{background:var(--bg);padding:10px 12px;border-left:1px solid var(--bd)}
+/* Mini gauge */
+.mg{height:3px;background:var(--bz);border-radius:1px;margin-top:3px;overflow:hidden}
+.mg-f{height:100%;border-radius:1px;box-shadow:0 0 4px currentColor}
 
-/* Dest cards */
-.dest{background:var(--panel);border:1px solid var(--bd);border-radius:4px;padding:8px 12px;margin-bottom:4px;cursor:pointer;transition:border-color 0.2s,box-shadow 0.2s}
-.dest:hover{border-color:var(--glow);box-shadow:0 0 8px rgba(0,255,136,0.15)}
-.dest-name{font-size:11px;color:var(--white);letter-spacing:1px}
-.dest-badges{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+/* Badge */
+.B{display:inline-block;padding:1px 6px;border-radius:2px;font-size:8px;letter-spacing:0.3px}
+.Bg{background:rgba(0,255,136,0.12);color:var(--gn);border:1px solid rgba(0,255,136,0.2)}
+.Ba{background:rgba(255,179,0,0.12);color:var(--am);border:1px solid rgba(255,179,0,0.2)}
+.Br{background:rgba(255,61,61,0.12);color:var(--rd);border:1px solid rgba(255,61,61,0.2)}
+.Bc{background:rgba(0,212,255,0.12);color:var(--cy);border:1px solid rgba(0,212,255,0.2)}
 
-/* Badges */
-.b{display:inline-block;padding:2px 8px;border-radius:2px;font-size:9px;letter-spacing:0.5px}
-.b-gn{background:rgba(0,255,136,0.12);color:var(--glow);border:1px solid rgba(0,255,136,0.25)}
-.b-am{background:rgba(255,179,0,0.12);color:var(--amber);border:1px solid rgba(255,179,0,0.25)}
-.b-rd{background:rgba(255,61,61,0.12);color:var(--red);border:1px solid rgba(255,61,61,0.25)}
-.b-cy{background:rgba(0,212,255,0.12);color:var(--cyan);border:1px solid rgba(0,212,255,0.25)}
+/* Dest grid */
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.D{background:var(--pn);border:1px solid var(--bd);border-radius:3px;padding:6px 8px;cursor:pointer;transition:border-color 0.15s;position:relative}
+.D:hover{border-color:var(--gn);box-shadow:0 0 6px rgba(0,255,136,0.1)}
+.D::before{content:'⊕';position:absolute;top:3px;right:5px;font-size:5px;color:var(--bd)}
+.D-n{font-size:10px;color:var(--wh);letter-spacing:0.5px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.D-b{display:flex;gap:3px;flex-wrap:wrap}
 
 /* Truck row */
-.tr-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:3px;margin-bottom:2px;cursor:pointer;font-size:11px;transition:background 0.15s}
-.tr-row:hover{background:var(--bezel)}
-.tr-id{width:52px;font-weight:700;flex-shrink:0}
-.tr-dest{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
-.tr-bar{width:50px;height:4px;background:var(--bezel);border-radius:1px;flex-shrink:0;overflow:hidden}
-.tr-bar-f{height:100%;border-radius:1px}
+.T{display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:2px;cursor:pointer;font-size:9px;transition:background 0.1s}
+.T:hover{background:var(--bz)}
+
+/* Section */
+.S{font-size:7px;letter-spacing:2.5px;color:var(--gn);padding:4px 0 3px;border-bottom:1px solid rgba(0,255,136,0.12);margin-bottom:4px;text-shadow:0 0 4px rgba(0,255,136,0.2)}
 
 /* Alert */
-@keyframes alertPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 12px rgba(255,61,61,0.3)}}
-.alert{padding:8px 10px;border-radius:4px;margin-bottom:5px;cursor:pointer;border-left:3px solid;transition:all 0.15s}
-.alert:hover{transform:translateX(2px)}
-.al-rd{border-color:var(--red);background:rgba(255,61,61,0.08);animation:alertPulse 3s infinite}
-.al-am{border-color:var(--amber);background:rgba(255,179,0,0.08)}
-.al-gn{border-color:var(--glow);background:rgba(0,255,136,0.05)}
-.al-cy{border-color:var(--cyan);background:rgba(0,212,255,0.08)}
-.al-title{font-size:10px;font-weight:700;letter-spacing:0.5px}
-.al-desc{font-size:9px;color:var(--dim);margin-top:2px}
-
-/* Section header */
-.sec-hd{font-size:9px;letter-spacing:2.5px;color:var(--glow);padding:6px 0 4px;border-bottom:1px solid rgba(0,255,136,0.15);margin-bottom:6px;text-shadow:0 0 6px rgba(0,255,136,0.3)}
+@keyframes ap{0%,100%{box-shadow:none}50%{box-shadow:0 0 8px rgba(255,61,61,0.25)}}
+.A{padding:5px 8px;border-radius:3px;margin-bottom:3px;cursor:pointer;border-left:2px solid;font-size:9px;transition:transform 0.1s}
+.A:hover{transform:translateX(2px)}
+.Ar{border-color:var(--rd);background:rgba(255,61,61,0.06);animation:ap 3s infinite}
+.Aa{border-color:var(--am);background:rgba(255,179,0,0.06)}
+.Ag{border-color:var(--gn);background:rgba(0,255,136,0.04)}
+.Ac{border-color:var(--cy);background:rgba(0,212,255,0.06)}
 
 /* Timeline */
-.tl-r{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:11px;border-bottom:1px solid rgba(37,48,64,0.4)}
-.tl-r:last-of-type{border-bottom:none}
-.tl-d{width:52px;color:var(--dim);flex-shrink:0;font-size:10px}
-.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
-.tl-txt{flex:1;color:var(--white);font-size:11px}
-.tl-past{opacity:0.25}
+.TL{display:flex;align-items:center;gap:5px;padding:3px 0;font-size:9px}
+.TL-d{width:42px;color:var(--dm);font-size:8px;flex-shrink:0}
+.TL-o{width:6px;height:6px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px currentColor}
+.TL-t{flex:1;color:var(--wh);font-size:9px}
+.TL-p{opacity:0.2}
 
 /* Modal */
-.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:100;display:none;justify-content:center;align-items:center;backdrop-filter:blur(4px)}
-.modal-bg.show{display:flex}
-.modal{background:var(--panel);border:1px solid var(--glow);border-radius:8px;padding:20px 24px;max-width:850px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,255,136,0.12),0 0 80px rgba(0,255,136,0.05),inset 0 0 30px rgba(0,0,0,0.3)}
-.modal h2{font-size:14px;letter-spacing:2px;color:var(--glow);margin-bottom:12px;text-shadow:0 0 8px rgba(0,255,136,0.4)}
-.modal table{width:100%;border-collapse:collapse;font-size:10px}
-.modal th{text-align:left;padding:5px 8px;font-size:8px;letter-spacing:1px;color:var(--dim);border-bottom:1px solid var(--bd)}
-.modal td{padding:4px 8px;border-bottom:1px solid rgba(37,48,64,0.5)}
-.modal-x{float:right;background:none;border:1px solid var(--dim);color:var(--dim);width:24px;height:24px;border-radius:2px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center}
-.modal-x:hover{border-color:var(--red);color:var(--red)}
+.MBg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:100;display:none;justify-content:center;align-items:center;backdrop-filter:blur(3px)}
+.MBg.show{display:flex}
+.M{background:var(--pn);border:1px solid var(--gn);border-radius:6px;padding:16px 20px;max-width:800px;width:90%;max-height:75vh;overflow-y:auto;box-shadow:0 0 30px rgba(0,255,136,0.1),inset 0 0 20px rgba(0,0,0,0.3)}
+.M h2{font-size:13px;letter-spacing:2px;color:var(--gn);margin-bottom:10px;text-shadow:0 0 6px rgba(0,255,136,0.3)}
+.M table{width:100%;border-collapse:collapse;font-size:10px}
+.M th{text-align:left;padding:4px 8px;font-size:8px;letter-spacing:1px;color:var(--dm);border-bottom:1px solid var(--bd)}
+.M td{padding:3px 8px;border-bottom:1px solid rgba(37,48,64,0.4)}
+.Mx{float:right;background:none;border:1px solid var(--dm);color:var(--dm);width:20px;height:20px;border-radius:2px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
+.Mx:hover{border-color:var(--rd);color:var(--rd)}
 
-/* Radial gauges */
-.radials{display:flex;gap:16px;justify-content:center;margin-bottom:12px;padding:12px 0}
-.radial{text-align:center;position:relative;cursor:default}
-.radial svg{filter:drop-shadow(0 0 8px rgba(0,255,136,0.15))}
-.radial-label{font-size:8px;letter-spacing:2px;color:var(--dim);margin-top:4px}
+/* Radial */
+.RG{display:flex;gap:8px;justify-content:center;padding:6px 0}
 
-/* Refresh animation */
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-.loading{text-align:center;padding:40px;color:var(--glow);animation:pulse 1.5s infinite}
-
-/* Button */
-.btn-refresh{padding:5px 14px;background:transparent;color:var(--glow);border:1px solid var(--glow);border-radius:2px;font-family:var(--mono);font-size:10px;cursor:pointer;letter-spacing:1px;transition:all 0.15s}
-.btn-refresh:hover{background:rgba(0,255,136,0.1);box-shadow:0 0 8px rgba(0,255,136,0.2)}
+/* Btn */
+.btn{padding:3px 10px;background:transparent;color:var(--gn);border:1px solid var(--gn);border-radius:2px;font-family:var(--mn);font-size:9px;cursor:pointer;letter-spacing:1px}
+.btn:hover{background:rgba(0,255,136,0.08)}
 </style>
 </head>
 <body>
-
-<!-- Radar background -->
-<div class="radar-bg"></div>
-<div class="radar-ring radar-ring-1"></div>
-<div class="radar-ring radar-ring-2"></div>
-<div class="radar-ring radar-ring-3"></div>
-<div class="radar-cross radar-cross-h"></div>
-<div class="radar-cross radar-cross-v"></div>
+<div class="rbg"></div><div class="rr rr1"></div><div class="rr rr2"></div>
 
 <div class="hud">
-  <div style="display:flex;align-items:center;gap:16px">
-    <div class="hud-title">FF&E RADAR</div>
-    <span style="font-size:9px;color:var(--dim);letter-spacing:1px">FIFA WORLD CUP 2026™ · MATERIALS MANAGEMENT</span>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="hud-t">FF&E RADAR</div>
+    <span style="font-size:8px;color:var(--dm);letter-spacing:1px">FWC26 · MATERIALS</span>
   </div>
-  <div style="display:flex;align-items:center;gap:16px">
-    <div class="hud-clock" id="clock">--:--:--</div>
-    <div class="hud-kickoff" id="kickoff">T-?? DAYS</div>
-    <button class="btn-refresh" onclick="generate()">↻ REFRESH</button>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="hud-c" id="ck">--:--:--</div>
+    <div class="hud-k" id="ko">T-??</div>
+    <button class="btn" onclick="gen()">↻ REFRESH</button>
   </div>
 </div>
 
-<div class="cockpit">
-  <div class="col-l" id="leftCol"><div class="loading">LOADING...</div></div>
-  <div class="col-c" id="centerCol"></div>
-  <div class="col-r" id="rightCol"></div>
+<div class="main">
+  <div class="col col-l" id="L"></div>
+  <div class="col" id="C" style="padding:8px 10px"></div>
+  <div class="col col-r" id="R"></div>
 </div>
 
-<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
-  <div class="modal" id="mc"></div>
-</div>
+<div class="MBg" id="mBg" onclick="if(event.target===this)cm()"><div class="M" id="mc"></div></div>
 
 <script>
 const SB='https://stwopndhnxcjyomkufii.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
-let _plan,_ts,_arr,_nom,_stk,_rw,_trucks,_disp,_oor,_ss,_sq;
+let _p,_ts,_a,_n,_sk,_rw,_tr,_di,_oo,_ss,_sq;
 
-async function get(id){const u=new URL(SB+'/rest/v1/shared_state');u.searchParams.set('select','value');u.searchParams.set('id','eq.'+id);const r=await fetch(u.toString(),{headers:{apikey:SK,Authorization:'Bearer '+SK}});const d=await r.json();return d?.length?JSON.parse(d[0].value):null}
-const CITY={TOR:'Toronto',VAN:'Vancouver',CDMX:'Mexico City',GDL:'Guadalajara',MTY:'Monterrey',ATL:'Atlanta',BOS:'Boston',DAL:'Dallas',HOU:'Houston',KC:'Kansas City',LA:'Los Angeles',MIA:'Miami',NY:'New York',PHI:'Philadelphia',SF:'San Francisco',SEA:'Seattle'};
-function clDisp(raw){if(!raw)return raw;let s=raw.replace(/\s*\/\s*CORT\s*$/i,'').replace(/\s*\/\s*RIC\s*$/i,'').trim();if(s.startsWith('CAN ')||s.startsWith('MEX ')){const rest=s.slice(4).trim();const parts=rest.split(/\s*\/\s*/).filter(p=>!/^(RGS|RGN|REGION)$/i.test(p.trim()));if(!parts.length)return s.startsWith('CAN ')?'Canada':'Mexico';return parts.map(p=>CITY[p.trim()]||p.trim()).join(' / ')}return s}
+async function g(id){const u=new URL(SB+'/rest/v1/shared_state');u.searchParams.set('select','value');u.searchParams.set('id','eq.'+id);const r=await fetch(u.toString(),{headers:{apikey:SK,Authorization:'Bearer '+SK}});const d=await r.json();return d?.length?JSON.parse(d[0].value):null}
+const CT={TOR:'Toronto',VAN:'Vancouver',CDMX:'Mexico City',GDL:'Guadalajara',MTY:'Monterrey',HOU:'Houston',KC:'Kansas City',NY:'New York',ATL:'Atlanta',BOS:'Boston',DAL:'Dallas',LA:'Los Angeles',MIA:'Miami',PHI:'Philadelphia',SF:'San Francisco',SEA:'Seattle'};
+function cd(r){if(!r)return r;let s=r.replace(/\s*\/\s*(CORT|RIC)\s*$/i,'').trim();if(s.startsWith('CAN ')||s.startsWith('MEX ')){const p=s.slice(4).trim().split(/\s*\/\s*/).filter(x=>!/^(RGS|RGN|REGION)$/i.test(x.trim()));return p.length?p.map(x=>CT[x.trim()]||x.trim()).join(' / '):s.startsWith('CAN ')?'Canada':'Mexico'}return s}
 function fD(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch{return d}}
-function fDw(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}catch{return d}}
+function fW(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}catch{return d}}
 function dN(d){if(!d)return null;const n=new Date();n.setHours(0,0,0,0);const t=new Date(d+'T12:00:00');t.setHours(0,0,0,0);return Math.round((t-n)/864e5)}
-function dL(d){const n=dN(d);if(n===null)return'';if(n<0)return Math.abs(n)+'D LATE';if(n===0)return'TODAY';if(n===1)return'TMRW';return'+'+n+'D'}
+function dL(d){const n=dN(d);if(n===null)return'';if(n<0)return Math.abs(n)+'D';if(n===0)return'NOW';if(n===1)return'TMR';return'+'+n+'D'}
 
-function openModal(h){document.getElementById('mc').innerHTML='<button class="modal-x" onclick="closeModal()">✕</button>'+h;document.getElementById('modalBg').classList.add('show')}
-function closeModal(){document.getElementById('modalBg').classList.remove('show')}
+function om(h){document.getElementById('mc').innerHTML='<button class="Mx" onclick="cm()">✕</button>'+h;document.getElementById('mBg').classList.add('show')}
+function cm(){document.getElementById('mBg').classList.remove('show')}
 
-function showTruck(id){
-  const rows=_plan.filter(r=>r.truckId===id);if(!rows.length)return;
-  const t=_trucks[id];const isD=_disp.has(id);
-  let h='<h2>LP-'+id+' // '+clDisp(t.dest)+'</h2>';
-  h+='<div style="display:flex;gap:10px;margin-bottom:14px;font-size:11px">';
-  h+='<span class="b '+(isD?'b-gn':t._ready?'b-cy':'b-rd')+'">'+(isD?'DISPATCHED':t._ready?'READY':'PENDING')+'</span>';
-  h+='<span style="color:var(--white)">'+t.pallets.toFixed(1)+' / 26 PLT</span>';
-  h+='<span style="color:var(--dim)">'+t.qty+' ITEMS · '+t.skuCount+' SKUS</span>';
-  h+='<span style="color:var(--amber)">'+fDw(t.date)+' ('+dL(t.date)+')</span></div>';
+function sT(id){
+  const rows=_p.filter(r=>r.truckId===id);if(!rows.length)return;const t=_tr[id];
+  let h='<h2>LP-'+id+' // '+cd(t.dest)+'</h2>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:10px;font-size:10px">';
+  const lsr=(_ts?.lsrNumbers||{})[id];
+  h+='<span class="B '+(_di.has(id)?'Bg':t._r?'Bc':'Br')+'">'+(_di.has(id)?'SENT':t._r?'READY':'PEND')+'</span>';
+  if(lsr)h+='<span style="color:var(--am)">'+lsr+'</span>';
+  h+='<span style="color:var(--wh)">'+t.plt.toFixed(1)+'/26</span>';
+  h+='<span style="color:var(--dm)">'+t.qty+' items · '+fW(t.date)+' ('+dL(t.date)+')</span></div>';
   h+='<table><thead><tr><th>SKU</th><th>ITEM</th><th>QTY</th><th>PLT</th><th>STOCK</th></tr></thead><tbody>';
-  const agg={};for(const r of rows){if(!agg[r.sku])agg[r.sku]={sku:r.sku,name:r.name||'',qty:0,plt:0};agg[r.sku].qty+=r.qty||0;agg[r.sku].plt+=r.pallets||0}
-  const wf=_wfSnap[id]||{};
-  for(const s of Object.values(agg).sort((a,b)=>b.plt-a.plt)){
-    const inS=_ss.has(s.sku);const sq=wf[s.sku]!==undefined?wf[s.sku]:(_sq[s.sku]);
-    const stk=!inS?'<span class="b b-rd">NO STK</span>':(sq!==undefined&&sq<s.qty?'<span class="b b-am">LOW '+Math.round(sq)+'</span>':'<span class="b b-gn">OK '+Math.round(sq)+'</span>');
-    h+='<tr><td style="color:var(--cyan)">'+s.sku+'</td><td style="color:var(--dim)">'+s.name+'</td><td>'+s.qty+'</td><td>'+s.plt.toFixed(1)+'</td><td>'+stk+'</td></tr>';
+  const ag={};for(const r of rows){if(!ag[r.sku])ag[r.sku]={s:r.sku,n:r.name||'',q:0,p:0};ag[r.sku].q+=r.qty||0;ag[r.sku].p+=r.pallets||0}
+  const wf=_wf[id]||{};
+  for(const s of Object.values(ag).sort((a,b)=>b.p-a.p)){
+    const inS=_ss.has(s.s);const sq=wf[s.s]!==undefined?wf[s.s]:_sq[s.s];
+    const st=!inS?'<span class="B Br">NO STK</span>':(sq!==undefined&&sq<s.q?'<span class="B Ba">LOW '+Math.round(sq)+'</span>':'<span class="B Bg">OK '+Math.round(sq)+'</span>');
+    h+='<tr><td style="color:var(--cy)">'+s.s+'</td><td style="color:var(--dm)">'+s.n+'</td><td>'+s.q+'</td><td>'+s.p.toFixed(1)+'</td><td>'+st+'</td></tr>';
   }
-  h+='</tbody></table>';openModal(h);
+  h+='</tbody></table>';om(h);
 }
 
-function showDest(dest){
-  const dt=Object.values(_trucks).filter(t=>t.dest===dest).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
-  let h='<h2>'+clDisp(dest)+'</h2><div style="margin-bottom:10px;font-size:10px;color:var(--dim)">'+dt.length+' TRUCKS</div>';
-  h+='<table><thead><tr><th>TRUCK</th><th>DATE</th><th>PLT</th><th>QTY</th><th>SKUS</th><th>STATUS</th></tr></thead><tbody>';
-  for(const t of dt){
-    const isD=_disp.has(t.id);const isO=_oor.has(t.id);
-    const st=isD?'<span class="b b-gn">SENT</span>':isO?'<span class="b b-am">OOR</span>':t._ready?'<span class="b b-cy">READY</span>':'<span class="b b-rd">PEND</span>';
-    h+='<tr onclick="showTruck('+t.id+')" style="cursor:pointer"><td style="font-weight:700;color:var(--glow)">LP-'+t.id+'</td><td style="color:var(--white)">'+fD(t.date)+' <span style="color:var(--dim);font-size:8px">'+dL(t.date)+'</span></td><td>'+t.pallets.toFixed(1)+'</td><td>'+t.qty+'</td><td>'+t.skuCount+'</td><td>'+st+'</td></tr>';
-  }
-  h+='</tbody></table>';openModal(h);
-}
-
-function showArrivals(){
-  if(!_arr)return;
-  const bd={};for(const a of _arr){const rd=a.readyDate||'';if(!rd)continue;if(!bd[rd])bd[rd]=[];bd[rd].push(a)}
-  const today=new Date().toISOString().slice(0,10);
-  let h='<h2>CONTAINER ARRIVALS</h2><table><thead><tr><th>READY DATE</th><th>STATUS</th><th>ITEMS</th><th>QTY</th></tr></thead><tbody>';
-  for(const d of Object.keys(bd).sort()){
-    const items=bd[d];const qty=items.reduce((s,a)=>s+(a.qty||0),0);
-    const n=dN(d);const st=d<=today?'<span class="b b-gn">ARRIVED</span>':n<=3?'<span class="b b-am">'+dL(d)+'</span>':'<span class="b b-cy">'+dL(d)+'</span>';
-    h+='<tr><td style="color:var(--white)">'+fDw(d)+'</td><td>'+st+'</td><td>'+items.length+'</td><td>'+qty.toLocaleString()+'</td></tr>';
-  }
-  h+='</tbody></table>';openModal(h);
-}
-
-async function generate(){
-  const now=new Date();const today=now.toISOString().slice(0,10);
-  const h72=new Date(now.getTime()+72*36e5).toISOString().slice(0,10);
-
-  [_plan,_ts,_arr,_nom,_stk,_rw]=await Promise.all([get('lp-plan'),get('lp-truck-state'),get('lp-arrivals'),get('lp-nom'),get('fm-stock'),get('fm-rw')]);
-  _disp=new Set(_ts?.dispatched||[]);_oor=new Set(_ts?.oorTrucks||[]);
-  _ss=new Set(_stk?.skus||_ts?.stockSkus||[]);_sq=_stk?.qtys||{};
-
-  _trucks={};
-  if(_plan)for(const r of _plan){
-    if(!_trucks[r.truckId])_trucks[r.truckId]={id:r.truckId,dest:r.destination,date:r.date,pallets:0,qty:0,skuCount:0,_s:new Set()};
-    _trucks[r.truckId].pallets+=r.pallets||0;_trucks[r.truckId].qty+=r.qty||0;_trucks[r.truckId]._s.add(r.sku);
-  }
-  for(const t of Object.values(_trucks))t.skuCount=t._s.size;
-
-  // Waterfall — mirrors LP_renderPlan waterfall exactly
-  const pool={};if(_ss.size)for(const s of _ss)pool[s]=_sq[s]!==undefined?_sq[s]:Infinity;
-  const _wfSnap={};// truckId → {sku: availQty BEFORE this truck deducts}
-  const tl=Object.values(_trucks).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
-  let readyCnt=0,pendCnt=0;
-  for(const t of tl){
-    // Snapshot BEFORE deduction
-    const snap={};for(const s in pool)snap[s]=pool[s];
-    _wfSnap[t.id]=snap;
-    // OOR: stock reserved externally, skip deduction
-    if(_oor.has(t.id)){t._ready=true;continue}
-    // Dispatched: already sent, but DID consume stock — deduct from pool
-    if(_disp.has(t.id)){
-      t._ready=true;
-      const ditems={};for(const r of _plan.filter(r=>r.truckId===t.id))ditems[r.sku]=(ditems[r.sku]||0)+(r.qty||0);
-      for(const s in ditems)if(pool[s]!==undefined)pool[s]=Math.max(0,(pool[s]||0)-ditems[s]);
-      continue;
-    }
-    if(!_ss.size){t._ready=false;pendCnt++;continue}
-    const items={};for(const r of _plan.filter(r=>r.truckId===t.id))items[r.sku]=(items[r.sku]||0)+(r.qty||0);
-    if(Object.keys(items).every(s=>(pool[s]||0)>=items[s])){
-      t._ready=true;readyCnt++;for(const s in items)pool[s]-=items[s];
-    }else{t._ready=false;pendCnt++}
-  }
-
-  const total=tl.length,dispCnt=[...new Set(tl.filter(t=>_disp.has(t.id)).map(t=>t.id))].length;
-  const oorCnt=[...new Set(tl.filter(t=>_oor.has(t.id)).map(t=>t.id))].length;
-  const up72=tl.filter(t=>!_disp.has(t.id)&&!_oor.has(t.id)&&dN(t.date)>=0&&dN(t.date)<=3);
-
-  // ═══ LEFT: INSTRUMENTS ═══
-  let L='';
-  const dispPct=total?Math.round(dispCnt/total*100):0;
-
-  L+='<div class="instr"><div class="instr-label">DISPATCHED</div>';
-  L+='<div class="instr-value" style="color:var(--glow)">'+dispCnt+'<span style="font-size:14px;color:var(--dim)"> / '+total+'</span></div>';
-  L+='<div class="gbar"><div class="gbar-fill" style="width:'+dispPct+'%;background:var(--glow);color:var(--glow)"></div></div>';
-  L+='<div class="instr-sub">'+dispPct+'% COMPLETE</div></div>';
-
-  L+='<div class="instr"><div class="instr-label">READY</div>';
-  L+='<div class="instr-value" style="color:var(--cyan)">'+readyCnt+'</div>';
-  L+='<div class="instr-sub">FULL STOCK COVERAGE</div></div>';
-
-  L+='<div class="instr"><div class="instr-label">PENDING STOCK</div>';
-  L+='<div class="instr-value" style="color:'+(pendCnt?'var(--red)':'var(--glow)')+'">'+pendCnt+'</div>';
-  L+='<div class="instr-sub">WAITING ARRIVALS</div></div>';
-
-  L+='<div class="instr"><div class="instr-label">OOR SUBMITTED</div>';
-  L+='<div class="instr-value" style="color:var(--amber)">'+oorCnt+'</div>';
-  L+='<div class="instr-sub">STOCK RESERVED</div></div>';
-
-  const recent=tl.filter(t=>_disp.has(t.id)&&dN(t.date)>=-3&&dN(t.date)<=0);
-  L+='<div class="instr" style="border-color:var(--cyan)"><div class="instr-label">72H WINDOW</div>';
-  L+='<div style="display:flex;gap:8px;margin-top:4px">';
-  L+='<div style="flex:1;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--glow)">'+(recent.length)+'</div><div style="font-size:8px;color:var(--dim)">SENT</div></div>';
-  L+='<div style="flex:1;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--cyan)">'+up72.length+'</div><div style="font-size:8px;color:var(--dim)">QUEUED</div></div>';
-  L+='</div>';
-  L+='<div class="instr-sub">'+fD(today)+' → '+fD(h72)+'</div></div>';
-
-  // Arrivals
-  if(_arr){
-    const ad=[...new Set(_arr.map(a=>a.readyDate||'').filter(d=>d))].sort();
-    const arv=ad.filter(d=>d<=today).length,a72=ad.filter(d=>d>today&&d<=h72).length,fut=ad.filter(d=>d>h72).length;
-    L+='<div class="instr" onclick="showArrivals()" style="cursor:pointer;border-color:var(--amber)"><div class="instr-label">ARRIVALS ▸</div>';
-    L+='<div style="display:flex;gap:4px;margin-top:4px">';
-    L+='<div style="flex:1;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--glow)">'+arv+'</div><div style="font-size:8px;color:var(--dim)">ARRIVED</div></div>';
-    L+='<div style="flex:1;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--amber)">'+a72+'</div><div style="font-size:8px;color:var(--dim)">NEXT 72H</div></div>';
-    L+='<div style="flex:1;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--dim)">'+fut+'</div><div style="font-size:8px;color:var(--dim)">FUTURE</div></div>';
-    L+='</div></div>';
-  }
-
-  document.getElementById('leftCol').innerHTML=L;
-
-  // ═══ CENTER: DESTINATIONS + 72H ═══
-  let C='';
-
-  // ── Radial gauges: LP, LM, Overall ──
-  const lpPct=total?Math.round(dispCnt/total*100):0;
-  // LM progress: count venues with all items dispatched (approximation from RW dispatch dates)
-  let lmTotal=0,lmDone=0;
-  if(_rw){
-    const venues=new Set();for(const r of _rw)venues.add(r.Venue||'');
-    lmTotal=venues.size;
-    // Estimate: venues whose latest bump-in date has passed = done (rough proxy)
-    const venueBi={};
-    for(const r of _rw){
-      const v=r.Venue||'';const bi=r['Estimated bump-in date']||'';
-      if(!bi)continue;const m=bi.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-      const p=m?m[3]+'-'+m[2]+'-'+m[1]:'';
-      if(p&&(!venueBi[v]||p>venueBi[v]))venueBi[v]=p;
-    }
-    for(const v of venues){if(venueBi[v]&&venueBi[v]<=today)lmDone++}
-  }
-  const lmPct=lmTotal?Math.round(lmDone/lmTotal*100):0;
-  const overallPct=Math.round((lpPct*0.4+lmPct*0.6));// LP=40% weight, LM=60%
-
-  function radialSvg(pct,color,label,sub,size){
-    const r=size/2-8,cx=size/2,cy=size/2;
-    const circ=2*Math.PI*r;
-    const offset=circ-(pct/100)*circ;
-    return '<div class="radial"><svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'
-      // Background rings
-      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--bezel)" stroke-width="4"/>'
-      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-10)+'" fill="none" stroke="var(--bezel)" stroke-width="1" stroke-dasharray="2,4"/>'
-      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+(r+6)+'" fill="none" stroke="var(--bd)" stroke-width="0.5"/>'
-      // Progress arc
-      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="5" stroke-linecap="round"'
-      +' stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'" transform="rotate(-90 '+cx+' '+cy+')"'
-      +' style="filter:drop-shadow(0 0 4px '+color+');transition:stroke-dashoffset 1s"/>'
-      // Tick marks (12 positions like a clock)
-      +Array.from({length:12},(_, i)=>{const a=(i*30-90)*Math.PI/180;const x1=cx+Math.cos(a)*(r+2);const y1=cy+Math.sin(a)*(r+2);const x2=cx+Math.cos(a)*(r+6);const y2=cy+Math.sin(a)*(r+6);return'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--dim)" stroke-width="1"/>'}).join('')
-      // Center text
-      +'<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-family="var(--mono)" font-size="20" font-weight="700" fill="'+color+'" style="text-shadow:0 0 8px '+color+'">'+pct+'%</text>'
-      +'<text x="'+cx+'" y="'+(cy+12)+'" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--dim)">'+sub+'</text>'
-      +'</svg><div class="radial-label">'+label+'</div></div>';
-  }
-
-  C+='<div class="radials">';
-  C+=radialSvg(lpPct,'var(--glow)','LP PROGRESS',dispCnt+'/'+total+' trucks',120);
-  C+=radialSvg(lmPct,'var(--cyan)','LM PROGRESS',lmDone+'/'+lmTotal+' venues',120);
-  C+=radialSvg(overallPct,'var(--amber)','OVERALL',lpPct+'% LP · '+lmPct+'% LM',120);
-  C+='</div>';
-
-  C+='<div class="sec-hd">DESTINATIONS</div>';
-  const bd={};
-  for(const t of tl){
-    if(!bd[t.dest])bd[t.dest]={tot:0,disp:0,rdy:0,pend:0,oor:0,plt:0};
-    bd[t.dest].tot++;bd[t.dest].plt+=t.pallets;
-    if(_disp.has(t.id))bd[t.dest].disp++;else if(_oor.has(t.id))bd[t.dest].oor++;else if(t._ready)bd[t.dest].rdy++;else bd[t.dest].pend++;
-  }
-  const destKeys=Object.keys(bd).sort((a,b)=>{const am=a.toUpperCase().includes('MEX'),bm=b.toUpperCase().includes('MEX'),ac=a.toUpperCase().includes('CAN'),bc=b.toUpperCase().includes('CAN');const ap=am?0:ac?1:2,bp=bm?0:bc?1:2;return ap!==bp?ap-bp:a.localeCompare(b)});
-  for(const d of destKeys){
-    const s=bd[d];const pct=s.tot?Math.round(s.disp/s.tot*100):0;
-    const mx=d.toUpperCase().includes('MEX'),ca=d.toUpperCase().includes('CAN');
-    const fl=mx?'🇲🇽':ca?'🇨🇦':'🇺🇸';
-    C+='<div class="dest" onclick="showDest(\''+d.replace(/'/g,"\\'")+'\')">';
-    C+='<div style="display:flex;justify-content:space-between;align-items:center">';
-    C+='<div class="dest-name">'+fl+' '+clDisp(d)+'</div>';
-    C+='<span style="font-size:10px;color:var(--dim)">'+s.tot+' TRUCKS</span></div>';
-    C+='<div class="dest-badges">';
-    if(s.disp)C+='<span class="b b-gn">'+s.disp+' SENT</span>';
-    if(s.rdy)C+='<span class="b b-cy">'+s.rdy+' READY</span>';
-    if(s.pend)C+='<span class="b b-rd">'+s.pend+' PEND</span>';
-    if(s.oor)C+='<span class="b b-am">'+s.oor+' OOR</span>';
-    C+='</div>';
-    C+='<div class="gbar" style="margin-top:4px"><div class="gbar-fill" style="width:'+pct+'%;background:var(--glow);color:var(--glow)"></div></div>';
-    C+='<div style="font-size:8px;color:var(--dim);margin-top:2px">'+Math.round(s.plt)+' PLT · '+pct+'%</div></div>';
-  }
-
-  // Recently dispatched (last 72h) + queued for dispatch (next 72h)
+function sD(dest){
+  const dt=Object.values(_tr).filter(t=>t.dest===dest).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   const lsr=_ts?.lsrNumbers||{};
-  const recent72=tl.filter(t=>_disp.has(t.id)&&dN(t.date)>=-3&&dN(t.date)<=0);
-  if(recent72.length){
-    C+='<div class="sec-hd" style="margin-top:14px">RECENTLY DISPATCHED (72H)</div>';
-    for(const t of recent72){
-      const pct=Math.round(t.pallets/26*100);
-      C+='<div class="tr-row" onclick="showTruck('+t.id+')" style="opacity:0.7">';
-      C+='<div class="tr-id" style="color:var(--glow)">LP-'+t.id+'</div>';
-      C+='<div class="tr-dest">'+clDisp(t.dest)+'</div>';
-      if(lsr[t.id])C+='<span style="font-size:9px;color:var(--amber)">'+lsr[t.id]+'</span>';
-      C+='<span style="font-size:10px;width:52px;text-align:right;flex-shrink:0">'+t.pallets.toFixed(1)+'</span>';
-      C+='<div class="tr-bar"><div class="tr-bar-f" style="width:'+pct+'%;background:var(--glow)"></div></div>';
-      C+='<span class="b b-gn">SENT</span>';
-      C+='</div>';
-    }
+  let h='<h2>'+cd(dest)+'</h2><div style="margin-bottom:8px;font-size:9px;color:var(--dm)">'+dt.length+' TRUCKS</div>';
+  h+='<table><thead><tr><th>TRUCK</th><th>DATE</th><th>LSR</th><th>PLT</th><th>QTY</th><th>STATUS</th></tr></thead><tbody>';
+  for(const t of dt){
+    const st=_di.has(t.id)?'<span class="B Bg">SENT</span>':_oo.has(t.id)?'<span class="B Ba">OOR</span>':t._r?'<span class="B Bc">READY</span>':'<span class="B Br">PEND</span>';
+    h+='<tr onclick="sT('+t.id+')" style="cursor:pointer"><td style="font-weight:700;color:var(--gn)">LP-'+t.id+'</td><td>'+fD(t.date)+' <span style="color:var(--dm);font-size:8px">'+dL(t.date)+'</span></td><td style="color:var(--am)">'+(lsr[t.id]||'')+'</td><td>'+t.plt.toFixed(1)+'</td><td>'+t.qty+'</td><td>'+st+'</td></tr>';
   }
-
-  if(up72.length){
-    C+='<div class="sec-hd" style="margin-top:14px">NEXT 72H DISPATCH QUEUE</div>';
-    for(const t of up72){
-      const pct=Math.round(t.pallets/26*100);const clr=t._ready?'var(--cyan)':'var(--red)';
-      const dl=dL(t.date);const dlc=dN(t.date)===0?'b-rd':dN(t.date)===1?'b-am':'b-cy';
-      C+='<div class="tr-row" onclick="showTruck('+t.id+')">';
-      C+='<div class="tr-id" style="color:'+clr+'">LP-'+t.id+'</div>';
-      C+='<div class="tr-dest">'+clDisp(t.dest)+'</div>';
-      if(lsr[t.id])C+='<span style="font-size:9px;color:var(--amber)">'+lsr[t.id]+'</span>';
-      C+='<span class="b '+dlc+'">'+dl+'</span>';
-      C+='<span style="font-size:10px;width:52px;text-align:right;flex-shrink:0">'+t.pallets.toFixed(1)+'</span>';
-      C+='<div class="tr-bar"><div class="tr-bar-f" style="width:'+pct+'%;background:'+clr+'"></div></div>';
-      C+='<span class="b '+(t._ready?'b-cy':'b-rd')+'">'+(t._ready?'RDY':'PND')+'</span>';
-      C+='</div>';
-    }
-  }
-
-  if(!recent72.length&&!up72.length){
-    C+='<div class="sec-hd" style="margin-top:14px">72-HOUR WINDOW</div>';
-    C+='<div style="padding:12px;color:var(--dim);font-size:10px">No trucks dispatched or queued in the 72h window.</div>';
-  }
-
-  document.getElementById('centerCol').innerHTML=C;
-
-  // ═══ RIGHT: ALERTS + TIMELINE ═══
-  let R='';
-  const alerts=[];
-
-  for(const t of tl){if(!_disp.has(t.id)&&!_oor.has(t.id)&&dN(t.date)<0)
-    alerts.push({c:'rd',t:'OVERDUE LP-'+t.id,d:clDisp(t.dest)+' · DUE '+fD(t.date)+' · '+Math.abs(dN(t.date))+'D LATE',f:()=>showTruck(t.id)})}
-  for(const t of up72){if(dN(t.date)===0&&!t._ready)
-    alerts.push({c:'rd',t:'TODAY NOT READY LP-'+t.id,d:clDisp(t.dest)+' · MISSING STOCK',f:()=>showTruck(t.id)})}
-  for(const t of up72){if(dN(t.date)===1&&!t._ready)
-    alerts.push({c:'am',t:'TMRW NOT READY LP-'+t.id,d:clDisp(t.dest)+' · CHECK STOCK',f:()=>showTruck(t.id)})}
-  const rdyWait=tl.filter(t=>!_disp.has(t.id)&&!_oor.has(t.id)&&t._ready&&dN(t.date)<=0);
-  if(rdyWait.length)alerts.push({c:'cy',t:rdyWait.length+' TRUCKS READY TO DISPATCH',d:'ALL STOCK AVAILABLE · CAN SEND NOW',f:()=>{
-    let h='<h2>READY FOR DISPATCH</h2><table><thead><tr><th>TRUCK</th><th>DEST</th><th>DATE</th><th>PLT</th></tr></thead><tbody>';
-    for(const t of rdyWait)h+='<tr onclick="showTruck('+t.id+')" style="cursor:pointer"><td style="font-weight:700;color:var(--glow)">LP-'+t.id+'</td><td>'+clDisp(t.dest)+'</td><td>'+fD(t.date)+'</td><td>'+t.pallets.toFixed(1)+'</td></tr>';
-    h+='</tbody></table>';openModal(h)}});
-  if(!alerts.length)alerts.push({c:'gn',t:'ALL CLEAR',d:'NO OVERDUE · NO URGENT ACTIONS'});
-
-  R+='<div class="sec-hd">⚠ ALERTS</div>';
-  for(const a of alerts){
-    R+='<div class="alert al-'+a.c+'" '+(a.f?'onclick="('+a.f.toString()+')()"':'')+' style="cursor:pointer">';
-    R+='<div class="al-title" style="color:var(--'+(a.c==='rd'?'red':a.c==='am'?'amber':a.c==='cy'?'cyan':'glow')+')">'+a.t+'</div>';
-    R+='<div class="al-desc">'+a.d+'</div></div>';
-  }
-
-  R+='<div class="sec-hd" style="margin-top:12px">TIMELINE</div>';
-  const ms=[
-    {d:'2026-03-09',l:'FIRST CONTAINER',c:'var(--glow)'},
-    {d:'2026-03-16',l:'FIRST LP TRUCK',c:'var(--glow)'},
-    {d:'2026-04-01',l:'USA BUCKET START',c:'var(--cyan)'},
-    {d:'2026-04-03',l:'FIRST LM TRUCK',c:'var(--cyan)'},
-    {d:'2026-04-15',l:'FIRST BUMP-IN',c:'var(--amber)'},
-    {d:'2026-04-29',l:'LAST LP TRUCK',c:'var(--glow)'},
-    {d:'2026-06-09',l:'LAST LM TRUCK',c:'var(--cyan)'},
-    {d:'2026-06-11',l:'★ KICKOFF',c:'var(--amber)'},
-  ];
-  for(const m of ms){
-    const n=dN(m.d);const past=n!==null&&n<0;
-    R+='<div class="tl-r'+(past?' tl-past':'')+'"><div class="tl-d">'+fD(m.d)+'</div><div class="tl-dot" style="background:'+m.c+'"></div><div class="tl-txt">'+m.l+(n!==null&&n>=0?' <span class="b b-cy">'+dL(m.d)+'</span>':'')+'</div></div>';
-  }
-
-  R+='<div style="margin-top:16px;padding-top:8px;border-top:1px solid var(--bd);font-size:8px;color:var(--dim);text-align:center;letter-spacing:1px">GENERATED '+now.toLocaleString().toUpperCase()+'<br>ML3K SUPABASE LIVE DATA</div>';
-
-  document.getElementById('rightCol').innerHTML=R;
+  h+='</tbody></table>';om(h);
 }
 
-setInterval(()=>{
-  const n=new Date();
-  document.getElementById('clock').textContent=n.toLocaleTimeString('en-US',{hour12:false});
-  const k=new Date('2026-06-11');const d=Math.ceil((k-n)/864e5);
-  document.getElementById('kickoff').textContent='T-'+d+' DAYS';
-},1000);
+function sA(){
+  if(!_a)return;const bd={};for(const a of _a){const rd=a.readyDate||'';if(!rd)continue;if(!bd[rd])bd[rd]=[];bd[rd].push(a)}
+  const td=new Date().toISOString().slice(0,10);
+  let h='<h2>ARRIVALS</h2><table><thead><tr><th>DATE</th><th>STATUS</th><th>ITEMS</th><th>QTY</th></tr></thead><tbody>';
+  for(const d of Object.keys(bd).sort()){
+    const it=bd[d];const q=it.reduce((s,a)=>s+(a.qty||0),0);
+    const st=d<=td?'<span class="B Bg">ARRIVED</span>':dN(d)<=3?'<span class="B Ba">'+dL(d)+'</span>':'<span class="B Bc">'+dL(d)+'</span>';
+    h+='<tr><td style="color:var(--wh)">'+fW(d)+'</td><td>'+st+'</td><td>'+it.length+'</td><td>'+q.toLocaleString()+'</td></tr>';
+  }
+  h+='</tbody></table>';om(h);
+}
 
-generate();
+let _wf={};
+async function gen(){
+  const now=new Date(),td=now.toISOString().slice(0,10),h72=new Date(now.getTime()+72*36e5).toISOString().slice(0,10);
+  [_p,_ts,_a,_n,_sk,_rw]=await Promise.all([g('lp-plan'),g('lp-truck-state'),g('lp-arrivals'),g('lp-nom'),g('fm-stock'),g('fm-rw')]);
+  _di=new Set(_ts?.dispatched||[]);_oo=new Set(_ts?.oorTrucks||[]);
+  _ss=new Set(_sk?.skus||_ts?.stockSkus||[]);_sq=_sk?.qtys||{};
+
+  _tr={};if(_p)for(const r of _p){if(!_tr[r.truckId])_tr[r.truckId]={id:r.truckId,dest:r.destination,date:r.date,plt:0,qty:0,sc:0,_s:new Set()};_tr[r.truckId].plt+=r.pallets||0;_tr[r.truckId].qty+=r.qty||0;_tr[r.truckId]._s.add(r.sku)}
+  for(const t of Object.values(_tr))t.sc=t._s.size;
+
+  const pool={};if(_ss.size)for(const s of _ss)pool[s]=_sq[s]!==undefined?_sq[s]:Infinity;
+  _wf={};
+  const tl=Object.values(_tr).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  let rC=0,pC=0;
+  for(const t of tl){
+    const sn={};for(const s in pool)sn[s]=pool[s];_wf[t.id]=sn;
+    if(_oo.has(t.id)){t._r=true;continue}
+    if(_di.has(t.id)){t._r=true;const di={};for(const r of _p.filter(r=>r.truckId===t.id))di[r.sku]=(di[r.sku]||0)+(r.qty||0);for(const s in di)if(pool[s]!==undefined)pool[s]=Math.max(0,(pool[s]||0)-di[s]);continue}
+    if(!_ss.size){t._r=false;pC++;continue}
+    const it={};for(const r of _p.filter(r=>r.truckId===t.id))it[r.sku]=(it[r.sku]||0)+(r.qty||0);
+    if(Object.keys(it).every(s=>(pool[s]||0)>=it[s])){t._r=true;rC++;for(const s in it)pool[s]-=it[s]}else{t._r=false;pC++}
+  }
+  const tot=tl.length,dC=tl.filter(t=>_di.has(t.id)).length,oC=tl.filter(t=>_oo.has(t.id)).length;
+  const lsr=_ts?.lsrNumbers||{};
+  const up72=tl.filter(t=>!_di.has(t.id)&&!_oo.has(t.id)&&dN(t.date)>=0&&dN(t.date)<=3);
+  const rec72=tl.filter(t=>_di.has(t.id)&&dN(t.date)>=-3&&dN(t.date)<=0);
+
+  // LM progress
+  let lmT=0,lmD=0;
+  if(_rw){const vs=new Set();for(const r of _rw)vs.add(r.Venue||'');lmT=vs.size;const vb={};for(const r of _rw){const v=r.Venue||'',bi=r['Estimated bump-in date']||'';if(!bi)continue;const m=bi.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);const p=m?m[3]+'-'+m[2]+'-'+m[1]:'';if(p&&(!vb[v]||p>vb[v]))vb[v]=p}for(const v of vs)if(vb[v]&&vb[v]<=td)lmD++}
+  const lpP=tot?Math.round(dC/tot*100):0,lmP=lmT?Math.round(lmD/lmT*100):0,ovP=Math.round(lpP*0.4+lmP*0.6);
+
+  // Radial SVG
+  function rg(pct,clr,lbl,sub,sz){
+    const r=sz/2-6,cx=sz/2,cy=sz/2,c=2*Math.PI*r,o=c-(pct/100)*c;
+    const ticks=Array.from({length:12},(_,i)=>{const a=(i*30-90)*Math.PI/180;return'<line x1="'+(cx+Math.cos(a)*(r+1))+'" y1="'+(cy+Math.sin(a)*(r+1))+'" x2="'+(cx+Math.cos(a)*(r+4))+'" y2="'+(cy+Math.sin(a)*(r+4))+'" stroke="var(--dm)" stroke-width="0.7"/>'}).join('');
+    return'<div style="text-align:center"><svg width="'+sz+'" height="'+sz+'" viewBox="0 0 '+sz+' '+sz+'" style="filter:drop-shadow(0 0 6px rgba(0,255,136,0.1))">'
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--bz)" stroke-width="3"/>'
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-8)+'" fill="none" stroke="var(--bz)" stroke-width="0.5" stroke-dasharray="1.5,3"/>'
+      +ticks
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+clr+'" stroke-width="4" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+o+'" transform="rotate(-90 '+cx+' '+cy+')" style="transition:stroke-dashoffset 0.8s"/>'
+      +'<text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-family="var(--mn)" font-size="16" font-weight="700" fill="'+clr+'" style="text-shadow:0 0 6px '+clr+'">'+pct+'%</text>'
+      +'<text x="'+cx+'" y="'+(cy+10)+'" text-anchor="middle" font-family="var(--mn)" font-size="7" fill="var(--dm)">'+sub+'</text>'
+      +'</svg><div style="font-size:7px;letter-spacing:1.5px;color:var(--dm);margin-top:2px">'+lbl+'</div></div>';
+  }
+
+  // ═══ LEFT ═══
+  let L='';
+  L+='<div class="I"><div class="I-l">DISPATCHED</div><div class="I-v" style="color:var(--gn)">'+dC+'<span style="font-size:12px;color:var(--dm)"> / '+tot+'</span></div><div class="mg"><div class="mg-f" style="width:'+lpP+'%;background:var(--gn);color:var(--gn)"></div></div><div class="I-s">'+lpP+'% COMPLETE</div></div>';
+  L+='<div class="I"><div class="I-l">READY</div><div class="I-v" style="color:var(--cy)">'+rC+'</div><div class="I-s">FULL STOCK</div></div>';
+  L+='<div class="I"><div class="I-l">PENDING</div><div class="I-v" style="color:'+(pC?'var(--rd)':'var(--gn)')+'">'+pC+'</div><div class="I-s">AWAITING STOCK</div></div>';
+  L+='<div class="I"><div class="I-l">OOR</div><div class="I-v" style="color:var(--am)">'+oC+'</div><div class="I-s">RESERVED</div></div>';
+  // 72H
+  L+='<div class="I" style="border-color:rgba(0,212,255,0.3)"><div class="I-l">72H WINDOW</div><div style="display:flex;gap:4px;margin-top:2px"><div style="flex:1;text-align:center"><div style="font-size:14px;font-weight:700;color:var(--gn)">'+rec72.length+'</div><div style="font-size:7px;color:var(--dm)">SENT</div></div><div style="flex:1;text-align:center"><div style="font-size:14px;font-weight:700;color:var(--cy)">'+up72.length+'</div><div style="font-size:7px;color:var(--dm)">QUEUE</div></div></div><div class="I-s">'+fD(td)+' → '+fD(h72)+'</div></div>';
+  // Arrivals
+  if(_a){const ad=[...new Set(_a.map(a=>a.readyDate||'').filter(d=>d))].sort();const av=ad.filter(d=>d<=td).length,a7=ad.filter(d=>d>td&&d<=h72).length,af=ad.filter(d=>d>h72).length;
+  L+='<div class="I" onclick="sA()" style="cursor:pointer;border-color:rgba(255,179,0,0.2)"><div class="I-l">ARRIVALS ▸</div><div style="display:flex;gap:4px;margin-top:2px"><div style="flex:1;text-align:center"><div style="font-size:14px;font-weight:700;color:var(--gn)">'+av+'</div><div style="font-size:7px;color:var(--dm)">IN</div></div><div style="flex:1;text-align:center"><div style="font-size:14px;font-weight:700;color:var(--am)">'+a7+'</div><div style="font-size:7px;color:var(--dm)">72H</div></div><div style="flex:1;text-align:center"><div style="font-size:14px;font-weight:700;color:var(--dm)">'+af+'</div><div style="font-size:7px;color:var(--dm)">FUT</div></div></div></div>'}
+  document.getElementById('L').innerHTML=L;
+
+  // ═══ CENTER ═══
+  let C='';
+  // Radial gauges
+  C+='<div class="RG">'+rg(lpP,'var(--gn)','LP PROGRESS',dC+'/'+tot,100)+rg(lmP,'var(--cy)','LM PROGRESS',lmD+'/'+lmT,100)+rg(ovP,'var(--am)','OVERALL',lpP+'%LP · '+lmP+'%LM',100)+'</div>';
+  // Destinations
+  C+='<div class="S">DESTINATIONS</div>';
+  const bd={};for(const t of tl){if(!bd[t.dest])bd[t.dest]={t:0,d:0,r:0,p:0,o:0,pl:0};bd[t.dest].t++;bd[t.dest].pl+=t.plt;if(_di.has(t.id))bd[t.dest].d++;else if(_oo.has(t.id))bd[t.dest].o++;else if(t._r)bd[t.dest].r++;else bd[t.dest].p++}
+  const dk=Object.keys(bd).sort((a,b)=>{const am=a.toUpperCase().includes('MEX'),bm=b.toUpperCase().includes('MEX'),ac=a.toUpperCase().includes('CAN'),bc=b.toUpperCase().includes('CAN');return(am?0:ac?1:2)-(bm?0:bc?1:2)||a.localeCompare(b)});
+  C+='<div class="dg">';
+  for(const d of dk){
+    const s=bd[d],pc=s.t?Math.round(s.d/s.t*100):0;
+    const mx=d.toUpperCase().includes('MEX'),ca=d.toUpperCase().includes('CAN');
+    C+='<div class="D" onclick="sD(\''+d.replace(/'/g,"\\'")+'\')">';
+    C+='<div class="D-n">'+(mx?'🇲🇽':ca?'🇨🇦':'🇺🇸')+' '+cd(d)+'</div>';
+    C+='<div class="D-b">';
+    if(s.d)C+='<span class="B Bg">'+s.d+'</span>';if(s.r)C+='<span class="B Bc">'+s.r+'</span>';if(s.p)C+='<span class="B Br">'+s.p+'</span>';if(s.o)C+='<span class="B Ba">'+s.o+'</span>';
+    C+='</div>';
+    C+='<div class="mg"><div class="mg-f" style="width:'+pc+'%;background:var(--gn);color:var(--gn)"></div></div></div>';
+  }
+  C+='</div>';
+  // 72h trucks
+  if(rec72.length||up72.length){
+    C+='<div class="S" style="margin-top:6px">'+(rec72.length?'RECENT':'')+(rec72.length&&up72.length?' + ':'')+(up72.length?'QUEUE':'')+'</div>';
+    for(const t of rec72){C+='<div class="T" onclick="sT('+t.id+')" style="opacity:0.6"><span style="width:44px;color:var(--gn);font-weight:700">LP-'+t.id+'</span><span style="flex:1;color:var(--dm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+cd(t.dest)+'</span>'+(lsr[t.id]?'<span style="color:var(--am);font-size:8px">'+lsr[t.id]+'</span>':'')+'<span style="width:36px;text-align:right">'+t.plt.toFixed(1)+'</span><span class="B Bg">SENT</span></div>'}
+    for(const t of up72){const cl=t._r?'var(--cy)':'var(--rd)';C+='<div class="T" onclick="sT('+t.id+')"><span style="width:44px;color:'+cl+';font-weight:700">LP-'+t.id+'</span><span style="flex:1;color:var(--dm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+cd(t.dest)+'</span>'+(lsr[t.id]?'<span style="color:var(--am);font-size:8px">'+lsr[t.id]+'</span>':'')+'<span class="B '+(dN(t.date)===0?'Br':dN(t.date)===1?'Ba':'Bc')+'">'+dL(t.date)+'</span><span style="width:36px;text-align:right">'+t.plt.toFixed(1)+'</span><span class="B '+(t._r?'Bc':'Br')+'">'+(t._r?'RDY':'PND')+'</span></div>'}
+  }
+  document.getElementById('C').innerHTML=C;
+
+  // ═══ RIGHT ═══
+  let R='';const al=[];
+  for(const t of tl){if(!_di.has(t.id)&&!_oo.has(t.id)&&dN(t.date)<0)al.push({c:'r',t:'OVERDUE LP-'+t.id,d:cd(t.dest)+' · '+Math.abs(dN(t.date))+'D',f:()=>sT(t.id)})}
+  for(const t of up72){if(dN(t.date)===0&&!t._r)al.push({c:'r',t:'TODAY LP-'+t.id,d:cd(t.dest)+' · NO STK',f:()=>sT(t.id)})}
+  for(const t of up72){if(dN(t.date)===1&&!t._r)al.push({c:'a',t:'TMRW LP-'+t.id,d:cd(t.dest)+' · CHECK',f:()=>sT(t.id)})}
+  const rw=tl.filter(t=>!_di.has(t.id)&&!_oo.has(t.id)&&t._r&&dN(t.date)<=0);
+  if(rw.length)al.push({c:'c',t:rw.length+' READY TO SEND',d:'STOCK OK · DISPATCH NOW',f:()=>{let h='<h2>READY</h2><table><thead><tr><th>TRUCK</th><th>DEST</th><th>DATE</th><th>PLT</th></tr></thead><tbody>';for(const t of rw)h+='<tr onclick="sT('+t.id+')" style="cursor:pointer"><td style="color:var(--gn);font-weight:700">LP-'+t.id+'</td><td>'+cd(t.dest)+'</td><td>'+fD(t.date)+'</td><td>'+t.plt.toFixed(1)+'</td></tr>';h+='</tbody></table>';om(h)}});
+  if(!al.length)al.push({c:'g',t:'ALL CLEAR',d:'NO OVERDUE · NO URGENT'});
+
+  R+='<div class="S">⚠ ALERTS</div>';
+  for(const a of al)R+='<div class="A A'+a.c+'" '+(a.f?'onclick="('+a.f.toString()+')()"':'')+'><div style="font-weight:700;letter-spacing:0.3px;color:var(--'+(a.c==='r'?'rd':a.c==='a'?'am':a.c==='c'?'cy':'gn')+')">'+a.t+'</div><div style="font-size:8px;color:var(--dm);margin-top:1px">'+a.d+'</div></div>';
+
+  R+='<div class="S" style="margin-top:8px">TIMELINE</div>';
+  const ms=[{d:'2026-03-09',l:'1ST CONTAINER',c:'var(--gn)'},{d:'2026-03-16',l:'1ST LP TRUCK',c:'var(--gn)'},{d:'2026-04-01',l:'USA START',c:'var(--cy)'},{d:'2026-04-03',l:'1ST LM TRUCK',c:'var(--cy)'},{d:'2026-04-15',l:'1ST BUMP-IN',c:'var(--am)'},{d:'2026-04-29',l:'LAST LP',c:'var(--gn)'},{d:'2026-06-09',l:'LAST LM',c:'var(--cy)'},{d:'2026-06-11',l:'★ KICKOFF',c:'var(--am)'}];
+  for(const m of ms){const n=dN(m.d);R+='<div class="TL'+(n<0?' TL-p':'')+'"><div class="TL-d">'+fD(m.d)+'</div><div class="TL-o" style="background:'+m.c+'"></div><div class="TL-t">'+m.l+(n>=0?' <span class="B Bc">'+dL(m.d)+'</span>':'')+'</div></div>'}
+
+  R+='<div style="margin-top:8px;padding-top:4px;border-top:1px solid var(--bd);font-size:7px;color:var(--dm);text-align:center;letter-spacing:1px">'+now.toLocaleTimeString()+' · ML3K LIVE</div>';
+  document.getElementById('R').innerHTML=R;
+}
+
+setInterval(()=>{const n=new Date();document.getElementById('ck').textContent=n.toLocaleTimeString('en-US',{hour12:false});const d=Math.ceil((new Date('2026-06-11')-n)/864e5);document.getElementById('ko').textContent='T-'+d},1000);
+gen();
 </script>
 </body>
 </html>
