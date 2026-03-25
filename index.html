@@ -12678,9 +12678,10 @@ if(cv==="dashboard"){
     }
     if(_asmRows.length>0){
       _asmRows.sort((a,b)=>a.dd.localeCompare(b.dd)||a.truckId.localeCompare(b.truckId)||a.sku.localeCompare(b.sku));
+      window._asmTimelineData=_asmRows;
       const _asmTotalQty=_asmRows.reduce((s,r)=>s+r.qty,0);
       const _asmSkus=new Set(_asmRows.map(r=>r.sku)).size;
-      h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span></div>
+      h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></div>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
       <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th></tr></thead><tbody>`;
       let _prevDd='';
@@ -13415,6 +13416,43 @@ function _oorSheet(wb,sheetName,truckId,dest,venue,items,opts){
     cl(R,1,idx+1,fValB,alC,rFill,brd);cl(R,2,item.sku,fData,alL,rFill,brd);cl(R,3,item.name,fData,alL,rFill,brd);
     cl(R,4,item.src||'',fData,alC,rFill,brd);cl(R,5,item.uom||'Each',fData,alC,rFill,brd);cl(R,6,item.qty,fValB,alC,rFill,brd);
   });
+}
+async function LM_exportAsmTimeline(){
+  const rows=window._asmTimelineData;if(!rows||!rows.length)return;
+  try{
+    const wb=new ExcelJS.Workbook();
+    const ws=wb.addWorksheet('Assembly Timeline');
+    ws.columns=[
+      {header:'Dispatch Date',key:'dd',width:14},
+      {header:'Day',key:'dow',width:6},
+      {header:'Truck',key:'truckId',width:10},
+      {header:'Destination',key:'dest',width:30},
+      {header:'SKU',key:'sku',width:18},
+      {header:'Item',key:'nm',width:35},
+      {header:'Source',key:'src',width:10},
+      {header:'Qty',key:'qty',width:10}
+    ];
+    const hdrRow=ws.getRow(1);
+    hdrRow.font={bold:true,size:10};
+    hdrRow.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
+    hdrRow.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};
+    rows.forEach(r=>{
+      const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
+      ws.addRow({dd:dt?dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'',
+        dow:dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'',
+        truckId:r.truckId,dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty});
+    });
+    // Total row
+    const totRow=ws.addRow({dd:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
+    totRow.font={bold:true};totRow.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
+    totRow.border={top:{style:'medium',color:{argb:'FFE2E4E9'}}};
+    // Style qty column as numbers
+    ws.getColumn('qty').numFmt='#,##0';ws.getColumn('qty').alignment={horizontal:'right'};
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='Assembly_Timeline_'+new Date().toISOString().slice(0,10)+'.xlsx';a.click();URL.revokeObjectURL(a.href);
+  }catch(e){console.error('Assembly export error:',e);alert('Export failed: '+e.message)}
 }
 async function exportTruck(truckIdx){
   const t=LP.allT[truckIdx];if(!t)return;
