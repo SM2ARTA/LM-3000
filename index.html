@@ -12719,6 +12719,59 @@ if(cv==="dashboard"){
     }
   }
 
+  // ── Kitting Timeline (FF&E kits) ──
+  {
+    const _kitRows=[];
+    const _kitSeen=new Set();
+    for(const label in PLAN_CACHE){
+      const P2=PLAN_CACHE[label];if(!P2)continue;
+      P2.allT.forEach(t=>{
+        if(LM_excluded.has(t.id))return;
+        t.items.forEach(it=>{
+          const nm=NOM[it.sku];if(!nm||!nm._kitNom)return;
+          if(!it.sku.startsWith('FNKIT'))return;// FF&E kits only
+          const kit=LM_getKitById(nm._kitId);if(!kit)return;
+          const k=t.id+'|'+it.sku;
+          if(_kitSeen.has(k))return;_kitSeen.add(k);
+          const dd=t.dd||'';
+          const dest=t.destDisplay||t.destLabel||label;
+          const readiness=LM_kitReadiness(kit.id);
+          _kitRows.push({dd,truckId:t.id,sku:it.sku,kitName:kit.name||it.sku,venue:kit.venue,dest,
+            items:kit.items,compCount:kit.items.length,readiness});
+        });
+      });
+    }
+    if(_kitRows.length>0){
+      _kitRows.sort((a,b)=>a.dd.localeCompare(b.dd)||a.truckId.localeCompare(b.truckId));
+      window._kitTimelineData=_kitRows;
+      const _kitTotal=_kitRows.length;
+      const _kitComps=_kitRows.reduce((s,r)=>s+r.compCount,0);
+      h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">📦 Kitting Timeline <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${_kitTotal} kits</span> <span class="bg bgs bg-gy">${_kitComps} components</span><button class="rbtn" onclick="LM_exportKitTimeline()" style="margin-left:auto;background:var(--gs);color:var(--gn);border-color:#B8DFCA">⬇ Excel</button></div>
+      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">FF&E kits requiring warehouse kitting before dispatch — grouped by dispatch date</p>
+      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>Kit</th><th>Venue</th><th style="text-align:center">Components</th><th style="text-align:center">Readiness</th></tr></thead><tbody>`;
+      let _prevDd='';
+      _kitRows.forEach(r=>{
+        const isNewDate=r.dd!==_prevDd;_prevDd=r.dd;
+        const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
+        const dateStr=dt?fS(dt):'—';
+        const dow=dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'';
+        const rPct=r.readiness.pct;
+        const rColor=rPct>=100?'var(--gn)':rPct>=50?'var(--or)':'var(--rd)';
+        const rBg=rPct>=100?'var(--gs)':rPct>=50?'var(--os)':'var(--rs)';
+        const compList=r.items.map(i=>{const n=NOM[i.sku];return(n?.nm||i.sku)+' ×'+i.qty}).join(', ');
+        h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
+          <td class="fw6">${isNewDate?dateStr+' <span style="color:var(--tt);font-weight:400">'+dow+'</span>':''}</td>
+          <td class="mono fw6">${r.truckId}</td>
+          <td style="font-size:10px">${r.dest}</td>
+          <td style="font-size:10px;font-weight:600;color:var(--tp)" title="${compList}">${r.kitName}</td>
+          <td style="font-size:10px;color:var(--ts)">${r.venue}</td>
+          <td class="mono" style="text-align:center">${r.compCount}</td>
+          <td style="text-align:center"><span class="bg bgs" style="background:${rBg};color:${rColor}">${rPct}% (${r.readiness.inStock}/${r.readiness.total})</span></td></tr>`;
+      });
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="5">Total</td><td class="mono" style="text-align:center">${_kitComps}</td><td></td></tr></tfoot></table></div>`;
+    }
+  }
+
   // ── Venue/Cluster summary ──
   _dashCalMap=calMap;// save for day-detail popup
   // Save filter context so showDayDetail only shows trucks for current view
@@ -13468,6 +13521,49 @@ async function LM_exportAsmTimeline(){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='Assembly_Timeline_'+new Date().toISOString().slice(0,10)+'.xlsx';a.click();URL.revokeObjectURL(a.href);
   }catch(e){console.error('Assembly export error:',e);alert('Export failed: '+e.message)}
+}
+async function LM_exportKitTimeline(){
+  const rows=window._kitTimelineData;if(!rows||!rows.length)return;
+  try{
+    const wb=new ExcelJS.Workbook();
+    const ws=wb.addWorksheet('Kitting Timeline');
+    ws.columns=[
+      {header:'Dispatch Date',key:'dd',width:14},
+      {header:'Day',key:'dow',width:6},
+      {header:'Truck',key:'truckId',width:10},
+      {header:'Destination',key:'dest',width:28},
+      {header:'Kit',key:'kitName',width:22},
+      {header:'Venue',key:'venue',width:28},
+      {header:'Component SKU',key:'compSku',width:18},
+      {header:'Component Name',key:'compNm',width:35},
+      {header:'Qty',key:'compQty',width:8},
+      {header:'Readiness',key:'readiness',width:12}
+    ];
+    const hdr=ws.getRow(1);
+    hdr.font={bold:true,size:10};
+    hdr.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
+    hdr.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};
+    rows.forEach(r=>{
+      const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
+      const dateStr=dt?dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+      const dowStr=dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'';
+      r.items.forEach((item,i)=>{
+        const n=NOM[item.sku];
+        ws.addRow({dd:i===0?dateStr:'',dow:i===0?dowStr:'',truckId:i===0?r.truckId:'',
+          dest:i===0?r.dest:'',kitName:i===0?r.kitName:'',venue:i===0?r.venue:'',
+          compSku:item.sku,compNm:n?.nm||item.sku,compQty:item.qty,
+          readiness:i===0?r.readiness.pct+'%':''});
+      });
+    });
+    const totRow=ws.addRow({dd:'Total',compQty:rows.reduce((s,r)=>s+r.items.reduce((ss,i)=>ss+i.qty,0),0)});
+    totRow.font={bold:true};totRow.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
+    totRow.border={top:{style:'medium',color:{argb:'FFE2E4E9'}}};
+    ws.getColumn('compQty').numFmt='#,##0';ws.getColumn('compQty').alignment={horizontal:'right'};
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='Kitting_Timeline_'+new Date().toISOString().slice(0,10)+'.xlsx';a.click();URL.revokeObjectURL(a.href);
+  }catch(e){console.error('Kit export error:',e);alert('Export failed: '+e.message)}
 }
 async function exportTruck(truckIdx){
   const t=LP.allT[truckIdx];if(!t)return;
