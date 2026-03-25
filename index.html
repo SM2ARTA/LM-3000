@@ -9785,7 +9785,7 @@ async function LM_loadPalletCfg(){
 }
 
 // ── Pallet Config Modal UI ──
-let _pcVt='Stadium';let _pcSrc='';let _pcCountry='USA';let _pcSearch='';
+let _pcVt='Stadium';let _pcSrc='';let _pcCountry='USA';let _pcSearch='';let _pcSearchCaret=0;
 function showPalletCfg(){
   // Auto-select first venue type present in Material Plan
   const availableVTs=LM_VENUE_TYPE_LIST.filter(vt=>LM_vtSkuMap[vt]);
@@ -9865,7 +9865,7 @@ function _renderPalletCfg(){
     <span class="bg bg-gy">${filtered.length} SKUs</span>
     <span style="font-size:10px;color:var(--ts)">${countryNote}</span>
   </div>
-  <div style="margin-bottom:10px"><input type="text" placeholder="Search SKU or item name…" value="${_pcSearch.replace(/"/g,'&quot;')}" oninput="_pcSearch=this.value;_renderPalletCfg()" style="padding:6px 12px;border-radius:6px;border:1px solid var(--bd);font-size:11px;font-family:var(--fd);width:100%;box-sizing:border-box;outline:none"></div>
+  <div style="margin-bottom:10px"><input id="_pcSearchInput" type="text" placeholder="Search SKU or item name…" value="${_pcSearch.replace(/"/g,'&quot;')}" oninput="_pcSearch=this.value;_pcSearchCaret=this.selectionStart;_renderPalletCfg()" style="padding:6px 12px;border-radius:6px;border:1px solid var(--bd);font-size:11px;font-family:var(--fd);width:100%;box-sizing:border-box;outline:none"></div>
   ${mpSkus.size===0?'<div class="note note-or" style="margin-bottom:10px">No Material Plan data found for <strong>'+_pcVt+'</strong>'+(isStaIbc?'':' in <strong>'+_pcCountry+'</strong>')+'. Upload a Material Plan to see venue-specific nomenclatures.</div>':''}
   <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--bl);border-radius:8px">
   <table class="dtb" style="font-size:10px"><thead><tr>
@@ -9901,6 +9901,7 @@ function _renderPalletCfg(){
   }
   h+=`</tbody></table></div></div></div></div>`;
   document.getElementById('mr').innerHTML=h;
+  if(_pcSearch){const si=document.getElementById('_pcSearchInput');if(si){si.focus();si.setSelectionRange(_pcSearchCaret,_pcSearchCaret)}}
 }
 function _pcToggle(sku){
   const cfg=LM_palletCfg[_pcVt];if(!cfg)return;
