@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FF&E OPS — COCKPIT</title>
+<title>FF&E RADAR</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
 :root{--bg:#080C10;--panel:#0D1117;--bezel:#1B2130;--bd:#253040;--glow:#00FF88;--glow2:#00CC6A;--amber:#FFB300;--amber2:#FF8F00;--red:#FF3D3D;--cyan:#00D4FF;--white:#D0D8E8;--dim:#4A5568;--mono:'Share Tech Mono',monospace;--fm:'IBM Plex Mono',monospace}
@@ -11,10 +11,23 @@
 body{font-family:var(--mono);background:var(--bg);color:var(--glow);min-height:100vh;overflow-x:hidden}
 
 /* Scanline overlay */
-body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,0.015) 2px,rgba(0,255,136,0.015) 4px);z-index:999}
+body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,0.012) 2px,rgba(0,255,136,0.012) 4px);z-index:999}
+
+/* Radar sweep */
+@keyframes sweep{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.radar-bg{position:fixed;top:50%;left:50%;width:900px;height:900px;margin:-450px 0 0 -450px;pointer-events:none;z-index:0;opacity:0.04}
+.radar-bg::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:50%;border:1px solid var(--glow)}
+.radar-bg::after{content:'';position:absolute;top:0;left:50%;width:50%;height:50%;transform-origin:bottom left;background:linear-gradient(90deg,transparent,rgba(0,255,136,0.3));animation:sweep 8s linear infinite;border-radius:0 100% 0 0}
+.radar-ring{position:fixed;border-radius:50%;border:1px solid rgba(0,255,136,0.03);pointer-events:none;z-index:0}
+.radar-ring-1{top:50%;left:50%;width:600px;height:600px;margin:-300px 0 0 -300px}
+.radar-ring-2{top:50%;left:50%;width:400px;height:400px;margin:-200px 0 0 -200px}
+.radar-ring-3{top:50%;left:50%;width:200px;height:200px;margin:-100px 0 0 -100px}
+.radar-cross{position:fixed;pointer-events:none;z-index:0;opacity:0.03}
+.radar-cross-h{top:50%;left:50%;width:900px;height:1px;margin-top:0;margin-left:-450px;background:var(--glow)}
+.radar-cross-v{top:50%;left:50%;width:1px;height:900px;margin-top:-450px;margin-left:0;background:var(--glow)}
 
 /* Top HUD */
-.hud{display:flex;justify-content:space-between;align-items:center;padding:8px 20px;background:var(--panel);border-bottom:2px solid var(--glow);position:relative}
+.hud{display:flex;justify-content:space-between;align-items:center;padding:8px 20px;background:var(--panel);border-bottom:2px solid var(--glow);position:relative;z-index:1}
 .hud::before{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--glow),transparent);opacity:0.5}
 .hud-title{font-size:14px;letter-spacing:4px;color:var(--glow);text-shadow:0 0 10px rgba(0,255,136,0.5)}
 .hud-clock{font-size:20px;color:var(--glow);text-shadow:0 0 15px rgba(0,255,136,0.6)}
@@ -33,7 +46,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-even
 .gbar-fill{height:100%;border-radius:1px;box-shadow:0 0 6px currentColor}
 
 /* Grid layout */
-.cockpit{display:grid;grid-template-columns:260px 1fr 280px;gap:0;min-height:calc(100vh - 44px)}
+.cockpit{display:grid;grid-template-columns:260px 1fr 280px;gap:0;min-height:calc(100vh - 44px);position:relative;z-index:1}
 .col-l{background:var(--bg);padding:12px;border-right:1px solid var(--bd)}
 .col-c{background:var(--bg);padding:12px 16px}
 .col-r{background:var(--bg);padding:12px;border-left:1px solid var(--bd)}
@@ -101,10 +114,18 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-even
 </head>
 <body>
 
+<!-- Radar background -->
+<div class="radar-bg"></div>
+<div class="radar-ring radar-ring-1"></div>
+<div class="radar-ring radar-ring-2"></div>
+<div class="radar-ring radar-ring-3"></div>
+<div class="radar-cross radar-cross-h"></div>
+<div class="radar-cross radar-cross-v"></div>
+
 <div class="hud">
   <div style="display:flex;align-items:center;gap:16px">
-    <div class="hud-title">FF&E OPS COCKPIT</div>
-    <span style="font-size:9px;color:var(--dim);letter-spacing:1px">FIFA WORLD CUP 2026™ · MATERIALS</span>
+    <div class="hud-title">FF&E RADAR</div>
+    <span style="font-size:9px;color:var(--dim);letter-spacing:1px">FIFA WORLD CUP 2026™ · MATERIALS MANAGEMENT</span>
   </div>
   <div style="display:flex;align-items:center;gap:16px">
     <div class="hud-clock" id="clock">--:--:--</div>
@@ -147,9 +168,10 @@ function showTruck(id){
   h+='<span style="color:var(--amber)">'+fDw(t.date)+' ('+dL(t.date)+')</span></div>';
   h+='<table><thead><tr><th>SKU</th><th>ITEM</th><th>QTY</th><th>PLT</th><th>STOCK</th></tr></thead><tbody>';
   const agg={};for(const r of rows){if(!agg[r.sku])agg[r.sku]={sku:r.sku,name:r.name||'',qty:0,plt:0};agg[r.sku].qty+=r.qty||0;agg[r.sku].plt+=r.pallets||0}
+  const wf=_wfSnap[id]||{};
   for(const s of Object.values(agg).sort((a,b)=>b.plt-a.plt)){
-    const inS=_ss.has(s.sku);const sq=_sq[s.sku];
-    const stk=!inS?'<span class="b b-rd">NO STK</span>':(sq!==undefined&&sq<s.qty?'<span class="b b-am">LOW '+sq+'</span>':'<span class="b b-gn">OK</span>');
+    const inS=_ss.has(s.sku);const sq=wf[s.sku]!==undefined?wf[s.sku]:(_sq[s.sku]);
+    const stk=!inS?'<span class="b b-rd">NO STK</span>':(sq!==undefined&&sq<s.qty?'<span class="b b-am">LOW '+Math.round(sq)+'</span>':'<span class="b b-gn">OK '+Math.round(sq)+'</span>');
     h+='<tr><td style="color:var(--cyan)">'+s.sku+'</td><td style="color:var(--dim)">'+s.name+'</td><td>'+s.qty+'</td><td>'+s.plt.toFixed(1)+'</td><td>'+stk+'</td></tr>';
   }
   h+='</tbody></table>';openModal(h);
@@ -195,11 +217,15 @@ async function generate(){
   }
   for(const t of Object.values(_trucks))t.skuCount=t._s.size;
 
-  // Waterfall
+  // Waterfall — mirrors LP_renderPlan waterfall exactly
   const pool={};if(_ss.size)for(const s of _ss)pool[s]=_sq[s]!==undefined?_sq[s]:Infinity;
+  const _wfSnap={};// truckId → {sku: availQty BEFORE this truck deducts}
   const tl=Object.values(_trucks).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   let readyCnt=0,pendCnt=0;
   for(const t of tl){
+    // Snapshot BEFORE deduction
+    const snap={};for(const s in pool)snap[s]=pool[s];
+    _wfSnap[t.id]=snap;
     if(_disp.has(t.id)||_oor.has(t.id)){t._ready=true;continue}
     if(!_ss.size){t._ready=false;pendCnt++;continue}
     const items={};for(const r of _plan.filter(r=>r.truckId===t.id))items[r.sku]=(items[r.sku]||0)+(r.qty||0);
