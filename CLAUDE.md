@@ -580,3 +580,48 @@ Post-build: `_lpTailReconstruct` optimizes last 2 unlocked trucks per (dest,date
 - Slide boundaries: `<div class="S">` with `class="sn"` page numbers
 - Product images: `Table 1.png`, `Table 4.png`, `Welcome desk.png` (committed to git)
 - When updating data: check all slides that reference the same number (truck counts, pallet totals, dates appear on multiple slides)
+
+## FF&E RADAR (`sitrep.html`)
+
+### Overview
+- **Automated 72-hour situation report** — queries Supabase live, no manual input
+- Dark cockpit aesthetic with radar sweep, CRT scanlines, phosphor glow
+- Single-page dashboard — no scrolling, everything in viewport
+- Accessed via `📡 SITREP` button in ML3K header (all 3 modules) or `http://localhost:8888/sitrep.html`
+- Font: Share Tech Mono (avionics display)
+
+### Layout (three columns)
+- **Left — Instruments**: Dispatched gauge, Ready/Pending/OOR counts, 72H Window (sent + queued), Arrivals breakdown (click for detail)
+- **Center — Operations**: Three radial SVG gauges (LP/LM/Overall progress), 2-column destination grid (click for truck list), Recently dispatched + dispatch queue with LSR numbers
+- **Right — Alerts + Timeline**: Pulsing red alerts (overdue, not ready), amber warnings, ready-to-send count, milestone timeline with countdown badges
+
+### Data Sources
+- `lp-plan` — truck plan (rows with truckId, destination, date, sku, qty, pallets)
+- `lp-truck-state` — dispatched set, OOR set, LSR numbers
+- `lp-arrivals` — container arrival ready dates
+- `lp-nom` — nomenclature (not directly displayed, available for drill-down)
+- `fm-stock` — stock report (skus + qtys for waterfall)
+- `fm-rw` — LM demand (venues, bump-in dates for LM progress gauge)
+
+### Stock Waterfall
+- Mirrors LP_renderPlan waterfall exactly
+- Walks trucks in date+id order, deducts stock from pool
+- Dispatched trucks deduct (they consumed stock when sent)
+- OOR trucks skip deduction (stock reserved externally)
+- Per-truck snapshot saved for drill-down stock display
+
+### Interactive Elements
+- **Click destination** → modal with all trucks, dates, LSR numbers, status
+- **Click truck** → modal with SKU-level detail, qty, pallets, waterfall-adjusted stock per item
+- **Click arrivals** → modal with all container dates and status
+- **Click alert** → drills to relevant truck or ready-to-dispatch list
+- **Refresh button** — re-queries all data on demand
+- **Live clock** — ticks every second with T-XX kickoff countdown
+
+### Visual Design
+- Radar sweep animation (8s rotation, green gradient)
+- Concentric radar rings behind content
+- Instrument bezels with bolt/screw decorations (⊕)
+- Column seam bolts
+- Pulsing red alerts (box-shadow animation)
+- Radial gauges with clock tick marks
