@@ -9753,11 +9753,8 @@ function LM_isAssembled(sku,venueType,country){
   // An override set in asm-base country (to make item dis) accidentally flips dis-base items to asm.
   // Skip this cross-country side effect. Stadium/IBC overrides are always intentional (cfg.mode based).
   if(!isStaIbc&&baseMode==='dis'&&isOverride)return false;
-  // Explicit override → trust user's intent, skip dims check
-  if(isOverride)return true;
-  // Default assembled (base=asm, no override) — only flag if dims differ (auto-detection)
-  if(nm.pqA===(nm.pq||0)&&nm.psA===(nm.ps||0))return false;
-  return true;
+  // Only explicit overrides count as assembly — no auto-detection
+  return isOverride;
 }
 function LM_getVenueType(venueName){return LM_vtMap[venueName]||''}
 
