@@ -2497,31 +2497,28 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
       <div style="font-size:13px;font-weight:800;color:var(--pri);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px">Step 2 — Fill Each Truck</div>
       <svg viewBox="0 0 480 540" width="100%" height="540">
         <!-- Pool + Truck diagram -->
-        <rect x="10" y="5" width="140" height="130" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
-        <text x="80" y="24" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#4A148C">ITEM POOL</text>
-        <text x="80" y="40" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">All venue items</text>
-        <text x="80" y="54" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">grouped by date</text>
-        <rect x="22" y="66" width="60" height="14" rx="4" fill="#4A148C" opacity="0.7"/><text x="90" y="77" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">Desks (today)</text>
-        <rect x="22" y="84" width="42" height="14" rx="4" fill="#4A148C" opacity="0.5"/><text x="90" y="95" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">Chairs (today)</text>
-        <rect x="22" y="102" width="52" height="14" rx="4" fill="#8888A0" opacity="0.3"/><text x="90" y="113" font-family="'Noto Sans',sans-serif" font-size="9" fill="#8888A0">Barriers (May 20)</text>
-        <rect x="22" y="120" width="38" height="14" rx="4" fill="#8888A0" opacity="0.2"/><text x="90" y="131" font-family="'Noto Sans',sans-serif" font-size="9" fill="#8888A0">Tables (May 25)</text>
+        <rect x="10" y="5" width="148" height="130" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
+        <text x="84" y="24" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#4A148C">ITEM POOL</text>
+        <text x="84" y="40" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">All venue items</text>
+        <text x="84" y="54" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">grouped by date</text>
+        <rect x="20" y="64" width="64" height="14" rx="4" fill="#4A148C" opacity="0.7"/><text x="20" y="90" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">Desks (today)</text>
+        <rect x="20" y="96" width="46" height="14" rx="4" fill="#4A148C" opacity="0.5"/><text x="20" y="122" font-family="'Noto Sans',sans-serif" font-size="9" fill="#8888A0">Chairs · Barriers · Tables...</text>
 
-        <path d="M150,70 L178,70" stroke="#4A148C" stroke-width="2" marker-end="url(#arr4)"/>
-        <defs><marker id="arr4" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#4A148C"/></marker></defs>
+        <text x="168" y="72" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="18" fill="#4A148C">→</text>
 
         <!-- Truck -->
-        <rect x="182" y="5" width="288" height="130" rx="10" fill="#FBE9E7" stroke="#D4A09F" stroke-width="1.5"/>
-        <text x="326" y="24" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#751312">TRUCK (26 pallet capacity)</text>
-        <rect x="196" y="34" width="160" height="20" rx="5" fill="#4A148C" opacity="0.8"/>
-        <text x="276" y="48" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Scheduled items (today)</text>
-        <rect x="356" y="34" width="60" height="20" rx="5" fill="#4A148C" opacity="0.45"/>
-        <text x="386" y="48" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="8" font-weight="700" fill="#fff">+top-up</text>
-        <rect x="196" y="60" width="258" height="20" rx="5" fill="#12804A" opacity="0.6"/>
-        <text x="325" y="74" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Pass 1: pull full pallets (same SKUs on truck)</text>
-        <rect x="196" y="86" width="200" height="20" rx="5" fill="#03BFA5" opacity="0.5"/>
-        <text x="296" y="100" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Pass 2: partial remainders (scraps)</text>
-        <rect x="196" y="112" width="150" height="16" rx="4" fill="#8888A0" opacity="0.25"/>
-        <text x="271" y="124" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#555570">Pass 3: future dates</text>
+        <rect x="186" y="5" width="284" height="130" rx="10" fill="#FBE9E7" stroke="#D4A09F" stroke-width="1.5"/>
+        <text x="328" y="24" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#751312">TRUCK (26 pallet cap)</text>
+        <rect x="198" y="32" width="164" height="20" rx="5" fill="#4A148C" opacity="0.85"/>
+        <text x="280" y="46" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Scheduled items (today)</text>
+        <rect x="362" y="32" width="56" height="20" rx="5" fill="#4A148C" opacity="0.5"/>
+        <text x="390" y="46" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="8" font-weight="700" fill="#fff">+top-up</text>
+        <rect x="198" y="58" width="262" height="20" rx="5" fill="#12804A" opacity="0.65"/>
+        <text x="329" y="72" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Pass 1: pull full pallets from pool (on-truck SKUs)</text>
+        <rect x="198" y="84" width="206" height="20" rx="5" fill="#03BFA5" opacity="0.55"/>
+        <text x="301" y="98" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">Pass 2: pull partial remainders (scraps)</text>
+        <rect x="198" y="110" width="150" height="20" rx="5" fill="#8888A0" opacity="0.2"/>
+        <text x="273" y="124" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#555570">Pass 3: future dates</text>
 
         <!-- Top-up rule -->
         <rect x="10" y="150" width="460" height="66" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
@@ -2616,7 +2613,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </div>
 
   <!-- Key stats -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
     <div class="chip">~<span class="n">469</span> LM trucks total</div>
     <div class="chip"><span class="n">214</span> venues</div>
     <div class="chip"><span class="n">177</span> MEX/CAN trucks</div>
