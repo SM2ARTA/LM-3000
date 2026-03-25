@@ -46,7 +46,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-even
 .gbar-fill{height:100%;border-radius:1px;box-shadow:0 0 6px currentColor}
 
 /* Grid layout */
-.cockpit{display:grid;grid-template-columns:260px 1fr 280px;gap:0;min-height:calc(100vh - 44px);position:relative;z-index:1}
+.cockpit{display:grid;grid-template-columns:260px 1fr 320px;gap:0;min-height:calc(100vh - 44px);position:relative;z-index:1}
 .col-l{background:var(--bg);padding:12px;border-right:1px solid var(--bd)}
 .col-c{background:var(--bg);padding:12px 16px}
 .col-r{background:var(--bg);padding:12px;border-left:1px solid var(--bd)}
@@ -86,11 +86,12 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-even
 .sec-hd{font-size:9px;letter-spacing:2px;color:var(--dim);padding:8px 0 4px;border-bottom:1px solid var(--bd);margin-bottom:8px}
 
 /* Timeline */
-.tl-r{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:9px}
-.tl-d{width:48px;color:var(--dim);flex-shrink:0}
-.tl-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px currentColor}
-.tl-txt{flex:1;color:var(--white)}
-.tl-past{opacity:0.3}
+.tl-r{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:11px;border-bottom:1px solid rgba(37,48,64,0.4)}
+.tl-r:last-of-type{border-bottom:none}
+.tl-d{width:52px;color:var(--dim);flex-shrink:0;font-size:10px}
+.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
+.tl-txt{flex:1;color:var(--white);font-size:11px}
+.tl-past{opacity:0.25}
 
 /* Modal */
 .modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:100;display:none;justify-content:center;align-items:center;backdrop-filter:blur(4px)}
@@ -149,6 +150,8 @@ const SB='https://stwopndhnxcjyomkufii.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5
 let _plan,_ts,_arr,_nom,_stk,_trucks,_disp,_oor,_ss,_sq;
 
 async function get(id){const u=new URL(SB+'/rest/v1/shared_state');u.searchParams.set('select','value');u.searchParams.set('id','eq.'+id);const r=await fetch(u.toString(),{headers:{apikey:SK,Authorization:'Bearer '+SK}});const d=await r.json();return d?.length?JSON.parse(d[0].value):null}
+const CITY={TOR:'Toronto',VAN:'Vancouver',CDMX:'Mexico City',GDL:'Guadalajara',MTY:'Monterrey',ATL:'Atlanta',BOS:'Boston',DAL:'Dallas',HOU:'Houston',KC:'Kansas City',LA:'Los Angeles',MIA:'Miami',NY:'New York',PHI:'Philadelphia',SF:'San Francisco',SEA:'Seattle'};
+function clDisp(raw){if(!raw)return raw;let s=raw.replace(/\s*\/\s*CORT\s*$/i,'').replace(/\s*\/\s*RIC\s*$/i,'').trim();if(s.startsWith('CAN ')||s.startsWith('MEX ')){const rest=s.slice(4).trim();const parts=rest.split(/\s*\/\s*/).filter(p=>!/^(RGS|RGN|REGION)$/i.test(p.trim()));if(!parts.length)return s.startsWith('CAN ')?'Canada':'Mexico';return parts.map(p=>CITY[p.trim()]||p.trim()).join(' / ')}return s}
 function fD(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch{return d}}
 function fDw(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}catch{return d}}
 function dN(d){if(!d)return null;const n=new Date();n.setHours(0,0,0,0);const t=new Date(d+'T12:00:00');t.setHours(0,0,0,0);return Math.round((t-n)/864e5)}
@@ -160,7 +163,7 @@ function closeModal(){document.getElementById('modalBg').classList.remove('show'
 function showTruck(id){
   const rows=_plan.filter(r=>r.truckId===id);if(!rows.length)return;
   const t=_trucks[id];const isD=_disp.has(id);
-  let h='<h2>LP-'+id+' // '+t.dest+'</h2>';
+  let h='<h2>LP-'+id+' // '+clDisp(t.dest)+'</h2>';
   h+='<div style="display:flex;gap:10px;margin-bottom:14px;font-size:11px">';
   h+='<span class="b '+(isD?'b-gn':t._ready?'b-cy':'b-rd')+'">'+(isD?'DISPATCHED':t._ready?'READY':'PENDING')+'</span>';
   h+='<span style="color:var(--white)">'+t.pallets.toFixed(1)+' / 26 PLT</span>';
@@ -179,7 +182,7 @@ function showTruck(id){
 
 function showDest(dest){
   const dt=Object.values(_trucks).filter(t=>t.dest===dest).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
-  let h='<h2>'+dest+'</h2><div style="margin-bottom:10px;font-size:10px;color:var(--dim)">'+dt.length+' TRUCKS</div>';
+  let h='<h2>'+clDisp(dest)+'</h2><div style="margin-bottom:10px;font-size:10px;color:var(--dim)">'+dt.length+' TRUCKS</div>';
   h+='<table><thead><tr><th>TRUCK</th><th>DATE</th><th>PLT</th><th>QTY</th><th>SKUS</th><th>STATUS</th></tr></thead><tbody>';
   for(const t of dt){
     const isD=_disp.has(t.id);const isO=_oor.has(t.id);
@@ -286,13 +289,14 @@ async function generate(){
     bd[t.dest].tot++;bd[t.dest].plt+=t.pallets;
     if(_disp.has(t.id))bd[t.dest].disp++;else if(_oor.has(t.id))bd[t.dest].oor++;else if(t._ready)bd[t.dest].rdy++;else bd[t.dest].pend++;
   }
-  for(const d of Object.keys(bd).sort()){
+  const destKeys=Object.keys(bd).sort((a,b)=>{const am=a.toUpperCase().includes('MEX'),bm=b.toUpperCase().includes('MEX'),ac=a.toUpperCase().includes('CAN'),bc=b.toUpperCase().includes('CAN');const ap=am?0:ac?1:2,bp=bm?0:bc?1:2;return ap!==bp?ap-bp:a.localeCompare(b)});
+  for(const d of destKeys){
     const s=bd[d];const pct=s.tot?Math.round(s.disp/s.tot*100):0;
     const mx=d.toUpperCase().includes('MEX'),ca=d.toUpperCase().includes('CAN');
     const fl=mx?'🇲🇽':ca?'🇨🇦':'🇺🇸';
     C+='<div class="dest" onclick="showDest(\''+d.replace(/'/g,"\\'")+'\')">';
     C+='<div style="display:flex;justify-content:space-between;align-items:center">';
-    C+='<div class="dest-name">'+fl+' '+d+'</div>';
+    C+='<div class="dest-name">'+fl+' '+clDisp(d)+'</div>';
     C+='<span style="font-size:10px;color:var(--dim)">'+s.tot+' TRUCKS</span></div>';
     C+='<div class="dest-badges">';
     if(s.disp)C+='<span class="b b-gn">'+s.disp+' SENT</span>';
@@ -311,7 +315,7 @@ async function generate(){
       const dl=dL(t.date);const dlc=dN(t.date)===0?'b-rd':dN(t.date)===1?'b-am':'b-cy';
       C+='<div class="tr-row" onclick="showTruck('+t.id+')">';
       C+='<div class="tr-id" style="color:'+clr+'">LP-'+t.id+'</div>';
-      C+='<div class="tr-dest">'+t.dest+'</div>';
+      C+='<div class="tr-dest">'+clDisp(t.dest)+'</div>';
       C+='<span class="b '+dlc+'">'+dl+'</span>';
       C+='<span style="font-size:10px;width:52px;text-align:right;flex-shrink:0">'+t.pallets.toFixed(1)+'</span>';
       C+='<div class="tr-bar"><div class="tr-bar-f" style="width:'+pct+'%;background:'+clr+'"></div></div>';
@@ -327,15 +331,15 @@ async function generate(){
   const alerts=[];
 
   for(const t of tl){if(!_disp.has(t.id)&&!_oor.has(t.id)&&dN(t.date)<0)
-    alerts.push({c:'rd',t:'OVERDUE LP-'+t.id,d:t.dest+' · DUE '+fD(t.date)+' · '+Math.abs(dN(t.date))+'D LATE',f:()=>showTruck(t.id)})}
+    alerts.push({c:'rd',t:'OVERDUE LP-'+t.id,d:clDisp(t.dest)+' · DUE '+fD(t.date)+' · '+Math.abs(dN(t.date))+'D LATE',f:()=>showTruck(t.id)})}
   for(const t of up72){if(dN(t.date)===0&&!t._ready)
-    alerts.push({c:'rd',t:'TODAY NOT READY LP-'+t.id,d:t.dest+' · MISSING STOCK',f:()=>showTruck(t.id)})}
+    alerts.push({c:'rd',t:'TODAY NOT READY LP-'+t.id,d:clDisp(t.dest)+' · MISSING STOCK',f:()=>showTruck(t.id)})}
   for(const t of up72){if(dN(t.date)===1&&!t._ready)
-    alerts.push({c:'am',t:'TMRW NOT READY LP-'+t.id,d:t.dest+' · CHECK STOCK',f:()=>showTruck(t.id)})}
+    alerts.push({c:'am',t:'TMRW NOT READY LP-'+t.id,d:clDisp(t.dest)+' · CHECK STOCK',f:()=>showTruck(t.id)})}
   const rdyWait=tl.filter(t=>!_disp.has(t.id)&&!_oor.has(t.id)&&t._ready&&dN(t.date)<=0);
   if(rdyWait.length)alerts.push({c:'cy',t:rdyWait.length+' TRUCKS READY TO DISPATCH',d:'ALL STOCK AVAILABLE · CAN SEND NOW',f:()=>{
     let h='<h2>READY FOR DISPATCH</h2><table><thead><tr><th>TRUCK</th><th>DEST</th><th>DATE</th><th>PLT</th></tr></thead><tbody>';
-    for(const t of rdyWait)h+='<tr onclick="showTruck('+t.id+')" style="cursor:pointer"><td style="font-weight:700;color:var(--glow)">LP-'+t.id+'</td><td>'+t.dest+'</td><td>'+fD(t.date)+'</td><td>'+t.pallets.toFixed(1)+'</td></tr>';
+    for(const t of rdyWait)h+='<tr onclick="showTruck('+t.id+')" style="cursor:pointer"><td style="font-weight:700;color:var(--glow)">LP-'+t.id+'</td><td>'+clDisp(t.dest)+'</td><td>'+fD(t.date)+'</td><td>'+t.pallets.toFixed(1)+'</td></tr>';
     h+='</tbody></table>';openModal(h)}});
   if(!alerts.length)alerts.push({c:'gn',t:'ALL CLEAR',d:'NO OVERDUE · NO URGENT ACTIONS'});
 
