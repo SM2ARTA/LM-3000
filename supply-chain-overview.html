@@ -2405,14 +2405,20 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
     </div>
   </div>
 
-  <!-- Key constraints -->
-  <div style="display:flex;gap:12px;margin-top:14px">
-    <div class="chip"><span class="n">26</span> pallets max per truck</div>
-    <div class="chip"><span class="n">4</span> trucks max per day</div>
-    <div class="chip"><span class="n">2</span> destinations max per day</div>
-    <div class="chip"><span class="n">90%</span> fill → truck emits</div>
-    <div class="chip">Stock report items load <span style="color:var(--pri);font-weight:700">first</span></div>
-    <div class="chip">Ready items → lead truck</div>
+  <!-- Scale + constraints -->
+  <div style="display:flex;gap:16px;margin-top:14px;align-items:stretch">
+    <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:10px;padding:12px 20px;display:flex;align-items:center;gap:14px">
+      <div style="font-family:var(--fm);font-size:28px;font-weight:800;color:var(--pri);white-space:nowrap">162B+</div>
+      <div style="font-size:11px;color:var(--ts);line-height:1.4"><b style="color:var(--pri)">combinations evaluated</b><br>by tail reconstruction across<br>16 truck pairs · 126 SKUs · 8 destinations</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;flex:1">
+      <div class="chip"><span class="n">26</span> pallets max per truck</div>
+      <div class="chip"><span class="n">4</span> trucks max per day</div>
+      <div class="chip"><span class="n">2</span> destinations max per day</div>
+      <div class="chip"><span class="n">90%</span> fill → truck emits</div>
+      <div class="chip">Stock report items load <span style="color:var(--pri);font-weight:700">first</span></div>
+      <div class="chip">Ready items → lead truck</div>
+    </div>
   </div>
 
   <div class="ft">
