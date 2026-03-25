@@ -3,415 +3,349 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SITREP — Operations Cockpit</title>
+<title>FF&E OPS — COCKPIT</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700;800&display=swap');
-:root{--bg:#0A0E1A;--sf:#111827;--sf2:#1A2035;--bd:#2A3050;--tp:#E8ECF4;--ts:#8892A8;--tt:#505870;--ac:#7C3AFF;--gn:#10B981;--gn2:#064E3B;--or:#F59E0B;--or2:#78350F;--rd:#EF4444;--rd2:#7F1D1D;--bl:#3B82F6;--mono:'IBM Plex Mono',monospace;--fd:'Noto Sans',sans-serif}
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+:root{--bg:#080C10;--panel:#0D1117;--bezel:#1B2130;--bd:#253040;--glow:#00FF88;--glow2:#00CC6A;--amber:#FFB300;--amber2:#FF8F00;--red:#FF3D3D;--cyan:#00D4FF;--white:#D0D8E8;--dim:#4A5568;--mono:'Share Tech Mono',monospace;--fm:'IBM Plex Mono',monospace}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh}
+body{font-family:var(--mono);background:var(--bg);color:var(--glow);min-height:100vh;overflow-x:hidden}
 
-/* Top bar */
-.top{display:flex;justify-content:space-between;align-items:center;padding:12px 24px;background:var(--sf);border-bottom:1px solid var(--bd)}
-.top h1{font-size:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--ac)}
-.top .clock{font-family:var(--mono);font-size:14px;color:var(--gn)}
-.top .kickoff{font-family:var(--mono);font-size:13px;color:var(--or);background:var(--or2);padding:4px 12px;border-radius:4px}
-.btn{padding:6px 16px;background:var(--ac);color:#fff;border:none;border-radius:4px;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:1px;text-transform:uppercase}
-.btn:hover{opacity:0.85}
+/* Scanline overlay */
+body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,0.015) 2px,rgba(0,255,136,0.015) 4px);z-index:999}
 
-/* Grid */
-.grid{display:grid;grid-template-columns:280px 1fr 320px;gap:1px;background:var(--bd);min-height:calc(100vh - 50px)}
-.col{background:var(--bg);padding:16px}
+/* Top HUD */
+.hud{display:flex;justify-content:space-between;align-items:center;padding:8px 20px;background:var(--panel);border-bottom:2px solid var(--glow);position:relative}
+.hud::before{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--glow),transparent);opacity:0.5}
+.hud-title{font-size:14px;letter-spacing:4px;color:var(--glow);text-shadow:0 0 10px rgba(0,255,136,0.5)}
+.hud-clock{font-size:20px;color:var(--glow);text-shadow:0 0 15px rgba(0,255,136,0.6)}
+.hud-kickoff{font-size:13px;color:var(--amber);text-shadow:0 0 10px rgba(255,179,0,0.4);background:rgba(255,179,0,0.1);padding:4px 14px;border:1px solid rgba(255,179,0,0.3);border-radius:2px}
 
-/* Instrument panel */
-.inst{background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:10px}
-.inst-hd{font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
-.inst-v{font-family:var(--mono);font-size:32px;font-weight:700;line-height:1}
-.inst-l{font-size:11px;color:var(--ts);margin-top:2px}
-.inst-sub{font-size:10px;color:var(--tt);margin-top:4px}
+/* Instrument bezel */
+.instr{background:var(--panel);border:2px solid var(--bd);border-radius:4px;padding:12px;margin-bottom:8px;position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03),0 2px 8px rgba(0,0,0,0.5)}
+.instr::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,255,136,0.15),transparent)}
+.instr-label{font-size:9px;letter-spacing:2px;color:var(--dim);margin-bottom:6px}
+.instr-value{font-size:28px;font-weight:700;line-height:1;text-shadow:0 0 12px currentColor}
+.instr-sub{font-size:10px;color:var(--dim);margin-top:4px}
 
-/* Gauges */
-.gauge{position:relative;height:8px;background:var(--bd);border-radius:4px;margin-top:8px;overflow:hidden}
-.gauge-fill{height:100%;border-radius:4px;transition:width 0.5s}
+/* Gauge bar */
+.gbar{height:6px;background:var(--bezel);border-radius:1px;margin-top:6px;position:relative;overflow:hidden}
+.gbar::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(90deg,transparent,transparent 8px,rgba(0,0,0,0.3) 8px,rgba(0,0,0,0.3) 9px)}
+.gbar-fill{height:100%;border-radius:1px;box-shadow:0 0 6px currentColor}
 
-/* Alert list */
-.alert-item{padding:8px 10px;border-radius:6px;margin-bottom:6px;cursor:pointer;border-left:3px solid;transition:background 0.15s}
-.alert-item:hover{background:var(--sf2)}
-.a-rd{border-color:var(--rd);background:var(--rd2)}
-.a-or{border-color:var(--or);background:var(--or2)}
-.a-gn{border-color:var(--gn);background:var(--gn2)}
-.a-bl{border-color:var(--bl);background:#1E3A5F}
-.alert-item .a-title{font-size:11px;font-weight:700}
-.alert-item .a-desc{font-size:10px;color:var(--ts);margin-top:2px}
+/* Grid layout */
+.cockpit{display:grid;grid-template-columns:260px 1fr 280px;gap:0;min-height:calc(100vh - 44px)}
+.col-l{background:var(--bg);padding:12px;border-right:1px solid var(--bd)}
+.col-c{background:var(--bg);padding:12px 16px}
+.col-r{background:var(--bg);padding:12px;border-left:1px solid var(--bd)}
 
-/* Truck list */
-.truck-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;margin-bottom:3px;cursor:pointer;font-size:11px;transition:background 0.15s}
-.truck-row:hover{background:var(--sf2)}
-.truck-id{font-family:var(--mono);font-weight:700;width:56px;flex-shrink:0}
-.truck-dest{flex:1;color:var(--ts);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.truck-plt{font-family:var(--mono);font-size:10px;width:60px;text-align:right;flex-shrink:0}
-.truck-bar{width:60px;height:6px;background:var(--bd);border-radius:3px;flex-shrink:0;overflow:hidden}
-.truck-bar-fill{height:100%;border-radius:3px}
-.badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px}
-.bg-gn{background:var(--gn2);color:var(--gn)}
-.bg-or{background:var(--or2);color:var(--or)}
-.bg-rd{background:var(--rd2);color:var(--rd)}
-.bg-bl{background:#1E3A5F;color:var(--bl)}
-.bg-ac{background:#2D1B69;color:var(--ac)}
+/* Dest cards */
+.dest{background:var(--panel);border:1px solid var(--bd);border-radius:4px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:border-color 0.2s,box-shadow 0.2s}
+.dest:hover{border-color:var(--glow);box-shadow:0 0 8px rgba(0,255,136,0.15)}
+.dest-name{font-size:12px;color:var(--white);letter-spacing:1px}
+.dest-badges{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 
-/* Destination cards */
-.dest-card{background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color 0.15s}
-.dest-card:hover{border-color:var(--ac)}
-.dest-name{font-size:12px;font-weight:700}
-.dest-stat{display:flex;gap:12px;margin-top:6px;font-size:10px;color:var(--ts)}
-.dest-stat span{font-family:var(--mono);font-weight:600}
+/* Badges */
+.b{display:inline-block;padding:2px 8px;border-radius:2px;font-size:9px;letter-spacing:0.5px}
+.b-gn{background:rgba(0,255,136,0.12);color:var(--glow);border:1px solid rgba(0,255,136,0.25)}
+.b-am{background:rgba(255,179,0,0.12);color:var(--amber);border:1px solid rgba(255,179,0,0.25)}
+.b-rd{background:rgba(255,61,61,0.12);color:var(--red);border:1px solid rgba(255,61,61,0.25)}
+.b-cy{background:rgba(0,212,255,0.12);color:var(--cyan);border:1px solid rgba(0,212,255,0.25)}
+
+/* Truck row */
+.tr-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:3px;margin-bottom:2px;cursor:pointer;font-size:11px;transition:background 0.15s}
+.tr-row:hover{background:var(--bezel)}
+.tr-id{width:52px;font-weight:700;flex-shrink:0}
+.tr-dest{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.tr-bar{width:50px;height:4px;background:var(--bezel);border-radius:1px;flex-shrink:0;overflow:hidden}
+.tr-bar-f{height:100%;border-radius:1px}
+
+/* Alert */
+.alert{padding:8px 10px;border-radius:3px;margin-bottom:5px;cursor:pointer;border-left:3px solid;transition:opacity 0.15s}
+.alert:hover{opacity:0.85}
+.al-rd{border-color:var(--red);background:rgba(255,61,61,0.08)}
+.al-am{border-color:var(--amber);background:rgba(255,179,0,0.08)}
+.al-gn{border-color:var(--glow);background:rgba(0,255,136,0.05)}
+.al-cy{border-color:var(--cyan);background:rgba(0,212,255,0.08)}
+.al-title{font-size:10px;font-weight:700;letter-spacing:0.5px}
+.al-desc{font-size:9px;color:var(--dim);margin-top:2px}
+
+/* Section header */
+.sec-hd{font-size:9px;letter-spacing:2px;color:var(--dim);padding:8px 0 4px;border-bottom:1px solid var(--bd);margin-bottom:8px}
+
+/* Timeline */
+.tl-r{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:9px}
+.tl-d{width:48px;color:var(--dim);flex-shrink:0}
+.tl-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px currentColor}
+.tl-txt{flex:1;color:var(--white)}
+.tl-past{opacity:0.3}
 
 /* Modal */
-.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:100;display:none;justify-content:center;align-items:center}
+.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:100;display:none;justify-content:center;align-items:center;backdrop-filter:blur(4px)}
 .modal-bg.show{display:flex}
-.modal{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:20px 24px;max-width:800px;width:90%;max-height:80vh;overflow-y:auto}
-.modal h2{font-size:16px;font-weight:700;margin-bottom:12px;color:var(--ac)}
-.modal table{width:100%;border-collapse:collapse;font-size:11px}
-.modal th{text-align:left;padding:6px 10px;font-size:9px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--bd)}
-.modal td{padding:5px 10px;border-bottom:1px solid var(--bd);font-family:var(--mono);font-size:11px}
-.modal-close{float:right;background:none;border:none;color:var(--ts);font-size:18px;cursor:pointer}
-.modal-close:hover{color:var(--tp)}
+.modal{background:var(--panel);border:2px solid var(--glow);border-radius:6px;padding:20px;max-width:850px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 0 30px rgba(0,255,136,0.15)}
+.modal h2{font-size:14px;letter-spacing:2px;color:var(--glow);margin-bottom:12px;text-shadow:0 0 8px rgba(0,255,136,0.4)}
+.modal table{width:100%;border-collapse:collapse;font-size:10px}
+.modal th{text-align:left;padding:5px 8px;font-size:8px;letter-spacing:1px;color:var(--dim);border-bottom:1px solid var(--bd)}
+.modal td{padding:4px 8px;border-bottom:1px solid rgba(37,48,64,0.5)}
+.modal-x{float:right;background:none;border:1px solid var(--dim);color:var(--dim);width:24px;height:24px;border-radius:2px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center}
+.modal-x:hover{border-color:var(--red);color:var(--red)}
 
-/* Section headers in center */
-.section-hd{font-size:11px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:1.5px;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--bd)}
+/* Refresh animation */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.loading{text-align:center;padding:40px;color:var(--glow);animation:pulse 1.5s infinite}
 
-/* Timeline row */
-.tl-row{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:10px}
-.tl-date{font-family:var(--mono);width:70px;color:var(--ts);flex-shrink:0}
-.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.tl-label{flex:1;color:var(--tp)}
+/* Button */
+.btn-refresh{padding:5px 14px;background:transparent;color:var(--glow);border:1px solid var(--glow);border-radius:2px;font-family:var(--mono);font-size:10px;cursor:pointer;letter-spacing:1px;transition:all 0.15s}
+.btn-refresh:hover{background:rgba(0,255,136,0.1);box-shadow:0 0 8px rgba(0,255,136,0.2)}
 </style>
 </head>
 <body>
 
-<div class="top">
+<div class="hud">
   <div style="display:flex;align-items:center;gap:16px">
-    <h1>SITREP</h1>
-    <span style="font-size:11px;color:var(--ts)">FF&E Operations Cockpit</span>
+    <div class="hud-title">FF&E OPS COCKPIT</div>
+    <span style="font-size:9px;color:var(--dim);letter-spacing:1px">FIFA WORLD CUP 2026™ · MATERIALS</span>
   </div>
   <div style="display:flex;align-items:center;gap:16px">
-    <div class="clock" id="clock"></div>
-    <div class="kickoff" id="kickoff"></div>
-    <button class="btn" onclick="generate()">⟳ REFRESH</button>
+    <div class="hud-clock" id="clock">--:--:--</div>
+    <div class="hud-kickoff" id="kickoff">T-?? DAYS</div>
+    <button class="btn-refresh" onclick="generate()">↻ REFRESH</button>
   </div>
 </div>
 
-<div class="grid">
-  <!-- LEFT: Instruments -->
-  <div class="col" id="leftCol"></div>
-  <!-- CENTER: Main operational view -->
-  <div class="col" id="centerCol" style="padding:16px 20px"></div>
-  <!-- RIGHT: Alerts + timeline -->
-  <div class="col" id="rightCol"></div>
+<div class="cockpit">
+  <div class="col-l" id="leftCol"><div class="loading">LOADING...</div></div>
+  <div class="col-c" id="centerCol"></div>
+  <div class="col-r" id="rightCol"></div>
 </div>
 
-<!-- Modal for drill-down -->
 <div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
-  <div class="modal" id="modalContent"></div>
+  <div class="modal" id="mc"></div>
 </div>
 
 <script>
-const SB_URL='https://stwopndhnxcjyomkufii.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
+const SB='https://stwopndhnxcjyomkufii.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
+let _plan,_ts,_arr,_nom,_stk,_trucks,_disp,_oor,_ss,_sq;
 
-let _plan,_truckState,_arrivals,_nom,_rw,_stock,_trucks,_dispatched,_oor,_stockSkus,_stockQtys;
-
-async function get(id){
-  const url=new URL(SB_URL+'/rest/v1/shared_state');
-  url.searchParams.set('select','value');url.searchParams.set('id','eq.'+id);
-  const r=await fetch(url.toString(),{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
-  const rows=await r.json();if(!rows||!rows.length)return null;return JSON.parse(rows[0].value);
-}
-
-function fD(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}}
-function fDw(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}catch(e){return d}}
+async function get(id){const u=new URL(SB+'/rest/v1/shared_state');u.searchParams.set('select','value');u.searchParams.set('id','eq.'+id);const r=await fetch(u.toString(),{headers:{apikey:SK,Authorization:'Bearer '+SK}});const d=await r.json();return d?.length?JSON.parse(d[0].value):null}
+function fD(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch{return d}}
+function fDw(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}catch{return d}}
 function dN(d){if(!d)return null;const n=new Date();n.setHours(0,0,0,0);const t=new Date(d+'T12:00:00');t.setHours(0,0,0,0);return Math.round((t-n)/864e5)}
-function dayLabel(d){const n=dN(d);if(n===null)return'';if(n<0)return n+'d OVERDUE';if(n===0)return'TODAY';if(n===1)return'TOMORROW';return'+'+n+'d'}
+function dL(d){const n=dN(d);if(n===null)return'';if(n<0)return Math.abs(n)+'D LATE';if(n===0)return'TODAY';if(n===1)return'TMRW';return'+'+n+'D'}
 
-function openModal(html){document.getElementById('modalContent').innerHTML='<button class="modal-close" onclick="closeModal()">✕</button>'+html;document.getElementById('modalBg').classList.add('show')}
+function openModal(h){document.getElementById('mc').innerHTML='<button class="modal-x" onclick="closeModal()">✕</button>'+h;document.getElementById('modalBg').classList.add('show')}
 function closeModal(){document.getElementById('modalBg').classList.remove('show')}
 
 function showTruck(id){
-  const rows=_plan.filter(r=>r.truckId===id);
-  if(!rows.length)return;
-  const t=_trucks[id];const isDisp=_dispatched.has(id);const isOor=_oor.has(id);
-  let h='<h2>LP-'+id+' — '+t.dest+'</h2>';
-  h+='<div style="display:flex;gap:12px;margin-bottom:12px">';
-  h+='<span class="badge '+(isDisp?'bg-gn':t._ready?'bg-bl':'bg-rd')+'">'+(isDisp?'DISPATCHED':isOor?'OOR':t._ready?'READY':'PENDING')+'</span>';
-  h+='<span style="font-family:var(--mono);font-size:13px">'+t.pallets.toFixed(1)+' / 26 pallets</span>';
-  h+='<span style="font-family:var(--mono);font-size:13px">'+t.qty+' items</span>';
-  h+='<span style="color:var(--ts);font-size:12px">Date: '+fDw(t.date)+' ('+dayLabel(t.date)+')</span>';
-  h+='</div>';
-  h+='<table><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Pallets</th><th>Stock</th></tr></thead><tbody>';
-  const agg={};for(const r of rows){if(!agg[r.sku])agg[r.sku]={sku:r.sku,name:r.name||'',qty:0,pallets:0};agg[r.sku].qty+=r.qty||0;agg[r.sku].pallets+=r.pallets||0}
-  for(const s of Object.values(agg).sort((a,b)=>b.pallets-a.pallets)){
-    const inStock=_stockSkus.has(s.sku);const sq=_stockQtys[s.sku];
-    const stockBadge=!inStock?'<span class="badge bg-rd">NO STOCK</span>':(sq!==undefined&&sq<s.qty?'<span class="badge bg-or">LOW '+sq+'</span>':'<span class="badge bg-gn">OK</span>');
-    h+='<tr><td>'+s.sku+'</td><td style="font-family:var(--fd);color:var(--ts)">'+s.name+'</td><td>'+s.qty+'</td><td>'+s.pallets.toFixed(1)+'</td><td>'+stockBadge+'</td></tr>';
+  const rows=_plan.filter(r=>r.truckId===id);if(!rows.length)return;
+  const t=_trucks[id];const isD=_disp.has(id);
+  let h='<h2>LP-'+id+' // '+t.dest+'</h2>';
+  h+='<div style="display:flex;gap:10px;margin-bottom:14px;font-size:11px">';
+  h+='<span class="b '+(isD?'b-gn':t._ready?'b-cy':'b-rd')+'">'+(isD?'DISPATCHED':t._ready?'READY':'PENDING')+'</span>';
+  h+='<span style="color:var(--white)">'+t.pallets.toFixed(1)+' / 26 PLT</span>';
+  h+='<span style="color:var(--dim)">'+t.qty+' ITEMS · '+t.skuCount+' SKUS</span>';
+  h+='<span style="color:var(--amber)">'+fDw(t.date)+' ('+dL(t.date)+')</span></div>';
+  h+='<table><thead><tr><th>SKU</th><th>ITEM</th><th>QTY</th><th>PLT</th><th>STOCK</th></tr></thead><tbody>';
+  const agg={};for(const r of rows){if(!agg[r.sku])agg[r.sku]={sku:r.sku,name:r.name||'',qty:0,plt:0};agg[r.sku].qty+=r.qty||0;agg[r.sku].plt+=r.pallets||0}
+  for(const s of Object.values(agg).sort((a,b)=>b.plt-a.plt)){
+    const inS=_ss.has(s.sku);const sq=_sq[s.sku];
+    const stk=!inS?'<span class="b b-rd">NO STK</span>':(sq!==undefined&&sq<s.qty?'<span class="b b-am">LOW '+sq+'</span>':'<span class="b b-gn">OK</span>');
+    h+='<tr><td style="color:var(--cyan)">'+s.sku+'</td><td style="color:var(--dim)">'+s.name+'</td><td>'+s.qty+'</td><td>'+s.plt.toFixed(1)+'</td><td>'+stk+'</td></tr>';
   }
-  h+='</tbody></table>';
-  openModal(h);
+  h+='</tbody></table>';openModal(h);
 }
 
 function showDest(dest){
-  const destTrucks=Object.values(_trucks).filter(t=>t.dest===dest).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
-  let h='<h2>'+dest+'</h2>';
-  h+='<div style="margin-bottom:12px;font-size:12px;color:var(--ts)">'+destTrucks.length+' trucks total</div>';
-  h+='<table><thead><tr><th>Truck</th><th>Date</th><th>Pallets</th><th>Qty</th><th>SKUs</th><th>Status</th></tr></thead><tbody>';
-  for(const t of destTrucks){
-    const isDisp=_dispatched.has(t.id);const isOor=_oor.has(t.id);
-    const status=isDisp?'<span class="badge bg-gn">DISPATCHED</span>':isOor?'<span class="badge bg-or">OOR</span>':t._ready?'<span class="badge bg-bl">READY</span>':'<span class="badge bg-rd">PENDING</span>';
-    h+='<tr onclick="showTruck('+t.id+')" style="cursor:pointer"><td style="font-weight:700">LP-'+t.id+'</td><td style="font-family:var(--fd)">'+fD(t.date)+' <span style="color:var(--tt);font-size:9px">'+dayLabel(t.date)+'</span></td><td>'+t.pallets.toFixed(1)+'</td><td>'+t.qty+'</td><td>'+t.skuCount+'</td><td>'+status+'</td></tr>';
+  const dt=Object.values(_trucks).filter(t=>t.dest===dest).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  let h='<h2>'+dest+'</h2><div style="margin-bottom:10px;font-size:10px;color:var(--dim)">'+dt.length+' TRUCKS</div>';
+  h+='<table><thead><tr><th>TRUCK</th><th>DATE</th><th>PLT</th><th>QTY</th><th>SKUS</th><th>STATUS</th></tr></thead><tbody>';
+  for(const t of dt){
+    const isD=_disp.has(t.id);const isO=_oor.has(t.id);
+    const st=isD?'<span class="b b-gn">SENT</span>':isO?'<span class="b b-am">OOR</span>':t._ready?'<span class="b b-cy">READY</span>':'<span class="b b-rd">PEND</span>';
+    h+='<tr onclick="showTruck('+t.id+')" style="cursor:pointer"><td style="font-weight:700;color:var(--glow)">LP-'+t.id+'</td><td style="color:var(--white)">'+fD(t.date)+' <span style="color:var(--dim);font-size:8px">'+dL(t.date)+'</span></td><td>'+t.pallets.toFixed(1)+'</td><td>'+t.qty+'</td><td>'+t.skuCount+'</td><td>'+st+'</td></tr>';
   }
-  h+='</tbody></table>';
-  openModal(h);
+  h+='</tbody></table>';openModal(h);
 }
 
 function showArrivals(){
-  if(!_arrivals)return;
-  const byDate={};
-  for(const a of _arrivals){const rd=a.readyDate||'';if(!rd)continue;if(!byDate[rd])byDate[rd]=[];byDate[rd].push(a)}
-  const dates=Object.keys(byDate).sort();
-  let h='<h2>Container Arrivals</h2>';
-  h+='<table><thead><tr><th>Ready Date</th><th>Status</th><th>Items</th><th>Total Qty</th></tr></thead><tbody>';
+  if(!_arr)return;
+  const bd={};for(const a of _arr){const rd=a.readyDate||'';if(!rd)continue;if(!bd[rd])bd[rd]=[];bd[rd].push(a)}
   const today=new Date().toISOString().slice(0,10);
-  for(const d of dates){
-    const items=byDate[d];const qty=items.reduce((s,a)=>s+(a.qty||0),0);
-    const days=dN(d);
-    const status=d<=today?'<span class="badge bg-gn">ARRIVED</span>':days<=3?'<span class="badge bg-or">'+dayLabel(d)+'</span>':'<span class="badge bg-bl">'+dayLabel(d)+'</span>';
-    h+='<tr><td>'+fDw(d)+'</td><td>'+status+'</td><td>'+items.length+'</td><td>'+qty.toLocaleString()+'</td></tr>';
+  let h='<h2>CONTAINER ARRIVALS</h2><table><thead><tr><th>READY DATE</th><th>STATUS</th><th>ITEMS</th><th>QTY</th></tr></thead><tbody>';
+  for(const d of Object.keys(bd).sort()){
+    const items=bd[d];const qty=items.reduce((s,a)=>s+(a.qty||0),0);
+    const n=dN(d);const st=d<=today?'<span class="b b-gn">ARRIVED</span>':n<=3?'<span class="b b-am">'+dL(d)+'</span>':'<span class="b b-cy">'+dL(d)+'</span>';
+    h+='<tr><td style="color:var(--white)">'+fDw(d)+'</td><td>'+st+'</td><td>'+items.length+'</td><td>'+qty.toLocaleString()+'</td></tr>';
   }
-  h+='</tbody></table>';
-  openModal(h);
+  h+='</tbody></table>';openModal(h);
 }
 
 async function generate(){
-  // Update clock
-  const now=new Date();
-  document.getElementById('clock').textContent=now.toLocaleString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-
-  // Kickoff countdown
-  const kickoff=new Date('2026-06-11T00:00:00');
-  const daysToKick=Math.ceil((kickoff-now)/864e5);
-  document.getElementById('kickoff').textContent='T-'+daysToKick+' DAYS TO KICKOFF';
-
-  const today=now.toISOString().slice(0,10);
+  const now=new Date();const today=now.toISOString().slice(0,10);
   const h72=new Date(now.getTime()+72*36e5).toISOString().slice(0,10);
 
-  [_plan,_truckState,_arrivals,_nom,_rw,_stock]=await Promise.all([
-    get('lp-plan'),get('lp-truck-state'),get('lp-arrivals'),get('lp-nom'),get('fm-rw'),get('fm-stock')
-  ]);
+  [_plan,_ts,_arr,_nom,_stk]=await Promise.all([get('lp-plan'),get('lp-truck-state'),get('lp-arrivals'),get('lp-nom'),get('fm-stock')]);
+  _disp=new Set(_ts?.dispatched||[]);_oor=new Set(_ts?.oorTrucks||[]);
+  _ss=new Set(_stk?.skus||_ts?.stockSkus||[]);_sq=_stk?.qtys||{};
 
-  _dispatched=new Set(_truckState?.dispatched||[]);
-  _oor=new Set(_truckState?.oorTrucks||[]);
-  _stockSkus=new Set(_stock?.skus||_truckState?.stockSkus||[]);
-  _stockQtys=_stock?.qtys||{};
-
-  // Build truck map
   _trucks={};
   if(_plan)for(const r of _plan){
-    if(!_trucks[r.truckId])_trucks[r.truckId]={id:r.truckId,dest:r.destination,date:r.date,pallets:0,qty:0,skuCount:0,_skus:new Set()};
-    _trucks[r.truckId].pallets+=r.pallets||0;
-    _trucks[r.truckId].qty+=r.qty||0;
-    _trucks[r.truckId]._skus.add(r.sku);
+    if(!_trucks[r.truckId])_trucks[r.truckId]={id:r.truckId,dest:r.destination,date:r.date,pallets:0,qty:0,skuCount:0,_s:new Set()};
+    _trucks[r.truckId].pallets+=r.pallets||0;_trucks[r.truckId].qty+=r.qty||0;_trucks[r.truckId]._s.add(r.sku);
   }
-  for(const t of Object.values(_trucks))t.skuCount=t._skus.size;
+  for(const t of Object.values(_trucks))t.skuCount=t._s.size;
 
-  // Stock waterfall
-  const pool={};
-  if(_stockSkus.size>0)for(const sku of _stockSkus)pool[sku]=_stockQtys[sku]!==undefined?_stockQtys[sku]:Infinity;
-  const truckList=Object.values(_trucks).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
-  let readyCount=0,pendingCount=0;
-  for(const t of truckList){
-    if(_dispatched.has(t.id)||_oor.has(t.id)){t._ready=true;continue}
-    if(_stockSkus.size===0){t._ready=false;pendingCount++;continue}
+  // Waterfall
+  const pool={};if(_ss.size)for(const s of _ss)pool[s]=_sq[s]!==undefined?_sq[s]:Infinity;
+  const tl=Object.values(_trucks).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  let readyCnt=0,pendCnt=0;
+  for(const t of tl){
+    if(_disp.has(t.id)||_oor.has(t.id)){t._ready=true;continue}
+    if(!_ss.size){t._ready=false;pendCnt++;continue}
     const items={};for(const r of _plan.filter(r=>r.truckId===t.id))items[r.sku]=(items[r.sku]||0)+(r.qty||0);
-    const canFill=Object.keys(items).every(s=>(pool[s]||0)>=items[s]);
-    if(canFill){t._ready=true;readyCount++;for(const s in items)pool[s]=(pool[s]||0)-items[s]}
-    else{t._ready=false;pendingCount++}
+    if(Object.keys(items).every(s=>(pool[s]||0)>=items[s])){
+      t._ready=true;readyCnt++;for(const s in items)pool[s]-=items[s];
+    }else{t._ready=false;pendCnt++}
   }
 
-  const totalTrucks=truckList.length;
-  const dispCount=[...new Set(truckList.filter(t=>_dispatched.has(t.id)).map(t=>t.id))].length;
-  const oorCount=[...new Set(truckList.filter(t=>_oor.has(t.id)).map(t=>t.id))].length;
-  const upcoming72=truckList.filter(t=>!_dispatched.has(t.id)&&!_oor.has(t.id)&&dN(t.date)>=0&&dN(t.date)<=3);
+  const total=tl.length,dispCnt=[...new Set(tl.filter(t=>_disp.has(t.id)).map(t=>t.id))].length;
+  const oorCnt=[...new Set(tl.filter(t=>_oor.has(t.id)).map(t=>t.id))].length;
+  const up72=tl.filter(t=>!_disp.has(t.id)&&!_oor.has(t.id)&&dN(t.date)>=0&&dN(t.date)<=3);
 
-  // ═══ LEFT COLUMN: Instruments ═══
-  let left='';
+  // ═══ LEFT: INSTRUMENTS ═══
+  let L='';
+  const dispPct=total?Math.round(dispCnt/total*100):0;
 
-  // Main gauges
-  const dispPct=totalTrucks>0?Math.round(dispCount/totalTrucks*100):0;
-  left+='<div class="inst"><div class="inst-hd">LP DISPATCHED</div>';
-  left+='<div class="inst-v" style="color:var(--gn)">'+dispCount+'<span style="font-size:16px;color:var(--ts)"> / '+totalTrucks+'</span></div>';
-  left+='<div class="gauge"><div class="gauge-fill" style="width:'+dispPct+'%;background:var(--gn)"></div></div>';
-  left+='<div class="inst-sub">'+dispPct+'% dispatched</div></div>';
+  L+='<div class="instr"><div class="instr-label">DISPATCHED</div>';
+  L+='<div class="instr-value" style="color:var(--glow)">'+dispCnt+'<span style="font-size:14px;color:var(--dim)"> / '+total+'</span></div>';
+  L+='<div class="gbar"><div class="gbar-fill" style="width:'+dispPct+'%;background:var(--glow);color:var(--glow)"></div></div>';
+  L+='<div class="instr-sub">'+dispPct+'% COMPLETE</div></div>';
 
-  left+='<div class="inst"><div class="inst-hd">READY TO DISPATCH</div>';
-  left+='<div class="inst-v" style="color:var(--bl)">'+readyCount+'</div>';
-  left+='<div class="inst-l">trucks with full stock coverage</div></div>';
+  L+='<div class="instr"><div class="instr-label">READY</div>';
+  L+='<div class="instr-value" style="color:var(--cyan)">'+readyCnt+'</div>';
+  L+='<div class="instr-sub">FULL STOCK COVERAGE</div></div>';
 
-  left+='<div class="inst"><div class="inst-hd">PENDING STOCK</div>';
-  left+='<div class="inst-v" style="color:'+(pendingCount>0?'var(--rd)':'var(--gn)')+'">'+pendingCount+'</div>';
-  left+='<div class="inst-l">waiting for container arrivals</div></div>';
+  L+='<div class="instr"><div class="instr-label">PENDING STOCK</div>';
+  L+='<div class="instr-value" style="color:'+(pendCnt?'var(--red)':'var(--glow)')+'">'+pendCnt+'</div>';
+  L+='<div class="instr-sub">WAITING ARRIVALS</div></div>';
 
-  left+='<div class="inst"><div class="inst-hd">OOR SUBMITTED</div>';
-  left+='<div class="inst-v" style="color:var(--or)">'+oorCount+'</div>';
-  left+='<div class="inst-l">stock reserved by warehouse</div></div>';
+  L+='<div class="instr"><div class="instr-label">OOR SUBMITTED</div>';
+  L+='<div class="instr-value" style="color:var(--amber)">'+oorCnt+'</div>';
+  L+='<div class="instr-sub">STOCK RESERVED</div></div>';
 
-  // 72h window
-  left+='<div class="inst" style="border-color:var(--ac)"><div class="inst-hd">72H WINDOW <span class="badge bg-ac">'+fD(today)+' → '+fD(h72)+'</span></div>';
-  left+='<div class="inst-v" style="color:var(--ac)">'+upcoming72.length+'</div>';
-  left+='<div class="inst-l">trucks due in next 72 hours</div></div>';
+  L+='<div class="instr" style="border-color:var(--cyan)"><div class="instr-label">72H WINDOW</div>';
+  L+='<div class="instr-value" style="color:var(--cyan)">'+up72.length+'</div>';
+  L+='<div class="instr-sub">'+fD(today)+' → '+fD(h72)+'</div></div>';
 
   // Arrivals
-  if(_arrivals){
-    const arrDates=[...new Set(_arrivals.map(a=>a.readyDate||'').filter(d=>d))].sort();
-    const arrived=arrDates.filter(d=>d<=today).length;
-    const arr72=arrDates.filter(d=>d>today&&d<=h72).length;
-    const future=arrDates.filter(d=>d>h72).length;
-    left+='<div class="inst" onclick="showArrivals()" style="cursor:pointer"><div class="inst-hd">ARRIVALS <span style="font-size:9px;color:var(--tt)">click for detail</span></div>';
-    left+='<div style="display:flex;gap:8px;margin-top:4px">';
-    left+='<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--gn)">'+arrived+'</div><div style="font-size:9px;color:var(--ts)">arrived</div></div>';
-    left+='<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--or)">'+arr72+'</div><div style="font-size:9px;color:var(--ts)">next 72h</div></div>';
-    left+='<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--ts)">'+future+'</div><div style="font-size:9px;color:var(--ts)">future</div></div>';
-    left+='</div></div>';
+  if(_arr){
+    const ad=[...new Set(_arr.map(a=>a.readyDate||'').filter(d=>d))].sort();
+    const arv=ad.filter(d=>d<=today).length,a72=ad.filter(d=>d>today&&d<=h72).length,fut=ad.filter(d=>d>h72).length;
+    L+='<div class="instr" onclick="showArrivals()" style="cursor:pointer;border-color:var(--amber)"><div class="instr-label">ARRIVALS ▸</div>';
+    L+='<div style="display:flex;gap:4px;margin-top:4px">';
+    L+='<div style="flex:1;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--glow)">'+arv+'</div><div style="font-size:8px;color:var(--dim)">ARRIVED</div></div>';
+    L+='<div style="flex:1;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--amber)">'+a72+'</div><div style="font-size:8px;color:var(--dim)">NEXT 72H</div></div>';
+    L+='<div style="flex:1;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--dim)">'+fut+'</div><div style="font-size:8px;color:var(--dim)">FUTURE</div></div>';
+    L+='</div></div>';
   }
 
-  document.getElementById('leftCol').innerHTML=left;
+  document.getElementById('leftCol').innerHTML=L;
 
-  // ═══ CENTER COLUMN: Destinations + 72h trucks ═══
-  let center='';
-
-  // Destination cards
-  center+='<div class="section-hd">DESTINATIONS</div>';
-  const byDest={};
-  for(const t of truckList){
-    if(!byDest[t.dest])byDest[t.dest]={total:0,disp:0,ready:0,pending:0,oor:0,plt:0};
-    byDest[t.dest].total++;byDest[t.dest].plt+=t.pallets;
-    if(_dispatched.has(t.id))byDest[t.dest].disp++;
-    else if(_oor.has(t.id))byDest[t.dest].oor++;
-    else if(t._ready)byDest[t.dest].ready++;
-    else byDest[t.dest].pending++;
+  // ═══ CENTER: DESTINATIONS + 72H ═══
+  let C='';
+  C+='<div class="sec-hd">DESTINATIONS</div>';
+  const bd={};
+  for(const t of tl){
+    if(!bd[t.dest])bd[t.dest]={tot:0,disp:0,rdy:0,pend:0,oor:0,plt:0};
+    bd[t.dest].tot++;bd[t.dest].plt+=t.pallets;
+    if(_disp.has(t.id))bd[t.dest].disp++;else if(_oor.has(t.id))bd[t.dest].oor++;else if(t._ready)bd[t.dest].rdy++;else bd[t.dest].pend++;
   }
-  for(const d of Object.keys(byDest).sort()){
-    const s=byDest[d];const pct=s.total>0?Math.round(s.disp/s.total*100):0;
-    const isMex=d.toUpperCase().includes('MEX');const isCan=d.toUpperCase().includes('CAN');
-    const flag=isMex?'🇲🇽':isCan?'🇨🇦':'🇺🇸';
-    center+='<div class="dest-card" onclick="showDest(\''+d.replace(/'/g,"\\'")+'\')">';
-    center+='<div style="display:flex;justify-content:space-between;align-items:center">';
-    center+='<div class="dest-name">'+flag+' '+d+'</div>';
-    center+='<div style="display:flex;gap:6px">';
-    if(s.disp)center+='<span class="badge bg-gn">'+s.disp+' sent</span>';
-    if(s.ready)center+='<span class="badge bg-bl">'+s.ready+' ready</span>';
-    if(s.pending)center+='<span class="badge bg-rd">'+s.pending+' pending</span>';
-    if(s.oor)center+='<span class="badge bg-or">'+s.oor+' OOR</span>';
-    center+='</div></div>';
-    center+='<div class="gauge" style="margin-top:6px"><div class="gauge-fill" style="width:'+pct+'%;background:var(--gn)"></div></div>';
-    center+='<div style="font-size:9px;color:var(--tt);margin-top:3px">'+s.total+' trucks · '+Math.round(s.plt)+' pallets · '+pct+'% dispatched</div>';
-    center+='</div>';
+  for(const d of Object.keys(bd).sort()){
+    const s=bd[d];const pct=s.tot?Math.round(s.disp/s.tot*100):0;
+    const mx=d.toUpperCase().includes('MEX'),ca=d.toUpperCase().includes('CAN');
+    const fl=mx?'🇲🇽':ca?'🇨🇦':'🇺🇸';
+    C+='<div class="dest" onclick="showDest(\''+d.replace(/'/g,"\\'")+'\')">';
+    C+='<div style="display:flex;justify-content:space-between;align-items:center">';
+    C+='<div class="dest-name">'+fl+' '+d+'</div>';
+    C+='<span style="font-size:10px;color:var(--dim)">'+s.tot+' TRUCKS</span></div>';
+    C+='<div class="dest-badges">';
+    if(s.disp)C+='<span class="b b-gn">'+s.disp+' SENT</span>';
+    if(s.rdy)C+='<span class="b b-cy">'+s.rdy+' READY</span>';
+    if(s.pend)C+='<span class="b b-rd">'+s.pend+' PEND</span>';
+    if(s.oor)C+='<span class="b b-am">'+s.oor+' OOR</span>';
+    C+='</div>';
+    C+='<div class="gbar" style="margin-top:4px"><div class="gbar-fill" style="width:'+pct+'%;background:var(--glow);color:var(--glow)"></div></div>';
+    C+='<div style="font-size:8px;color:var(--dim);margin-top:2px">'+Math.round(s.plt)+' PLT · '+pct+'%</div></div>';
   }
 
-  // 72h truck list
-  if(upcoming72.length){
-    center+='<div class="section-hd" style="margin-top:20px">72-HOUR DISPATCH WINDOW</div>';
-    for(const t of upcoming72){
-      const pct=Math.round(t.pallets/26*100);
-      const clr=t._ready?'var(--bl)':'var(--rd)';
-      const dl=dayLabel(t.date);
-      const dlCls=dN(t.date)===0?'bg-rd':dN(t.date)===1?'bg-or':'bg-bl';
-      center+='<div class="truck-row" onclick="showTruck('+t.id+')">';
-      center+='<div class="truck-id" style="color:'+clr+'">LP-'+t.id+'</div>';
-      center+='<div class="truck-dest">'+t.dest+'</div>';
-      center+='<span class="badge '+dlCls+'">'+dl+'</span>';
-      center+='<div class="truck-plt">'+t.pallets.toFixed(1)+'/26</div>';
-      center+='<div class="truck-bar"><div class="truck-bar-fill" style="width:'+pct+'%;background:'+clr+'"></div></div>';
-      center+='<span class="badge '+(t._ready?'bg-bl':'bg-rd')+'">'+(t._ready?'READY':'PEND')+'</span>';
-      center+='</div>';
+  if(up72.length){
+    C+='<div class="sec-hd" style="margin-top:14px">72-HOUR DISPATCH QUEUE</div>';
+    for(const t of up72){
+      const pct=Math.round(t.pallets/26*100);const clr=t._ready?'var(--cyan)':'var(--red)';
+      const dl=dL(t.date);const dlc=dN(t.date)===0?'b-rd':dN(t.date)===1?'b-am':'b-cy';
+      C+='<div class="tr-row" onclick="showTruck('+t.id+')">';
+      C+='<div class="tr-id" style="color:'+clr+'">LP-'+t.id+'</div>';
+      C+='<div class="tr-dest">'+t.dest+'</div>';
+      C+='<span class="b '+dlc+'">'+dl+'</span>';
+      C+='<span style="font-size:10px;width:52px;text-align:right;flex-shrink:0">'+t.pallets.toFixed(1)+'</span>';
+      C+='<div class="tr-bar"><div class="tr-bar-f" style="width:'+pct+'%;background:'+clr+'"></div></div>';
+      C+='<span class="b '+(t._ready?'b-cy':'b-rd')+'">'+(t._ready?'RDY':'PND')+'</span>';
+      C+='</div>';
     }
   }
 
-  document.getElementById('centerCol').innerHTML=center;
+  document.getElementById('centerCol').innerHTML=C;
 
-  // ═══ RIGHT COLUMN: Alerts + Timeline ═══
-  let right='';
-
-  // Generate alerts
+  // ═══ RIGHT: ALERTS + TIMELINE ═══
+  let R='';
   const alerts=[];
 
-  // Overdue trucks (date passed but not dispatched)
-  for(const t of truckList){
-    if(_dispatched.has(t.id)||_oor.has(t.id))continue;
-    const d=dN(t.date);
-    if(d!==null&&d<0){
-      alerts.push({type:'rd',title:'OVERDUE: LP-'+t.id,desc:t.dest+' — due '+fD(t.date)+' ('+Math.abs(d)+'d late)',action:()=>showTruck(t.id)});
-    }
-  }
+  for(const t of tl){if(!_disp.has(t.id)&&!_oor.has(t.id)&&dN(t.date)<0)
+    alerts.push({c:'rd',t:'OVERDUE LP-'+t.id,d:t.dest+' · DUE '+fD(t.date)+' · '+Math.abs(dN(t.date))+'D LATE',f:()=>showTruck(t.id)})}
+  for(const t of up72){if(dN(t.date)===0&&!t._ready)
+    alerts.push({c:'rd',t:'TODAY NOT READY LP-'+t.id,d:t.dest+' · MISSING STOCK',f:()=>showTruck(t.id)})}
+  for(const t of up72){if(dN(t.date)===1&&!t._ready)
+    alerts.push({c:'am',t:'TMRW NOT READY LP-'+t.id,d:t.dest+' · CHECK STOCK',f:()=>showTruck(t.id)})}
+  const rdyWait=tl.filter(t=>!_disp.has(t.id)&&!_oor.has(t.id)&&t._ready&&dN(t.date)<=0);
+  if(rdyWait.length)alerts.push({c:'cy',t:rdyWait.length+' TRUCKS READY TO DISPATCH',d:'ALL STOCK AVAILABLE · CAN SEND NOW',f:()=>{
+    let h='<h2>READY FOR DISPATCH</h2><table><thead><tr><th>TRUCK</th><th>DEST</th><th>DATE</th><th>PLT</th></tr></thead><tbody>';
+    for(const t of rdyWait)h+='<tr onclick="showTruck('+t.id+')" style="cursor:pointer"><td style="font-weight:700;color:var(--glow)">LP-'+t.id+'</td><td>'+t.dest+'</td><td>'+fD(t.date)+'</td><td>'+t.pallets.toFixed(1)+'</td></tr>';
+    h+='</tbody></table>';openModal(h)}});
+  if(!alerts.length)alerts.push({c:'gn',t:'ALL CLEAR',d:'NO OVERDUE · NO URGENT ACTIONS'});
 
-  // Trucks due today not ready
-  for(const t of upcoming72){
-    if(dN(t.date)===0&&!t._ready){
-      alerts.push({type:'rd',title:'DUE TODAY NOT READY: LP-'+t.id,desc:t.dest+' — missing stock items',action:()=>showTruck(t.id)});
-    }
-  }
-
-  // Trucks due tomorrow not ready
-  for(const t of upcoming72){
-    if(dN(t.date)===1&&!t._ready){
-      alerts.push({type:'or',title:'DUE TOMORROW NOT READY: LP-'+t.id,desc:t.dest+' — check stock availability',action:()=>showTruck(t.id)});
-    }
-  }
-
-  // Ready trucks that could be dispatched
-  const readyNotDisp=truckList.filter(t=>!_dispatched.has(t.id)&&!_oor.has(t.id)&&t._ready&&dN(t.date)<=0);
-  if(readyNotDisp.length){
-    alerts.push({type:'bl',title:readyNotDisp.length+' READY TRUCKS AWAITING DISPATCH',desc:'All stock available — can be dispatched now',action:()=>{
-      let h='<h2>Ready for Dispatch</h2><table><thead><tr><th>Truck</th><th>Dest</th><th>Date</th><th>Pallets</th></tr></thead><tbody>';
-      for(const t of readyNotDisp)h+='<tr onclick="showTruck('+t.id+')" style="cursor:pointer"><td style="font-weight:700">LP-'+t.id+'</td><td>'+t.dest+'</td><td>'+fD(t.date)+'</td><td>'+t.pallets.toFixed(1)+'</td></tr>';
-      h+='</tbody></table>';openModal(h);
-    }});
-  }
-
-  // All clear
-  if(!alerts.length)alerts.push({type:'gn',title:'ALL CLEAR',desc:'No overdue trucks, no urgent actions needed'});
-
-  right+='<div class="section-hd">ALERTS</div>';
+  R+='<div class="sec-hd">⚠ ALERTS</div>';
   for(const a of alerts){
-    right+='<div class="alert-item a-'+a.type+'" '+(a.action?'onclick="('+a.action.toString()+')()"':'')+' style="cursor:pointer">';
-    right+='<div class="a-title">'+a.title+'</div>';
-    right+='<div class="a-desc">'+a.desc+'</div></div>';
+    R+='<div class="alert al-'+a.c+'" '+(a.f?'onclick="('+a.f.toString()+')()"':'')+' style="cursor:pointer">';
+    R+='<div class="al-title" style="color:var(--'+(a.c==='rd'?'red':a.c==='am'?'amber':a.c==='cy'?'cyan':'glow')+')">'+a.t+'</div>';
+    R+='<div class="al-desc">'+a.d+'</div></div>';
   }
 
-  // Timeline
-  right+='<div class="section-hd" style="margin-top:16px">TIMELINE</div>';
-  const milestones=[
-    {date:'2026-03-09',label:'First container arrives',color:'var(--ac)'},
-    {date:'2026-03-16',label:'First LP truck dispatches',color:'var(--ac)'},
-    {date:'2026-04-01',label:'USA/RIC bucket starts',color:'var(--bl)'},
-    {date:'2026-04-03',label:'First LM truck (LM-1)',color:'var(--bl)'},
-    {date:'2026-04-15',label:'First venue bump-in',color:'var(--gn)'},
-    {date:'2026-04-29',label:'Last LP truck',color:'var(--ac)'},
-    {date:'2026-06-09',label:'Last LM truck',color:'var(--bl)'},
-    {date:'2026-06-11',label:'KICKOFF',color:'var(--or)'},
+  R+='<div class="sec-hd" style="margin-top:12px">TIMELINE</div>';
+  const ms=[
+    {d:'2026-03-09',l:'FIRST CONTAINER',c:'var(--glow)'},
+    {d:'2026-03-16',l:'FIRST LP TRUCK',c:'var(--glow)'},
+    {d:'2026-04-01',l:'USA BUCKET START',c:'var(--cyan)'},
+    {d:'2026-04-03',l:'FIRST LM TRUCK',c:'var(--cyan)'},
+    {d:'2026-04-15',l:'FIRST BUMP-IN',c:'var(--amber)'},
+    {d:'2026-04-29',l:'LAST LP TRUCK',c:'var(--glow)'},
+    {d:'2026-06-09',l:'LAST LM TRUCK',c:'var(--cyan)'},
+    {d:'2026-06-11',l:'★ KICKOFF',c:'var(--amber)'},
   ];
-  for(const m of milestones){
-    const d=dN(m.date);const passed=d!==null&&d<0;
-    right+='<div class="tl-row" style="'+(passed?'opacity:0.4':'')+'"><div class="tl-date">'+fD(m.date)+'</div><div class="tl-dot" style="background:'+m.color+'"></div><div class="tl-label">'+m.label+(d!==null&&d>=0?' <span class="badge bg-ac">'+dayLabel(m.date)+'</span>':'')+'</div></div>';
+  for(const m of ms){
+    const n=dN(m.d);const past=n!==null&&n<0;
+    R+='<div class="tl-r'+(past?' tl-past':'')+'"><div class="tl-d">'+fD(m.d)+'</div><div class="tl-dot" style="background:'+m.c+'"></div><div class="tl-txt">'+m.l+(n!==null&&n>=0?' <span class="b b-cy">'+dL(m.d)+'</span>':'')+'</div></div>';
   }
 
-  // Generated timestamp
-  right+='<div style="margin-top:20px;font-size:9px;color:var(--tt);text-align:center;padding-top:12px;border-top:1px solid var(--bd)">Generated '+now.toLocaleString()+'<br>Data from ML3K Supabase</div>';
+  R+='<div style="margin-top:16px;padding-top:8px;border-top:1px solid var(--bd);font-size:8px;color:var(--dim);text-align:center;letter-spacing:1px">GENERATED '+now.toLocaleString().toUpperCase()+'<br>ML3K SUPABASE LIVE DATA</div>';
 
-  document.getElementById('rightCol').innerHTML=right;
+  document.getElementById('rightCol').innerHTML=R;
 }
 
-// Clock update
 setInterval(()=>{
-  const now=new Date();
-  document.getElementById('clock').textContent=now.toLocaleString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  const n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleTimeString('en-US',{hour12:false});
+  const k=new Date('2026-06-11');const d=Math.ceil((k-n)/864e5);
+  document.getElementById('kickoff').textContent='T-'+d+' DAYS';
 },1000);
 
 generate();
