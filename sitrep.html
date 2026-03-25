@@ -270,8 +270,12 @@ async function generate(){
   L+='<div class="instr-value" style="color:var(--amber)">'+oorCnt+'</div>';
   L+='<div class="instr-sub">STOCK RESERVED</div></div>';
 
+  const recent=tl.filter(t=>_disp.has(t.id)&&dN(t.date)>=-3&&dN(t.date)<=0);
   L+='<div class="instr" style="border-color:var(--cyan)"><div class="instr-label">72H WINDOW</div>';
-  L+='<div class="instr-value" style="color:var(--cyan)">'+up72.length+'</div>';
+  L+='<div style="display:flex;gap:8px;margin-top:4px">';
+  L+='<div style="flex:1;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--glow)">'+(recent.length)+'</div><div style="font-size:8px;color:var(--dim)">SENT</div></div>';
+  L+='<div style="flex:1;text-align:center"><div style="font-size:18px;font-weight:700;color:var(--cyan)">'+up72.length+'</div><div style="font-size:8px;color:var(--dim)">QUEUED</div></div>';
+  L+='</div>';
   L+='<div class="instr-sub">'+fD(today)+' → '+fD(h72)+'</div></div>';
 
   // Arrivals
@@ -316,20 +320,44 @@ async function generate(){
     C+='<div style="font-size:8px;color:var(--dim);margin-top:2px">'+Math.round(s.plt)+' PLT · '+pct+'%</div></div>';
   }
 
+  // Recently dispatched (last 72h) + queued for dispatch (next 72h)
+  const lsr=_ts?.lsrNumbers||{};
+  const recent72=tl.filter(t=>_disp.has(t.id)&&dN(t.date)>=-3&&dN(t.date)<=0);
+  if(recent72.length){
+    C+='<div class="sec-hd" style="margin-top:14px">RECENTLY DISPATCHED (72H)</div>';
+    for(const t of recent72){
+      const pct=Math.round(t.pallets/26*100);
+      C+='<div class="tr-row" onclick="showTruck('+t.id+')" style="opacity:0.7">';
+      C+='<div class="tr-id" style="color:var(--glow)">LP-'+t.id+'</div>';
+      C+='<div class="tr-dest">'+clDisp(t.dest)+'</div>';
+      if(lsr[t.id])C+='<span style="font-size:9px;color:var(--amber)">'+lsr[t.id]+'</span>';
+      C+='<span style="font-size:10px;width:52px;text-align:right;flex-shrink:0">'+t.pallets.toFixed(1)+'</span>';
+      C+='<div class="tr-bar"><div class="tr-bar-f" style="width:'+pct+'%;background:var(--glow)"></div></div>';
+      C+='<span class="b b-gn">SENT</span>';
+      C+='</div>';
+    }
+  }
+
   if(up72.length){
-    C+='<div class="sec-hd" style="margin-top:14px">72-HOUR DISPATCH QUEUE</div>';
+    C+='<div class="sec-hd" style="margin-top:14px">NEXT 72H DISPATCH QUEUE</div>';
     for(const t of up72){
       const pct=Math.round(t.pallets/26*100);const clr=t._ready?'var(--cyan)':'var(--red)';
       const dl=dL(t.date);const dlc=dN(t.date)===0?'b-rd':dN(t.date)===1?'b-am':'b-cy';
       C+='<div class="tr-row" onclick="showTruck('+t.id+')">';
       C+='<div class="tr-id" style="color:'+clr+'">LP-'+t.id+'</div>';
       C+='<div class="tr-dest">'+clDisp(t.dest)+'</div>';
+      if(lsr[t.id])C+='<span style="font-size:9px;color:var(--amber)">'+lsr[t.id]+'</span>';
       C+='<span class="b '+dlc+'">'+dl+'</span>';
       C+='<span style="font-size:10px;width:52px;text-align:right;flex-shrink:0">'+t.pallets.toFixed(1)+'</span>';
       C+='<div class="tr-bar"><div class="tr-bar-f" style="width:'+pct+'%;background:'+clr+'"></div></div>';
       C+='<span class="b '+(t._ready?'b-cy':'b-rd')+'">'+(t._ready?'RDY':'PND')+'</span>';
       C+='</div>';
     }
+  }
+
+  if(!recent72.length&&!up72.length){
+    C+='<div class="sec-hd" style="margin-top:14px">72-HOUR WINDOW</div>';
+    C+='<div style="padding:12px;color:var(--dim);font-size:10px">No trucks dispatched or queued in the 72h window.</div>';
   }
 
   document.getElementById('centerCol').innerHTML=C;
