@@ -11404,7 +11404,7 @@ if(it.noPallet){
 }
 const _isKit=!!NOM[it.sku]?._kitNom;
 const _isAsm=!_isKit&&LM_isAssembled(it.sku,_mVt,_mCountry);
-h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}</td><td class="mono">${it.sku}${_isKit?' <span onclick="event.stopPropagation();LM_showKitDetail(\''+NOM[it.sku]._kitId+'\')" style="cursor:pointer;font-size:10px" title="View kit contents">📦</span>':''}</td><td class="tcl" style="color:var(--ts)">${it.nm}${_isKit?' <span style="font-size:8px;color:#43A047;font-weight:700">KIT</span>':''}${_isAsm?' <span style="font-size:8px;color:var(--or);font-weight:700;background:var(--os);padding:1px 4px;border-radius:3px" title="Assembly required at WHS">A</span>':''}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
+h+=`<tr${it.noPallet?' style="background:#FEF8F4"':''}><td style="text-align:center">${lmDot}${_isAsm?'<span style="display:block;font-size:7px;font-weight:700;color:var(--or);line-height:1;margin-top:1px" title="Assembly required at WHS">A</span>':''}</td><td class="mono">${it.sku}${_isKit?' <span onclick="event.stopPropagation();LM_showKitDetail(\''+NOM[it.sku]._kitId+'\')" style="cursor:pointer;font-size:10px" title="View kit contents">📦</span>':''}</td><td class="tcl" style="color:var(--ts)">${it.nm}${_isKit?' <span style="font-size:8px;color:#43A047;font-weight:700">KIT</span>':''}</td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">${lmSrc}</td>
 <td class="fw6">${totalForSku.toLocaleString()}</td><td class="cgr" style="border-right:2px solid var(--bl)" title="${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'Pallet qty '+(it.pq*_ppu)+' ÷ PPU '+_ppu+' = '+it.pq:'Pallet qty per UOM';})()}">${it.pq||'—'}${(()=>{const _ppu=NOM[it.sku]?.ppu||1;return _ppu>1?'<span style="font-size:8px;color:var(--tt)"> ×'+_ppu+'</span>':'';})()}</td>
 ${isClusterTruck?'':`<td style="border-right:none">${reqQtyHtml}</td><td style="border-right:2px solid var(--bl)">${reqPltHtml}</td>`}
 <td class="fw7 cgn">${_isKit?'1':it.loadQty.toLocaleString()}</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.noPallet?'<span style="color:var(--or);font-size:10px">—</span>':(Number.isInteger(it.loadPlt)?it.loadPlt:it.loadPlt.toFixed(1))}</td>
@@ -12643,6 +12643,64 @@ if(cv==="dashboard"){
       <td><div style="height:14px;background:#F0F1F3;border-radius:3px;overflow:hidden"><div style="width:${barW}%;height:100%;background:${d.trucks>=10?"#C0392B":d.trucks>=6?"#E8745A":d.trucks>=3?"#F0C36D":"#78C68D"};border-radius:3px"></div></div></td></tr>`;
     });
     h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="2" style="font-size:12px">Total · ${calDates.length} days</td><td style="color:var(--gn)">${_totTrk}</td><td style="color:#E31837">${_totCrt||'—'}</td><td style="color:#EF6C00">${_totStp||'—'}</td><td>${Number.isInteger(_totPlt)?_totPlt:_totPlt.toFixed(1)}</td><td>${_totPcs.toLocaleString()}</td><td style="color:#E31837">${_totCrtPcs>0?_totCrtPcs.toLocaleString():"—"}</td><td style="color:#EF6C00">${_totStpPcs>0?_totStpPcs.toLocaleString():"—"}</td><td></td></tr></tfoot></table></div>`;
+  }
+
+  // ── Assembly Timeline ──
+  {
+    const _asmRows=[];
+    const _asmSeen=new Set();
+    for(const label in PLAN_CACHE){
+      const P2=PLAN_CACHE[label];if(!P2)continue;
+      // Filter to current view scope
+      if(isFiltered){
+        const lab=isClusterSel2?selCluster:sel;
+        if(label!==lab&&!(isClusterSel2&&CLUSTERS[selCluster]?.venues.includes(label)))continue;
+      } else if(isRegion){
+        if(regionCat==='can'&&!vcIsCAN(label)&&!VN.find(v=>v.name===label&&vcIsCAN(v.cluster)))continue;
+        if(regionCat==='mex'&&!vcIsMEX(label)&&!VN.find(v=>v.name===label&&vcIsMEX(v.cluster)))continue;
+      } else if(isClusterOv){
+        if(label!==clusterOvName&&!(CLUSTERS[clusterOvName]?.venues.includes(label)))continue;
+      }
+      const _isClPlan=!!CLUSTERS[label];
+      const _vt=LM_vtMap[label]||(_isClPlan&&CLUSTERS[label].venues[0]?LM_vtMap[CLUSTERS[label].venues[0]]:'');
+      const _cty=LM_venueCountry(_isClPlan?label:'',_isClPlan?CLUSTERS[label].venues[0]||'':label);
+      P2.allT.forEach(t=>{
+        if(LM_excluded.has(t.id))return;
+        const dd=t.dd||'';
+        t.items.forEach(it=>{
+          if(NOM[it.sku]?._kitNom)return;
+          if(!LM_isAssembled(it.sku,_vt,_cty))return;
+          const k=dd+'|'+it.sku+'|'+t.id;
+          if(_asmSeen.has(k))return;_asmSeen.add(k);
+          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label});
+        });
+      });
+    }
+    if(_asmRows.length>0){
+      _asmRows.sort((a,b)=>a.dd.localeCompare(b.dd)||a.truckId.localeCompare(b.truckId)||a.sku.localeCompare(b.sku));
+      const _asmTotalQty=_asmRows.reduce((s,r)=>s+r.qty,0);
+      const _asmSkus=new Set(_asmRows.map(r=>r.sku)).size;
+      h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span></div>
+      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
+      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th></tr></thead><tbody>`;
+      let _prevDd='';
+      _asmRows.forEach(r=>{
+        const isNewDate=r.dd!==_prevDd;
+        _prevDd=r.dd;
+        const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
+        const dateStr=dt?fS(dt):'—';
+        const dow=dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'';
+        h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
+          <td class="fw6">${isNewDate?dateStr+' <span style="color:var(--tt);font-weight:400">'+dow+'</span>':''}</td>
+          <td class="mono fw6">${r.truckId}</td>
+          <td style="font-size:10px">${r.dest}</td>
+          <td class="mono">${r.sku}</td>
+          <td class="tcl" style="color:var(--ts)">${r.nm}</td>
+          <td style="font-size:10px;color:var(--tt)">${r.src}</td>
+          <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td></tr>`;
+      });
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="6">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td></tr></tfoot></table></div>`;
+    }
   }
 
   // ── Venue/Cluster summary ──
