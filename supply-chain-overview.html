@@ -282,28 +282,30 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
     <svg viewBox="0 0 1400 96" width="100%" height="96" style="display:block">
       <!-- Date tick marks -->
       <g stroke="#D0D0E0" stroke-width="1">
-        <line x1="60" y1="18" x2="60" y2="72"/>
-        <line x1="400" y1="18" x2="400" y2="72"/>
+        <line x1="20" y1="18" x2="20" y2="72"/>
+        <line x1="100" y1="18" x2="100" y2="72"/>
+        <line x1="410" y1="18" x2="410" y2="72"/>
         <line x1="570" y1="18" x2="570" y2="72"/>
         <line x1="1360" y1="18" x2="1360" y2="72"/>
       </g>
       <!-- Date labels -->
       <g font-family="'IBM Plex Mono',monospace" font-size="10" fill="#8888A0" font-weight="600" text-anchor="middle">
-        <text x="60" y="88">Mar 16</text>
-        <text x="400" y="88">Apr 1</text>
+        <text x="20" y="88">Mar 9</text>
+        <text x="100" y="88">Mar 16</text>
+        <text x="410" y="88">Apr 3</text>
         <text x="570" y="88">Apr 29</text>
         <text x="1360" y="88">Jun 11</text>
       </g>
       <!-- Overlap zone background -->
-      <rect x="400" y="16" width="170" height="58" rx="4" fill="#03BFA5" opacity="0.08"/>
-      <!-- LP bar (row 1) -->
-      <rect x="60" y="22" width="510" height="22" rx="11" fill="#4A148C"/>
-      <text x="315" y="37" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#fff">Load Plan (LP) — PUSH</text>
-      <!-- LM bar (row 2) -->
-      <rect x="400" y="50" width="960" height="22" rx="11" fill="#304FFE"/>
-      <text x="880" y="65" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#fff">Last Mile (LM) — PULL</text>
+      <rect x="410" y="16" width="160" height="58" rx="4" fill="#03BFA5" opacity="0.08"/>
+      <!-- LP bar (row 1): Mar 9 – Apr 29 -->
+      <rect x="20" y="22" width="550" height="22" rx="11" fill="#4A148C"/>
+      <text x="295" y="37" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#fff">Load Plan (LP) — PUSH (Mar 9 – Apr 29)</text>
+      <!-- LM bar (row 2): Apr 3 – Jun 11 -->
+      <rect x="410" y="50" width="950" height="22" rx="11" fill="#304FFE"/>
+      <text x="885" y="65" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#fff">Last Mile (LM) — PULL (Apr 3 – Jun 9)</text>
       <!-- Overlap label -->
-      <text x="485" y="12" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#03BFA5">OVERLAP</text>
+      <text x="490" y="12" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#03BFA5">OVERLAP</text>
       <!-- Kickoff star -->
       <text x="1360" y="44" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="16" fill="#4A148C">★</text>
     </svg>
