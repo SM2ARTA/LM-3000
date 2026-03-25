@@ -108,6 +108,12 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-even
 .modal-x{float:right;background:none;border:1px solid var(--dim);color:var(--dim);width:24px;height:24px;border-radius:2px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center}
 .modal-x:hover{border-color:var(--red);color:var(--red)}
 
+/* Radial gauges */
+.radials{display:flex;gap:16px;justify-content:center;margin-bottom:12px;padding:12px 0}
+.radial{text-align:center;position:relative;cursor:default}
+.radial svg{filter:drop-shadow(0 0 8px rgba(0,255,136,0.15))}
+.radial-label{font-size:8px;letter-spacing:2px;color:var(--dim);margin-top:4px}
+
 /* Refresh animation */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 .loading{text-align:center;padding:40px;color:var(--glow);animation:pulse 1.5s infinite}
@@ -151,7 +157,7 @@ body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-even
 
 <script>
 const SB='https://stwopndhnxcjyomkufii.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
-let _plan,_ts,_arr,_nom,_stk,_trucks,_disp,_oor,_ss,_sq;
+let _plan,_ts,_arr,_nom,_stk,_rw,_trucks,_disp,_oor,_ss,_sq;
 
 async function get(id){const u=new URL(SB+'/rest/v1/shared_state');u.searchParams.set('select','value');u.searchParams.set('id','eq.'+id);const r=await fetch(u.toString(),{headers:{apikey:SK,Authorization:'Bearer '+SK}});const d=await r.json();return d?.length?JSON.parse(d[0].value):null}
 const CITY={TOR:'Toronto',VAN:'Vancouver',CDMX:'Mexico City',GDL:'Guadalajara',MTY:'Monterrey',ATL:'Atlanta',BOS:'Boston',DAL:'Dallas',HOU:'Houston',KC:'Kansas City',LA:'Los Angeles',MIA:'Miami',NY:'New York',PHI:'Philadelphia',SF:'San Francisco',SEA:'Seattle'};
@@ -213,7 +219,7 @@ async function generate(){
   const now=new Date();const today=now.toISOString().slice(0,10);
   const h72=new Date(now.getTime()+72*36e5).toISOString().slice(0,10);
 
-  [_plan,_ts,_arr,_nom,_stk]=await Promise.all([get('lp-plan'),get('lp-truck-state'),get('lp-arrivals'),get('lp-nom'),get('fm-stock')]);
+  [_plan,_ts,_arr,_nom,_stk,_rw]=await Promise.all([get('lp-plan'),get('lp-truck-state'),get('lp-arrivals'),get('lp-nom'),get('fm-stock'),get('fm-rw')]);
   _disp=new Set(_ts?.dispatched||[]);_oor=new Set(_ts?.oorTrucks||[]);
   _ss=new Set(_stk?.skus||_ts?.stockSkus||[]);_sq=_stk?.qtys||{};
 
@@ -298,6 +304,54 @@ async function generate(){
 
   // ═══ CENTER: DESTINATIONS + 72H ═══
   let C='';
+
+  // ── Radial gauges: LP, LM, Overall ──
+  const lpPct=total?Math.round(dispCnt/total*100):0;
+  // LM progress: count venues with all items dispatched (approximation from RW dispatch dates)
+  let lmTotal=0,lmDone=0;
+  if(_rw){
+    const venues=new Set();for(const r of _rw)venues.add(r.Venue||'');
+    lmTotal=venues.size;
+    // Estimate: venues whose latest bump-in date has passed = done (rough proxy)
+    const venueBi={};
+    for(const r of _rw){
+      const v=r.Venue||'';const bi=r['Estimated bump-in date']||'';
+      if(!bi)continue;const m=bi.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      const p=m?m[3]+'-'+m[2]+'-'+m[1]:'';
+      if(p&&(!venueBi[v]||p>venueBi[v]))venueBi[v]=p;
+    }
+    for(const v of venues){if(venueBi[v]&&venueBi[v]<=today)lmDone++}
+  }
+  const lmPct=lmTotal?Math.round(lmDone/lmTotal*100):0;
+  const overallPct=Math.round((lpPct*0.4+lmPct*0.6));// LP=40% weight, LM=60%
+
+  function radialSvg(pct,color,label,sub,size){
+    const r=size/2-8,cx=size/2,cy=size/2;
+    const circ=2*Math.PI*r;
+    const offset=circ-(pct/100)*circ;
+    return '<div class="radial"><svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'
+      // Background rings
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--bezel)" stroke-width="4"/>'
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-10)+'" fill="none" stroke="var(--bezel)" stroke-width="1" stroke-dasharray="2,4"/>'
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+(r+6)+'" fill="none" stroke="var(--bd)" stroke-width="0.5"/>'
+      // Progress arc
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="5" stroke-linecap="round"'
+      +' stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'" transform="rotate(-90 '+cx+' '+cy+')"'
+      +' style="filter:drop-shadow(0 0 4px '+color+');transition:stroke-dashoffset 1s"/>'
+      // Tick marks (12 positions like a clock)
+      +Array.from({length:12},(_, i)=>{const a=(i*30-90)*Math.PI/180;const x1=cx+Math.cos(a)*(r+2);const y1=cy+Math.sin(a)*(r+2);const x2=cx+Math.cos(a)*(r+6);const y2=cy+Math.sin(a)*(r+6);return'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--dim)" stroke-width="1"/>'}).join('')
+      // Center text
+      +'<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" font-family="var(--mono)" font-size="20" font-weight="700" fill="'+color+'" style="text-shadow:0 0 8px '+color+'">'+pct+'%</text>'
+      +'<text x="'+cx+'" y="'+(cy+12)+'" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--dim)">'+sub+'</text>'
+      +'</svg><div class="radial-label">'+label+'</div></div>';
+  }
+
+  C+='<div class="radials">';
+  C+=radialSvg(lpPct,'var(--glow)','LP PROGRESS',dispCnt+'/'+total+' trucks',120);
+  C+=radialSvg(lmPct,'var(--cyan)','LM PROGRESS',lmDone+'/'+lmTotal+' venues',120);
+  C+=radialSvg(overallPct,'var(--amber)','OVERALL',lpPct+'% LP · '+lmPct+'% LM',120);
+  C+='</div>';
+
   C+='<div class="sec-hd">DESTINATIONS</div>';
   const bd={};
   for(const t of tl){
