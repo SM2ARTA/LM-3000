@@ -2548,15 +2548,24 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
         <text x="240" y="372" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" fill="#8888A0">→ pull full pallets → truck reaches 25/26</text>
         <text x="240" y="388" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#03BFA5">Ship early = fewer trucks later</text>
 
-        <!-- Priority — stacked bars, full width -->
+        <!-- Priority — numbered steps with icons -->
         <rect x="10" y="408" width="460" height="122" rx="12" fill="#EDE7F6" stroke="#C5B3E6" stroke-width="1.5"/>
         <text x="240" y="432" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="800" fill="#4A148C">Loading Priority</text>
-        <rect x="24" y="442" width="432" height="26" rx="7" fill="#4A148C" opacity="0.85"/>
-        <text x="240" y="460" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#fff">1. Scheduled items for today's bump-in date</text>
-        <rect x="24" y="474" width="350" height="26" rx="7" fill="#4A148C" opacity="0.6"/>
-        <text x="199" y="492" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#fff">2. Top-up to full pallets from pool</text>
-        <rect x="24" y="506" width="260" height="26" rx="7" fill="#12804A" opacity="0.65"/>
-        <text x="154" y="524" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#fff">3. Pull full pallets from pool</text>
+        <!-- Step 1 -->
+        <circle cx="36" cy="456" r="12" fill="#4A148C"/>
+        <text x="36" y="460" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" font-weight="700" fill="#fff">1</text>
+        <text x="56" y="460" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#4A148C">Load scheduled items</text>
+        <text x="260" y="460" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">— what's due for today's bump-in date</text>
+        <!-- Step 2 -->
+        <circle cx="36" cy="482" r="12" fill="#4A148C" opacity="0.65"/>
+        <text x="36" y="486" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" font-weight="700" fill="#fff">2</text>
+        <text x="56" y="486" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#4A148C">Top-up partial pallets</text>
+        <text x="240" y="486" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">— pull from pool to complete the pallet</text>
+        <!-- Step 3 -->
+        <circle cx="36" cy="508" r="12" fill="#12804A" opacity="0.7"/>
+        <text x="36" y="512" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" font-weight="700" fill="#fff">3</text>
+        <text x="56" y="512" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#12804A">Fill remaining space</text>
+        <text x="226" y="512" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">— pool SKUs, then future dates</text>
       </svg>
     </div>
 
