@@ -8167,7 +8167,7 @@ async function syncLM(){
     if(exV)LM_excluded=new Set(exV);if(eoV)LM_excludeUserOvr=eoV;
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),MI_load().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadClusterTA().catch(()=>{})]);
     await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
-    LM_injectAll();LM_applyNomOverrides();bV();numberAll();PLAN_CACHE={};
+    LM_injectAll();LM_applyNomOverrides();bV();numberAll();
     rT();rVL();rMain();applyRole();
   });
 }
