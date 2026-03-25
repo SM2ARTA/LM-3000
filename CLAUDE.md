@@ -523,3 +523,60 @@ Post-build: `_lpTailReconstruct` optimizes last 2 unlocked trucks per (dest,date
 - Use `Grep` with line numbers to locate functions before editing
 - Prefer `Edit` over full rewrites
 - Key IDs to preserve: `stockBtn`, `stockFileInput`, `lpExportBtn`, `v26ExportBtn`, `lm-bottom-nav`, `global-supp-bar`
+
+## Supply Chain Presentation (`supply-chain-overview.html`)
+
+### Overview
+- **18 slides**, single HTML file, FIFA brand colors
+- CSS custom properties: `--pri` (#4A148C purple), `--a3` (#304FFE blue), `--a4` (#03BFA5 teal), `--sec` (#751312 burgundy)
+- Viewport: `1920×1080`, padding `72px 90px`
+- Served via `_server.js` on port 8888
+- Print: `@page size:20in 11.25in`
+- All data sourced from ML3K Supabase + Supply Chain system screenshots
+
+### Slide Structure
+1. **Title** — 166,311 LM items, disclaimer, FIFA WORLD CUP 2026™
+2. **Journey** — two-phase (LP push / LM pull), 6-step flow, timeline overlap bar (LP: Mar 9–Apr 29, LM: Apr 3–Jun 9)
+3. **Suppliers** — 8 suppliers, 40 containers (Mar 9–Apr 10), 20 local deliveries
+4. **Dallas Engine Room** — 192+ SKUs, ~93 LP trucks, 201 kits, 850 assembly items, arrivals chart SVG
+5. **LP Routes Map** — ~93 trucks to 8 destinations (excl Staples), 57,566 UoM, SVG map with route lines
+6. **Warehouse Models** — Regional (5, Space Rent) + Satellite (8, Pallet Spaces), assembly 4,258 items, 3-column layout
+7. **MEX/CAN Regional** — 5 regions (CDMX 52, GDL 38, MTY 32, TOR 25, VAN 30), 177 LM trucks, 3,422 assembly items
+8. **USA Last Mile** — 292 LM trucks, 166 CORT, 39 Staples, 130,840 items, satellite + CORT model
+9. **Venue Assembly** — 6,658 RGS items at 10 stadiums + IBC, per-stadium table, tools per stadium (10 tools, 3 sets each), VLM tools disclaimer
+10. **CORT Stadiums** — 2,128 items, What's Ours/Theirs, 37 CORT SKUs (24 rental + 13 retail), 32,627 items
+11. **Staples** — USA Direct/Kits/MEX&CAN, 166 SKUs, 83 kits, 69 direct, delivery split table
+12. **Cardboard Furniture** — Re-Board tables (900) + LOOK welcome desks (278), product images
+13. **Operations Matrix** — 214 venues, full route/WHS/assembly breakdown table, MEX/CAN/USA/CORT rows
+14. **Action Items** — 6 workstreams in 3×2 grid (Materials, Customs, Distribution, Warehousing, Venue Logistics, CORT)
+15. **Timeline** — 94-day SVG (Mar 9–Jun 11), Phase 1 LP bars (Bucket 1/2), Phase 2 LM bars (Apr 3–Jun 9), assembly (Apr 15–Jun 29), KICKOFF star, summary chips
+16. **Platform (ML3K)** — ml3000.smmarta.com, credentials view/me, LP Engine V5 + LM Engine details
+17. **LP Engine V5** — Three-stage visual: Plan (two-bucket with stock pool), Build (4-pass SR-first loading), Optimize (tail reconstruction with 162B+ search). Real example flow: LP-31 Monterrey walkthrough. Constraint cards (26 plt, 4 trucks, 2 dests).
+18. **LM Engine** — Three-section visual: Dispatch dates (bump-in − lead time, MEX/CAN 0d, USA 0–3d), Fill each truck (3-pass: scheduled → top-up → pool → future), Day loop & overflow (carry-over, max trucks/day, no-BI items, CORT separate)
+
+### CSS Design System
+- Standardized spacing: `.sub-tight` (16px), `.sub-std` (24px), default `.sub` (32px)
+- Card tiers: `.cv-sm` (24px), `.cv-md` (28px), default `.cv` (36px)
+- Disclaimer callouts: `callout callout-red` with `padding:10px 18px;font-size:11px` — consistent across all slides
+- Badge colors: `badge-pri` (purple), `badge-a3` (blue), `badge-a4` (teal), `badge-sec` (burgundy), `badge-rd` (red)
+- All slides use consistent header (`.hd`), footer (`.ft` with `.sn` page number), and content padding
+
+### Key Data Points (as of 2026-03-24)
+- LP demand (excl Staples): 57,566 UoM, ~93 trucks, 2,403 pallets
+- LM MEX/CAN: 177 trucks (CDMX 52, GDL 38, MTY 32, TOR 25, VAN 30)
+- LM USA: 292 trucks, 166 CORT deliveries
+- Assembly at venues: 6,658 items (RGS stadiums + IBC)
+- Assembly at CORT stadiums: 2,128 items
+- Assembly at WHS: Regional 3,422, Satellite 836, Dallas 850
+- CORT: 24 rental + 13 retail = 37 SKUs, 32,627 items
+- RGS containers: 40 (Mar 9–Apr 10), 20 local deliveries
+- Staples: 166 SKUs, 62 USA + 59 CAN + 45 MEX catalogs
+- Timeline: LP Mar 9–Apr 29, LM Apr 3–Jun 9, Bump-in Apr 15–Jun 29, Kickoff Jun 11
+- LM lead times: MEX/CAN = 0 days (regional WHS), USA = 0–3 days from Dallas
+- LP Engine: 162B+ search combinations across 16 truck pairs, 126 SKUs, 8 destinations
+
+### Editing Notes
+- SVGs are inline — edit viewBox, coordinates, and text directly
+- Slide boundaries: `<div class="S">` with `class="sn"` page numbers
+- Product images: `Table 1.png`, `Table 4.png`, `Welcome desk.png` (committed to git)
+- When updating data: check all slides that reference the same number (truck counts, pallet totals, dates appear on multiple slides)
