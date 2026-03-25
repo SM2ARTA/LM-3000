@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FF&E SITREP — 72h Look-Ahead</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+:root{--pri:#4A148C;--a3:#304FFE;--a4:#03BFA5;--sec:#751312;--gn:#12804A;--or:#C4550A;--rd:#C62828;--tp:#1A1A2E;--ts:#555570;--tt:#8888A0;--bg:#F4F5F7;--sf:#FFF;--bd:#E2E4E9}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--tp);padding:24px 40px;max-width:1400px;margin:0 auto}
+h1{font-size:28px;font-weight:800;margin-bottom:4px}
+h2{font-size:18px;font-weight:700;margin:24px 0 12px;color:var(--pri)}
+h3{font-size:14px;font-weight:700;margin:16px 0 8px}
+.sub{font-size:14px;color:var(--ts);margin-bottom:20px}
+.mono{font-family:'IBM Plex Mono',monospace}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:16px 20px;margin-bottom:12px}
+.kpi-row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.kpi{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px 18px;flex:1;min-width:140px;text-align:center}
+.kpi .v{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:800;margin-bottom:2px}
+.kpi .l{font-size:11px;color:var(--ts);font-weight:600}
+.badge{display:inline-block;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:700}
+.b-gn{background:#E6F5ED;color:var(--gn)}
+.b-or{background:#FEF3EB;color:var(--or)}
+.b-rd{background:#FDEBED;color:var(--rd)}
+.b-pri{background:#EDE7F6;color:var(--pri)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:8px 12px;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--bd);background:var(--bg)}
+td{padding:7px 12px;border-bottom:1px solid var(--bd);line-height:1.4}
+.loading{text-align:center;padding:60px;color:var(--tt);font-size:16px}
+.ts{color:var(--ts);font-size:11px}
+.generated{color:var(--tt);font-size:11px;margin-top:24px;text-align:center;padding:12px;border-top:1px solid var(--bd)}
+.section{margin-bottom:24px}
+@media print{body{padding:12px 24px}h1{font-size:22px}.kpi .v{font-size:18px}}
+</style>
+</head>
+<body>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+  <div>
+    <h1>FF&E SITREP — 72-Hour Look-Ahead</h1>
+    <div class="sub">Automated situation report from ML3K. Generated <span id="genTime" class="mono" style="color:var(--pri)">...</span></div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:11px;color:var(--ts);margin-bottom:4px">FIFA World Cup 2026™ · Materials Management</div>
+    <button onclick="generate()" style="padding:8px 20px;background:var(--pri);color:#fff;border:none;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer">Refresh Sitrep</button>
+  </div>
+</div>
+
+<div id="content"><div class="loading">Loading data from ML3K...</div></div>
+
+<div class="generated" id="footer"></div>
+
+<script>
+const SB_URL='https://stwopndhnxcjyomkufii.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
+
+async function get(id){
+  const url=new URL(SB_URL+'/rest/v1/shared_state');
+  url.searchParams.set('select','value');url.searchParams.set('id','eq.'+id);
+  const r=await fetch(url.toString(),{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
+  const rows=await r.json();
+  if(!rows||!rows.length)return null;
+  return JSON.parse(rows[0].value);
+}
+
+function fmtDate(d){
+  if(!d)return'—';
+  try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}catch(e){return d}
+}
+
+function daysFromNow(d){
+  if(!d)return null;
+  const now=new Date();now.setHours(0,0,0,0);
+  const target=new Date(d+'T12:00:00');target.setHours(0,0,0,0);
+  return Math.round((target-now)/(86400000));
+}
+
+async function generate(){
+  const el=document.getElementById('content');
+  el.innerHTML='<div class="loading">Generating sitrep...</div>';
+  const now=new Date();
+  document.getElementById('genTime').textContent=now.toLocaleString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  try{
+    const [plan,truckState,arrivals,nom,rw,vs,stock]=await Promise.all([
+      get('lp-plan'),get('lp-truck-state'),get('lp-arrivals'),
+      get('lp-nom'),get('fm-rw'),get('fm-vs'),get('fm-stock')
+    ]);
+
+    const today=now.toISOString().slice(0,10);
+    const h72=new Date(now.getTime()+72*3600000).toISOString().slice(0,10);
+    let html='';
+
+    // ═══ LP STATUS ═══
+    const dispatched=new Set(truckState?.dispatched||[]);
+    const oorSet=new Set(truckState?.oorTrucks||[]);
+    const stockSkus=new Set(stock?.skus||truckState?.stockSkus||[]);
+    const stockQtys=stock?.qtys||{};
+
+    if(plan&&plan.length){
+      // Group by truck
+      const trucks={};
+      for(const r of plan){
+        if(!trucks[r.truckId])trucks[r.truckId]={id:r.truckId,dest:r.destination,date:r.date,pallets:0,qty:0,skus:new Set()};
+        trucks[r.truckId].pallets+=r.pallets||0;
+        trucks[r.truckId].qty+=r.qty||0;
+        trucks[r.truckId].skus.add(r.sku);
+      }
+      const truckList=Object.values(trucks).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+
+      const totalTrucks=truckList.length;
+      const dispatchedCount=truckList.filter(t=>dispatched.has(t.id)).length;
+      const oorCount=truckList.filter(t=>oorSet.has(t.id)).length;
+      const pendingTrucks=truckList.filter(t=>!dispatched.has(t.id)&&!oorSet.has(t.id));
+
+      // Stock waterfall for readiness
+      const stockPool={};
+      if(stockSkus.size>0)for(const sku of stockSkus){stockPool[sku]=stockQtys[sku]!==undefined?stockQtys[sku]:Infinity}
+      let readyCount=0,notReadyCount=0;
+      for(const t of truckList){
+        if(dispatched.has(t.id)||oorSet.has(t.id))continue;
+        if(stockSkus.size===0){notReadyCount++;continue}
+        const items={};
+        for(const r of plan){if(r.truckId===t.id){items[r.sku]=(items[r.sku]||0)+(r.qty||0)}}
+        const canFill=Object.keys(items).every(s=>(stockPool[s]||0)>=items[s]);
+        if(canFill){
+          readyCount++;
+          for(const s in items)stockPool[s]=(stockPool[s]||0)-items[s];
+          t._ready=true;
+        }else{notReadyCount++;t._ready=false}
+      }
+
+      // 72h look-ahead: trucks with dates in next 72 hours
+      const upcoming=pendingTrucks.filter(t=>{const d=daysFromNow(t.date);return d!==null&&d>=0&&d<=3});
+
+      // Late arrivals
+      let lateArrivals=0;
+      if(arrivals){
+        for(const a of arrivals){
+          const rd=a.readyDate||'';
+          if(rd>today&&rd<=h72)lateArrivals++;
+        }
+      }
+
+      html+='<h2>LP Status — Load Plan from Dallas</h2>';
+      html+='<div class="kpi-row">';
+      html+='<div class="kpi"><div class="v" style="color:var(--pri)">'+totalTrucks+'</div><div class="l">Total LP Trucks</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--gn)">'+dispatchedCount+'</div><div class="l">Dispatched (Locked)</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--or)">'+(oorCount)+'</div><div class="l">OOR Submitted</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--a3)">'+readyCount+'</div><div class="l">Ready to Dispatch</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--rd)">'+notReadyCount+'</div><div class="l">Pending Stock</div></div>';
+      html+='</div>';
+
+      // 72h look-ahead table
+      if(upcoming.length){
+        html+='<div class="card"><h3>72-Hour LP Dispatch Window ('+fmtDate(today)+' – '+fmtDate(h72)+')</h3>';
+        html+='<table><thead><tr><th>Truck</th><th>Date</th><th>Destination</th><th>Pallets</th><th>Qty</th><th>SKUs</th><th>Status</th></tr></thead><tbody>';
+        for(const t of upcoming){
+          const days=daysFromNow(t.date);
+          const dayLabel=days===0?'TODAY':days===1?'Tomorrow':days+'d';
+          const status=t._ready?'<span class="badge b-gn">READY</span>':'<span class="badge b-rd">PENDING</span>';
+          html+='<tr><td class="mono" style="font-weight:700">LP-'+t.id+'</td><td>'+fmtDate(t.date)+' <span class="badge b-pri">'+dayLabel+'</span></td><td>'+t.dest+'</td><td class="mono">'+t.pallets.toFixed(1)+' / 26</td><td class="mono">'+t.qty+'</td><td>'+t.skus.size+'</td><td>'+status+'</td></tr>';
+        }
+        html+='</tbody></table></div>';
+      }else{
+        html+='<div class="card"><h3>72-Hour LP Dispatch Window</h3><div class="ts">No LP trucks scheduled in the next 72 hours.</div></div>';
+      }
+
+      // By destination summary
+      const byDest={};
+      for(const t of truckList){
+        if(!byDest[t.dest])byDest[t.dest]={total:0,dispatched:0,ready:0,pending:0,pallets:0};
+        byDest[t.dest].total++;
+        byDest[t.dest].pallets+=t.pallets;
+        if(dispatched.has(t.id))byDest[t.dest].dispatched++;
+        else if(t._ready)byDest[t.dest].ready++;
+        else byDest[t.dest].pending++;
+      }
+      html+='<div class="card"><h3>LP by Destination</h3>';
+      html+='<table><thead><tr><th>Destination</th><th>Total</th><th>Dispatched</th><th>Ready</th><th>Pending</th><th>Total Pallets</th><th>Progress</th></tr></thead><tbody>';
+      for(const d of Object.keys(byDest).sort()){
+        const s=byDest[d];
+        const pct=s.total>0?Math.round(s.dispatched/s.total*100):0;
+        const bar='<div style="background:var(--bd);border-radius:3px;height:12px;width:100px;display:inline-block;vertical-align:middle"><div style="background:var(--gn);height:100%;border-radius:3px;width:'+pct+'%"></div></div> <span class="mono" style="font-size:10px">'+pct+'%</span>';
+        html+='<tr><td style="font-weight:600">'+d+'</td><td class="mono">'+s.total+'</td><td class="mono" style="color:var(--gn)">'+s.dispatched+'</td><td class="mono" style="color:var(--a3)">'+s.ready+'</td><td class="mono" style="color:var(--rd)">'+s.pending+'</td><td class="mono">'+Math.round(s.pallets)+'</td><td>'+bar+'</td></tr>';
+      }
+      html+='</tbody></table></div>';
+    }
+
+    // ═══ ARRIVALS STATUS ═══
+    if(arrivals&&arrivals.length){
+      const arrByDate={};
+      for(const a of arrivals){
+        const rd=a.readyDate||'';if(!rd)continue;
+        if(!arrByDate[rd])arrByDate[rd]={count:0,qty:0};
+        arrByDate[rd].count++;arrByDate[rd].qty+=a.qty||0;
+      }
+      const arrDates=Object.keys(arrByDate).sort();
+      const arrived=arrDates.filter(d=>d<=today);
+      const upcoming72=arrDates.filter(d=>d>today&&d<=h72);
+      const future=arrDates.filter(d=>d>h72);
+
+      html+='<h2>Arrivals — Container Status</h2>';
+      html+='<div class="kpi-row">';
+      html+='<div class="kpi"><div class="v" style="color:var(--gn)">'+arrived.length+'</div><div class="l">Arrival Dates Passed</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--or)">'+upcoming72.length+'</div><div class="l">Arriving Next 72h</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--ts)">'+future.length+'</div><div class="l">Future Arrivals</div></div>';
+      html+='</div>';
+
+      if(upcoming72.length){
+        html+='<div class="card"><h3>Arrivals in Next 72 Hours</h3>';
+        html+='<table><thead><tr><th>Ready Date</th><th>Days</th><th>Items</th><th>Total Qty</th></tr></thead><tbody>';
+        for(const d of upcoming72){
+          const days=daysFromNow(d);
+          const dayLabel=days===0?'TODAY':days===1?'Tomorrow':'+'+days+'d';
+          html+='<tr><td>'+fmtDate(d)+'</td><td><span class="badge b-or">'+dayLabel+'</span></td><td class="mono">'+arrByDate[d].count+'</td><td class="mono">'+arrByDate[d].qty.toLocaleString()+'</td></tr>';
+        }
+        html+='</tbody></table></div>';
+      }
+    }
+
+    // ═══ LM STATUS ═══
+    if(rw&&rw.length){
+      const venues=new Set();const biDates=new Set();
+      let totalItems=0;
+      for(const r of rw){
+        venues.add(r.Venue||'');
+        totalItems+=(r._effQty||r.Required||0);
+        const bi=r['Estimated bump-in date']||'';
+        if(bi){
+          const m=bi.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+          if(m)biDates.add(m[3]+'-'+m[2]+'-'+m[1]);
+        }
+      }
+      const sortedBI=[...biDates].sort();
+      const upcomingBI=sortedBI.filter(d=>{const days=daysFromNow(d);return days!==null&&days>=0&&days<=3});
+
+      html+='<h2>LM Status — Last Mile</h2>';
+      html+='<div class="kpi-row">';
+      html+='<div class="kpi"><div class="v" style="color:var(--a3)">'+venues.size+'</div><div class="l">Total Venues</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--pri)">'+totalItems.toLocaleString()+'</div><div class="l">Total Items (UoM)</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--or)">'+sortedBI.length+'</div><div class="l">Unique Bump-in Dates</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--gn)">'+upcomingBI.length+'</div><div class="l">Bump-ins Next 72h</div></div>';
+      html+='</div>';
+
+      if(sortedBI.length){
+        html+='<div class="card"><h3>Next Bump-in Dates</h3>';
+        const nextDates=sortedBI.filter(d=>daysFromNow(d)>=0).slice(0,8);
+        html+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+        for(const d of nextDates){
+          const days=daysFromNow(d);
+          const cls=days<=3?'b-rd':days<=7?'b-or':'b-pri';
+          html+='<span class="badge '+cls+'" style="font-size:11px;padding:5px 12px">'+fmtDate(d)+' <span class="mono">('+days+'d)</span></span>';
+        }
+        html+='</div></div>';
+      }
+    }
+
+    // ═══ STOCK STATUS ═══
+    if(stockSkus.size>0&&nom){
+      let inStock=0,outOfStock=0;
+      for(const sku of stockSkus){
+        if((stockQtys[sku]||0)>0)inStock++;else outOfStock++;
+      }
+      html+='<h2>Stock Report</h2>';
+      html+='<div class="kpi-row">';
+      html+='<div class="kpi"><div class="v" style="color:var(--pri)">'+stockSkus.size+'</div><div class="l">SKUs in Stock Report</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--gn)">'+inStock+'</div><div class="l">In Stock (qty > 0)</div></div>';
+      html+='<div class="kpi"><div class="v" style="color:var(--rd)">'+outOfStock+'</div><div class="l">Zero Stock</div></div>';
+      html+='</div>';
+    }
+
+    el.innerHTML=html;
+    document.getElementById('footer').textContent='Generated '+now.toLocaleString()+' · Data from ML3K Supabase · 72-hour look-ahead from '+fmtDate(today)+' to '+fmtDate(h72);
+
+  }catch(e){
+    el.innerHTML='<div class="card" style="border-color:var(--rd)"><h3 style="color:var(--rd)">Error generating sitrep</h3><div class="ts">'+e.message+'</div></div>';
+    console.error(e);
+  }
+}
+
+generate();
+</script>
+</body>
+</html>
