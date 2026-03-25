@@ -12683,7 +12683,7 @@ if(cv==="dashboard"){
           if(!LM_isAssembled(it.sku,_tVt,_tCty))return;
           const k=dd+'|'+it.sku+'|'+t.id;
           if(_asmSeen.has(k))return;_asmSeen.add(k);
-          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label});
+          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty});
         });
       });
     }
@@ -12705,7 +12705,7 @@ if(cv==="dashboard"){
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
           <td class="fw6">${isNewDate?dateStr+' <span style="color:var(--tt);font-weight:400">'+dow+'</span>':''}</td>
           <td class="mono fw6">${r.truckId}</td>
-          <td style="font-size:10px">${r.dest}</td>
+          <td style="font-size:10px" title="${(r._vt||'?')+' · '+(r._cty||'?')}">${r.dest}</td>
           <td class="mono">${r.sku}</td>
           <td class="tcl" style="color:var(--ts)">${r.nm}</td>
           <td style="font-size:10px;color:var(--tt)">${r.src}</td>
