@@ -2270,39 +2270,44 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   <div class="sub sub-tight">The LP Engine decides what goes on each truck from Dallas. It runs in three stages.</div>
 
   <!-- THREE STAGES -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:18px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:12px">
 
     <!-- STAGE 1 -->
-    <div class="c c-pri" style="padding:18px 22px">
-      <div style="font-size:11px;font-weight:700;color:var(--pri);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Stage 1 — Plan</div>
-      <div style="font-size:14px;font-weight:700;margin-bottom:10px">Two-Bucket Day-by-Day Planner</div>
-      <svg viewBox="0 0 460 200" width="100%" height="200">
+    <div class="c c-pri" style="padding:14px 18px">
+      <div style="font-size:13px;font-weight:800;color:var(--pri);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px">Stage 1 — Plan</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px">Two-Bucket Planner</div>
+      <svg viewBox="0 0 460 290" width="100%" height="290">
         <!-- Stock pool -->
-        <rect x="10" y="10" width="120" height="50" rx="8" fill="#EDE7F6" stroke="#C5B3E6"/>
-        <text x="70" y="30" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#4A148C">STOCK POOL</text>
-        <text x="70" y="44" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="8" fill="#555570">Items arrive daily</text>
+        <rect x="10" y="10" width="130" height="66" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
+        <text x="75" y="32" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#4A148C">STOCK POOL</text>
+        <text x="75" y="50" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Items arrive daily</text>
+        <text x="75" y="66" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#8888A0">from containers</text>
         <!-- Arrow -->
-        <path d="M130,35 L155,35" stroke="#4A148C" stroke-width="1.5" marker-end="url(#arr1)"/>
-        <defs><marker id="arr1" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#4A148C"/></marker></defs>
+        <text x="152" y="46" font-family="'Noto Sans',sans-serif" font-size="18" fill="#4A148C">→</text>
         <!-- Bucket 1 -->
-        <rect x="160" y="5" width="140" height="60" rx="8" fill="#4A148C" opacity="0.85"/>
-        <text x="230" y="24" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">BUCKET 1</text>
-        <text x="230" y="36" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="8" fill="#fff" opacity="0.8">MEX / CAN first</text>
-        <text x="230" y="48" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="8" fill="#fff" opacity="0.8">with consolidation buffer</text>
+        <rect x="170" y="5" width="150" height="72" rx="10" fill="#4A148C" opacity="0.85"/>
+        <text x="245" y="28" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#fff">BUCKET 1</text>
+        <text x="245" y="44" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#fff" opacity="0.8">MEX / CAN first</text>
+        <text x="245" y="60" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#fff" opacity="0.7">with consolidation buffer</text>
         <!-- Bucket 2 -->
-        <rect x="160" y="72" width="140" height="50" rx="8" fill="#4A148C" opacity="0.5"/>
-        <text x="230" y="91" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#fff">BUCKET 2</text>
-        <text x="230" y="103" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="8" fill="#fff" opacity="0.8">USA / RIC second</text>
+        <rect x="170" y="84" width="150" height="60" rx="10" fill="#4A148C" opacity="0.5"/>
+        <text x="245" y="108" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#fff">BUCKET 2</text>
+        <text x="245" y="124" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#fff" opacity="0.8">USA / RIC second</text>
         <!-- Arrow to trucks -->
-        <path d="M300,35 L325,35" stroke="#4A148C" stroke-width="1.5" marker-end="url(#arr1)"/>
-        <path d="M300,97 L325,97" stroke="#4A148C" stroke-width="1.5" marker-end="url(#arr1)"/>
-        <!-- Truck icons -->
-        <rect x="330" y="15" width="120" height="40" rx="8" fill="#EDE7F6" stroke="#C5B3E6"/>
-        <text x="390" y="40" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#4A148C">~93 LP Trucks</text>
-        <!-- Key rule -->
-        <rect x="10" y="140" width="440" height="50" rx="8" fill="#F5F5FA" stroke="#E0E0EE"/>
-        <text x="230" y="160" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#4A148C">KEY RULE</text>
-        <text x="230" y="176" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">MEX/CAN gets stock first → USA gets the remainder</text>
+        <text x="332" y="46" font-family="'Noto Sans',sans-serif" font-size="18" fill="#4A148C">→</text>
+        <text x="332" y="118" font-family="'Noto Sans',sans-serif" font-size="18" fill="#4A148C">→</text>
+        <!-- Truck result -->
+        <rect x="350" y="15" width="100" height="50" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
+        <text x="400" y="36" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="14" font-weight="800" fill="#4A148C">~93</text>
+        <text x="400" y="52" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="600" fill="#4A148C">LP Trucks</text>
+        <!-- Key rule — bigger -->
+        <rect x="10" y="162" width="440" height="56" rx="10" fill="#F5F5FA" stroke="#E0E0EE"/>
+        <text x="230" y="184" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="800" fill="#4A148C">KEY RULE</text>
+        <text x="230" y="204" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">MEX/CAN gets stock first → USA gets remainder</text>
+        <!-- Consolidation note -->
+        <rect x="10" y="232" width="440" height="48" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
+        <text x="230" y="254" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#4A148C">Consolidation Buffer (MEX/CAN only)</text>
+        <text x="230" y="270" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Hold partial trucks, top up daily with new stock, emit at 90%</text>
       </svg>
     </div>
 
