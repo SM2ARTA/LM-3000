@@ -2702,5 +2702,124 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 19 — RISK REGISTER
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-rd">RISK REGISTER</span>
+  </div>
+
+  <h2>Top Risks &amp; Mitigations</h2>
+  <div class="sub sub-tight">What can go wrong, what's the impact, and what we do about it.</div>
+
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead>
+      <tr style="background:var(--bg);border-bottom:2px solid var(--bd)">
+        <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.7px;width:30px">#</th>
+        <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.7px;width:200px">Risk</th>
+        <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.7px;width:80px">Likelihood</th>
+        <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.7px;width:80px">Impact</th>
+        <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.7px">Impact Description</th>
+        <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.7px">Mitigation</th>
+        <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.7px;width:100px">Owner</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Risk 1 -->
+      <tr style="border-bottom:1px solid var(--bd)">
+        <td style="padding:10px 14px;font-weight:700;color:var(--rd)">1</td>
+        <td style="padding:10px 14px;font-weight:700">Container arrival delay</td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">HIGH</span></td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--rd-s);color:var(--rd);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">CRITICAL</span></td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">LP trucks delayed → LM bump-in dates at risk. 2-week delay on 5 containers affects ~15 trucks across 4 destinations.</td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">Engine replans automatically on new arrival dates. Prioritize SR items (already in WHS) on early trucks. Late-arrival analysis in ML3K Late tab.</td>
+        <td style="padding:10px 14px;font-weight:600">Materials</td>
+      </tr>
+      <!-- Risk 2 -->
+      <tr style="border-bottom:1px solid var(--bd);background:var(--bg)">
+        <td style="padding:10px 14px;font-weight:700;color:var(--rd)">2</td>
+        <td style="padding:10px 14px;font-weight:700">MEX/CAN customs clearance delay</td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">HIGH</span></td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">HIGH</span></td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">LP trucks stuck at border. MEX/CAN venues receive items late. 5 regional warehouses starved of stock.</td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">Pre-clear documentation via Customs workstream. HS codes confirmed in ML3K (AI-assisted classification). CI exports ready per truck.</td>
+        <td style="padding:10px 14px;font-weight:600">Customs</td>
+      </tr>
+      <!-- Risk 3 -->
+      <tr style="border-bottom:1px solid var(--bd)">
+        <td style="padding:10px 14px;font-weight:700;color:var(--sec)">3</td>
+        <td style="padding:10px 14px;font-weight:700">Assembly damage at venues</td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">HIGH</span></td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">MEDIUM</span></td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">~13,894 items require assembly. At 3-5% damage rate = 400-700 items need replacement. Dallas is 7 days from MEX/CAN.</td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">Maintain contingency stock at Dallas. WHS to hold 5% buffer of high-damage SKUs (barriers, shelving). Fast-track replacement via next available truck.</td>
+        <td style="padding:10px 14px;font-weight:600">Warehousing</td>
+      </tr>
+      <!-- Risk 4 -->
+      <tr style="border-bottom:1px solid var(--bd);background:var(--bg)">
+        <td style="padding:10px 14px;font-weight:700;color:var(--sec)">4</td>
+        <td style="padding:10px 14px;font-weight:700">Venue layout changes after LP dispatch</td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">MEDIUM</span></td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">MEDIUM</span></td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">Sponsor changes, security modifications, broadcast requirements alter demand after items are already on trucks or at WHS.</td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">LM engine regenerates on demand update. Manual demand adjustments in ML3K. Excess items held at regional WHS for reallocation.</td>
+        <td style="padding:10px 14px;font-weight:600">Venue Logistics</td>
+      </tr>
+      <!-- Risk 5 -->
+      <tr style="border-bottom:1px solid var(--bd)">
+        <td style="padding:10px 14px;font-weight:700;color:var(--ts)">5</td>
+        <td style="padding:10px 14px;font-weight:700">CORT coordination failure</td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--pri-s);color:var(--pri);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">LOW</span></td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">HIGH</span></td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">CORT handles 141 non-stadium venues independently. If kits arrive at cross-docks but CORT doesn't deliver on time, venues go live without FF&E.</td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">Kit delivery tracking via ASN inbound forms. Weekly CORT status sync. Escalation path for delayed deliveries. ML3K tracks STP delivery dates.</td>
+        <td style="padding:10px 14px;font-weight:600">CORT</td>
+      </tr>
+      <!-- Risk 6 -->
+      <tr style="border-bottom:1px solid var(--bd);background:var(--bg)">
+        <td style="padding:10px 14px;font-weight:700;color:var(--ts)">6</td>
+        <td style="padding:10px 14px;font-weight:700">Single operator dependency (ML3K)</td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--sec-s);color:var(--sec);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">MEDIUM</span></td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--rd-s);color:var(--rd);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">CRITICAL</span></td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">One person builds, operates, and maintains the planning system. 48-hour unavailability during peak dispatch = no informed truck decisions.</td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">Viewer access for backup operators (ml3000.smmarta.com). Engine slides 17-18 document decision logic. Locked trucks protect dispatched decisions. Automated sitrep report.</td>
+        <td style="padding:10px 14px;font-weight:600">Materials</td>
+      </tr>
+      <!-- Risk 7 -->
+      <tr style="border-bottom:2px solid var(--pri)">
+        <td style="padding:10px 14px;font-weight:700;color:var(--ts)">7</td>
+        <td style="padding:10px 14px;font-weight:700">Staples direct delivery failure</td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--pri-s);color:var(--pri);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">LOW</span></td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:var(--pri-s);color:var(--pri);padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">LOW</span></td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">Staples delivers 166 SKUs directly to USA venues. If delivery fails, office supplies missing at venue (pens, paper, printer supplies).</td>
+        <td style="padding:10px 14px;color:var(--ts);line-height:1.5">Based on FCWC25 experience — direct delivery is lower risk than kitting. STP delivery tracking in ML3K. Local procurement as backup.</td>
+        <td style="padding:10px 14px;font-weight:600">Materials</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="display:flex;gap:14px;margin-top:14px">
+    <div style="flex:1;background:var(--rd-s);border:1px solid var(--rd-b);border-radius:10px;padding:12px 18px">
+      <div style="font-size:12px;font-weight:700;color:var(--rd);margin-bottom:4px">Critical Window</div>
+      <div style="font-size:11px;color:var(--ts)">Mar 16 – Apr 29: LP dispatch. Any container delay directly impacts truck schedules. Daily monitoring required.</div>
+    </div>
+    <div style="flex:1;background:var(--sec-s);border:1px solid var(--sec-b);border-radius:10px;padding:12px 18px">
+      <div style="font-size:12px;font-weight:700;color:var(--sec);margin-bottom:4px">Peak Risk Period</div>
+      <div style="font-size:11px;color:var(--ts)">May 1 – Jun 9: 214 venues receiving simultaneously. Assembly damage + late deliveries compound. Exception management critical.</div>
+    </div>
+    <div style="flex:1;background:var(--a3-s);border:1px solid var(--a3-b);border-radius:10px;padding:12px 18px">
+      <div style="font-size:12px;font-weight:700;color:var(--a3);margin-bottom:4px">Automated Monitoring</div>
+      <div style="font-size:11px;color:var(--ts)">ML3K Sitrep: auto-generated 72-hour look-ahead. LP truck readiness, LM dispatch schedule, stock gaps, and late arrivals — updated on demand.</div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">19</div>
+  </div>
+</div>
+
 </body>
 </html>
