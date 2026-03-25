@@ -2407,9 +2407,14 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
 
   <!-- Scale + constraints -->
   <div style="display:flex;gap:16px;margin-top:14px;align-items:stretch">
-    <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:10px;padding:12px 20px;display:flex;align-items:center;gap:14px">
-      <div style="font-family:var(--fm);font-size:28px;font-weight:800;color:var(--pri);white-space:nowrap">162B+</div>
-      <div style="font-size:11px;color:var(--ts);line-height:1.4"><b style="color:var(--pri)">search space</b> across 16 truck pairs<br>Pruned by capacity: over 26 plt → skip branch<br>Each SKU: (maxFit+1) × 2 options → product</div>
+    <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:10px;padding:14px 20px;flex:0 0 auto">
+      <div style="font-family:var(--fm);font-size:28px;font-weight:800;color:var(--pri);margin-bottom:4px">162 Billion+</div>
+      <div style="font-size:11px;color:var(--ts);line-height:1.5;max-width:320px">
+        <b style="color:var(--pri)">How?</b> For each truck pair, the engine tries every combination of "how many pallets of each SKU go on truck A?"<br>
+        <b>Example — 3 SKUs:</b> Desks fit 0–5 pallets (6 choices), Chairs 0–7 (8 choices), Shelves 0–11 (12 choices). Each also with/without remainder (×2).<br>
+        <span class="mono" style="color:var(--pri);font-weight:700">6×2 × 8×2 × 12×2 = 4,608</span> combinations for just 3 SKUs.<br>
+        With <b>13 SKUs</b> (real data) → billions. Pruned: over 26 pallets → skip entire branch.
+      </div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;flex:1">
       <div class="chip"><span class="n">26</span> pallets max per truck</div>
