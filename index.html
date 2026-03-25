@@ -9745,10 +9745,14 @@ function LM_isAssembled(sku,venueType,country){
   const cfg=LM_palletCfg[venueType];
   if(!cfg)return false;// no pallet config for this venue type
   const baseMode=isStaIbc?(cfg?.mode||'dis'):(LM_COUNTRY_DEFAULTS[country||'USA']||'dis');
-  const isOverride=cfg?cfg.overrides.has(sku):false;
+  const isOverride=cfg.overrides.has(sku);
   // Effective mode: override flips the base
   const useDis=baseMode==='dis'?!isOverride:isOverride;
   if(useDis)return false;// disassembled mode → no assembly
+  // If base is dis and override made it asm — this is likely unintended cross-country side effect
+  // (user set override in asm-base country to make it dis, but same override flips dis-base to asm)
+  // Only flag as assembly when base mode is asm (CAN/MEX) and item stays asm (no override)
+  if(baseMode==='dis'&&isOverride)return false;
   // In assembled mode — but only flag if dims actually differ (same dims = no physical assembly)
   if(nm.pqA===(nm.pq||0)&&nm.psA===(nm.ps||0))return false;
   return true;
