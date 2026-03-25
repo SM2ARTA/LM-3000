@@ -2379,33 +2379,50 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
     </div>
   </div>
 
-  <!-- Example flow -->
-  <div style="background:var(--bg);border-radius:12px;padding:18px 28px">
-    <div style="font-size:13px;font-weight:700;color:var(--pri);margin-bottom:10px">Example: How a Monterrey Truck Gets Built</div>
-    <div style="display:flex;align-items:center;gap:0">
-      <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:8px;padding:10px 14px;text-align:center;min-width:140px">
-        <div style="font-size:11px;font-weight:700;color:var(--pri)">Day 1: Mar 16</div>
-        <div style="font-size:10px;color:var(--ts)">Container SEKU001 arrives<br>8 pallets of desks for MTY</div>
+  <!-- Example: Monterrey truck — the real flow -->
+  <div style="background:var(--bg);border-radius:12px;padding:14px 24px">
+    <div style="font-size:13px;font-weight:700;color:var(--pri);margin-bottom:8px">Real Example: How Monterrey LP-31 Gets Built</div>
+    <div style="display:flex;align-items:stretch;gap:0">
+      <!-- Step 1: Containers arrive -->
+      <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:8px;padding:8px 10px;text-align:center;flex:1">
+        <div style="font-size:10px;font-weight:800;color:var(--pri)">Mar 16–20</div>
+        <div style="font-size:9px;color:var(--ts);line-height:1.4;margin-top:2px">Containers arrive<br>Items enter stock pool<br>MTY scores highest</div>
       </div>
-      <div style="padding:0 6px;color:var(--tt);font-size:18px">→</div>
-      <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:8px;padding:10px 14px;text-align:center;min-width:140px">
-        <div style="font-size:11px;font-weight:700;color:var(--pri)">Day 2: Mar 17</div>
-        <div style="font-size:10px;color:var(--ts)">More containers arrive<br>Truck reaches 22 pallets</div>
+      <div style="display:flex;align-items:center;padding:0 3px;color:var(--tt);font-size:14px">→</div>
+      <!-- Step 2: Build truck with SR first -->
+      <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:8px;padding:8px 10px;text-align:center;flex:1">
+        <div style="font-size:10px;font-weight:800;color:var(--pri)">buildOneTruck</div>
+        <div style="font-size:9px;color:var(--ts);line-height:1.4;margin-top:2px">SR whole pallets first<br>Then SR partial<br>Reaches 22 plt</div>
       </div>
-      <div style="padding:0 6px;color:var(--tt);font-size:18px">→</div>
-      <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:8px;padding:10px 14px;text-align:center;min-width:140px">
-        <div style="font-size:11px;font-weight:700;color:var(--pri)">Day 5: Mar 20</div>
-        <div style="font-size:10px;color:var(--ts)">Stock report items added<br>Truck hits 90% → emit!</div>
+      <div style="display:flex;align-items:center;padding:0 3px;color:var(--tt);font-size:14px">→</div>
+      <!-- Step 3: Deferral guard -->
+      <div style="background:var(--sec-s);border:1px solid var(--sec-b);border-radius:8px;padding:8px 10px;text-align:center;flex:1">
+        <div style="font-size:10px;font-weight:800;color:var(--sec)">Deferral Guard</div>
+        <div style="font-size:9px;color:var(--ts);line-height:1.4;margin-top:2px">More SR coming!<br>Don't fill with non-SR<br>→ <b>pending buffer</b></div>
       </div>
-      <div style="padding:0 6px;color:var(--tt);font-size:18px">→</div>
-      <div style="background:#E6F5ED;border:1px solid #B8DFCA;border-radius:8px;padding:10px 14px;text-align:center;min-width:140px">
-        <div style="font-size:11px;font-weight:700;color:#12804A">Tail Reconstruct</div>
-        <div style="font-size:10px;color:var(--ts)">Repack last 2 trucks<br>Ready items → Truck A</div>
+      <div style="display:flex;align-items:center;padding:0 3px;color:var(--tt);font-size:14px">→</div>
+      <!-- Step 4: Daily top-up -->
+      <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:8px;padding:8px 10px;text-align:center;flex:1">
+        <div style="font-size:10px;font-weight:800;color:var(--pri)">Daily Top-Up</div>
+        <div style="font-size:9px;color:var(--ts);line-height:1.4;margin-top:2px">New SR stock added<br>22→23.5→24.8→25.8<br>Hits 90% → <b>emit!</b></div>
       </div>
-      <div style="padding:0 6px;color:var(--tt);font-size:18px">→</div>
-      <div style="background:var(--sec-s);border:1px solid var(--sec-b);border-radius:8px;padding:10px 14px;text-align:center;min-width:160px">
-        <div style="font-size:11px;font-weight:700;color:var(--sec)">LP-31: 26/26 ✓ READY</div>
-        <div style="font-size:10px;color:var(--ts)">All in-stock items on Truck A<br>Pending items → Truck B</div>
+      <div style="display:flex;align-items:center;padding:0 3px;color:var(--tt);font-size:14px">→</div>
+      <!-- Step 5: Second truck -->
+      <div style="background:var(--a3-s);border:1px solid var(--a3-b);border-radius:8px;padding:8px 10px;text-align:center;flex:1">
+        <div style="font-size:10px;font-weight:800;color:var(--a3)">Truck 2 Built</div>
+        <div style="font-size:9px;color:var(--ts);line-height:1.4;margin-top:2px">Remaining demand<br>Non-SR fills now<br>LP-33: 25.4 plt</div>
+      </div>
+      <div style="display:flex;align-items:center;padding:0 3px;color:var(--tt);font-size:14px">→</div>
+      <!-- Step 6: Tail reconstruct -->
+      <div style="background:#E6F5ED;border:1px solid #B8DFCA;border-radius:8px;padding:8px 10px;text-align:center;flex:1">
+        <div style="font-size:10px;font-weight:800;color:#12804A">Reconstruct</div>
+        <div style="font-size:9px;color:var(--ts);line-height:1.4;margin-top:2px">162B+ combos searched<br>Ready items → LP-31<br>Unready → LP-33</div>
+      </div>
+      <div style="display:flex;align-items:center;padding:0 3px;color:var(--tt);font-size:14px">→</div>
+      <!-- Result -->
+      <div style="background:var(--sec-s);border:1.5px solid var(--sec-b);border-radius:8px;padding:8px 12px;text-align:center;flex:1">
+        <div style="font-size:10px;font-weight:800;color:var(--sec)">LP-31: 26/26 ✓</div>
+        <div style="font-size:9px;color:var(--ts);line-height:1.4;margin-top:2px">All in-stock items<br><b>Ready to dispatch</b><br>LP-33 pending</div>
       </div>
     </div>
   </div>
