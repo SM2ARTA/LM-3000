@@ -2445,57 +2445,57 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   <div class="sub sub-tight">Per-venue, day-by-day truck planner. Dates from demand file. Three-pass fill-up. Overflow to next day.</div>
 
   <!-- THREE VISUAL SECTIONS -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:10px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:6px">
 
     <!-- SECTION 1: Date Calculation -->
-    <div class="c c-a3" style="padding:16px 18px">
-      <div style="font-size:11px;font-weight:700;color:var(--a3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Step 1 — Calculate Dispatch Dates</div>
-      <svg viewBox="0 0 480 470" width="100%" height="470">
+    <div class="c c-a3" style="padding:14px 16px">
+      <div style="font-size:13px;font-weight:800;color:var(--a3);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px">Step 1 — Dispatch Dates</div>
+      <svg viewBox="0 0 480 540" width="100%" height="540">
         <!-- Formula -->
-        <rect x="10" y="5" width="460" height="44" rx="8" fill="#E8EAF6" stroke="#8C9EFF"/>
-        <text x="240" y="24" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#304FFE">Dispatch = Bump-in − Lead time</text>
-        <text x="240" y="40" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Lead time from venue settings (configurable per venue)</text>
+        <rect x="10" y="5" width="460" height="50" rx="10" fill="#E8EAF6" stroke="#8C9EFF" stroke-width="1.5"/>
+        <text x="240" y="26" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="14" font-weight="800" fill="#304FFE">Dispatch = Bump-in − Lead time</text>
+        <text x="240" y="44" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">Lead time from venue settings (configurable per venue)</text>
 
         <!-- MEX/CAN -->
-        <rect x="10" y="62" width="460" height="90" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
-        <text x="26" y="84" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#4A148C">MEX / CAN — ships from Regional Warehouse</text>
-        <text x="26" y="102" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">LP already delivered stock to regional WHS</text>
-        <text x="26" y="118" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">→ lead time = <tspan font-weight="700" fill="#4A148C">0 days</tspan> (warehouse is next door to venues)</text>
-        <text x="26" y="140" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#555570">May 15 bump-in − 0d = <tspan font-weight="700" fill="#4A148C">May 15 dispatch</tspan></text>
+        <rect x="10" y="68" width="460" height="104" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
+        <text x="26" y="92" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="700" fill="#4A148C">MEX / CAN — Regional Warehouse</text>
+        <text x="26" y="112" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">LP already delivered stock to regional WHS</text>
+        <text x="26" y="130" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">→ lead time = <tspan font-weight="700" fill="#4A148C">0 days</tspan> (WHS is next door to venues)</text>
+        <text x="26" y="158" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#555570">May 15 bump-in − 0d = <tspan font-weight="800" fill="#4A148C">May 15 dispatch</tspan></text>
 
         <!-- USA -->
-        <rect x="10" y="162" width="460" height="90" rx="10" fill="#E8EAF6" stroke="#8C9EFF"/>
-        <text x="26" y="184" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#304FFE">USA — ships from Dallas or Satellite Warehouse</text>
-        <text x="26" y="202" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">Transit from Dallas → venue. Near: 0–1d. Far: 2–3d</text>
-        <text x="26" y="220" font-family="'IBM Plex Mono',monospace" font-size="10" fill="#555570">HOU: May 15 − 0d = <tspan font-weight="700" fill="#304FFE">May 15</tspan></text>
-        <text x="26" y="238" font-family="'IBM Plex Mono',monospace" font-size="10" fill="#555570">NY:  May 15 − 3d = <tspan font-weight="700" fill="#304FFE">May 12</tspan> · BOS: May 15 − 3d = <tspan font-weight="700" fill="#304FFE">May 12</tspan></text>
+        <rect x="10" y="184" width="460" height="104" rx="10" fill="#E8EAF6" stroke="#8C9EFF"/>
+        <text x="26" y="208" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="700" fill="#304FFE">USA — Dallas or Satellite Warehouse</text>
+        <text x="26" y="228" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">Transit from Dallas → venue. Near: 0–1d. Far: 2–3d</text>
+        <text x="26" y="250" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#555570">HOU: May 15 − 0d = <tspan font-weight="700" fill="#304FFE">May 15</tspan></text>
+        <text x="26" y="272" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#555570">NY: May 15 − 3d = <tspan font-weight="700" fill="#304FFE">May 12</tspan> · BOS: − 3d = <tspan font-weight="700" fill="#304FFE">May 12</tspan></text>
 
-        <!-- Two warehouse model cards -->
-        <rect x="10" y="266" width="224" height="100" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
-        <text x="122" y="292" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#4A148C">MEX/CAN Model</text>
-        <text x="122" y="310" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Regional WHS → Venue</text>
-        <text x="122" y="326" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Stock already local (LP Phase 1)</text>
-        <text x="122" y="348" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="14" font-weight="800" fill="#4A148C">0 days</text>
+        <!-- Two warehouse model cards — bigger, bolder -->
+        <rect x="10" y="302" width="224" height="114" rx="12" fill="#EDE7F6" stroke="#C5B3E6" stroke-width="1.5"/>
+        <text x="122" y="328" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="800" fill="#4A148C">MEX / CAN</text>
+        <text x="122" y="348" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">Regional WHS → Venue</text>
+        <text x="122" y="366" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">Stock already local (LP Phase 1)</text>
+        <text x="122" y="400" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="22" font-weight="800" fill="#4A148C">0 days</text>
 
-        <rect x="246" y="266" width="224" height="100" rx="10" fill="#E8EAF6" stroke="#8C9EFF"/>
-        <text x="358" y="292" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#304FFE">USA Model</text>
-        <text x="358" y="310" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Dallas / Satellite → Venue</text>
-        <text x="358" y="326" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Ships from central or cross-dock</text>
-        <text x="358" y="348" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="14" font-weight="800" fill="#304FFE">0–3 days</text>
+        <rect x="246" y="302" width="224" height="114" rx="12" fill="#E8EAF6" stroke="#8C9EFF" stroke-width="1.5"/>
+        <text x="358" y="328" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="800" fill="#304FFE">USA</text>
+        <text x="358" y="348" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">Dallas / Satellite → Venue</text>
+        <text x="358" y="366" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">Ships from central or cross-dock</text>
+        <text x="358" y="400" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="22" font-weight="800" fill="#304FFE">0–3 days</text>
 
         <!-- Lead time reference -->
-        <rect x="10" y="380" width="460" height="80" rx="8" fill="#F5F5FA" stroke="#E0E0EE"/>
-        <text x="240" y="398" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#555570">Default Lead Times (configurable per venue)</text>
-        <text x="240" y="416" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10" fill="#4A148C">MEX/CAN: all 0 days (stock at regional WHS)</text>
-        <text x="240" y="434" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="9" fill="#304FFE">DAL 0 · HOU 0 · KC 0–1 · ATL 1 · LA 2 · MIA 2</text>
-        <text x="240" y="450" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="9" fill="#304FFE">NY 0–3 · BOS 3 · PHI 3 · SEA 3 · SF 3</text>
+        <rect x="10" y="430" width="460" height="100" rx="10" fill="#F5F5FA" stroke="#E0E0EE"/>
+        <text x="240" y="452" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#555570">Default Lead Times (configurable per venue)</text>
+        <text x="240" y="472" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#4A148C">MEX/CAN: all 0 days (stock at regional WHS)</text>
+        <text x="240" y="494" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10" fill="#304FFE">DAL 0 · HOU 0 · KC 0–1 · ATL 1 · LA 2 · MIA 2</text>
+        <text x="240" y="514" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10" fill="#304FFE">NY 0–3 · BOS 3 · PHI 3 · SEA 3 · SF 3</text>
       </svg>
     </div>
 
     <!-- SECTION 2: 3-Pass Fill-Up -->
-    <div class="c c-pri" style="padding:16px 18px">
-      <div style="font-size:11px;font-weight:700;color:var(--pri);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Step 2 — Fill Each Truck (3 Passes)</div>
-      <svg viewBox="0 0 480 470" width="100%" height="470">
+    <div class="c c-pri" style="padding:14px 16px">
+      <div style="font-size:13px;font-weight:800;color:var(--pri);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px">Step 2 — Fill Each Truck</div>
+      <svg viewBox="0 0 480 540" width="100%" height="540">
         <!-- Pool + Truck diagram -->
         <rect x="10" y="5" width="140" height="130" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
         <text x="80" y="24" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#4A148C">ITEM POOL</text>
@@ -2552,62 +2552,65 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
         <text x="240" y="380" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="600" fill="#03BFA5">Ship early = fewer trucks later</text>
 
         <!-- Summary -->
-        <rect x="10" y="398" width="460" height="64" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
-        <text x="240" y="418" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#4A148C">Priority Order</text>
-        <text x="240" y="436" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">1. Scheduled items → 2. Top-up to full pallets</text>
-        <text x="240" y="452" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">3. Pull from pool → 4. Pull scraps → 5. Pull from future dates</text>
+        <rect x="10" y="398" width="460" height="130" rx="12" fill="#EDE7F6" stroke="#C5B3E6" stroke-width="1.5"/>
+        <text x="240" y="424" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="800" fill="#4A148C">Loading Priority Order</text>
+        <rect x="30" y="436" width="420" height="24" rx="6" fill="#4A148C" opacity="0.8"/>
+        <text x="240" y="453" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#fff">1. Scheduled items for today's bump-in date</text>
+        <rect x="30" y="466" width="340" height="24" rx="6" fill="#4A148C" opacity="0.6"/>
+        <text x="200" y="483" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#fff">2. Top-up partials to full pallets from pool</text>
+        <rect x="30" y="496" width="260" height="24" rx="6" fill="#12804A" opacity="0.6"/>
+        <text x="160" y="513" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#fff">3. Pull full pallets from pool</text>
       </svg>
     </div>
 
     <!-- SECTION 3: Day Loop + Overflow -->
-    <div class="c c-sec" style="padding:16px 18px">
-      <div style="font-size:11px;font-weight:700;color:var(--sec);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Step 3 — Day Loop &amp; Overflow</div>
-      <svg viewBox="0 0 480 470" width="100%" height="470">
+    <div class="c c-sec" style="padding:14px 16px">
+      <div style="font-size:13px;font-weight:800;color:var(--sec);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px">Step 3 — Overflow</div>
+      <svg viewBox="0 0 480 540" width="100%" height="540">
         <!-- Day 1 -->
-        <rect x="10" y="5" width="460" height="120" rx="10" fill="#FBE9E7" stroke="#D4A09F"/>
-        <text x="26" y="26" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#751312">DAY 1: May 5 (3 bump-in dates)</text>
-        <!-- Trucks -->
-        <rect x="26" y="38" width="150" height="30" rx="8" fill="#4A148C"/>
-        <text x="101" y="58" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10" font-weight="700" fill="#fff">LM-1: 26/26 ✓</text>
-        <rect x="184" y="38" width="150" height="30" rx="8" fill="#4A148C" opacity="0.7"/>
-        <text x="259" y="58" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10" font-weight="700" fill="#fff">LM-2: 24/26</text>
-        <rect x="342" y="38" width="116" height="30" rx="8" fill="#C62828" opacity="0.12" stroke="#C62828" stroke-dasharray="4,3"/>
-        <text x="400" y="58" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#C62828">MAX TRUCKS</text>
-        <!-- Overflow -->
-        <rect x="26" y="78" width="280" height="34" rx="8" fill="#C62828" opacity="0.1" stroke="#C62828"/>
-        <text x="166" y="100" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#C62828">5 items don't fit → carry over to Day 2</text>
-        <path d="M306,95 L340,95" stroke="#C62828" stroke-width="2" marker-end="url(#arr5)"/>
-        <defs><marker id="arr5" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#C62828"/></marker></defs>
+        <rect x="10" y="5" width="460" height="140" rx="12" fill="#FBE9E7" stroke="#D4A09F" stroke-width="1.5"/>
+        <text x="26" y="30" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="800" fill="#751312">DAY 1: May 5 (3 bump-in dates)</text>
+        <rect x="26" y="42" width="156" height="34" rx="8" fill="#4A148C"/>
+        <text x="104" y="64" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" font-weight="700" fill="#fff">LM-1: 26/26 ✓</text>
+        <rect x="190" y="42" width="156" height="34" rx="8" fill="#4A148C" opacity="0.7"/>
+        <text x="268" y="64" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" font-weight="700" fill="#fff">LM-2: 24/26</text>
+        <rect x="354" y="42" width="104" height="34" rx="8" fill="#C62828" opacity="0.12" stroke="#C62828" stroke-dasharray="4,3"/>
+        <text x="406" y="64" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#C62828">MAX HIT</text>
+        <rect x="26" y="88" width="320" height="42" rx="8" fill="#C62828" opacity="0.1" stroke="#C62828"/>
+        <text x="186" y="110" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#C62828">5 items don't fit → carry to Day 2</text>
+        <text x="186" y="124" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">Max trucks per day reached</text>
+        <path d="M346,109 L388,109" stroke="#C62828" stroke-width="2.5" marker-end="url(#arr5)"/>
+        <defs><marker id="arr5" markerWidth="7" markerHeight="7" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="#C62828"/></marker></defs>
 
         <!-- Day 2 -->
-        <rect x="10" y="138" width="460" height="100" rx="10" fill="#E8EAF6" stroke="#8C9EFF"/>
-        <text x="26" y="160" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#304FFE">DAY 2: May 6 (carry-over + new items)</text>
-        <rect x="26" y="172" width="100" height="26" rx="6" fill="#C62828" opacity="0.2"/>
-        <text x="76" y="190" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#C62828">Carry-over</text>
-        <text x="138" y="190" font-family="'Noto Sans',sans-serif" font-size="14" fill="#555570">+</text>
-        <rect x="154" y="172" width="120" height="26" rx="6" fill="#304FFE" opacity="0.3"/>
-        <text x="214" y="190" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" font-weight="700" fill="#304FFE">May 6 scheduled</text>
-        <text x="290" y="190" font-family="'Noto Sans',sans-serif" font-size="14" fill="#555570">→</text>
-        <rect x="306" y="172" width="150" height="26" rx="6" fill="#304FFE"/>
-        <text x="381" y="190" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10" font-weight="700" fill="#fff">LM-3: 22/26</text>
-        <text x="26" y="224" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Carry-over loads <tspan font-weight="700" fill="#304FFE">FIRST</tspan> → then today's scheduled → then 3-pass fill-up</text>
+        <rect x="10" y="158" width="460" height="120" rx="12" fill="#E8EAF6" stroke="#8C9EFF"/>
+        <text x="26" y="184" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="800" fill="#304FFE">DAY 2: May 6 (carry-over + new)</text>
+        <rect x="26" y="198" width="110" height="30" rx="7" fill="#C62828" opacity="0.2"/>
+        <text x="81" y="218" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#C62828">Carry-over</text>
+        <text x="148" y="218" font-family="'Noto Sans',sans-serif" font-size="16" fill="#555570">+</text>
+        <rect x="164" y="198" width="120" height="30" rx="7" fill="#304FFE" opacity="0.3"/>
+        <text x="224" y="218" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="700" fill="#304FFE">May 6 items</text>
+        <text x="300" y="218" font-family="'Noto Sans',sans-serif" font-size="16" fill="#555570">→</text>
+        <rect x="316" y="198" width="140" height="30" rx="7" fill="#304FFE"/>
+        <text x="386" y="218" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11" font-weight="700" fill="#fff">LM-3: 22/26</text>
+        <text x="26" y="260" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">Carry-over loads <tspan font-weight="700" fill="#304FFE">FIRST</tspan> → then scheduled → then fill-up</text>
 
         <!-- Rules -->
-        <rect x="10" y="252" width="460" height="100" rx="10" fill="#F5F5FA" stroke="#E0E0EE"/>
-        <text x="240" y="276" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#751312">Key Rules</text>
-        <text x="26" y="298" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">• <tspan font-weight="700">Max trucks/day</tspan> — configurable per venue type</text>
-        <text x="30" y="314" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">  Stadiums: more trucks. Small venues: fewer.</text>
-        <text x="26" y="336" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">• <tspan font-weight="700">Overflow</tspan> → next working day (skips weekends)</text>
-        <text x="30" y="348" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">  Always loads before that day's new scheduled items</text>
+        <rect x="10" y="292" width="460" height="110" rx="12" fill="#F5F5FA" stroke="#E0E0EE"/>
+        <text x="240" y="318" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="13" font-weight="800" fill="#751312">Key Rules</text>
+        <text x="26" y="342" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">• <tspan font-weight="700">Max trucks/day</tspan> — configurable per venue type</text>
+        <text x="30" y="360" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">  Stadiums: more trucks allowed. Small venues: fewer.</text>
+        <text x="26" y="382" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">• <tspan font-weight="700">Overflow</tspan> → next working day (skips weekends)</text>
+        <text x="30" y="398" font-family="'Noto Sans',sans-serif" font-size="10" fill="#8888A0">  Always loads before that day's new scheduled items</text>
 
         <!-- No-BI items -->
-        <rect x="10" y="366" width="460" height="52" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
-        <text x="240" y="388" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="700" fill="#4A148C">Items without bump-in dates?</text>
-        <text x="240" y="406" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">Fill into any truck with remaining space — lowest priority</text>
+        <rect x="10" y="416" width="460" height="58" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
+        <text x="240" y="440" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="700" fill="#4A148C">Items without bump-in dates?</text>
+        <text x="240" y="460" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570">Fill into any truck with space — lowest priority</text>
 
         <!-- CORT -->
-        <rect x="10" y="428" width="460" height="36" rx="8" fill="#FBE9E7" stroke="#D4A09F"/>
-        <text x="240" y="450" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570"><tspan font-weight="700" fill="#751312">CORT items</tspan> tracked separately — own delivery dates, not mixed into FF&amp;E trucks</text>
+        <rect x="10" y="486" width="460" height="44" rx="10" fill="#FBE9E7" stroke="#D4A09F"/>
+        <text x="240" y="512" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" fill="#555570"><tspan font-weight="700" fill="#751312">CORT items</tspan> tracked separately — own dates, not mixed into FF&amp;E trucks</text>
       </svg>
     </div>
   </div>
