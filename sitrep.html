@@ -229,7 +229,15 @@ async function generate(){
     // Snapshot BEFORE deduction
     const snap={};for(const s in pool)snap[s]=pool[s];
     _wfSnap[t.id]=snap;
-    if(_disp.has(t.id)||_oor.has(t.id)){t._ready=true;continue}
+    // OOR: stock reserved externally, skip deduction
+    if(_oor.has(t.id)){t._ready=true;continue}
+    // Dispatched: already sent, but DID consume stock — deduct from pool
+    if(_disp.has(t.id)){
+      t._ready=true;
+      const ditems={};for(const r of _plan.filter(r=>r.truckId===t.id))ditems[r.sku]=(ditems[r.sku]||0)+(r.qty||0);
+      for(const s in ditems)if(pool[s]!==undefined)pool[s]=Math.max(0,(pool[s]||0)-ditems[s]);
+      continue;
+    }
     if(!_ss.size){t._ready=false;pendCnt++;continue}
     const items={};for(const r of _plan.filter(r=>r.truckId===t.id))items[r.sku]=(items[r.sku]||0)+(r.qty||0);
     if(Object.keys(items).every(s=>(pool[s]||0)>=items[s])){
