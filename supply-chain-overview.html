@@ -2409,7 +2409,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   <div style="display:flex;gap:16px;margin-top:14px;align-items:stretch">
     <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:10px;padding:12px 20px;display:flex;align-items:center;gap:14px">
       <div style="font-family:var(--fm);font-size:28px;font-weight:800;color:var(--pri);white-space:nowrap">162B+</div>
-      <div style="font-size:11px;color:var(--ts);line-height:1.4"><b style="color:var(--pri)">combinations evaluated</b><br>by tail reconstruction across<br>16 truck pairs · 126 SKUs · 8 destinations</div>
+      <div style="font-size:11px;color:var(--ts);line-height:1.4"><b style="color:var(--pri)">search space</b> across 16 truck pairs<br>Pruned by capacity: over 26 plt → skip branch<br>Each SKU: (maxFit+1) × 2 options → product</div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;flex:1">
       <div class="chip"><span class="n">26</span> pallets max per truck</div>
@@ -2525,39 +2525,56 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
     </div>
   </div>
 
-  <!-- Kit management -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:14px">
-    <div class="c" style="padding:16px 22px;border-left:3px solid var(--a4)">
-      <div style="font-size:13px;font-weight:700;color:#00897B;margin-bottom:8px">Kit Assembly at Dallas</div>
-      <div style="font-size:12px;color:var(--ts);line-height:1.6">
-        For smaller venues (non-stadiums), items are <b>pre-kitted</b> in Dallas:<br>
-        <span class="mono bold" style="color:var(--pri)">118</span> FF&amp;E kits + <span class="mono bold" style="color:var(--pri)">83</span> Stationery kits = <span class="mono bold" style="color:var(--pri)">201</span> total kits<br>
-        Each kit contains all items for one venue, packed and labeled.
-        Shipped to CORT cross-docks for final delivery.
-      </div>
+  <!-- Engine logic rules -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+
+    <!-- Where dates come from -->
+    <div class="c c-a3" style="padding:16px 20px">
+      <div style="font-size:11px;font-weight:700;color:var(--a3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Where Dates Come From</div>
+      <ul class="ilist a3" style="font-size:11px">
+        <li><b>Bump-in date</b> — from the demand file (per venue per item)</li>
+        <li><b>Dispatch date</b> — bump-in minus lead time (transit + WHS days)</li>
+        <li><b>Lead time</b> — MEX/CAN: 7 days transit + 3 days WHS. USA: 1–3 days + 3 days</li>
+        <li><b>Early dates</b> — items before the venue's first bump-in ship immediately</li>
+        <li><b>Overflow</b> — if max trucks/day hit, overflow carries to next working day</li>
+      </ul>
     </div>
-    <div class="c" style="padding:16px 22px;border-left:3px solid var(--a3)">
-      <div style="font-size:13px;font-weight:700;color:var(--a3);margin-bottom:8px">Stock &amp; Dispatch Tracking</div>
-      <div style="font-size:12px;color:var(--ts);line-height:1.6">
-        The LM engine tracks in real-time:<br>
-        <b>Stock readiness</b> — which items are in warehouse vs arriving<br>
-        <b>Dispatch status</b> — which trucks have been sent, locked, or pending<br>
-        <b>Kit readiness</b> — percentage of kit components available<br>
-        <b>Assembly needs</b> — which items need assembly at venue vs WHS
-      </div>
+
+    <!-- Top-up rules -->
+    <div class="c c-pri" style="padding:16px 20px">
+      <div style="font-size:11px;font-weight:700;color:var(--pri);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Top-Up Rules (Fill the Truck)</div>
+      <ul class="ilist pri" style="font-size:11px">
+        <li><b>Full pallet first</b> — if a SKU has a partial load, pull extra from pool to complete the pallet</li>
+        <li><b>Pool &lt; 2 pallets</b> — load everything from pool (don't leave scraps)</li>
+        <li><b>Pass 1</b> — pull full pallets of SKUs already on the truck</li>
+        <li><b>Pass 2</b> — pull partial remainders (pool &lt; 1 pallet) if space allows</li>
+        <li><b>Pass 3</b> — pull from future dates' SKUs to fill remaining space</li>
+      </ul>
+    </div>
+
+    <!-- Overflow truck rules -->
+    <div class="c c-sec" style="padding:16px 20px">
+      <div style="font-size:11px;font-weight:700;color:var(--sec);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Overflow Truck Rules</div>
+      <ul class="ilist sec" style="font-size:11px">
+        <li><b>Max trucks/day</b> — configurable per venue (default varies by type)</li>
+        <li><b>Truck full?</b> — start a new truck if pallets exceed capacity</li>
+        <li><b>Max reached?</b> — overflow items carry over to next working day</li>
+        <li><b>Next day</b> — carry-over items load first (before that day's scheduled items)</li>
+        <li><b>No-BI items</b> — items without dates fill into any truck with space (lowest priority)</li>
+      </ul>
     </div>
   </div>
 
   <!-- Key stats -->
-  <div style="display:flex;gap:12px">
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
     <div class="chip">~<span class="n">469</span> LM trucks total</div>
     <div class="chip"><span class="n">214</span> venues</div>
     <div class="chip"><span class="n">177</span> MEX/CAN trucks</div>
     <div class="chip"><span class="n">292</span> USA trucks</div>
     <div class="chip"><span class="n">166</span> CORT deliveries</div>
-    <div class="chip"><span class="n">201</span> kits</div>
+    <div class="chip"><span class="n">201</span> kits (118 FF&amp;E + 83 STP)</div>
     <div class="chip">Per-venue bump-in scheduling</div>
-    <div class="chip">Real-time stock tracking</div>
+    <div class="chip">3-pass top-up: on-truck → pool → future dates</div>
   </div>
 
   <div class="ft">
