@@ -8021,7 +8021,7 @@ function enterApp(){
       _hsLoadAIConfig().catch(()=>{})
     ]);
     // Now build venues and trucks AFTER all config is loaded
-    if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){numberAll();sel="";cv="dashboard";lmOk=true}}
+    if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="dashboard";lmOk=true}}
     // Load LP data
     try{lpOk=await LP_loadFromSupabase()}catch(e){}
     
@@ -8119,7 +8119,7 @@ async function loadSharedData(){
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
-    numberAll();
+    _stpValidateVenues();numberAll();
     sel="";cv="dashboard";
     document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
     document.getElementById("pov").style.display="none";
@@ -8187,7 +8187,7 @@ async function syncV26(){
     const [nomV,rwV,vsV,exV]=await Promise.all([get('fm-nom'),get('fm-rw'),get('fm-vs'),get('fm-excl')]);
     if(nomV)NOM=nomV;if(rwV){RW=rwV;_rwEnrichEffQty()}if(vsV)VS=vsV;if(exV)LM_excluded=new Set(exV);
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadNomOverrides().catch(()=>{})]);
-    LM_injectAll();LM_applyNomOverrides();bV();numberAll();PLAN_CACHE={};
+    LM_injectAll();LM_applyNomOverrides();bV();_stpValidateVenues();numberAll();
     await LP_loadFromSupabase().catch(()=>{});
     V26_render();
   });
@@ -10950,6 +10950,32 @@ let LM_STP_DELIVERIES=[];// [{id:'STP-1', venue:'Dallas Stadium', date:'2026-05-
 let _stpNextId=1;
 let LM_STP_TRUCKS={};// del.id -> truck object (populated by numberAll)
 function LM_stpVenueSet(){return new Set(LM_STP_DELIVERIES.map(d=>d.venue))}
+function _stpValidateVenues(){
+  // After bV() rebuilds VN from new files, check STP delivery venues still exist
+  if(!LM_STP_DELIVERIES.length||!VN.length)return;
+  const vnNames=new Set(VN.map(v=>v.name));
+  const orphaned=LM_STP_DELIVERIES.filter(d=>!vnNames.has(d.venue));
+  if(orphaned.length>0){
+    const names=[...new Set(orphaned.map(d=>d.venue))];
+    console.warn('[ML3K] STP deliveries reference missing venues:',names);
+    // Mark orphaned deliveries so UI can warn (don't delete — user decides)
+    orphaned.forEach(d=>{d._stale=true});
+    setTimeout(()=>{
+      const msg=names.length+' STP deliver'+(names.length>1?'ies':'y')+' reference'+(names.length>1?'':'s')+' venue'+(names.length>1?'s':'')+' not found in new data:\n\n'+names.join('\n')+'\n\nThese deliveries will be kept but may not load items. Delete them manually if the venues were renamed.';
+      alert(msg);
+    },500);
+  }
+  // Also clean up explicit .items that reference SKUs no longer in NOM
+  let _cleaned=false;
+  for(const del of LM_STP_DELIVERIES){
+    if(!del.items)continue;
+    const before=del.items.length;
+    del.items=del.items.filter(it=>NOM[it.sku]);
+    if(del.items.length<before)_cleaned=true;
+    if(!del.items.length)delete del.items;// revert to auto-remainder if all items gone
+  }
+  if(_cleaned){console.warn('[ML3K] STP split deliveries: removed references to missing SKUs');LM_saveStpDeliveries()}
+}
 function LM_getStpForVenue(v){return LM_STP_DELIVERIES.filter(d=>d.venue===v)}
 function LM_getStpTrucksForVenue(venue){return LM_STP_DELIVERIES.filter(d=>d.venue===venue).map(d=>LM_STP_TRUCKS[d.id]).filter(Boolean)}
 function _stpAllocMap(venue){
@@ -10979,8 +11005,16 @@ function _stpBuildTruck(del){
   const items=[];let totalPlt=0,totalPcs=0;
   const bySkuMap={};
   if(del.items){
-    // Explicit item allocation — use quantities directly
-    for(const it of del.items){if(it.qty>0)bySkuMap[it.sku]=(bySkuMap[it.sku]||0)+it.qty}
+    // Explicit item allocation — validate against current NOM + demand
+    const _demandMap={};
+    for(const r of RW){if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s]||!isStp(s)||r._kit)continue;let q=r._effQty||0;if(q>0)_demandMap[s]=(_demandMap[s]||0)+q}
+    for(const it of del.items){
+      if(it.qty<=0)continue;
+      if(!NOM[it.sku]){continue}// SKU removed from NOM — skip silently
+      const cap=_demandMap[it.sku]||0;
+      const qty=cap>0?Math.min(it.qty,cap):it.qty;// clamp to demand if available
+      if(qty>0)bySkuMap[it.sku]=(bySkuMap[it.sku]||0)+qty;
+    }
   } else {
     // Only first auto-remainder delivery for a venue gets items; subsequent ones get nothing
     const firstAuto=LM_STP_DELIVERIES.find(d=>d.venue===del.venue&&!d.items);
@@ -11005,7 +11039,8 @@ function _stpBuildTruck(del){
     for(const[sku,cl] of Object.entries(claimed)){if(bySkuMap[sku])bySkuMap[sku]=Math.max(0,bySkuMap[sku]-cl)}
   }
   for(const[sku,qty] of Object.entries(bySkuMap)){
-    const nm=NOM[sku];
+    if(qty<=0)continue;
+    const nm=NOM[sku];if(!nm)continue;// SKU not in NOM — skip
     const vt=LM_vtMap[del.venue]||'';const country=LM_venueCountry('',del.venue);
     const eff=LM_getEffPallet(sku,vt,country);
     const _sPpu=nm?.ppu||1;const pqU=_pqUomEff(eff.pq,_sPpu);const psVal=eff.ps;
