@@ -2158,7 +2158,7 @@ function LM_buildLPArrivalFifo(){
     if(abbr){
       if(!LP_ARRIVAL_FIFO[abbr])LP_ARRIVAL_FIFO[abbr]={};
       if(!LP_ARRIVAL_FIFO[abbr][r.sku])LP_ARRIVAL_FIFO[abbr][r.sku]=[];
-      LP_ARRIVAL_FIFO[abbr][r.sku].push({date:arrDate,qty:r.qty||0,truckId:r.truckId||''});
+      LP_ARRIVAL_FIFO[abbr][r.sku].push({date:arrDate,shipDate:r.date||'',qty:r.qty||0,truckId:r.truckId||''});
     }
   }
   // Sort each SKU's arrivals by date then truckId
@@ -2179,12 +2179,13 @@ function LM_skuArrivalFifo(sku,lpAbbrs,neededQty){
   all.sort((a,b)=>a.date.localeCompare(b.date)||a.truckId.localeCompare(b.truckId));
   const firstArr=all[0].date;
   const firstTrk=all[0].truckId;
-  let cum=0,readyBy=null,readyTrk=null;
+  const firstShip=all[0].shipDate||'';
+  let cum=0,readyBy=null,readyTrk=null,readyShip=null;
   for(const e of all){
     cum+=e.qty;
-    if(cum>=neededQty){readyBy=e.date;readyTrk=e.truckId;break}
+    if(cum>=neededQty){readyBy=e.date;readyTrk=e.truckId;readyShip=e.shipDate||'';break}
   }
-  return{firstArr,firstTrk,readyBy,readyTrk};
+  return{firstArr,firstTrk,firstShip,readyBy,readyTrk,readyShip};
 }
 
 function LP_recalcReadyDates(){
@@ -8251,6 +8252,7 @@ function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-16","Boston Stadium":"2026-04-20","Dallas Stadium":"2026-05-08","Guadalajara Stadium":"2026-04-21","Houston Stadium":"2026-05-14","International Broadcast Centre":"2026-04-27","International Broadcast Coordination Centre":"2026-04-27","Kansas City Stadium":"2026-04-24","Los Angeles Stadium":"2026-04-20","Los Angeles - Rose Bowl Stadium":"2026-05-13","Mexico City Stadium":"2026-05-12","Miami Stadium":"2026-05-11","Monterrey Stadium":"2026-05-15","New York / New Jersey Stadium":"2026-04-27","Philadelphia Stadium":"2026-05-01","San Francisco Bay Area Stadium":"2026-04-22","Seattle Stadium":"2026-04-22","Toronto Stadium":"2026-04-01","Vancouver Stadium":"2026-05-14"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
 function gWP(v){const wp=vG(v).wp;return wp!==undefined&&wp!==null?Math.max(0,wp):0}// WHS processing days
+function gLT2(v){const lt2=vG(v).lt2;return lt2!==undefined&&lt2!==null?Math.max(0,lt2):0}// Inbound transit days (Dallas→WHS)
 
 // ── USA Cluster Turnaround (days at satellite warehouse before re-dispatch) ──
 let LM_clusterTurnaround=5;
@@ -8714,6 +8716,8 @@ function build(venue,venueList,skipNoBi){
   const tCap=gTC(venue),maxT=gMT(venue);
   const _dateOvr=VS[venue]?.dateOverrides||{};
   let lt=gLT(venue)+gWP(venue);
+  // Non-LP destinations: add inbound transit (Dallas→WHS)
+  if(!LM_isLPFed(venue))lt+=gLT2(venue);
   // USA cluster trucks: add satellite warehouse turnaround to lead time
   const _isUSACluster=isCluster&&!vcIsCAN(venue)&&!vcIsMEX(venue);
   if(_isUSACluster)lt+=LM_clusterTurnaround;
@@ -12271,8 +12275,9 @@ function rConstraints(){
     el.innerHTML=`<div class="cnst">Venue Constraints</div><div style="font-size:11px;color:var(--tt);padding:0 2px">Select a venue to configure</div>`;
     return;
   }
-  const tc=gTC(key),mt=gMT(key),lt=gLT(key),wp=gWP(key),bi=gBI(key);
-  console.log('[ML3000 v10.1] rConstraints',key,': tc='+tc,'mt='+mt,'lt='+lt,'wp='+wp,'bi='+bi,'VS[key]=',JSON.stringify(VS[key]||null));
+  const tc=gTC(key),mt=gMT(key),lt=gLT(key),lt2=gLT2(key),wp=gWP(key),bi=gBI(key);
+  const _isLpFedVenue=LM_isLPFed(key);
+  console.log('[ML3000 v10.1] rConstraints',key,': tc='+tc,'mt='+mt,'lt='+lt,'lt2='+lt2,'wp='+wp,'bi='+bi,'lpFed='+_isLpFedVenue,'VS[key]=',JSON.stringify(VS[key]||null));
   const defTC=LM_DEFAULT_TC[key]||12;
   const defMT=LM_DEFAULT_MT[key]||2;
   const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;
@@ -12288,8 +12293,9 @@ function rConstraints(){
   <div class="cgrid"${isV?' style="pointer-events:none"':''}>
     ${_field('i-tc','Truck cap (plt)',tc,defTC,'number',1)}
     ${_field('i-mt','Max trucks/day',mt,defMT,'number',1)}
-    ${_field('i-lt','Lead time (d)',lt,defLT,'number',0)}
+    ${!_isLpFedVenue?_field('i-lt2','Inbound transit (d)',lt2,0,'number',0):''}
     ${_field('i-wp','WHS processing (d)',wp,0,'number',0)}
+    ${_field('i-lt','Outbound transit (d)',lt,defLT,'number',0)}
     ${_field('i-bi','Bump-in',bi,defBI,'date')}
   </div>
   ${(()=>{const _isCl=CLUSTERS[key]&&!vcIsCAN(key)&&!vcIsMEX(key);return _isCl?`<div class="cgrid" style="margin-top:6px${isV?';pointer-events:none':''}"><div class="cf"><label style="display:flex;justify-content:space-between;align-items:center">WH Turnaround (d)<span style="font-size:8px;color:var(--gn)">def:5</span></label><input type="number" min="0" max="30" id="i-cta" value="${LM_clusterTurnaround}" style="border-color:${LM_clusterTurnaround!==5?'var(--pu)':'var(--bd)'}${isV?';opacity:.6':''}"${isV?' disabled':''}></div></div>`:''})()}
@@ -12321,7 +12327,7 @@ function rConstraints(){
     return h;
   })()}`;
   if(!isV){
-    ['i-tc','i-mt','i-lt','i-wp','i-bi'].forEach(id=>{
+    ['i-tc','i-mt','i-lt','i-lt2','i-wp','i-bi'].forEach(id=>{
       const inp=document.getElementById(id);
       if(inp)inp.addEventListener('change',_onConstraintChange);
     });
@@ -12353,6 +12359,7 @@ function _onConstraintChange(){
   const tc=parseInt(document.getElementById('i-tc')?.value)||26;
   const mt=parseInt(document.getElementById('i-mt')?.value)||2;
   const ltVal=parseInt(document.getElementById('i-lt')?.value);const lt=isNaN(ltVal)?0:Math.max(0,ltVal);
+  const lt2Val=parseInt(document.getElementById('i-lt2')?.value);const lt2=isNaN(lt2Val)?0:Math.max(0,lt2Val);
   const wpVal=parseInt(document.getElementById('i-wp')?.value);const wp=isNaN(wpVal)?0:Math.max(0,wpVal);
   const bi=document.getElementById('i-bi')?.value||'';
   const defTC=LM_DEFAULT_TC[key]||12;const defMT=LM_DEFAULT_MT[key]||2;
@@ -12361,6 +12368,7 @@ function _onConstraintChange(){
   if(tc!==defTC)VS[key].tc=tc;else delete VS[key].tc;
   if(mt!==defMT)VS[key].mt=mt;else delete VS[key].mt;
   if(lt!==defLT)VS[key].lt=lt;else delete VS[key].lt;
+  if(lt2>0)VS[key].lt2=lt2;else delete VS[key].lt2;
   if(wp>0)VS[key].wp=wp;else delete VS[key].wp;
   if(bi&&bi!==defBI)VS[key].bi=bi;else delete VS[key].bi;
   if(VS[key]&&Object.keys(VS[key]).length===0)delete VS[key];
@@ -13036,26 +13044,38 @@ if(cv==="dashboard"){
           else if(vcIsMEX(_vCluster)){const c=_whsParts(_vCluster,/^MEX\s*/i);_whs=c.join(' / ')||'Mexico Warehouse'}
           else if(_vCluster){const c=_whsParts(_vCluster,/^USA\s*/i);_whs=(c.join(' / ')||_vCluster)+' Satellite Warehouse'}
           else{_whs='Dallas Warehouse'}
-          // Compute arrival dates (LP-fed FIFO waterfall or WHS processing)
-          let _asmFirstArr=null,_asmFirstTrk=null,_asmReadyBy=null,_asmReadyTrk=null,_asmIsLp=false,_asmNotInLp=false;
+          // Compute full supply chain dates
+          let _r={dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,
+            lpDeparts:null,arrivesWhs:null,leavesWhs:null,bumpin:null,isLp:false,notInLp:false,firstTrk:null,readyTrk:null};
           try{
+            // Bump-in = truck biK or compute from dispatch + total lead time
+            const _biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
+            _r.bumpin=_biK;
+            // Leaves WHS = bump-in − outbound transit
+            const _outLt=gLT(_tLabel);
+            if(_biK){const _lwDt=disp(new Date(_biK+'T12:00:00'),_outLt);_r.leavesWhs=dk(_lwDt)}
+            else if(dd){_r.leavesWhs=dd}
             const _isLpFed=LM_isLPFed(_tLabel);
-            const _asmLpAbbrs=_isLpFed?LM_getLPDestAbbrs(_tLabel):[];
-            if(_asmLpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
-              _asmIsLp=true;
-              const fifo=LM_skuArrivalFifo(it.sku,_asmLpAbbrs,it.loadQty||0);
-              if(fifo){_asmFirstArr=fifo.firstArr;_asmFirstTrk=fifo.firstTrk;_asmReadyBy=fifo.readyBy;_asmReadyTrk=fifo.readyTrk}
-              else{_asmNotInLp=true}
-            } else if(_isLpFed){
-              // LP-fed but no LP plan loaded or no abbrs matched
-              _asmIsLp=true;_asmNotInLp=true;
-            } else if(dd){
-              const _wpDays=gWP(_tLabel);
-              if(_wpDays>0){const _arrDt=disp(new Date(dd+'T12:00:00'),_wpDays);const _arrStr=dk(_arrDt);_asmFirstArr=_arrStr;_asmReadyBy=_arrStr}
-              else{_asmFirstArr=dd;_asmReadyBy=dd}
+            if(_isLpFed){
+              _r.isLp=true;
+              const _asmLpAbbrs=LM_getLPDestAbbrs(_tLabel);
+              if(_asmLpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
+                const fifo=LM_skuArrivalFifo(it.sku,_asmLpAbbrs,it.loadQty||0);
+                if(fifo){_r.arrivesWhs=fifo.readyBy||fifo.firstArr;_r.lpDeparts=fifo.readyShip||fifo.firstShip;_r.firstTrk=fifo.firstTrk;_r.readyTrk=fifo.readyTrk}
+                else{_r.notInLp=true}
+              } else{_r.notInLp=true}
+            } else {
+              // Non-LP: compute chain backwards from leavesWhs
+              const _wpD2=gWP(_tLabel);const _lt2D2=gLT2(_tLabel);
+              if(_r.leavesWhs){
+                const _lwDt2=new Date(_r.leavesWhs+'T12:00:00');
+                const _asmDt=disp(_lwDt2,_wpD2);_r.arrivesWhs=dk(_asmDt);
+                if(_lt2D2>0){const _dlDt=disp(_asmDt,_lt2D2);_r.lpDeparts=dk(_dlDt)}
+                else{_r.lpDeparts=_r.arrivesWhs}
+              }
             }
-          }catch(e){console.warn('Asm arrival:',it.sku,e)}
-          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,firstArr:_asmFirstArr,firstTrk:_asmFirstTrk,readyBy:_asmReadyBy,readyTrk:_asmReadyTrk,isLp:_asmIsLp,notInLp:_asmNotInLp});
+          }catch(e){console.warn('Asm chain:',it.sku,e)}
+          _asmRows.push(_r);
         });
       });
     }
@@ -13067,40 +13087,35 @@ if(cv==="dashboard"){
       h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></div>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
       <table class="dtb"><thead><tr>
-        <th>Items Arrive</th><th>All Items Ready</th>
-        <th>Dispatch</th><th>Truck</th><th>Assembly At</th><th>Ship To</th>
+        <th>Leaves Dallas</th><th>Arrives WHS</th><th>Leaves WHS</th><th>Bump-in</th>
+        <th>Truck</th><th>Assembly At</th><th>Ship To</th>
         <th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th><th>Status</th>
       </tr></thead><tbody>`;
       let _prevDd='';
+      const _fmtDt=d=>d?fS(new Date(d+'T12:00:00')):'<span style="color:var(--tt)">—</span>';
+      const _nilp='<span style="color:var(--or);font-size:9px;font-weight:600">Not in LP</span>';
       _asmRows.forEach(r=>{
         const isNewDate=r.dd!==_prevDd;_prevDd=r.dd;
-        const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
-        const dateStr=dt?fS(dt):'—';
-        const dow=dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'';
-        // Items Arrive
-        let _arrHtml='<span style="color:var(--tt)">—</span>';
-        if(r.notInLp){_arrHtml='<span style="color:var(--or);font-size:9px;font-weight:600">Not in LP</span>'}
-        else if(r.firstArr){const _faDt=new Date(r.firstArr+'T12:00:00');_arrHtml=fS(_faDt)+(r.isLp&&r.firstTrk?' <span class="mono" style="font-size:8px;color:var(--tt)">('+r.firstTrk+')</span>':'')}
-        // All Items Ready
-        let _rdyHtml='<span style="color:var(--tt)">—</span>';
-        if(r.notInLp){_rdyHtml='<span style="color:var(--or);font-size:9px;font-weight:600">Not in LP</span>'}
-        else if(r.readyBy){
-          const _isLate=r.dd&&r.readyBy>r.dd;
-          const _rbDt=new Date(r.readyBy+'T12:00:00');
-          if(r.readyBy===r.firstArr&&!_isLate){_rdyHtml='<span style="color:var(--gn)">'+fS(_rbDt)+'</span>'}
-          else{_rdyHtml=`<span style="color:${_isLate?'var(--rd)':'var(--gn)'};font-weight:600">${fS(_rbDt)}</span>`+(r.isLp&&r.readyTrk&&r.readyTrk!==r.firstTrk?' <span class="mono" style="font-size:8px;color:var(--tt)">('+r.readyTrk+')</span>':'')}
-        } else if(r.firstArr&&!r.readyBy){_rdyHtml='<span style="color:var(--rd);font-weight:600">Not enough</span>'}
-        // Status
+        // Leaves Dallas
+        let _ldHtml=r.notInLp?_nilp:_fmtDt(r.lpDeparts);
+        if(r.isLp&&r.lpDeparts&&r.readyTrk)_ldHtml+=` <span class="mono" style="font-size:8px;color:var(--tt)">(${r.readyTrk})</span>`;
+        // Arrives WHS
+        let _awHtml=r.notInLp?_nilp:_fmtDt(r.arrivesWhs);
+        // Leaves WHS
+        const _lwHtml=_fmtDt(r.leavesWhs);
+        // Bump-in
+        const _biHtml=_fmtDt(r.bumpin);
+        // Status: compare arrivesWhs vs leavesWhs (items must arrive before truck departs)
         let _stHtml='';
         if(r.notInLp){_stHtml='<span class="bg bgs bg-or">Not in LP</span>'}
-        else if(!r.readyBy&&!r.firstArr){_stHtml='<span style="color:var(--tt)">—</span>'}
-        else if(!r.readyBy){_stHtml='<span class="bg bgs bg-rd">Missing</span>'}
-        else if(r.dd&&r.readyBy>r.dd){const days=Math.round((new Date(r.readyBy+'T12:00:00')-new Date(r.dd+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
+        else if(!r.arrivesWhs){_stHtml='<span style="color:var(--tt)">—</span>'}
+        else if(r.leavesWhs&&r.arrivesWhs>r.leavesWhs){const days=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
         else{_stHtml='<span class="bg bgs bg-gn">On time</span>'}
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
-          <td style="font-size:10px;white-space:nowrap">${_arrHtml}</td>
-          <td style="font-size:10px;white-space:nowrap">${_rdyHtml}</td>
-          <td class="fw6">${isNewDate?dateStr+' <span style="color:var(--tt);font-weight:400">'+dow+'</span>':''}</td>
+          <td style="font-size:10px;white-space:nowrap">${_ldHtml}</td>
+          <td style="font-size:10px;white-space:nowrap">${_awHtml}</td>
+          <td style="font-size:10px;white-space:nowrap">${_lwHtml}</td>
+          <td style="font-size:10px;white-space:nowrap">${_biHtml}</td>
           <td class="mono fw6">${r.truckId}</td>
           <td style="font-size:10px;font-weight:600;color:var(--pu)">${r.whs}</td>
           <td style="font-size:10px" title="${(r._vt||'?')+' · '+(r._cty||'?')}">${r.dest}</td>
@@ -13110,7 +13125,7 @@ if(cv==="dashboard"){
           <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td>
           <td style="text-align:center">${_stHtml}</td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="9">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="10">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></div>`;
     }
   }
 
@@ -13227,7 +13242,7 @@ const nCortPcs=P.cortDeliveries?P.cortDeliveries.filter(cd=>!LM_excluded.has(cd.
 let h=`<div class="fin"><h2 style="font-size:19px;font-weight:700">${displayName}</h2>`;
 if(isClusterSel)h+=`<p style="font-size:11px;color:var(--ts);margin-top:3px">${clusterVenues.length} venues: ${clusterVenues.slice(0,4).join(', ')}${clusterVenues.length>4?' +'+( clusterVenues.length-4)+' more':''}</p>`;
 const _isUSACl=isClusterSel&&!vcIsCAN(selCluster)&&!vcIsMEX(selCluster);
-const _wpD=gWP(cacheKey);const _ltBreak=(()=>{const parts=[];const _lt0=gLT(cacheKey);if(_lt0>0)parts.push(_lt0+'d transit');if(_wpD>0)parts.push(_wpD+'d WHS');if(_isUSACl)parts.push(LM_clusterTurnaround+'d turnaround');return parts.length>1?' <span style="color:var(--pu)">('+parts.join(' + ')+')</span>':''})();
+const _wpD=gWP(cacheKey);const _lt2D=gLT2(cacheKey);const _ltBreak=(()=>{const parts=[];if(_lt2D>0)parts.push(_lt2D+'d inbound');const _lt0=gLT(cacheKey);if(_wpD>0)parts.push(_wpD+'d WHS');if(_lt0>0)parts.push(_lt0+'d outbound');if(_isUSACl)parts.push(LM_clusterTurnaround+'d turnaround');return parts.length>1?' <span style="color:var(--pu)">('+parts.join(' + ')+')</span>':''})();
 h+=`<p style="font-size:12px;color:var(--ts);margin-top:3px">Lead: ${P.lt}d${_ltBreak} · ${P.maxT} trucks/day · ${P.tCap} plt/truck · ${nT} trucks · ${nD} days${nCort>0?' · '+nCort+' CORT':''}</p></div>`;
 if(P.bi)h+=`<div class="note note-pu fin">📌 Bump-in starts <strong>${fF(new Date(P.bi+"T12:00:00"))}</strong></div>`;
 if(P.noPN>0){
@@ -13890,10 +13905,10 @@ async function LM_exportAsmTimeline(){
     const wb=new ExcelJS.Workbook();
     const ws=wb.addWorksheet('Assembly Timeline');
     ws.columns=[
-      {header:'Items Arrive',key:'arrive',width:18},
-      {header:'All Items Ready',key:'ready',width:18},
-      {header:'Dispatch Date',key:'dd',width:14},
-      {header:'Day',key:'dow',width:6},
+      {header:'Leaves Dallas',key:'lpDep',width:16},
+      {header:'Arrives WHS',key:'arrWhs',width:16},
+      {header:'Leaves WHS',key:'lvWhs',width:14},
+      {header:'Bump-in',key:'bumpin',width:14},
       {header:'Truck',key:'truckId',width:10},
       {header:'Assembly At',key:'whs',width:22},
       {header:'Ship To',key:'dest',width:30},
@@ -13909,22 +13924,21 @@ async function LM_exportAsmTimeline(){
     hdrRow.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};
     const _fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
     rows.forEach(r=>{
-      const arrStr=r.firstArr?_fmtD(r.firstArr)+(r.isLp&&r.firstTrk?' ('+r.firstTrk+')':''):'—';
-      const rdyStr=r.readyBy?_fmtD(r.readyBy)+(r.isLp&&r.readyTrk&&r.readyTrk!==r.firstTrk?' ('+r.readyTrk+')':''):(r.firstArr?'Not enough':'—');
-      const _isLate=r.dd&&r.readyBy&&r.readyBy>r.dd;
-      const days=_isLate?Math.round((new Date(r.readyBy+'T12:00:00')-new Date(r.dd+'T12:00:00'))/86400000):0;
-      const status=!r.readyBy&&!r.firstArr?'—':!r.readyBy?'Missing':_isLate?days+'d late':'On time';
-      ws.addRow({arrive:arrStr,ready:rdyStr,dd:_fmtD(r.dd),
-        dow:r.dd?new Date(r.dd+'T12:00:00').toLocaleDateString('en-US',{weekday:'short'}):'',
+      const lpDep=r.notInLp?'Not in LP':(r.lpDeparts?_fmtD(r.lpDeparts)+(r.isLp&&r.readyTrk?' ('+r.readyTrk+')':''):'—');
+      const arrWhs=r.notInLp?'Not in LP':_fmtD(r.arrivesWhs);
+      const _isLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
+      const days=_isLate?Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000):0;
+      const status=r.notInLp?'Not in LP':!r.arrivesWhs?'—':_isLate?days+'d late':'On time';
+      ws.addRow({lpDep,arrWhs,lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
         truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty,status});
     });
     // Color status cells
     rows.forEach((r,i)=>{
       const exRow=ws.getRow(i+2);
       const stCell=exRow.getCell('status');
-      const _isLate=r.dd&&r.readyBy&&r.readyBy>r.dd;
-      if(_isLate||(!r.readyBy&&r.firstArr))stCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
-      else if(r.readyBy)stCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
+      const _isLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
+      if(_isLate||r.notInLp)stCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
+      else if(r.arrivesWhs)stCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
     });
     // Total row
     const totRow=ws.addRow({dd:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
