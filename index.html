@@ -12949,7 +12949,16 @@ if(cv==="dashboard"){
           if(!LM_isAssembled(it.sku,_tVt,_tCty))return;
           const k=dd+'|'+it.sku+'|'+t.id;
           if(_asmSeen.has(k))return;_asmSeen.add(k);
-          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty});
+          // Determine assembly WHS from venue context
+          const _vMeta=VN.find(v=>v.name===_tVenue);
+          const _vCluster=_tIsCluster?_tLabel:(_vMeta?.cluster||'');
+          let _whs='';
+          if(isStadium(_tVenue)){_whs='Dallas'}
+          else if(vcIsCAN(_vCluster)){const parts=_vCluster.replace(/^CAN\s*/i,'').split(/\s*\/\s*/);_whs=parts.map(p=>CITY_ABBR[p.trim()]||p.trim()).filter(Boolean).join(' / ')||'Canada WHS'}
+          else if(vcIsMEX(_vCluster)){const parts=_vCluster.replace(/^MEX\s*/i,'').split(/\s*\/\s*/);_whs=parts.map(p=>CITY_ABBR[p.trim()]||p.trim()).filter(Boolean).join(' / ')||'Mexico WHS'}
+          else if(_vCluster){_whs=clDisp(_vCluster)||_vCluster}
+          else{_whs='Dallas'}
+          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs});
         });
       });
     }
@@ -12960,7 +12969,7 @@ if(cv==="dashboard"){
       const _asmSkus=new Set(_asmRows.map(r=>r.sku)).size;
       h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></div>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
-      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th></tr></thead><tbody>`;
+      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>WHS</th><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th></tr></thead><tbody>`;
       let _prevDd='';
       _asmRows.forEach(r=>{
         const isNewDate=r.dd!==_prevDd;
@@ -12971,13 +12980,14 @@ if(cv==="dashboard"){
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
           <td class="fw6">${isNewDate?dateStr+' <span style="color:var(--tt);font-weight:400">'+dow+'</span>':''}</td>
           <td class="mono fw6">${r.truckId}</td>
+          <td style="font-size:10px;font-weight:600;color:var(--pu)">${r.whs}</td>
           <td style="font-size:10px" title="${(r._vt||'?')+' · '+(r._cty||'?')}">${r.dest}</td>
           <td class="mono">${r.sku}</td>
           <td class="tcl" style="color:var(--ts)">${r.nm}</td>
           <td style="font-size:10px;color:var(--tt)">${r.src}</td>
           <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="6">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="7">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td></tr></tfoot></table></div>`;
     }
   }
 
@@ -13757,6 +13767,7 @@ async function LM_exportAsmTimeline(){
       {header:'Dispatch Date',key:'dd',width:14},
       {header:'Day',key:'dow',width:6},
       {header:'Truck',key:'truckId',width:10},
+      {header:'WHS',key:'whs',width:18},
       {header:'Destination',key:'dest',width:30},
       {header:'SKU',key:'sku',width:18},
       {header:'Item',key:'nm',width:35},
@@ -13771,7 +13782,7 @@ async function LM_exportAsmTimeline(){
       const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
       ws.addRow({dd:dt?dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'',
         dow:dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'',
-        truckId:r.truckId,dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty});
+        truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty});
     });
     // Total row
     const totRow=ws.addRow({dd:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
