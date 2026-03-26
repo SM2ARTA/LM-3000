@@ -13040,14 +13040,15 @@ if(cv==="dashboard"){
         if(LM_excluded.has(t.id))return;
         t.items.forEach(it=>{
           const nm=NOM[it.sku];if(!nm||!nm._kitNom)return;
-          if(!it.sku.startsWith('FNKIT'))return;// FF&E kits only
+          if(!it.sku.startsWith('FNKIT')&&!it.sku.startsWith('OSKIT'))return;
           const kit=LM_getKitById(nm._kitId);if(!kit)return;
           const k=t.id+'|'+it.sku;
           if(_kitSeen.has(k))return;_kitSeen.add(k);
           const dd=t.dd||'';
           const dest=t.destDisplay||t.destLabel||label;
           const readiness=LM_kitReadiness(kit.id);
-          _kitRows.push({dd,truckId:t.id,sku:it.sku,kitName:kit.name||it.sku,venue:kit.venue,dest,
+          const kitType=it.sku.startsWith('FNKIT')?'FF&E':'Stationery';
+          _kitRows.push({dd,truckId:t.id,sku:it.sku,kitName:kit.name||it.sku,kitType,venue:kit.venue,dest,
             items:kit.items,compCount:kit.items.length,readiness});
         });
       });
@@ -13058,8 +13059,8 @@ if(cv==="dashboard"){
       const _kitTotal=_kitRows.length;
       const _kitComps=_kitRows.reduce((s,r)=>s+r.compCount,0);
       h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">📦 Kitting Timeline <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${_kitTotal} kits</span> <span class="bg bgs bg-gy">${_kitComps} components</span><button class="rbtn" onclick="LM_exportKitTimeline()" style="margin-left:auto;background:var(--gs);color:var(--gn);border-color:#B8DFCA">⬇ Excel</button></div>
-      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">FF&E kits requiring warehouse kitting before dispatch — grouped by dispatch date</p>
-      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>Kit</th><th>Venue</th><th style="text-align:center">Components</th><th style="text-align:center">Readiness</th></tr></thead><tbody>`;
+      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">FF&amp;E and Stationery kits requiring warehouse kitting before dispatch — grouped by dispatch date</p>
+      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>Type</th><th>Kit</th><th>Venue</th><th style="text-align:center">Components</th><th style="text-align:center">Readiness</th></tr></thead><tbody>`;
       let _prevDd='';
       _kitRows.forEach(r=>{
         const isNewDate=r.dd!==_prevDd;_prevDd=r.dd;
@@ -13074,12 +13075,13 @@ if(cv==="dashboard"){
           <td class="fw6">${isNewDate?dateStr+' <span style="color:var(--tt);font-weight:400">'+dow+'</span>':''}</td>
           <td class="mono fw6">${r.truckId}</td>
           <td style="font-size:10px">${r.dest}</td>
+          <td style="font-size:10px;font-weight:600;color:${r.kitType==='FF&E'?'var(--gn)':'var(--or)'}">${r.kitType}</td>
           <td style="font-size:10px;font-weight:600;color:var(--tp)" title="${compList}">${r.kitName}</td>
           <td style="font-size:10px;color:var(--ts)">${r.venue}</td>
           <td class="mono" style="text-align:center">${r.compCount}</td>
           <td style="text-align:center"><span class="bg bgs" style="background:${rBg};color:${rColor}">${rPct}% (${r.readiness.inStock}/${r.readiness.total})</span></td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="5">Total</td><td class="mono" style="text-align:center">${_kitComps}</td><td></td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="6">Total</td><td class="mono" style="text-align:center">${_kitComps}</td><td></td></tr></tfoot></table></div>`;
     }
   }
 
@@ -13846,6 +13848,7 @@ async function LM_exportKitTimeline(){
       {header:'Day',key:'dow',width:6},
       {header:'Truck',key:'truckId',width:10},
       {header:'Destination',key:'dest',width:28},
+      {header:'Type',key:'kitType',width:12},
       {header:'Kit',key:'kitName',width:22},
       {header:'Venue',key:'venue',width:28},
       {header:'Component SKU',key:'compSku',width:18},
@@ -13864,7 +13867,7 @@ async function LM_exportKitTimeline(){
       r.items.forEach((item,i)=>{
         const n=NOM[item.sku];
         ws.addRow({dd:i===0?dateStr:'',dow:i===0?dowStr:'',truckId:i===0?r.truckId:'',
-          dest:i===0?r.dest:'',kitName:i===0?r.kitName:'',venue:i===0?r.venue:'',
+          dest:i===0?r.dest:'',kitType:i===0?r.kitType:'',kitName:i===0?r.kitName:'',venue:i===0?r.venue:'',
           compSku:item.sku,compNm:n?.nm||item.sku,compQty:item.qty,
           readiness:i===0?r.readiness.pct+'%':''});
       });
