@@ -10975,6 +10975,35 @@ function _stpValidateVenues(){
     if(!del.items.length)delete del.items;// revert to auto-remainder if all items gone
   }
   if(_cleaned){console.warn('[ML3K] STP split deliveries: removed references to missing SKUs');LM_saveStpDeliveries()}
+  // ── Validate kits ──
+  if(LM_KITS.length>0&&VN.length>0){
+    const warnings=[];
+    // Check venue names
+    const orphanedKits=LM_KITS.filter(k=>!vnNames.has(k.venue));
+    if(orphanedKits.length>0){
+      const kNames=[...new Set(orphanedKits.map(k=>k.venue))];
+      console.warn('[ML3K] Kits reference missing venues:',kNames);
+      warnings.push(orphanedKits.length+' kit'+(orphanedKits.length>1?'s':'')+' reference venue'+(kNames.length>1?'s':'')+' not found: '+kNames.join(', '));
+    }
+    // Clean up kit items with missing SKUs
+    let _kitCleaned=false;
+    for(const kit of LM_KITS){
+      const before=kit.items.length;
+      kit.items=kit.items.filter(i=>NOM[i.sku]);
+      if(kit.items.length<before)_kitCleaned=true;
+    }
+    // Remove kits with no remaining items
+    const emptyKits=LM_KITS.filter(k=>!k.items.length);
+    if(emptyKits.length>0){
+      warnings.push(emptyKits.length+' kit'+(emptyKits.length>1?'s':'')+' had all components removed (SKUs missing from new data)');
+      LM_KITS=LM_KITS.filter(k=>k.items.length>0);
+      _kitCleaned=true;
+    }
+    if(_kitCleaned){console.warn('[ML3K] Kits: cleaned missing SKU references');LM_saveKits()}
+    if(warnings.length>0){
+      setTimeout(()=>{alert('Kit validation:\n\n'+warnings.join('\n\n')+'\n\nKits with valid components are preserved.')},orphaned.length>0?1500:500);
+    }
+  }
 }
 function LM_getStpForVenue(v){return LM_STP_DELIVERIES.filter(d=>d.venue===v)}
 function LM_getStpTrucksForVenue(venue){return LM_STP_DELIVERIES.filter(d=>d.venue===venue).map(d=>LM_STP_TRUCKS[d.id]).filter(Boolean)}
