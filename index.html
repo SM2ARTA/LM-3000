@@ -2151,7 +2151,7 @@ function LM_getSkuLPArrival(sku,lpAbbrs){
 let LP_ARRIVAL_FIFO={};
 function LM_buildLPArrivalFifo(){
   LP_ARRIVAL_FIFO={};
-  if(!LP_STATE.generatedPlan||!LP_STATE.generatedPlan.length)return;
+  if(!LP_STATE||!LP_STATE.generatedPlan||!LP_STATE.generatedPlan.length)return;
   for(const r of LP_STATE.generatedPlan){
     const arrDate=LP_getArrivalDate(r.date,r.destination);
     const abbr=LP_matchTransitAbbr(r.destination);
@@ -12740,7 +12740,7 @@ function LM_renderAnalysis(el){
 }
 function LM_filterAnalysis(){filterBySearch('lmAnalysisSearch','#lmAnalysisBody','tr[data-search]',{})}
 
-function rMain(){LM_buildLPArrivalMap();LM_buildLPArrivalFifo();const el=document.getElementById("mn");
+function rMain(){LM_buildLPArrivalMap();try{LM_buildLPArrivalFifo()}catch(e){console.warn('FIFO build:',e)}const el=document.getElementById("mn");
 
 // ── ANALYSIS VIEW ──
 if(cv==="analysis"){LM_renderAnalysis(el);return}
@@ -13037,18 +13037,19 @@ if(cv==="dashboard"){
           else if(_vCluster){const c=_whsParts(_vCluster,/^USA\s*/i);_whs=(c.join(' / ')||_vCluster)+' Satellite Warehouse'}
           else{_whs='Dallas Warehouse'}
           // Compute arrival dates (LP-fed FIFO waterfall or WHS processing)
-          const _asmLpAbbrs=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
           let _asmFirstArr=null,_asmFirstTrk=null,_asmReadyBy=null,_asmReadyTrk=null,_asmIsLp=false;
-          if(_asmLpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
-            _asmIsLp=true;
-            const fifo=LM_skuArrivalFifo(it.sku,_asmLpAbbrs,it.loadQty||0);
-            if(fifo){_asmFirstArr=fifo.firstArr;_asmFirstTrk=fifo.firstTrk;_asmReadyBy=fifo.readyBy;_asmReadyTrk=fifo.readyTrk}
-          } else if(dd){
-            // Non-LP: dispatch minus WHS processing days
-            const _wpDays=gWP(label);
-            if(_wpDays>0){const _arrDt=disp(new Date(dd+'T12:00:00'),_wpDays);const _arrStr=_arrDt.toISOString().slice(0,10);_asmFirstArr=_arrStr;_asmReadyBy=_arrStr}
-            else{_asmFirstArr=dd;_asmReadyBy=dd}
-          }
+          try{
+            const _asmLpAbbrs=LM_isLPFed(_tLabel)?LM_getLPDestAbbrs(_tLabel):[];
+            if(_asmLpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
+              _asmIsLp=true;
+              const fifo=LM_skuArrivalFifo(it.sku,_asmLpAbbrs,it.loadQty||0);
+              if(fifo){_asmFirstArr=fifo.firstArr;_asmFirstTrk=fifo.firstTrk;_asmReadyBy=fifo.readyBy;_asmReadyTrk=fifo.readyTrk}
+            } else if(dd){
+              const _wpDays=gWP(_tLabel);
+              if(_wpDays>0){const _arrDt=disp(new Date(dd+'T12:00:00'),_wpDays);const _arrStr=dk(_arrDt);_asmFirstArr=_arrStr;_asmReadyBy=_arrStr}
+              else{_asmFirstArr=dd;_asmReadyBy=dd}
+            }
+          }catch(e){}
           _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,firstArr:_asmFirstArr,firstTrk:_asmFirstTrk,readyBy:_asmReadyBy,readyTrk:_asmReadyTrk,isLp:_asmIsLp});
         });
       });
