@@ -13020,8 +13020,8 @@ if(cv==="dashboard"){
     }
   }
 
-  // ── Kitting Timeline (FF&E kits) ──
-  {
+  // ── Kitting Timeline (FF&E kits) — All Venues only ──
+  if(!isFiltered&&!isRegion&&!isClusterOv){
     const _kitRows=[];
     const _kitSeen=new Set();
     for(const label in PLAN_CACHE){
