@@ -13037,20 +13037,21 @@ if(cv==="dashboard"){
           else if(_vCluster){const c=_whsParts(_vCluster,/^USA\s*/i);_whs=(c.join(' / ')||_vCluster)+' Satellite Warehouse'}
           else{_whs='Dallas Warehouse'}
           // Compute arrival dates (LP-fed FIFO waterfall or WHS processing)
-          let _asmFirstArr=null,_asmFirstTrk=null,_asmReadyBy=null,_asmReadyTrk=null,_asmIsLp=false;
+          let _asmFirstArr=null,_asmFirstTrk=null,_asmReadyBy=null,_asmReadyTrk=null,_asmIsLp=false,_asmNotInLp=false;
           try{
             const _asmLpAbbrs=LM_isLPFed(_tLabel)?LM_getLPDestAbbrs(_tLabel):[];
             if(_asmLpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
               _asmIsLp=true;
               const fifo=LM_skuArrivalFifo(it.sku,_asmLpAbbrs,it.loadQty||0);
               if(fifo){_asmFirstArr=fifo.firstArr;_asmFirstTrk=fifo.firstTrk;_asmReadyBy=fifo.readyBy;_asmReadyTrk=fifo.readyTrk}
+              else{_asmNotInLp=true}
             } else if(dd){
               const _wpDays=gWP(_tLabel);
               if(_wpDays>0){const _arrDt=disp(new Date(dd+'T12:00:00'),_wpDays);const _arrStr=dk(_arrDt);_asmFirstArr=_arrStr;_asmReadyBy=_arrStr}
               else{_asmFirstArr=dd;_asmReadyBy=dd}
             }
           }catch(e){}
-          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,firstArr:_asmFirstArr,firstTrk:_asmFirstTrk,readyBy:_asmReadyBy,readyTrk:_asmReadyTrk,isLp:_asmIsLp});
+          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,firstArr:_asmFirstArr,firstTrk:_asmFirstTrk,readyBy:_asmReadyBy,readyTrk:_asmReadyTrk,isLp:_asmIsLp,notInLp:_asmNotInLp});
         });
       });
     }
@@ -13073,11 +13074,13 @@ if(cv==="dashboard"){
         const dateStr=dt?fS(dt):'—';
         const dow=dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'';
         // Items Arrive
-        let _arrHtml='—';
-        if(r.firstArr){const _faDt=new Date(r.firstArr+'T12:00:00');_arrHtml=fS(_faDt)+(r.isLp&&r.firstTrk?' <span class="mono" style="font-size:8px;color:var(--tt)">('+r.firstTrk+')</span>':'')}
+        let _arrHtml='<span style="color:var(--tt)">—</span>';
+        if(r.notInLp){_arrHtml='<span style="color:var(--or);font-size:9px;font-weight:600">Not in LP</span>'}
+        else if(r.firstArr){const _faDt=new Date(r.firstArr+'T12:00:00');_arrHtml=fS(_faDt)+(r.isLp&&r.firstTrk?' <span class="mono" style="font-size:8px;color:var(--tt)">('+r.firstTrk+')</span>':'')}
         // All Items Ready
-        let _rdyHtml='—';
-        if(r.readyBy){
+        let _rdyHtml='<span style="color:var(--tt)">—</span>';
+        if(r.notInLp){_rdyHtml='<span style="color:var(--or);font-size:9px;font-weight:600">Not in LP</span>'}
+        else if(r.readyBy){
           const _isLate=r.dd&&r.readyBy>r.dd;
           const _rbDt=new Date(r.readyBy+'T12:00:00');
           if(r.readyBy===r.firstArr&&!_isLate){_rdyHtml='<span style="color:var(--gn)">'+fS(_rbDt)+'</span>'}
@@ -13085,7 +13088,8 @@ if(cv==="dashboard"){
         } else if(r.firstArr&&!r.readyBy){_rdyHtml='<span style="color:var(--rd);font-weight:600">Not enough</span>'}
         // Status
         let _stHtml='';
-        if(!r.readyBy&&!r.firstArr){_stHtml='<span style="color:var(--tt)">—</span>'}
+        if(r.notInLp){_stHtml='<span class="bg bgs bg-or">Not in LP</span>'}
+        else if(!r.readyBy&&!r.firstArr){_stHtml='<span style="color:var(--tt)">—</span>'}
         else if(!r.readyBy){_stHtml='<span class="bg bgs bg-rd">Missing</span>'}
         else if(r.dd&&r.readyBy>r.dd){const days=Math.round((new Date(r.readyBy+'T12:00:00')-new Date(r.dd+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
         else{_stHtml='<span class="bg bgs bg-gn">On time</span>'}
