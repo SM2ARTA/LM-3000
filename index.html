@@ -2147,6 +2147,45 @@ function LM_getSkuLPArrival(sku,lpAbbrs){
   }
   return earliest;
 }
+// Build FIFO arrival list: abbr -> sku -> [{date, qty, truckId}] sorted by date
+let LP_ARRIVAL_FIFO={};
+function LM_buildLPArrivalFifo(){
+  LP_ARRIVAL_FIFO={};
+  if(!LP_STATE.generatedPlan||!LP_STATE.generatedPlan.length)return;
+  for(const r of LP_STATE.generatedPlan){
+    const arrDate=LP_getArrivalDate(r.date,r.destination);
+    const abbr=LP_matchTransitAbbr(r.destination);
+    if(abbr){
+      if(!LP_ARRIVAL_FIFO[abbr])LP_ARRIVAL_FIFO[abbr]={};
+      if(!LP_ARRIVAL_FIFO[abbr][r.sku])LP_ARRIVAL_FIFO[abbr][r.sku]=[];
+      LP_ARRIVAL_FIFO[abbr][r.sku].push({date:arrDate,qty:r.qty||0,truckId:r.truckId||''});
+    }
+  }
+  // Sort each SKU's arrivals by date then truckId
+  for(const abbr in LP_ARRIVAL_FIFO)for(const sku in LP_ARRIVAL_FIFO[abbr])
+    LP_ARRIVAL_FIFO[abbr][sku].sort((a,b)=>a.date.localeCompare(b.date)||a.truckId.localeCompare(b.truckId));
+}
+// FIFO waterfall: find firstArrival and readyBy for a SKU at LP-fed destination
+// Returns {firstArr, firstTrk, readyBy, readyTrk} or null
+function LM_skuArrivalFifo(sku,lpAbbrs,neededQty){
+  if(!lpAbbrs||!lpAbbrs.length)return null;
+  // Collect all arrivals across matching abbrs
+  let all=[];
+  for(const abbr of lpAbbrs){
+    const m=LP_ARRIVAL_FIFO[abbr];
+    if(m&&m[sku])all=all.concat(m[sku]);
+  }
+  if(!all.length)return null;
+  all.sort((a,b)=>a.date.localeCompare(b.date)||a.truckId.localeCompare(b.truckId));
+  const firstArr=all[0].date;
+  const firstTrk=all[0].truckId;
+  let cum=0,readyBy=null,readyTrk=null;
+  for(const e of all){
+    cum+=e.qty;
+    if(cum>=neededQty){readyBy=e.date;readyTrk=e.truckId;break}
+  }
+  return{firstArr,firstTrk,readyBy,readyTrk};
+}
 
 function LP_recalcReadyDates(){
   const ta=LP_STATE.turnaround||6;
@@ -7361,7 +7400,7 @@ function masterBackupExport(){
 
   // 4. LM Trucks — from PLAN_CACHE
   if(Object.keys(PLAN_CACHE).length){
-    LM_buildLPArrivalMap();
+    LM_buildLPArrivalMap();LM_buildLPArrivalFifo();
     const truckRows=[];
     for(const[label,P]of Object.entries(PLAN_CACHE)){
       const _eAbbrs=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
@@ -12701,7 +12740,7 @@ function LM_renderAnalysis(el){
 }
 function LM_filterAnalysis(){filterBySearch('lmAnalysisSearch','#lmAnalysisBody','tr[data-search]',{})}
 
-function rMain(){LM_buildLPArrivalMap();const el=document.getElementById("mn");
+function rMain(){LM_buildLPArrivalMap();LM_buildLPArrivalFifo();const el=document.getElementById("mn");
 
 // ── ANALYSIS VIEW ──
 if(cv==="analysis"){LM_renderAnalysis(el);return}
@@ -12997,7 +13036,20 @@ if(cv==="dashboard"){
           else if(vcIsMEX(_vCluster)){const c=_whsParts(_vCluster,/^MEX\s*/i);_whs=c.join(' / ')||'Mexico Warehouse'}
           else if(_vCluster){const c=_whsParts(_vCluster,/^USA\s*/i);_whs=(c.join(' / ')||_vCluster)+' Satellite Warehouse'}
           else{_whs='Dallas Warehouse'}
-          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs});
+          // Compute arrival dates (LP-fed FIFO waterfall or WHS processing)
+          const _asmLpAbbrs=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
+          let _asmFirstArr=null,_asmFirstTrk=null,_asmReadyBy=null,_asmReadyTrk=null,_asmIsLp=false;
+          if(_asmLpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
+            _asmIsLp=true;
+            const fifo=LM_skuArrivalFifo(it.sku,_asmLpAbbrs,it.loadQty||0);
+            if(fifo){_asmFirstArr=fifo.firstArr;_asmFirstTrk=fifo.firstTrk;_asmReadyBy=fifo.readyBy;_asmReadyTrk=fifo.readyTrk}
+          } else if(dd){
+            // Non-LP: dispatch minus WHS processing days
+            const _wpDays=gWP(label);
+            if(_wpDays>0){const _arrDt=disp(new Date(dd+'T12:00:00'),_wpDays);const _arrStr=_arrDt.toISOString().slice(0,10);_asmFirstArr=_arrStr;_asmReadyBy=_arrStr}
+            else{_asmFirstArr=dd;_asmReadyBy=dd}
+          }
+          _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,firstArr:_asmFirstArr,firstTrk:_asmFirstTrk,readyBy:_asmReadyBy,readyTrk:_asmReadyTrk,isLp:_asmIsLp});
         });
       });
     }
@@ -13008,7 +13060,7 @@ if(cv==="dashboard"){
       const _asmSkus=new Set(_asmRows.map(r=>r.sku)).size;
       h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></div>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
-      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>WHS</th><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th></tr></thead><tbody>`;
+      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>WHS</th><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th><th>First Arrival</th><th>Ready By</th></tr></thead><tbody>`;
       let _prevDd='';
       _asmRows.forEach(r=>{
         const isNewDate=r.dd!==_prevDd;
@@ -13016,6 +13068,24 @@ if(cv==="dashboard"){
         const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
         const dateStr=dt?fS(dt):'—';
         const dow=dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'';
+        // Format First Arrival cell
+        let _faHtml='—',_rbHtml='—';
+        if(r.firstArr){
+          const _faDt=new Date(r.firstArr+'T12:00:00');
+          _faHtml=fS(_faDt)+(r.isLp&&r.firstTrk?' <span class="mono" style="font-size:9px;color:var(--tt)">('+r.firstTrk+')</span>':'');
+        }
+        // Format Ready By cell
+        if(r.readyBy){
+          if(r.readyBy===r.firstArr){_rbHtml='<span style="color:var(--gn);font-weight:600">✓</span>'}
+          else{
+            const _rbDt=new Date(r.readyBy+'T12:00:00');
+            const _isLate=r.dd&&r.readyBy>r.dd;
+            _rbHtml=`<span style="color:${_isLate?'var(--rd)':'var(--gn)'};font-weight:600">${_isLate?'⚠ ':''}${fS(_rbDt)}</span>`+(r.isLp&&r.readyTrk?' <span class="mono" style="font-size:9px;color:var(--tt)">('+r.readyTrk+')</span>':'');
+          }
+        } else if(r.firstArr&&!r.readyBy){
+          // Has some arrivals but not enough qty
+          _rbHtml='<span style="color:var(--rd);font-weight:600">⚠ Insufficient</span>';
+        }
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
           <td class="fw6">${isNewDate?dateStr+' <span style="color:var(--tt);font-weight:400">'+dow+'</span>':''}</td>
           <td class="mono fw6">${r.truckId}</td>
@@ -13024,9 +13094,11 @@ if(cv==="dashboard"){
           <td class="mono">${r.sku}</td>
           <td class="tcl" style="color:var(--ts)">${r.nm}</td>
           <td style="font-size:10px;color:var(--tt)">${r.src}</td>
-          <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td></tr>`;
+          <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td>
+          <td style="font-size:10px;white-space:nowrap">${_faHtml}</td>
+          <td style="font-size:10px;white-space:nowrap">${_rbHtml}</td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="7">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="7">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td><td></td></tr></tfoot></table></div>`;
     }
   }
 
@@ -13814,7 +13886,9 @@ async function LM_exportAsmTimeline(){
       {header:'SKU',key:'sku',width:18},
       {header:'Item',key:'nm',width:35},
       {header:'Source',key:'src',width:10},
-      {header:'Qty',key:'qty',width:10}
+      {header:'Qty',key:'qty',width:10},
+      {header:'First Arrival',key:'firstArr',width:16},
+      {header:'Ready By',key:'readyBy',width:16}
     ];
     const hdrRow=ws.getRow(1);
     hdrRow.font={bold:true,size:10};
@@ -13822,9 +13896,22 @@ async function LM_exportAsmTimeline(){
     hdrRow.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};
     rows.forEach(r=>{
       const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
+      const _faDt=r.firstArr?new Date(r.firstArr+'T12:00:00'):null;
+      const _rbDt=r.readyBy?new Date(r.readyBy+'T12:00:00'):null;
+      const _faStr=_faDt?_faDt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+(r.isLp&&r.firstTrk?' ('+r.firstTrk+')':''):'—';
+      const _rbStr=_rbDt?(r.readyBy===r.firstArr?'Same as First Arrival':_rbDt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+(r.isLp&&r.readyTrk?' ('+r.readyTrk+')':'')):(r.firstArr?'Insufficient':'—');
       ws.addRow({dd:dt?dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'',
         dow:dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'',
-        truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty});
+        truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty,
+        firstArr:_faStr,readyBy:_rbStr});
+    });
+    // Color Ready By cells (green=on time, red=late/insufficient)
+    rows.forEach((r,i)=>{
+      const exRow=ws.getRow(i+2);// +2: 1-based + header row
+      const rbCell=exRow.getCell('readyBy');
+      if(r.readyBy&&r.dd&&r.readyBy>r.dd)rbCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
+      else if(r.readyBy)rbCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
+      else if(r.firstArr&&!r.readyBy)rbCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
     });
     // Total row
     const totRow=ws.addRow({dd:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
