@@ -8247,12 +8247,13 @@ function gMT(v){return Math.max(1,vG(v).mt||LM_DEFAULT_MT[v]||2)}
 // Default lead times (days) from Dallas warehouse — 53ft single transit, rounded up
 // From Transit_times_MAT.xlsx: address-to-city mapped, ceiling of fractional days
 const LM_DEFAULT_LT={"Atlanta / CORT":1,"Austin / CORT":0,"Boston / CORT":3,"Charlotte / CORT":2,"Columbus / CORT":2,"Dallas / CORT":0,"Houston / CORT":0,"Houston / RIC":0,"Kansas City / CORT":1,"Kansas City / RIC":1,"Knoxville / CORT":2,"Los Angeles / CORT":2,"Nashville / CORT":1,"New York / CORT":3,"New York New Jersey / RIC":3,"Philadelphia / CORT":3,"Phoenix / CORT":2,"Portland / CORT":3,"Roanoke / CORT":2,"Salt Lake City / CORT":2,"San Diego / CORT":2,"San Francisco / CORT":3,"Seattle / CORT":3,"South Florida / CORT":2,"Tampa / CORT":2,"TSE Atlanta / CORT":1,"TSE Boston / CORT":3,"TSE Los Angeles / CORT":2,"TSE Orlando / CORT":2,"TSE San Francisco / CORT":3,"TSE Seattle / CORT":3,"TSE Washington / CORT":2,"USA / CORT":0,"USA / RGS":0,"USA CENT / CORT":1,"USA EAST / CORT":3,"Washington DC / CORT":2,"Atlanta Stadium":1,"Boston Stadium":3,"Dallas Stadium":0,"Houston Stadium":0,"Kansas City Stadium":0,"Los Angeles Stadium":2,"Los Angeles - Rose Bowl Stadium":2,"Miami Stadium":2,"New York / New Jersey Stadium":0,"Philadelphia Stadium":3,"San Francisco Bay Area Stadium":3,"Seattle Stadium":3,"International Broadcast Centre":0,"International Broadcast Coordination Centre":0};
-function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt):(LM_DEFAULT_LT[v]!==undefined?LM_DEFAULT_LT[v]:0)}
+function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt):0}// Outbound transit (within city, default 0)
 // Default bump-in dates per stadium (from Stadium Bump-in Schedule)
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-16","Boston Stadium":"2026-04-20","Dallas Stadium":"2026-05-08","Guadalajara Stadium":"2026-04-21","Houston Stadium":"2026-05-14","International Broadcast Centre":"2026-04-27","International Broadcast Coordination Centre":"2026-04-27","Kansas City Stadium":"2026-04-24","Los Angeles Stadium":"2026-04-20","Los Angeles - Rose Bowl Stadium":"2026-05-13","Mexico City Stadium":"2026-05-12","Miami Stadium":"2026-05-11","Monterrey Stadium":"2026-05-15","New York / New Jersey Stadium":"2026-04-27","Philadelphia Stadium":"2026-05-01","San Francisco Bay Area Stadium":"2026-04-22","Seattle Stadium":"2026-04-22","Toronto Stadium":"2026-04-01","Vancouver Stadium":"2026-05-14"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
-function gWP(v){const wp=vG(v).wp;return wp!==undefined&&wp!==null?Math.max(0,wp):0}// WHS processing days
-function gLT2(v){const lt2=vG(v).lt2;return lt2!==undefined&&lt2!==null?Math.max(0,lt2):0}// Inbound transit days (Dallas→WHS)
+const LM_DEFAULT_WP={"Atlanta Stadium":3,"Boston Stadium":3,"Dallas Stadium":3,"Houston Stadium":3,"Kansas City Stadium":3,"Los Angeles Stadium":3,"Miami Stadium":3,"New York / New Jersey Stadium":3,"Philadelphia Stadium":3,"San Francisco Bay Area Stadium":3,"Seattle Stadium":3,"International Broadcast Centre":3};
+function gWP(v){const wp=vG(v).wp;return wp!==undefined&&wp!==null?Math.max(0,wp):(LM_DEFAULT_WP[v]||0)}// WHS processing days
+function gLT2(v){const lt2=vG(v).lt2;return lt2!==undefined&&lt2!==null?Math.max(0,lt2):(LM_DEFAULT_LT[v]!==undefined?LM_DEFAULT_LT[v]:0)}// Inbound transit (Dallas→satellite)
 
 // ── USA Cluster Turnaround (days at satellite warehouse before re-dispatch) ──
 let LM_clusterTurnaround=5;
@@ -12280,7 +12281,9 @@ function rConstraints(){
   console.log('[ML3000 v10.1] rConstraints',key,': tc='+tc,'mt='+mt,'lt='+lt,'lt2='+lt2,'wp='+wp,'bi='+bi,'lpFed='+_isLpFedVenue,'VS[key]=',JSON.stringify(VS[key]||null));
   const defTC=LM_DEFAULT_TC[key]||12;
   const defMT=LM_DEFAULT_MT[key]||2;
-  const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;
+  const defLT=0;// outbound (within city) defaults to 0
+  const defLT2=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;// inbound (Dallas→satellite)
+  const defWP=LM_DEFAULT_WP[key]||0;
   const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
   const hasOvr=VS[key]&&Object.keys(VS[key]).length>0;
   const dn=clDisp(key)||key;
@@ -12293,8 +12296,8 @@ function rConstraints(){
   <div class="cgrid"${isV?' style="pointer-events:none"':''}>
     ${_field('i-tc','Truck cap (plt)',tc,defTC,'number',1)}
     ${_field('i-mt','Max trucks/day',mt,defMT,'number',1)}
-    ${!_isLpFedVenue?_field('i-lt2','Inbound transit (d)',lt2,0,'number',0):''}
-    ${_field('i-wp','WHS processing (d)',wp,0,'number',0)}
+    ${!_isLpFedVenue?_field('i-lt2','Inbound transit (d)',lt2,defLT2,'number',0):''}
+    ${_field('i-wp','WHS processing (d)',wp,defWP,'number',0)}
     ${_field('i-lt','Outbound transit (d)',lt,defLT,'number',0)}
     ${_field('i-bi','Bump-in',bi,defBI,'date')}
   </div>
@@ -12363,13 +12366,13 @@ function _onConstraintChange(){
   const wpVal=parseInt(document.getElementById('i-wp')?.value);const wp=isNaN(wpVal)?0:Math.max(0,wpVal);
   const bi=document.getElementById('i-bi')?.value||'';
   const defTC=LM_DEFAULT_TC[key]||12;const defMT=LM_DEFAULT_MT[key]||2;
-  const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
+  const defLT=0;const defLT2=LM_DEFAULT_LT[key]||0;const defWP=LM_DEFAULT_WP[key]||0;const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
   if(!VS[key])VS[key]={};
   if(tc!==defTC)VS[key].tc=tc;else delete VS[key].tc;
   if(mt!==defMT)VS[key].mt=mt;else delete VS[key].mt;
   if(lt!==defLT)VS[key].lt=lt;else delete VS[key].lt;
-  if(lt2>0)VS[key].lt2=lt2;else delete VS[key].lt2;
-  if(wp>0)VS[key].wp=wp;else delete VS[key].wp;
+  if(lt2!==defLT2)VS[key].lt2=lt2;else delete VS[key].lt2;
+  if(wp!==defWP)VS[key].wp=wp;else delete VS[key].wp;
   if(bi&&bi!==defBI)VS[key].bi=bi;else delete VS[key].bi;
   if(VS[key]&&Object.keys(VS[key]).length===0)delete VS[key];
   const cK=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
@@ -13116,12 +13119,19 @@ if(cv==="dashboard"){
         const _lwHtml=_fmtDt(r.leavesWhs);
         // Bump-in
         const _biHtml=_fmtDt(r.bumpin);
-        // Status: compare arrivesWhs vs leavesWhs (items must arrive before truck departs)
+        // Status: check full chain — Dallas arrival must be before LP departs, satellite arrival before satellite departs
         let _stHtml='';
         if(r.notInLp){_stHtml='<span class="bg bgs bg-or">Not in LP</span>'}
-        else if(!r.arrivesWhs){_stHtml='<span style="color:var(--tt)">—</span>'}
-        else if(r.leavesWhs&&r.arrivesWhs>r.leavesWhs){const days=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
-        else{_stHtml='<span class="bg bgs bg-gn">On time</span>'}
+        else if(!r.arrivesWhs&&!r.arrivesDallas){_stHtml='<span style="color:var(--tt)">—</span>'}
+        else{
+          // Check Dallas arrival vs LP departure (for items arriving late at Dallas)
+          const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
+          // Check satellite arrival vs satellite departure
+          const _satLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
+          if(_dalLate){const days=Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late (Dallas)</span>`}
+          else if(_satLate){const days=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
+          else{_stHtml='<span class="bg bgs bg-gn">On time</span>'}
+        }
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
           <td style="font-size:10px;white-space:nowrap">${_adHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_ldHtml}</td>
@@ -13940,9 +13950,11 @@ async function LM_exportAsmTimeline(){
       const arrDal=r.inStock?'In stock':_fmtD(r.arrivesDallas);
       const lpDep=r.notInLp?'Not in LP':(r.lpDeparts?_fmtD(r.lpDeparts)+(r.isLp&&r.readyTrk?' ('+r.readyTrk+')':''):'—');
       const arrWhs=r.notInLp?'Not in LP':_fmtD(r.arrivesWhs);
-      const _isLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
-      const days=_isLate?Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000):0;
-      const status=r.notInLp?'Not in LP':!r.arrivesWhs?'—':_isLate?days+'d late':'On time';
+      const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
+      const _satLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
+      const _isLate=_dalLate||_satLate;
+      const days=_dalLate?Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/86400000):(_satLate?Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000):0);
+      const status=r.notInLp?'Not in LP':(!r.arrivesWhs&&!r.arrivesDallas)?'—':_dalLate?days+'d late (Dallas)':_satLate?days+'d late':'On time';
       ws.addRow({arrDal,lpDep,arrWhs,lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
         truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty,status});
     });
@@ -13950,9 +13962,11 @@ async function LM_exportAsmTimeline(){
     rows.forEach((r,i)=>{
       const exRow=ws.getRow(i+2);
       const stCell=exRow.getCell('status');
-      const _isLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
+      const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
+      const _satLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
+      const _isLate=_dalLate||_satLate;
       if(_isLate||r.notInLp)stCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
-      else if(r.arrivesWhs)stCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
+      else if(r.arrivesWhs||r.arrivesDallas)stCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
     });
     // Total row
     const totRow=ws.addRow({dd:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
