@@ -2075,11 +2075,14 @@ let LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};// dest abbr -> satellite WHS proce
 // Match destination string to transit abbreviation (checks both abbr and full city name)
 function LP_matchTransitAbbr(dest){
   const u=(dest||'').toUpperCase();
+  // First pass: match full city names (more specific, avoids substring collisions like Monterrey containing TOR)
   for(const abbr of Object.keys(LP_transitDays)){
-    if(u.includes(abbr))return abbr;
-    // Also check full city name from CITY_ABBR (e.g. KC→"Kansas City", NY→"New York")
     const full=(CITY_ABBR[abbr]||'').toUpperCase();
     if(full&&u.includes(full))return abbr;
+  }
+  // Second pass: match abbreviations (shorter, less specific)
+  for(const abbr of Object.keys(LP_transitDays)){
+    if(u.includes(abbr))return abbr;
   }
   return null;
 }
@@ -13119,18 +13122,18 @@ if(cv==="dashboard"){
         const _lwHtml=_fmtDt(r.leavesWhs);
         // Bump-in
         const _biHtml=_fmtDt(r.bumpin);
-        // Status: check full chain — Dallas arrival must be before LP departs, satellite arrival before satellite departs
+        // Status: check full chain
         let _stHtml='';
         if(r.notInLp){_stHtml='<span class="bg bgs bg-or">Not in LP</span>'}
+        else if(r.isLp&&!r.arrivesWhs){_stHtml='<span class="bg bgs bg-or">No LP data</span>'}
         else if(!r.arrivesWhs&&!r.arrivesDallas){_stHtml='<span style="color:var(--tt)">—</span>'}
         else{
-          // Check Dallas arrival vs LP departure (for items arriving late at Dallas)
           const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
-          // Check satellite arrival vs satellite departure
           const _satLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
           if(_dalLate){const days=Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late (Dallas)</span>`}
           else if(_satLate){const days=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
-          else{_stHtml='<span class="bg bgs bg-gn">On time</span>'}
+          else if(r.arrivesWhs){_stHtml='<span class="bg bgs bg-gn">On time</span>'}
+          else{_stHtml='<span style="color:var(--tt)">—</span>'}
         }
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
           <td style="font-size:10px;white-space:nowrap">${_adHtml}</td>
