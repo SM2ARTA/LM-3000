@@ -6552,7 +6552,7 @@ function V26_gatherTrucks(){
   
   // ── STP Direct Deliveries ──
   for(const del of LM_STP_DELIVERIES){
-    const truck=LM_STP_TRUCKS[del.venue];if(!truck||!truck.items.length)continue;
+    const truck=LM_STP_TRUCKS[del.id];if(!truck||!truck.items.length)continue;
     trucks.push({id:del.id,date:del.date||'',source:'STP Direct',dest:del.venue,destDisplay:clDisp(del.venue),
       pallets:truck.pallets,qty:truck.pcs,skus:truck.items.length,
       items:truck.items.map(it=>({sku:it.sku,name:it.nm,qty:it.loadQty,pallets:it.loadPlt||0})),excluded:false,_isStp:true,_stpRate:del.rate||0});
@@ -6899,7 +6899,7 @@ function V26_render(){
         }
         for(let si=0;si<nbStp.length;si++){
           const s=nbStp[si];
-          html+=`<div style="background:#FFF8F0;border-radius:6px;padding:6px 8px;margin-bottom:4px;border:1px solid #FFCC80;cursor:pointer;transition:box-shadow .15s" onclick="LM_showStpDetail('${(s.dest||s.destDisplay||'').replace(/'/g,"\\'")}')" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+          html+=`<div style="background:#FFF8F0;border-radius:6px;padding:6px 8px;margin-bottom:4px;border:1px solid #FFCC80;cursor:pointer;transition:box-shadow .15s" onclick="LM_showStpDetail('${(s.id||'').replace(/'/g,"\\'")}')" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
             <div style="display:flex;justify-content:space-between;align-items:center">
               <div style="font-size:11px;font-weight:700;color:#EF6C00">🏪 STP → ${clDisp(s.dest||s.destDisplay)}</div>
               <div style="font-size:9px;color:var(--tt)">${_effKey}</div>
@@ -7041,7 +7041,7 @@ function V26_render(){
     // STP Direct cards
     dayTrucks.filter(t=>t.source==='STP Direct').forEach(t=>{
       const exStyle=t.excluded?'opacity:0.4;':'';
-      html+=`<div class="lp-truck" style="border-left:3px solid #EF6C00;${exStyle}" onclick="LM_showStpDetail('${(t.dest||'').replace(/'/g,"\\'")}')">
+      html+=`<div class="lp-truck" style="border-left:3px solid #EF6C00;${exStyle}" onclick="LM_showStpDetail('${(t.id||'').replace(/'/g,"\\'")}')">
         <div class="lp-truck-hd">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="background:#EF6C00;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px">🏪 STP</span>
@@ -7553,7 +7553,7 @@ function masterBackupExport(){
 
   // 20. LM STP Deliveries
   if(LM_STP_DELIVERIES.length>0){
-    const rows=LM_STP_DELIVERIES.map(d=>({ID:d.id,Venue:d.venue,Date:d.date||'',Rate:d.rate||0,Auto:d._auto?'Y':''}));
+    const rows=LM_STP_DELIVERIES.map(d=>({ID:d.id,Venue:d.venue,Date:d.date||'',Rate:d.rate||0,Auto:d._auto?'Y':'',Items:d.items?JSON.stringify(d.items):''}));
     const ws=XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb,ws,'LM STP Deliveries');
   }
@@ -7789,7 +7789,7 @@ async function masterBackupRestore(file){
     // ── 20. LM STP Deliveries → LM_STP_DELIVERIES ──
     const stpRows=getSheet('LM STP Deliveries');
     if(stpRows){
-      LM_STP_DELIVERIES=stpRows.map(r=>({id:r.ID||'',venue:r.Venue||'',date:r.Date||'',rate:r.Rate||0,_auto:r.Auto==='Y'?true:undefined}));
+      LM_STP_DELIVERIES=stpRows.map(r=>{const d={id:r.ID||'',venue:r.Venue||'',date:r.Date||'',rate:r.Rate||0};if(r.Auto==='Y')d._auto=true;if(r.Items){try{d.items=JSON.parse(r.Items)}catch(e){}}return d});
       _stpNextId=LM_STP_DELIVERIES.reduce((mx,d)=>Math.max(mx,(parseInt(String(d.id).replace(/\D/g,''))||0)+1),1);
       log.push('STP Deliveries: '+LM_STP_DELIVERIES.length);
     }
@@ -8599,7 +8599,7 @@ function renderDayPopup(dateKey,trucks,cort,opts){
     h+=`<div style="font-size:11px;font-weight:700;color:#EF6C00;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">🏪 Staples Direct Deliveries</div>`;
     h+=`<table class="dtb"><thead><tr><th>ID</th><th>Destination</th><th>SKUs</th><th>Qty</th><th>Pallets</th><th>Rate</th></tr></thead><tbody>`;
     stpTrucks.forEach(t=>{
-      h+=`<tr style="cursor:pointer" onclick="LM_showStpDetail('${(t.dest||'').replace(/'/g,"\\'")}')"><td class="fw6" style="color:#EF6C00">${t.id}</td><td>${t.dest}</td><td>${t.items.length}</td><td class="fw6">${t.pcs.toLocaleString()}</td><td>${t.pallets.toFixed(1)}</td><td>${t._stpRate>0?fmtUSD(t._stpRate):'—'}</td></tr>`;
+      h+=`<tr style="cursor:pointer" onclick="LM_showStpDetail('${(t.id||'').replace(/'/g,"\\'")}')"><td class="fw6" style="color:#EF6C00">${t.id}</td><td>${t.dest}</td><td>${t.items.length}</td><td class="fw6">${t.pcs.toLocaleString()}</td><td>${t.pallets.toFixed(1)}</td><td>${t._stpRate>0?fmtUSD(t._stpRate):'—'}</td></tr>`;
     });
     h+=`</tbody></table>`;
   }
@@ -9668,12 +9668,13 @@ function numberAll(){
 
   // ── Build STP trucks ──
   LM_STP_TRUCKS={};
+  for(const k in PLAN_CACHE){if(PLAN_CACHE[k])delete PLAN_CACHE[k]._stpTrucks}
   for(const del of LM_STP_DELIVERIES){
     const truck=_stpBuildTruck(del);
     if(truck){
-      LM_STP_TRUCKS[del.venue]=truck;
+      LM_STP_TRUCKS[del.id]=truck;
       // Inject into PLAN_CACHE so it shows in venue view
-      if(PLAN_CACHE[del.venue]){PLAN_CACHE[del.venue]._stpTruck=truck}
+      if(PLAN_CACHE[del.venue]){if(!PLAN_CACHE[del.venue]._stpTrucks)PLAN_CACHE[del.venue]._stpTrucks=[];PLAN_CACHE[del.venue]._stpTrucks.push(truck)}
     }
   }
 }
@@ -10383,7 +10384,7 @@ function _kitLoadItems(){
   const el=document.getElementById('kit_items');if(!el)return;
   if(!venue){el.innerHTML='<div style="padding:12px;color:var(--tt);text-align:center">Select a venue first</div>';return}
   // Get all demand items for this venue (including manual, excluding kit rows)
-  const hasStp=!!LM_getStpForVenue(venue);// hide STP items if staples truck exists
+  const hasStp=LM_getStpForVenue(venue).length>0;// hide STP items if staples truck exists
   const bySkuMap={};
   for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(hasStp&&(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
   // Subtract already-allocated kit amounts
@@ -10542,7 +10543,7 @@ function LM_showKitDetail(kitId){
 function _kitAvailHtml(kit){
   // Get demand items for this venue that are NOT already in the kit
   const kitSkus=new Set(kit.items.map(i=>i.sku));
-  const hasStp=!!LM_getStpForVenue(kit.venue);
+  const hasStp=LM_getStpForVenue(kit.venue).length>0;
   const avail={};
   for(const r of RW){
     if(r.Venue!==kit.venue||r._kit)continue;
@@ -10828,7 +10829,7 @@ function _stratRenderModal(){
   const rows=vtList.map(vt=>{
     const d=vtData[vt];
     const totalV=new Set([...d.stpVenues,...d.ffeVenues]).size;
-    const manStpD=[...d.stpVenues].filter(v=>{const e=LM_getStpForVenue(v);return e&&!e._auto});
+    const manStpD=[...d.stpVenues].filter(v=>{const e=LM_getStpForVenue(v);return e.some(d=>!d._auto)});
     const manStpK=[...d.stpVenues].filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('OSKIT')&&!k._auto));
     const manFfeK=[...d.ffeVenues].filter(v=>LM_KITS.some(k=>k.venue===v&&k.sku.startsWith('FNKIT')&&!k._auto));
     const allManual=[...manStpD.map(v=>v+' (STP direct)'),...manStpK.map(v=>v+' (STP kit)'),...manFfeK.map(v=>v+' (FF&E kit)')];
@@ -10897,7 +10898,7 @@ function _stpApplyStrategy(){
     }
     // Apply STP strategy
     if(cfg.stp==='direct'){for(const venue of stpVenues){
-      const ex=LM_getStpForVenue(venue);if(ex)continue;// manual or auto exists
+      const ex=LM_getStpForVenue(venue);if(ex.length>0)continue;// manual or auto exists
       LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&k.venue===venue));
       LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date:'',rate:0,_auto:true});
     }}
@@ -10927,11 +10928,26 @@ function _stpApplyStrategy(){
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
 // ── LM Staples Direct Deliveries ──────────────────────────────
-let LM_STP_DELIVERIES=[];// [{id:'STP-1', venue:'Dallas Stadium', date:'2026-05-08', rate:0}]
+let LM_STP_DELIVERIES=[];// [{id:'STP-1', venue:'Dallas Stadium', date:'2026-05-08', rate:0, items?:[{sku,qty}]}]
 let _stpNextId=1;
-let LM_STP_TRUCKS={};// venue -> truck object (populated by numberAll)
+let LM_STP_TRUCKS={};// del.id -> truck object (populated by numberAll)
 function LM_stpVenueSet(){return new Set(LM_STP_DELIVERIES.map(d=>d.venue))}
-function LM_getStpForVenue(v){return LM_STP_DELIVERIES.find(d=>d.venue===v)}
+function LM_getStpForVenue(v){return LM_STP_DELIVERIES.filter(d=>d.venue===v)}
+function LM_getStpTrucksForVenue(venue){return LM_STP_DELIVERIES.filter(d=>d.venue===venue).map(d=>LM_STP_TRUCKS[d.id]).filter(Boolean)}
+function _stpAllocMap(venue){
+  const map={};
+  // Compute total STP demand for venue from RW
+  const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
+  const _adjScale={};
+  if(Object.keys(LM_demandAdj).length>0){const ot={};for(const r of RW){const v=r.Venue;if(!v||v!==venue)continue;const eq=r._effQty||0;if(eq<=0)continue;const s=r.Nomenclature;if(!NOM[s])continue;ot[v+'|'+s]=(ot[v+'|'+s]||0)+eq};for(const k in LM_demandAdj){if(ot[k]&&ot[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/ot[k]}}
+  const bySkuMap={};
+  for(const r of RW){if(r.Venue!==venue)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!isStp(s))continue;if(r._kit)continue;let q=r._effQty||0;if(q<=0)continue;const ak=r.Venue+'|'+s;if(_adjScale[ak]!==undefined)q=Math.round(q*_adjScale[ak]);if(!r._kit&&_kitAl[ak])q=Math.max(0,q-_kitAl[ak]);if(q<=0)continue;bySkuMap[s]=(bySkuMap[s]||0)+q}
+  // Sum allocated across deliveries with explicit .items
+  const allocated={};
+  for(const del of LM_STP_DELIVERIES){if(del.venue!==venue||!del.items)continue;for(const it of del.items){allocated[it.sku]=(allocated[it.sku]||0)+it.qty}}
+  for(const[sku,demand] of Object.entries(bySkuMap)){const alloc=allocated[sku]||0;map[sku]={demand,allocated:alloc,remaining:demand-alloc}}
+  return map;
+}
 async function LM_saveStpDeliveries(){
   if(ROLE==='viewer'||!SB)return;UNDO_capture();
   try{await SB.from('shared_state').upsert({id:'fm-lm-stp-deliveries',value:JSON.stringify(LM_STP_DELIVERIES),updated_at:new Date().toISOString()})}catch(e){}
@@ -10941,20 +10957,34 @@ async function LM_loadStpDeliveries(){
   try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-lm-stp-deliveries').single();if(data){LM_STP_DELIVERIES=JSON.parse(data.value)||[];_stpNextId=LM_STP_DELIVERIES.reduce((mx,d)=>Math.max(mx,(parseInt(String(d.id).replace(/\D/g,''))||0)+1),1)}}catch(e){}
 }
 function _stpBuildTruck(del){
-  // Build a truck-like object from STP items for this venue
+  // Build a truck-like object from STP items for this delivery
   const items=[];let totalPlt=0,totalPcs=0;
-  const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
-  const _adjScale={};
-  if(Object.keys(LM_demandAdj).length>0){const ot={};for(const r of RW){const v=r.Venue;if(!v||v!==del.venue)continue;const eq=r._effQty||0;if(eq<=0)continue;const s=r.Nomenclature;if(!NOM[s])continue;ot[v+'|'+s]=(ot[v+'|'+s]||0)+eq};for(const k in LM_demandAdj){if(ot[k]&&ot[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/ot[k]}}
   const bySkuMap={};
-  for(const r of RW){
-    if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;
-    if(!isStp(s))continue;if(r._kit)continue;
-    let q=r._effQty||0;if(q<=0)continue;
-    const ak=r.Venue+'|'+s;if(_adjScale[ak]!==undefined)q=Math.round(q*_adjScale[ak]);
-    if(!r._kit&&_kitAl[ak])q=Math.max(0,q-_kitAl[ak]);
-    if(q<=0)continue;
-    if(!bySkuMap[s])bySkuMap[s]=0;bySkuMap[s]+=q;
+  if(del.items){
+    // Explicit item allocation — use quantities directly
+    for(const it of del.items){if(it.qty>0)bySkuMap[it.sku]=(bySkuMap[it.sku]||0)+it.qty}
+  } else {
+    // Only first auto-remainder delivery for a venue gets items; subsequent ones get nothing
+    const firstAuto=LM_STP_DELIVERIES.find(d=>d.venue===del.venue&&!d.items);
+    if(firstAuto&&firstAuto.id!==del.id)return null;
+    // Auto-aggregate: all STP demand minus quantities claimed by other deliveries with explicit .items
+    const _kitAl=LM_KITS.length>0?LM_kitAllocMap():{};
+    const _adjScale={};
+    if(Object.keys(LM_demandAdj).length>0){const ot={};for(const r of RW){const v=r.Venue;if(!v||v!==del.venue)continue;const eq=r._effQty||0;if(eq<=0)continue;const s=r.Nomenclature;if(!NOM[s])continue;ot[v+'|'+s]=(ot[v+'|'+s]||0)+eq};for(const k in LM_demandAdj){if(ot[k]&&ot[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/ot[k]}}
+    // Sum claimed by sibling deliveries with explicit .items
+    const claimed={};
+    for(const sib of LM_STP_DELIVERIES){if(sib.id===del.id||sib.venue!==del.venue||!sib.items)continue;for(const it of sib.items)claimed[it.sku]=(claimed[it.sku]||0)+it.qty}
+    for(const r of RW){
+      if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;
+      if(!isStp(s))continue;if(r._kit)continue;
+      let q=r._effQty||0;if(q<=0)continue;
+      const ak=r.Venue+'|'+s;if(_adjScale[ak]!==undefined)q=Math.round(q*_adjScale[ak]);
+      if(!r._kit&&_kitAl[ak])q=Math.max(0,q-_kitAl[ak]);
+      if(q<=0)continue;
+      if(!bySkuMap[s])bySkuMap[s]=0;bySkuMap[s]+=q;
+    }
+    // Subtract quantities claimed by sibling deliveries
+    for(const[sku,cl] of Object.entries(claimed)){if(bySkuMap[sku])bySkuMap[sku]=Math.max(0,bySkuMap[sku]-cl)}
   }
   for(const[sku,qty] of Object.entries(bySkuMap)){
     const nm=NOM[sku];
@@ -10969,18 +10999,16 @@ function _stpBuildTruck(del){
   items.sort((a,b)=>a.sku.localeCompare(b.sku));
   return{id:del.id,items,pallets:Math.round(totalPlt*100)/100,pcs:totalPcs,dd:del.date||'',destLabel:del.venue,destDisplay:clDisp(del.venue),_isStp:true,_stpRate:del.rate||0};
 }
-function LM_deleteStp(venue){
+function LM_deleteStp(delId){
   if(ROLE==='viewer')return;
-  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>d.venue!==venue);
+  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>d.id!==delId);
   LM_saveStpDeliveries();bV();PLAN_CACHE={};numberAll();
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
 function LM_showCreateStp(prefillVenue){
   if(ROLE==='viewer')return;
-  const stpVenues=LM_stpVenueSet();
-  // Only venues that have STP items AND don't already have an STP delivery
+  // Venues that have STP items (allow multiple deliveries per venue)
   const eligible=VN.filter(v=>{
-    if(stpVenues.has(v.name))return false;
     return RW.some(r=>r.Venue===v.name&&r.Nomenclature&&NOM[r.Nomenclature]&&isStp(r.Nomenclature));
   }).map(v=>v.name).sort();
   if(!eligible.length){alert('No venues with STP items available for direct delivery.');return}
@@ -11043,21 +11071,28 @@ function _stpCreate(){
   const date=document.getElementById('stp_date')?.value||'';
   const rate=parseFloat(document.getElementById('stp_rate')?.value)||0;
   if(!venue)return;
-  if(LM_STP_DELIVERIES.find(d=>d.venue===venue)){alert('STP delivery already exists for '+venue);return}
   LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date,rate});
   LM_saveStpDeliveries();bV();PLAN_CACHE={};numberAll();
   document.querySelector('.mo')?.remove();
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
-function LM_showStpDetail(venue){
-  const del=LM_getStpForVenue(venue);if(!del)return;
-  const truck=LM_STP_TRUCKS[venue];
-  const rows=truck?truck.items.map(it=>`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.nm}</td><td class="mono">${it.loadQty.toLocaleString()}</td><td class="mono">${it.noPallet?'—':it.loadPlt.toFixed(1)}</td></tr>`).join(''):'<tr><td colspan="4">No items</td></tr>';
+function LM_showStpDetail(delId){
+  const del=LM_STP_DELIVERIES.find(d=>d.id===delId);if(!del)return;
+  const venue=del.venue;
+  const truck=LM_STP_TRUCKS[del.id];
+  const allocMap=_stpAllocMap(venue);
+  const venueDels=LM_getStpForVenue(venue);
+  const idEsc=del.id.replace(/'/g,"\\'");
+  // Allocation bar helper
+  const _allocBar=(sku,qty)=>{const a=allocMap[sku];if(!a)return'';const pct=a.demand>0?Math.min(100,Math.round((a.allocated/a.demand)*100)):0;const clr=a.remaining<0?'var(--rd)':a.remaining===0?'var(--gn)':'var(--or)';return`<div style="display:flex;align-items:center;gap:4px"><div style="width:40px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${clr}"></div></div><span style="font-size:8px;color:var(--tt)">${a.allocated}/${a.demand}</span></div>`};
+  const rows=truck?truck.items.map(it=>`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.nm}</td><td class="mono">${it.loadQty.toLocaleString()}</td><td class="mono">${it.noPallet?'—':it.loadPlt.toFixed(1)}</td><td>${_allocBar(it.sku,it.loadQty)}</td></tr>`).join(''):'<tr><td colspan="5">No items</td></tr>';
+  // Allocation summary
+  const allocSkus=Object.values(allocMap);const fullyAlloc=allocSkus.filter(a=>a.remaining<=0).length;
   document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
-    <div class="mdi" style="max-width:500px">
+    <div class="mdi" style="max-width:560px">
       <div class="mdh" style="background:#FFF3E0;border-bottom-color:#EF6C00">
         <div><h3 style="color:#EF6C00">🏪 ${del.id} · ${venue}</h3></div>
-        <div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="_exportStpDelivery('${venue.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="this.closest('.mo').remove()">✕</button></div>
+        <div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="_exportStpDelivery('${idEsc}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="this.closest('.mo').remove()">✕</button></div>
       </div>
       <div class="mdb" style="padding:16px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -11065,25 +11100,90 @@ function LM_showStpDetail(venue){
           <span class="bg bg-gy">${del.date||'No date'}</span>
           <span class="bg bg-gy">Rate: ${del.rate>0?fmtUSD(del.rate):'Vendor delivers'}</span>
           ${truck?`<span class="bg bg-bl">${truck.items.length} items · ${truck.pcs.toLocaleString()} pcs · ${truck.pallets.toFixed(1)} plt</span>`:''}
+          ${del.items?'<span class="bg" style="background:var(--ps);color:var(--pu);font-size:9px">Split</span>':'<span class="bg bg-gy" style="font-size:9px">Auto</span>'}
+          ${venueDels.length>1?`<span class="bg" style="background:#FFF3E0;color:#EF6C00;font-size:9px">${venueDels.length} deliveries</span>`:''}
         </div>
         ${ROLE!=='viewer'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-          <div><label style="font-size:10px;font-weight:600;color:var(--ts)">Date</label><input type="date" value="${del.date}" onchange="LM_updateStp('${venue}','date',this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
-          <div><label style="font-size:10px;font-weight:600;color:var(--ts)">Rate (USD)</label><input type="number" value="${del.rate||0}" min="0" onchange="LM_updateStp('${venue}','rate',+this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts)">Date</label><input type="date" value="${del.date}" onchange="LM_updateStp('${idEsc}','date',this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts)">Rate (USD)</label><input type="number" value="${del.rate||0}" min="0" onchange="LM_updateStp('${idEsc}','rate',+this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:11px;font-family:var(--fm)"></div>
         </div>`:''}
-        <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Qty</th><th>Plt</th></tr></thead><tbody>${rows}</tbody></table>
-        ${ROLE!=='viewer'?`<button class="mbtn mbtn-danger mbtn-wide" onclick="LM_deleteStp('${venue}');this.closest('.mo').remove()" style="margin-top:12px">🗑 Delete STP Delivery</button>`:''}
+        <table class="dtb" style="font-size:11px"><thead><tr><th>SKU</th><th>Item</th><th>Qty</th><th>Plt</th><th>Alloc</th></tr></thead><tbody>${rows}</tbody></table>
+        <div style="padding:6px 0;font-size:10px;color:var(--ts)">${fullyAlloc}/${allocSkus.length} SKUs fully allocated</div>
+        ${ROLE!=='viewer'?`<div style="display:flex;gap:8px;margin-top:8px" id="stp-detail-actions">
+          <button class="mbtn mbtn-danger" onclick="LM_deleteStp('${idEsc}');this.closest('.mo').remove()" style="flex:1">🗑 Delete</button>
+          <button class="mbtn admin-only" onclick="_stpSplitMode('${idEsc}')" style="flex:1;background:#FFF3E0;color:#EF6C00;border-color:#FFCC80">✂ Split Delivery</button>
+        </div>`:''}
+        <div id="stp-split-zone"></div>
       </div>
     </div>
   </div>`;
+  if(ROLE!=='viewer')applyRole();
 }
-function LM_updateStp(venue,field,val){
-  const del=LM_getStpForVenue(venue);if(!del)return;
+function _stpSplitMode(delId){
+  const del=LM_STP_DELIVERIES.find(d=>d.id===delId);if(!del)return;
+  const truck=LM_STP_TRUCKS[del.id];if(!truck)return;
+  const venue=del.venue;
+  const allocMap=_stpAllocMap(venue);
+  const zone=document.getElementById('stp-split-zone');if(!zone)return;
+  // Toggle off if already open
+  if(zone.innerHTML){zone.innerHTML='';return}
+  let h=`<div style="margin-top:12px;border:1px solid #FFCC80;border-radius:var(--r);padding:12px;background:#FFF8F0">
+    <div style="font-size:11px;font-weight:700;color:#EF6C00;margin-bottom:8px">✂ Split — move items to new delivery</div>
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:8px">
+    <table class="dtb" style="font-size:10px"><thead><tr><th>SKU</th><th>Item</th><th>Avail</th><th style="width:60px">Move</th></tr></thead><tbody>`;
+  truck.items.forEach(it=>{
+    const maxQ=it.loadQty;
+    h+=`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.nm}</td><td class="mono">${maxQ.toLocaleString()}</td><td><input type="number" class="stp-split-qty" data-sku="${it.sku}" data-max="${maxQ}" min="0" max="${maxQ}" value="0" style="width:54px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm);text-align:right" oninput="_stpSplitPreview()"></td></tr>`;
+  });
+  h+=`</tbody></table></div>
+    <div id="stp-split-preview" style="font-size:10px;color:var(--ts);margin-bottom:8px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><label style="font-size:9px;font-weight:600;color:var(--ts)">Date</label><input id="stp_split_date" type="date" value="${del.date||''}" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)"></div>
+      <div><label style="font-size:9px;font-weight:600;color:var(--ts)">Rate (USD)</label><input id="stp_split_rate" type="number" min="0" value="0" style="width:100%;padding:4px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)"></div>
+    </div>
+    <button class="mbtn mbtn-wide" onclick="_stpSplitCreate('${delId.replace(/'/g,"\\'")}')" style="background:#EF6C00;color:#fff;border-color:#EF6C00">✂ Create Split</button>
+  </div>`;
+  zone.innerHTML=h;
+}
+function _stpSplitPreview(){
+  const el=document.getElementById('stp-split-preview');if(!el)return;
+  const inputs=document.querySelectorAll('.stp-split-qty');
+  let count=0,total=0;
+  inputs.forEach(inp=>{const v=parseInt(inp.value)||0;const mx=parseInt(inp.dataset.max)||0;if(v>mx)inp.value=mx;if(v>0){count++;total+=Math.min(v,mx)}});
+  el.textContent=count>0?count+' SKUs · '+total.toLocaleString()+' pcs will move to new delivery':'Select quantities to move';
+}
+function _stpSplitCreate(delId){
+  if(ROLE==='viewer')return;
+  const del=LM_STP_DELIVERIES.find(d=>d.id===delId);if(!del)return;
+  const inputs=document.querySelectorAll('.stp-split-qty');
+  const splitItems=[];
+  inputs.forEach(inp=>{const v=parseInt(inp.value)||0;if(v>0)splitItems.push({sku:inp.dataset.sku,qty:v})});
+  if(!splitItems.length){alert('Select at least one item to split.');return}
+  const date=document.getElementById('stp_split_date')?.value||'';
+  const rate=parseFloat(document.getElementById('stp_split_rate')?.value)||0;
+  // New delivery gets explicit .items
+  const newDel={id:'STP-'+(_stpNextId++),venue:del.venue,date,rate,items:splitItems};
+  LM_STP_DELIVERIES.push(newDel);
+  // Original delivery becomes auto-remainder (no .items) if it didn't have explicit items before
+  // If original had explicit items, reduce them
+  if(del.items){
+    for(const si of splitItems){const orig=del.items.find(i=>i.sku===si.sku);if(orig){orig.qty=Math.max(0,orig.qty-si.qty)}}
+    del.items=del.items.filter(i=>i.qty>0);
+    if(!del.items.length)LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>d.id!==del.id);
+  }
+  LM_saveStpDeliveries();bV();PLAN_CACHE={};numberAll();
+  document.querySelector('.mo')?.remove();
+  setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
+}
+function LM_updateStp(delId,field,val){
+  const del=LM_STP_DELIVERIES.find(d=>d.id===delId);if(!del)return;
   del[field]=val;LM_saveStpDeliveries();
   if(field==='date'){PLAN_CACHE={};numberAll();setTimeout(()=>{rMain();rVL()},50)}
 }
-function _exportStpDelivery(venue){
-  const del=LM_getStpForVenue(venue);if(!del)return;
-  const truck=LM_STP_TRUCKS[venue];if(!truck)return;
+function _exportStpDelivery(delId){
+  const del=LM_STP_DELIVERIES.find(d=>d.id===delId);if(!del)return;
+  const venue=del.venue;
+  const truck=LM_STP_TRUCKS[del.id];if(!truck)return;
   const rows=truck.items.filter(it=>(it.loadQty||0)>0).map(it=>{
     const nom=NOM[it.sku]||{};
     return{'Nomenclature code':it.sku,'Nomenclature name':it.nm||nom.nm||it.sku,'Source':nom.src||'','Qty':it.loadQty,'Pallets':it.noPallet?'—':+(it.loadPlt||0).toFixed(2)};
@@ -11530,7 +11630,7 @@ function showDayDetail(dateKey){
   const dayStp=[];
   for(const del of LM_STP_DELIVERIES){
     if(del.date!==dateKey)continue;
-    const truck=LM_STP_TRUCKS[del.venue];if(!truck||!truck.items.length)continue;
+    const truck=LM_STP_TRUCKS[del.id];if(!truck||!truck.items.length)continue;
     if(!isLabelRelevant(del.venue))continue;
     dayStp.push({...truck,dest:del.venue,_stpRate:del.rate||0});
   }
@@ -12168,7 +12268,7 @@ function LM_renderDemand(el){
       <span class="bg bg-gy">${grandOrigQty.toLocaleString()}${grandAdjQty!==grandOrigQty?' → <b>'+grandAdjQty.toLocaleString()+'</b>':' pcs'}</span>
       ${manualCount>0?`<span class="bg bg-gn">✏${manualCount}</span>`:''}
       ${adjItems>0?`<span class="bg bg-pu">★${adjItems}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_demandAdj={};LM_saveDemandAdj();PLAN_CACHE={};numberAll();rMain()" style="font-size:9px;padding:2px 6px">↻</button>`:''}`:''}
-      ${ROLE!=='viewer'&&prefillV?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button><button class="rbtn" onclick="LM_showCreateKit('${prefillV.replace(/'/g,"\\'")}')" style="background:#E8F5E9;color:#43A047;border-color:#A5D6A7;font-size:10px;padding:4px 10px">📦 Kit</button>${LM_getStpForVenue(prefillV)?`<button class="rbtn" disabled style="background:#F0F1F3;color:var(--tt);border-color:var(--bd);font-size:10px;padding:4px 10px;cursor:not-allowed;opacity:0.5">🏪 STP ✓</button>`:`<button class="rbtn" onclick="LM_showCreateStp('${prefillV.replace(/'/g,"\\'")}')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:10px;padding:4px 10px">🏪 STP</button>`}`:''}
+      ${ROLE!=='viewer'&&prefillV?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button><button class="rbtn" onclick="LM_showCreateKit('${prefillV.replace(/'/g,"\\'")}')" style="background:#E8F5E9;color:#43A047;border-color:#A5D6A7;font-size:10px;padding:4px 10px">📦 Kit</button>${`<button class="rbtn" onclick="LM_showCreateStp('${prefillV.replace(/'/g,"\\'")}')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:10px;padding:4px 10px">🏪 STP${LM_getStpForVenue(prefillV).length>0?' ('+LM_getStpForVenue(prefillV).length+')':''}</button>`}`:''}
       ${_filteredKits.length>0?`<span class="bg" style="background:#E8F5E9;color:#43A047;cursor:pointer" onclick="LM_showKitList()">📦 ${_filteredKits.length} kit${_filteredKits.length>1?'s':''}</span>`:''}
       ${_filteredStp.length>0?`<span class="bg" style="background:#FFF3E0;color:#EF6C00">🏪 ${_filteredStp.length} STP</span>`:''}
     </div>
@@ -12185,12 +12285,13 @@ function LM_renderDemand(el){
     const hasManual=v.skuList.some(s=>s.manualIndices.length>0);
     const venueKits=LM_getKitsForVenue(v.name);
     const hasKit=venueKits.length>0;
-    const venueStp=LM_getStpForVenue(v.name);
+    const venueStpArr=LM_getStpForVenue(v.name);
+    const hasStp=venueStpArr.length>0;
     const vEsc=v.name.replace(/'/g,"\\'");
-    html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')+' '+venueKits.map(k=>k.sku+' '+k.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${venueStp?'#EF6C00':hasKit?'#43A047':hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
+    html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')+' '+venueKits.map(k=>k.sku+' '+k.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${hasStp?'#EF6C00':hasKit?'#43A047':hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="this.parentElement.querySelector('.lm-dem-body').classList.toggle('lm-dem-open')">
         <div style="min-width:0;flex:1">
-          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${(VN.find(vn=>vn.name===v.name)||{}).hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;vertical-align:middle">CORT</span>':''}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}${venueStp?' <span class="bg bgs" style="background:#FFF3E0;color:#EF6C00;font-size:8px;vertical-align:middle">🏪 STP</span>':''}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${(VN.find(vn=>vn.name===v.name)||{}).hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;vertical-align:middle">CORT</span>':''}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}${hasStp?' <span class="bg bgs" style="background:#FFF3E0;color:#EF6C00;font-size:8px;vertical-align:middle">🏪 STP'+(venueStpArr.length>1?' '+venueStpArr.length:'')+'</span>':''}</div>
           <div style="font-size:10px;color:var(--tt)">${v.skuList.length} SKUs · ${v.totalOrig.toLocaleString()} pcs${v.totalAdj!==v.totalOrig?' → <strong style="color:var(--pu)">'+v.totalAdj.toLocaleString()+'</strong>':''}</div>
         </div>
         <span style="font-size:10px;color:var(--tt)">▼</span>
@@ -12211,16 +12312,19 @@ function LM_renderDemand(el){
       }
       html+=`</div>`;
     }
-    // STP delivery card for this venue
-    if(venueStp){
-      const stpTruck=LM_STP_TRUCKS[v.name];
-      html+=`<div style="padding:8px 12px;background:#FFF8F0;border-bottom:1px solid #FFCC80">
-        <div onclick="LM_showStpDetail('${vEsc}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border:1px solid #FFCC80;border-radius:6px;cursor:pointer;font-size:11px">
+    // STP delivery cards for this venue
+    if(venueStpArr.length>0){
+      html+=`<div style="padding:8px 12px;background:#FFF8F0;border-bottom:1px solid #FFCC80">`;
+      for(const venueStp of venueStpArr){
+        const stpTruck=LM_STP_TRUCKS[venueStp.id];
+        const dEsc=venueStp.id.replace(/'/g,"\\'");
+        html+=`<div onclick="LM_showStpDetail('${dEsc}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#fff;border:1px solid #FFCC80;border-radius:6px;cursor:pointer;font-size:11px">
           <span style="font-size:14px">🏪</span>
-          <div style="flex:1;min-width:0"><div style="font-weight:700;color:#EF6C00">STP Direct · ${venueStp.id}</div><div style="font-size:9px;color:var(--tt)">${stpTruck?stpTruck.items.length+' items · '+stpTruck.pcs.toLocaleString()+' pcs · '+stpTruck.pallets.toFixed(1)+' plt':'Building...'} · ${venueStp.date||'No date'}${venueStp.rate>0?' · '+fmtUSD(venueStp.rate):''}</div></div>
-          ${ROLE!=='viewer'?`<span onclick="event.stopPropagation();LM_deleteStp('${vEsc}')" style="color:var(--rd);cursor:pointer;font-size:13px" title="Delete STP delivery">🗑</span>`:''}
-        </div>
-      </div>`;
+          <div style="flex:1;min-width:0"><div style="font-weight:700;color:#EF6C00">STP Direct · ${venueStp.id}${venueStp.items?' <span style="font-size:8px;color:var(--pu)">(split)</span>':''}</div><div style="font-size:9px;color:var(--tt)">${stpTruck?stpTruck.items.length+' items · '+stpTruck.pcs.toLocaleString()+' pcs · '+stpTruck.pallets.toFixed(1)+' plt':'Building...'} · ${venueStp.date||'No date'}${venueStp.rate>0?' · '+fmtUSD(venueStp.rate):''}</div></div>
+          ${ROLE!=='viewer'?`<span onclick="event.stopPropagation();LM_deleteStp('${dEsc}')" style="color:var(--rd);cursor:pointer;font-size:13px" title="Delete STP delivery">🗑</span>`:''}
+        </div>`;
+      }
+      html+=`</div>`;
     }
     html+=`<table class="dtb"><thead><tr>
           <th>SKU</th><th>Item</th><th>Src</th><th>Orig</th><th>Adj Qty</th><th>Δ</th>${ROLE!=='viewer'?'<th></th>':''}
@@ -12524,10 +12628,10 @@ if(cv==="dashboard"){
           const newT=pumpPlan(P,venueName,[]);
           if(newT>0){
             const trkPcs=P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.items?t.items.reduce((ss,it)=>ss+(it.loadQty||0),0):(t.pcs||0)),0);
-            const _stpV=LM_STP_TRUCKS[venueName];
+            const _stpVArr=LM_getStpTrucksForVenue(venueName);
             venueStats.push({name:venueName,plt:vMeta.ep||0,pcs:trkPcs,trucks:newT,
               cortN:cortDels.length,cortPcs:cortDels.reduce((s,d)=>s+d.totalQty,0),
-              stpN:_stpV?1:0,stpPcs:_stpV?_stpV.pcs:0,
+              stpN:_stpVArr.length,stpPcs:_stpVArr.reduce((s,t)=>s+t.pcs,0),
               days:P.days.length,avgU:0});
           }
         }
@@ -12538,10 +12642,10 @@ if(cv==="dashboard"){
         const cortDels=(CORT_CACHE[venueName]||P.cortDeliveries||[]).filter(cd=>!LM_excluded.has(cd.id));
         const newT=pumpPlan(P,venueName,cortDels);
         const trkPcs=P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.items?t.items.reduce((ss,it)=>ss+(it.loadQty||0),0):(t.pcs||0)),0);
-        const _stpV2=LM_STP_TRUCKS[venueName];
+        const _stpVArr2=LM_getStpTrucksForVenue(venueName);
         venueStats.push({name:venueName,plt:vMeta.ep||0,pcs:trkPcs,trucks:newT,
           cortN:cortDels.length,cortPcs:cortDels.reduce((s,d)=>s+d.totalQty,0),
-          stpN:_stpV2?1:0,stpPcs:_stpV2?_stpV2.pcs:0,
+          stpN:_stpVArr2.length,stpPcs:_stpVArr2.reduce((s,t)=>s+t.pcs,0),
           days:P.days.length,
           avgU:newT>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/(P.tCap||26))*100,0)/newT):0});
       }
@@ -12587,7 +12691,7 @@ if(cv==="dashboard"){
   for(const del of LM_STP_DELIVERIES){
     // Only show STP deliveries for venues visible in current dashboard view
     if(!_stpViewNames.has(del.venue))continue;
-    const truck=LM_STP_TRUCKS[del.venue];if(!truck||!truck.items.length)continue;
+    const truck=LM_STP_TRUCKS[del.id];if(!truck||!truck.items.length)continue;
     // Use explicit date, or fall back to venue's first dispatch date from plan
     let dk2=del.date;
     if(!dk2){const P=PLAN_CACHE[del.venue];if(P&&P.days&&P.days.length)dk2=P.days[0].dKey}
@@ -12611,7 +12715,7 @@ if(cv==="dashboard"){
   const totalCortPcs=calDates.reduce((s,d)=>s+(calMap[d].cortPcs||0),0);
   // STP: count ALL venues with STP trucks in view (not just dated deliveries)
   let totalStp=0,totalStpPcs=0,totalStpPlt=0;
-  for(const vn of _stpViewNames){const tr=LM_STP_TRUCKS[vn];if(tr&&tr.items.length){totalStp++;totalStpPcs+=tr.pcs;totalStpPlt+=tr.pallets}}
+  for(const vn of _stpViewNames){const vTrks=LM_getStpTrucksForVenue(vn);for(const tr of vTrks){if(tr.items.length){totalStp++;totalStpPcs+=tr.pcs;totalStpPlt+=tr.pallets}}}
   totalStpPlt=Math.round(totalStpPlt*10)/10;
 
   let h=`<div class="fin"><h2 style="font-size:19px;font-weight:700">📊 Dashboard — ${filterLabel}</h2>
@@ -13041,14 +13145,14 @@ if(cv==="trucks"&&cortWithMerge.length===0){
 if(cv==="trucks"&&LM_STP_DELIVERIES.length>0){
   // Gather all STP trucks (or filter to current venue if single-venue view)
   const _stpList=LM_STP_DELIVERIES.filter(del=>{
-    if(!LM_STP_TRUCKS[del.venue])return false;
+    if(!LM_STP_TRUCKS[del.id])return false;
     // If viewing a specific venue, only show that venue's STP
     if(sel&&!sel.startsWith('__')&&del.venue!==sel&&!(selCluster&&CLUSTERS[selCluster]&&CLUSTERS[selCluster].venues.includes(del.venue)))return false;
     return true;
   });
   if(_stpList.length>0){
-    const stpTotalPcs=_stpList.reduce((s,del)=>s+(LM_STP_TRUCKS[del.venue]?.pcs||0),0);
-    const stpTotalPlt=_stpList.reduce((s,del)=>s+(LM_STP_TRUCKS[del.venue]?.pallets||0),0);
+    const stpTotalPcs=_stpList.reduce((s,del)=>s+(LM_STP_TRUCKS[del.id]?.pcs||0),0);
+    const stpTotalPlt=_stpList.reduce((s,del)=>s+(LM_STP_TRUCKS[del.id]?.pallets||0),0);
     const stpTotalRate=_stpList.reduce((s,del)=>s+(del.rate||0),0);
     h+=`<div class="fin" style="margin-top:24px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
     <div><span style="background:#EF6C00;color:#fff;font-weight:800;font-size:14px;padding:5px 14px;border-radius:6px;letter-spacing:1px">🏪 STAPLES</span></div>
@@ -13056,9 +13160,9 @@ if(cv==="trucks"&&LM_STP_DELIVERIES.length>0){
     <div style="font-size:11px;color:var(--ts)">${_stpList.length} deliver${_stpList.length!==1?'ies':'y'} · ${stpTotalPcs.toLocaleString()} pcs · ${stpTotalPlt.toFixed(1)} plt${stpTotalRate>0?' · Cost: '+fmtUSD(stpTotalRate):''}</div></div></div>
     <div class="tgr">`;
     _stpList.forEach(del=>{
-      const truck=LM_STP_TRUCKS[del.venue];if(!truck)return;
-      const vEsc=del.venue.replace(/'/g,"\\'");
-      h+=`<div class="tc" style="border-left:3px solid #EF6C00" onclick="LM_showStpDetail('${vEsc}')">
+      const truck=LM_STP_TRUCKS[del.id];if(!truck)return;
+      const dEsc=del.id.replace(/'/g,"\\'");
+      h+=`<div class="tc" style="border-left:3px solid #EF6C00" onclick="LM_showStpDetail('${dEsc}')">
         <div class="tto"><div class="tin"><div style="background:#EF6C00;color:#fff;font-size:9px;font-weight:800;padding:3px 6px;border-radius:4px;letter-spacing:.5px">🏪 STP</div>
         <div><div class="tid">${del.id}</div>
         <div class="tsu">${truck.items.length} SKUs · ${truck.pcs.toLocaleString()} pcs · ${truck.pallets.toFixed(1)} plt</div></div></div></div>
@@ -13287,7 +13391,7 @@ function exportXL(){
 
   // STP Direct Deliveries
   for(const del of LM_STP_DELIVERIES){
-    const truck=LM_STP_TRUCKS[del.venue];if(!truck)continue;
+    const truck=LM_STP_TRUCKS[del.id];if(!truck)continue;
     truck.items.forEach(it=>{
       truckRows.push({
         'Venue/Cluster':del.venue,'Truck':del.id,'Dispatch Date':del.date?fF(new Date(del.date+'T12:00:00')):'',
@@ -13338,7 +13442,7 @@ function exportXL(){
   // STP Direct deliveries as dispatch rows
   for(const del of LM_STP_DELIVERIES){
     if(!del.date)continue;
-    const truck=LM_STP_TRUCKS[del.venue];if(!truck||!truck.items.length)continue;
+    const truck=LM_STP_TRUCKS[del.id];if(!truck||!truck.items.length)continue;
     dispRows.push({
       'Venue/Cluster':del.venue,
       'Dispatch Date':fF(new Date(del.date+'T12:00:00')),
@@ -13374,9 +13478,9 @@ function exportXL(){
       const cortPcs=cortDels.reduce((s,d)=>s+d.totalQty,0);
       // STP: count deliveries for venues in this group
       const stpVenues=vl?vl:[name];
-      const stpDels=LM_STP_DELIVERIES.filter(d=>stpVenues.includes(d.venue)&&LM_STP_TRUCKS[d.venue]);
+      const stpDels=LM_STP_DELIVERIES.filter(d=>stpVenues.includes(d.venue)&&LM_STP_TRUCKS[d.id]);
       const stpN=stpDels.length;
-      const stpPcs=stpDels.reduce((s,d)=>s+(LM_STP_TRUCKS[d.venue]?.pcs||0),0);
+      const stpPcs=stpDels.reduce((s,d)=>s+(LM_STP_TRUCKS[d.id]?.pcs||0),0);
       venRows.push({
         'Venue/Cluster':label,
         'Pallets':plt,
