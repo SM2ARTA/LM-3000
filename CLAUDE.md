@@ -352,6 +352,32 @@ LP Engine V4.5 audit (now V5). All findings verified.
 - `_lpDemDestGroup(region)` — selects destinations by country: `can` (Toronto, Vancouver), `mex` (Mexico City, Guadalajara, Monterrey), `usa` (Houston, Kansas City, New York)
 - Buttons with country flags in the destination dropdown: 🇨🇦 CAN, 🇲🇽 MEX, 🇺🇸 USA
 
+## LM Engine (`build()`)
+
+### Early Path Bin-Packing
+- Items before the main bump-in start date (`biSK`) go through the early path
+- Pre-computes total pallets, creates `n = ceil(totalPlt / tCap)` trucks
+- Sorts items by pallet size descending, then bin-packs with best-fit
+- **Oversized item splitting**: when no truck can fit the entire item, finds truck with most space, fits as many full pallets as possible, remainder goes to a new truck
+- Creates new trucks dynamically via `while(rem.loadQty > 0)` loop — respects tCap per truck
+
+### Sweep Path (Final Pool Drain)
+- After all main passes (scheduled, top-up, future-pull, mop-up, no-pallet), the final sweep guarantees every pool piece is loaded
+- Tries to fit remaining items on last truck with space
+- **Split + multi-truck**: if item exceeds remaining space, fills current truck with as many full pallets as possible, then creates new trucks in a `while(sw.loadQty > 0)` loop — each new truck respects tCap
+- Sweep items tagged with `pulledFrom:'pool-sweep'`
+
+### Date Rules Integration
+- Per-date overrides from `VS[venue].dateOverrides[dateKey]` control: `dayTCap` (truck capacity), `dayMaxT` (max trucks), `noTopUp` (skip top-up logic)
+- `noTopUp` skips both the pallet-completion pass and the pool top-up sweep for that date
+- Constraints inherited from overflow source date when items carry over
+
+## Help Section
+- 5 tabbed sections: Overview, Load Plan, Last Mile, Vision 2026, Operations
+- `_hlpTab(btn, id)` — switches active tab, shows/hides `.hlp-sec` sections
+- Visual flow diagrams, data tables, styled cards explaining each module's workflow
+- Tabs styled with `.hlp-tab` class, active state `.act`
+
 ## Module Layout (viewport-locked)
 All three modules use `height:100vh;overflow:hidden` — no page-level scrollbar:
 - `#D` (LM): `.hd` sticky header → `.cnt` (flex:1, overflow:hidden) → sidebar + main scroll
@@ -503,9 +529,125 @@ Post-build: `_lpTailReconstruct` optimizes last 2 unlocked trucks per (dest,date
 - **Batch OOR export**: `_klExportSelected()` — select kits via checkboxes, download as ZIP of individual OOR Excel files (uses `fflate.zipSync`)
 - **ASN Inbound Form**: `_klExportASN()` — generates government-template Excel per truck with kit details (Ship from: WHS Kitting, UoM: Kit, Qty: 1)
 - **Cluster demand view**: Add/Kit/STP buttons hidden when multiple venues selected (only show for single-venue view via `prefillV`)
+- **Validation on demand change**: `_stpValidateVenues()` checks kit venue names still exist after file upload/sync, warns orphaned venues, removes components referencing missing SKUs from kit items
 
 ### LP Supabase Keys
 `lp-config`, `lp-nom`, `lp-demand`, `lp-demand-raw`, `lp-arrivals`, `lp-plan`, `lp-truck-state`
+
+### Multi-STP Delivery System
+- **Multiple deliveries per venue** — `LM_STP_DELIVERIES[]` is an array of `{id, venue, date, rate, items?, _auto?}`
+- **`LM_STP_TRUCKS`** — keyed by delivery ID (`del.id`), not venue name. Each delivery gets its own built truck object
+- **Explicit `.items` field** — deliveries with `.items` array get only those specific SKU/qty pairs; used for split deliveries
+- **Auto-remainder** — first delivery without `.items` receives all unallocated STP demand for that venue (remainder after explicit splits)
+- **Split UI** — detail modal allows splitting items from one delivery to a new one; search + checkbox selection; new delivery gets `items:splitItems`; original reverts to auto-remainder if all items moved
+- **`_stpAllocMap(venue)`** — computes allocation tracking: total STP demand vs allocated across all deliveries for that venue; returns `{sku: {total, allocated, remaining}}`
+- **`_stpValidateVenues()`** — defensive validation on file upload/sync: checks venue names still exist in VN, marks orphaned deliveries `_stale=true`, removes references to missing SKUs from explicit `.items`, warns user
+- **All function signatures use delivery ID** — `LM_deleteStp(delId)`, `LM_showStpDetail(delId)`, `LM_showStpSplit(delId)`, etc.
+- **`_stpNextId`** — monotonic counter for delivery IDs (`STP-1`, `STP-2`, ...); persisted in undo snapshots and Supabase
+
+### LP Matching (`LP_matchTransitAbbr`)
+- **Two-pass matching** to resolve destination strings to transit abbreviations (TOR, VAN, CDMX, GDL, MTY, HOU, KC, NY)
+- **Pass 1**: full city name match via `CITY_ABBR` lookup — sorted by city name length descending (longest match first). Prevents "Monterrey" matching "TOR" before "MTY"
+- **Pass 2**: word-boundary abbreviation regex (`\bABBR\b`) for formats like "CAN TOR", "MEX CDMX"
+- **`LP_ARRIVAL_FIFO`** — truckId coerced to `String()` for consistent sort order in FIFO waterfall
+
+## Assembly Timeline
+Appears in LM Dashboard (All Venues view + individual venue views). Shows full supply chain date chain for items requiring warehouse assembly.
+
+### `LM_isAssembled()` — 6-path Decision Matrix
+`LM_isAssembled(sku, venueType, country)` — returns `true` when SKU needs physical assembly at WHS.
+
+| Venue Type | Base Mode | Override? | Effective | Returns | Reason |
+|---|---|---|---|---|---|
+| Stadium/IBC | dis (cfg.mode) | Yes (D→A) | asm | **true** | Explicit assembly override |
+| Stadium/IBC | dis | No | dis | false | Default disassembled |
+| Non-stadium (CAN/MEX) | asm (country default) | Yes (A→D) | dis | false | User wants disassembled |
+| Non-stadium (CAN/MEX) | asm | No | asm | **true** | Default assembly |
+| Non-stadium (USA) | dis | Yes (D→A) | asm | false | Cross-country artifact — skip |
+| Non-stadium (USA) | dis | No | dis | false | Default disassembled |
+
+- Requires `nm.pqA && nm.psA` (assembled pallet dimensions) to be non-zero
+- Base mode: Stadiums/IBC use `LM_palletCfg[venueType].mode`; non-stadiums use `LM_COUNTRY_DEFAULTS[country]`
+- Override: `LM_palletCfg[venueType].overrides.has(sku)` flips the base mode
+
+### Supply Chain Date Chain (5 columns)
+1. **Arrives Dallas** — from stock report (`in-stock`) or earliest container arrival ready date for SKU
+2. **Leaves Dallas** — LP truck ship date (for LP-fed destinations) or computed backwards for non-LP
+3. **Arrives Satellite** — LP arrival date (ship + transit) or computed backwards from leaves satellite
+4. **Leaves Satellite** — dispatch date computed from bump-in minus outbound transit minus WHS processing
+5. **Bump-in** — venue bump-in date from schedule
+
+### LP FIFO Waterfall (LP-fed destinations)
+- `LM_buildLPArrivalFifo()` — builds `LP_ARRIVAL_FIFO[abbr][sku][]` from `LP_STATE.generatedPlan`; each entry has `{date, shipDate, qty, truckId}`, sorted by date then truckId
+- `LM_skuArrivalFifo(sku, lpAbbrs, neededQty)` — walks FIFO queue consuming arrivals until `neededQty` satisfied; returns `{firstArr, firstTrk, readyBy, readyTrk, firstShip, readyShip}` or null
+- Dates: `firstArr` = earliest arrival, `readyBy` = date when cumulative arrivals >= neededQty
+
+### Non-LP Date Computation
+For non-LP venues (e.g., CAN/MEX regional WHS), dates computed backwards from bump-in:
+- `leavesWhs` = dispatch date (BI − outbound transit − WHS processing)
+- `arrivesWhs` = `leavesWhs` − WHS processing days (`gWP()`)
+- `lpDeparts` = `arrivesWhs` − inbound transit days (`gLT2()`)
+
+### Status Logic
+| Status | Condition |
+|---|---|
+| On time | `arrivesWhs` exists and `arrivesWhs <= leavesWhs` |
+| Xd late | `arrivesWhs > leavesWhs` (satellite arrival after required departure) |
+| Xd late (Dallas) | `arrivesDallas > lpDeparts` (Dallas arrival after LP truck departure) |
+| No LP data | LP-fed destination but FIFO returned null |
+| Not in LP | SKU not found in LP plan for any matching destination abbreviation |
+
+### WHS Name Resolution
+| Venue Context | Assembly At |
+|---|---|
+| IBC | Dallas Warehouse |
+| CAN stadium | `{city} / ... Warehouse` (from cluster name, stripping `CAN ` prefix) |
+| MEX stadium | `{city} / ... Warehouse` (from cluster name, stripping `MEX ` prefix) |
+| USA stadium | `{city} Satellite Warehouse` (or `Dallas Warehouse` for Dallas Stadium) |
+| CAN non-stadium | `{city} Warehouse` |
+| MEX non-stadium | `{city} Warehouse` |
+| USA non-stadium | `{cluster} Satellite Warehouse` |
+| No cluster | Dallas Warehouse |
+
+### Excel Export (`LM_exportAsmTimeline`)
+- ExcelJS workbook with all Assembly Timeline columns + styled headers
+- Stored in `window._asmTimelineData` after dashboard render
+
+## Kitting Timeline
+Appears in LM Dashboard **All Venues view only** (not filtered/region/cluster).
+
+- Iterates all trucks in `PLAN_CACHE`, finds items with kit nomenclature (`nm._kitNom`) and FNKIT/OSKIT prefix
+- **Columns**: Dispatch, Truck, Destination, Type, Kit, Venue, Components, Readiness
+- **Type column**: FF&E (green, `FNKIT` prefix) or Stationery (orange, `OSKIT` prefix)
+- **Readiness badges**: color-coded by percentage — green (100%), orange (50-99%), red (<50%); shows `pct% (inStock/total)`
+- **Component tooltips**: hover on kit name shows component list with quantities
+- Sorted by dispatch date then truckId
+- Stored in `window._kitTimelineData`
+- **Excel export**: `LM_exportKitTimeline()` — ExcelJS workbook with all Kitting Timeline columns
+
+## Per-Venue Constraints
+Stored in `VS[venue]` (venue settings), accessed via helper functions:
+
+### Transit & Processing Parameters
+| Parameter | Function | Default | Description |
+|---|---|---|---|
+| Inbound transit (d) | `gLT2(v)` | `LM_DEFAULT_LT[v]` or 0 | Dallas → satellite WHS transit days. Non-LP venues only |
+| WHS processing (d) | `gWP(v)` | `LM_DEFAULT_WP[v]` or 0 | Days at satellite WHS for assembly/processing. Default 3d for USA stadiums |
+| Outbound transit (d) | `gLT(v)` | 0 | WHS → venue transit days (within city, typically 0) |
+| Truck capacity (plt) | `gTC(v)` | Per-venue default | Pallet capacity per truck |
+| Max trucks/day | `gMT(v)` | Per-venue default | Maximum trucks that can arrive per day |
+
+### Date Rules (Per-Date Overrides)
+- Stored in `VS[venue].dateOverrides[dateKey]` as `{tc?, mt?, noTopUp?}`
+- **tc**: override truck capacity for that specific date
+- **mt**: override max trucks/day for that date
+- **noTopUp**: boolean — skip pallet-completion and pool top-up logic; load only exact scheduled quantities
+- **Inheritance on overflow**: when items carry over to next day, inherited constraints (`_inheritedCap`, `_inheritedNoTopUp`) apply if no local date rule exists
+
+### Dispatch Date Formula
+- **LP-fed venues**: `dispatch = bump-in − outbound_transit − WHS_processing`
+- **Non-LP venues**: `dispatch = bump-in − outbound_transit − WHS_processing − inbound_transit`
+- Additional adjustments: USA cluster turnaround (`LM_clusterTurnaround`, default 5d)
 
 ## LM Dashboard KPIs
 - **Pallets**: total demand pallets from VN (consistent with sidebar labels)
