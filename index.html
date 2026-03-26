@@ -10942,9 +10942,9 @@ function _stpAllocMap(venue){
   if(Object.keys(LM_demandAdj).length>0){const ot={};for(const r of RW){const v=r.Venue;if(!v||v!==venue)continue;const eq=r._effQty||0;if(eq<=0)continue;const s=r.Nomenclature;if(!NOM[s])continue;ot[v+'|'+s]=(ot[v+'|'+s]||0)+eq};for(const k in LM_demandAdj){if(ot[k]&&ot[k]>0)_adjScale[k]=Math.max(0,LM_demandAdj[k])/ot[k]}}
   const bySkuMap={};
   for(const r of RW){if(r.Venue!==venue)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!isStp(s))continue;if(r._kit)continue;let q=r._effQty||0;if(q<=0)continue;const ak=r.Venue+'|'+s;if(_adjScale[ak]!==undefined)q=Math.round(q*_adjScale[ak]);if(!r._kit&&_kitAl[ak])q=Math.max(0,q-_kitAl[ak]);if(q<=0)continue;bySkuMap[s]=(bySkuMap[s]||0)+q}
-  // Sum allocated across deliveries with explicit .items
+  // Sum allocated across ALL deliveries (from built trucks, which reflect actual allocation)
   const allocated={};
-  for(const del of LM_STP_DELIVERIES){if(del.venue!==venue||!del.items)continue;for(const it of del.items){allocated[it.sku]=(allocated[it.sku]||0)+it.qty}}
+  for(const del of LM_STP_DELIVERIES){if(del.venue!==venue)continue;const truck=LM_STP_TRUCKS[del.id];if(!truck)continue;for(const it of truck.items){allocated[it.sku]=(allocated[it.sku]||0)+it.loadQty}}
   for(const[sku,demand] of Object.entries(bySkuMap)){const alloc=allocated[sku]||0;map[sku]={demand,allocated:alloc,remaining:demand-alloc}}
   return map;
 }
@@ -11155,9 +11155,13 @@ function _stpSplitPreview(){
 function _stpSplitCreate(delId){
   if(ROLE==='viewer')return;
   const del=LM_STP_DELIVERIES.find(d=>d.id===delId);if(!del)return;
+  const truck=LM_STP_TRUCKS[del.id];
   const inputs=document.querySelectorAll('.stp-split-qty');
   const splitItems=[];
-  inputs.forEach(inp=>{const v=parseInt(inp.value)||0;if(v>0)splitItems.push({sku:inp.dataset.sku,qty:v})});
+  inputs.forEach(inp=>{const sku=inp.dataset.sku;let v=parseInt(inp.value)||0;if(v<=0)return;
+    // Clamp to what this delivery actually has
+    if(truck){const ti=truck.items.find(i=>i.sku===sku);if(ti)v=Math.min(v,ti.loadQty)}
+    if(v>0)splitItems.push({sku,qty:v})});
   if(!splitItems.length){alert('Select at least one item to split.');return}
   const date=document.getElementById('stp_split_date')?.value||'';
   const rate=parseFloat(document.getElementById('stp_split_rate')?.value)||0;
