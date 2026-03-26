@@ -11129,11 +11129,12 @@ function _stpSplitMode(delId){
   if(zone.innerHTML){zone.innerHTML='';return}
   let h=`<div style="margin-top:12px;border:1px solid #FFCC80;border-radius:var(--r);padding:12px;background:#FFF8F0">
     <div style="font-size:11px;font-weight:700;color:#EF6C00;margin-bottom:8px">✂ Split — move items to new delivery</div>
+    <input type="text" placeholder="Search SKU or item name…" oninput="_stpSplitFilter(this.value)" style="width:100%;box-sizing:border-box;padding:5px 10px;border:1px solid var(--bd);border-radius:6px;font-size:10px;font-family:var(--fd);margin-bottom:6px;outline:none">
     <div style="max-height:200px;overflow-y:auto;margin-bottom:8px">
     <table class="dtb" style="font-size:10px"><thead><tr><th>SKU</th><th>Item</th><th>Avail</th><th style="width:60px">Move</th></tr></thead><tbody>`;
   truck.items.forEach(it=>{
     const maxQ=it.loadQty;
-    h+=`<tr><td class="mono">${it.sku}</td><td class="tcl">${it.nm}</td><td class="mono">${maxQ.toLocaleString()}</td><td><input type="number" class="stp-split-qty" data-sku="${it.sku}" data-max="${maxQ}" min="0" max="${maxQ}" value="0" style="width:54px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm);text-align:right" oninput="_stpSplitPreview()"></td></tr>`;
+    h+=`<tr class="stp-split-row" data-sku="${it.sku}" data-nm="${(it.nm||'').toLowerCase()}"><td class="mono">${it.sku}</td><td class="tcl">${it.nm}</td><td class="mono">${maxQ.toLocaleString()}</td><td><input type="number" class="stp-split-qty" data-sku="${it.sku}" data-max="${maxQ}" min="0" max="${maxQ}" value="0" style="width:54px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm);text-align:right" oninput="_stpSplitPreview()"></td></tr>`;
   });
   h+=`</tbody></table></div>
     <div id="stp-split-preview" style="font-size:10px;color:var(--ts);margin-bottom:8px"></div>
@@ -11144,6 +11145,13 @@ function _stpSplitMode(delId){
     <button class="mbtn mbtn-wide" onclick="_stpSplitCreate('${delId.replace(/'/g,"\\'")}')" style="background:#EF6C00;color:#fff;border-color:#EF6C00">✂ Create Split</button>
   </div>`;
   zone.innerHTML=h;
+}
+function _stpSplitFilter(q){
+  const lq=q.toLowerCase();
+  document.querySelectorAll('.stp-split-row').forEach(row=>{
+    const sku=row.dataset.sku||'';const nm=row.dataset.nm||'';
+    row.style.display=(!lq||sku.toLowerCase().includes(lq)||nm.includes(lq))?'':'none';
+  });
 }
 function _stpSplitPreview(){
   const el=document.getElementById('stp-split-preview');if(!el)return;
