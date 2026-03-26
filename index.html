@@ -13061,33 +13061,37 @@ if(cv==="dashboard"){
       const _asmSkus=new Set(_asmRows.map(r=>r.sku)).size;
       h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></div>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
-      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>WHS</th><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th><th>First Arrival</th><th>Ready By</th></tr></thead><tbody>`;
+      <table class="dtb"><thead><tr>
+        <th>Items Arrive</th><th>All Items Ready</th>
+        <th>Dispatch</th><th>Truck</th><th>Assembly At</th><th>Ship To</th>
+        <th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th><th>Status</th>
+      </tr></thead><tbody>`;
       let _prevDd='';
       _asmRows.forEach(r=>{
-        const isNewDate=r.dd!==_prevDd;
-        _prevDd=r.dd;
+        const isNewDate=r.dd!==_prevDd;_prevDd=r.dd;
         const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
         const dateStr=dt?fS(dt):'—';
         const dow=dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'';
-        // Format First Arrival cell
-        let _faHtml='—',_rbHtml='—';
-        if(r.firstArr){
-          const _faDt=new Date(r.firstArr+'T12:00:00');
-          _faHtml=fS(_faDt)+(r.isLp&&r.firstTrk?' <span class="mono" style="font-size:9px;color:var(--tt)">('+r.firstTrk+')</span>':'');
-        }
-        // Format Ready By cell
+        // Items Arrive
+        let _arrHtml='—';
+        if(r.firstArr){const _faDt=new Date(r.firstArr+'T12:00:00');_arrHtml=fS(_faDt)+(r.isLp&&r.firstTrk?' <span class="mono" style="font-size:8px;color:var(--tt)">('+r.firstTrk+')</span>':'')}
+        // All Items Ready
+        let _rdyHtml='—';
         if(r.readyBy){
           const _isLate=r.dd&&r.readyBy>r.dd;
-          if(r.readyBy===r.firstArr&&!_isLate){_rbHtml='<span style="color:var(--gn);font-weight:600">✓</span>'}
-          else{
-            const _rbDt=new Date(r.readyBy+'T12:00:00');
-            _rbHtml=`<span style="color:${_isLate?'var(--rd)':'var(--gn)'};font-weight:600">${_isLate?'⚠ ':''}${fS(_rbDt)}</span>`+(r.isLp&&r.readyTrk?' <span class="mono" style="font-size:9px;color:var(--tt)">('+r.readyTrk+')</span>':'');
-          }
-        } else if(r.firstArr&&!r.readyBy){
-          // Has some arrivals but not enough qty
-          _rbHtml='<span style="color:var(--rd);font-weight:600">⚠ Insufficient</span>';
-        }
+          const _rbDt=new Date(r.readyBy+'T12:00:00');
+          if(r.readyBy===r.firstArr&&!_isLate){_rdyHtml='<span style="color:var(--gn)">'+fS(_rbDt)+'</span>'}
+          else{_rdyHtml=`<span style="color:${_isLate?'var(--rd)':'var(--gn)'};font-weight:600">${fS(_rbDt)}</span>`+(r.isLp&&r.readyTrk&&r.readyTrk!==r.firstTrk?' <span class="mono" style="font-size:8px;color:var(--tt)">('+r.readyTrk+')</span>':'')}
+        } else if(r.firstArr&&!r.readyBy){_rdyHtml='<span style="color:var(--rd);font-weight:600">Not enough</span>'}
+        // Status
+        let _stHtml='';
+        if(!r.readyBy&&!r.firstArr){_stHtml='<span style="color:var(--tt)">—</span>'}
+        else if(!r.readyBy){_stHtml='<span class="bg bgs bg-rd">Missing</span>'}
+        else if(r.dd&&r.readyBy>r.dd){const days=Math.round((new Date(r.readyBy+'T12:00:00')-new Date(r.dd+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
+        else{_stHtml='<span class="bg bgs bg-gn">On time</span>'}
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
+          <td style="font-size:10px;white-space:nowrap">${_arrHtml}</td>
+          <td style="font-size:10px;white-space:nowrap">${_rdyHtml}</td>
           <td class="fw6">${isNewDate?dateStr+' <span style="color:var(--tt);font-weight:400">'+dow+'</span>':''}</td>
           <td class="mono fw6">${r.truckId}</td>
           <td style="font-size:10px;font-weight:600;color:var(--pu)">${r.whs}</td>
@@ -13096,10 +13100,9 @@ if(cv==="dashboard"){
           <td class="tcl" style="color:var(--ts)">${r.nm}</td>
           <td style="font-size:10px;color:var(--tt)">${r.src}</td>
           <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td>
-          <td style="font-size:10px;white-space:nowrap">${_faHtml}</td>
-          <td style="font-size:10px;white-space:nowrap">${_rbHtml}</td></tr>`;
+          <td style="text-align:center">${_stHtml}</td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="7">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td><td></td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="9">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></div>`;
     }
   }
 
@@ -13879,40 +13882,41 @@ async function LM_exportAsmTimeline(){
     const wb=new ExcelJS.Workbook();
     const ws=wb.addWorksheet('Assembly Timeline');
     ws.columns=[
+      {header:'Items Arrive',key:'arrive',width:18},
+      {header:'All Items Ready',key:'ready',width:18},
       {header:'Dispatch Date',key:'dd',width:14},
       {header:'Day',key:'dow',width:6},
       {header:'Truck',key:'truckId',width:10},
-      {header:'WHS',key:'whs',width:18},
-      {header:'Destination',key:'dest',width:30},
+      {header:'Assembly At',key:'whs',width:22},
+      {header:'Ship To',key:'dest',width:30},
       {header:'SKU',key:'sku',width:18},
       {header:'Item',key:'nm',width:35},
       {header:'Source',key:'src',width:10},
       {header:'Qty',key:'qty',width:10},
-      {header:'First Arrival',key:'firstArr',width:16},
-      {header:'Ready By',key:'readyBy',width:16}
+      {header:'Status',key:'status',width:12}
     ];
     const hdrRow=ws.getRow(1);
     hdrRow.font={bold:true,size:10};
     hdrRow.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
     hdrRow.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};
+    const _fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
     rows.forEach(r=>{
-      const dt=r.dd?new Date(r.dd+'T12:00:00'):null;
-      const _faDt=r.firstArr?new Date(r.firstArr+'T12:00:00'):null;
-      const _rbDt=r.readyBy?new Date(r.readyBy+'T12:00:00'):null;
-      const _faStr=_faDt?_faDt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+(r.isLp&&r.firstTrk?' ('+r.firstTrk+')':''):'—';
-      const _rbStr=_rbDt?(r.readyBy===r.firstArr?'Same as First Arrival':_rbDt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+(r.isLp&&r.readyTrk?' ('+r.readyTrk+')':'')):(r.firstArr?'Insufficient':'—');
-      ws.addRow({dd:dt?dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'',
-        dow:dt?dt.toLocaleDateString('en-US',{weekday:'short'}):'',
-        truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty,
-        firstArr:_faStr,readyBy:_rbStr});
+      const arrStr=r.firstArr?_fmtD(r.firstArr)+(r.isLp&&r.firstTrk?' ('+r.firstTrk+')':''):'—';
+      const rdyStr=r.readyBy?_fmtD(r.readyBy)+(r.isLp&&r.readyTrk&&r.readyTrk!==r.firstTrk?' ('+r.readyTrk+')':''):(r.firstArr?'Not enough':'—');
+      const _isLate=r.dd&&r.readyBy&&r.readyBy>r.dd;
+      const days=_isLate?Math.round((new Date(r.readyBy+'T12:00:00')-new Date(r.dd+'T12:00:00'))/86400000):0;
+      const status=!r.readyBy&&!r.firstArr?'—':!r.readyBy?'Missing':_isLate?days+'d late':'On time';
+      ws.addRow({arrive:arrStr,ready:rdyStr,dd:_fmtD(r.dd),
+        dow:r.dd?new Date(r.dd+'T12:00:00').toLocaleDateString('en-US',{weekday:'short'}):'',
+        truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty,status});
     });
-    // Color Ready By cells (green=on time, red=late/insufficient)
+    // Color status cells
     rows.forEach((r,i)=>{
-      const exRow=ws.getRow(i+2);// +2: 1-based + header row
-      const rbCell=exRow.getCell('readyBy');
-      if(r.readyBy&&r.dd&&r.readyBy>r.dd)rbCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
-      else if(r.readyBy)rbCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
-      else if(r.firstArr&&!r.readyBy)rbCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
+      const exRow=ws.getRow(i+2);
+      const stCell=exRow.getCell('status');
+      const _isLate=r.dd&&r.readyBy&&r.readyBy>r.dd;
+      if(_isLate||(!r.readyBy&&r.firstArr))stCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
+      else if(r.readyBy)stCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
     });
     // Total row
     const totRow=ws.addRow({dd:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
