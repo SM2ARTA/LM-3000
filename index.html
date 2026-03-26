@@ -6173,7 +6173,7 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   // ROWS 4-9: Left info + Right shipment details
   const ciTotalPcs=items.reduce((s,it)=>s+(it.qty||0),0);
   const infoLeft=[['DATE:',date],['INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['VENUE ADDRESS:',''],['VENUE CONTACT:',''],['DELIVERY DEADLINE:','']];
-  const infoRight=[['SHIPMENT DETAILS','','',''],['Total # of Pieces:',ciTotalPcs.toLocaleString(),'Type of Packaging:','Pallets'],['Total Gross Weight:','','Total Pallets:',Math.round(totalPlt*10)/10],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Port of Departure:','','Port of Arrival:',''],['Mode of Transport:','Road','','']];
+  const infoRight=[['SHIPMENT DETAILS','','',''],['Total # of Pieces:',ciTotalPcs.toLocaleString(),'Type of Packaging:','Pallets'],['Total Gross Weight:','','',''],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Port of Departure:','','Port of Arrival:',''],['Mode of Transport:','Road','','']];
 
   for(let i=0;i<6;i++){
     const rn=4+i;ws.getRow(rn).height=20;
