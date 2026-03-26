@@ -8875,16 +8875,18 @@ function build(venue,venueList,skipNoBi){
   let mqi=0;
   // Carry-over: items that didn't fit today's trucks
   let carryOver=[];// [{sku, nm, qty, pq, ps, biK}]
+  let _inheritedCap=0;// inherited from overflow-causing date rule
+  let _inheritedNoTopUp=false;
 
   while(mqi<mainQueue.length&&mqi<300){
     const dateK=mainQueue[mqi];mqi++;
     if(processedMain.has(dateK))continue;processedMain.add(dateK);
 
-    // Per-date constraint overrides
+    // Per-date constraint overrides (inherit cap/noTopUp from overflow source if no local rule)
     const _dovr=_dateOvr[dateK]||{};
-    const dayTCap=_dovr.tc||tCap;
+    const dayTCap=_dovr.tc||(carryOver.length>0&&_inheritedCap?_inheritedCap:tCap);
     const dayMaxT=_dovr.mt||maxT;
-    const noTopUp=!!_dovr.noTopUp;
+    const noTopUp=!!_dovr.noTopUp||(carryOver.length>0&&_inheritedNoTopUp);
 
     // Collect items for today: requested items + carry-over from previous day
     const dateItems=byDate[dateK]||[];
@@ -9106,11 +9108,15 @@ function build(venue,venueList,skipNoBi){
     // Carry over overflow to next working day
     if(overflow.length>0){
       carryOver=overflow;
+      _inheritedCap=dayTCap<tCap?dayTCap:0;// inherit smaller cap from date rule
+      _inheritedNoTopUp=noTopUp;// inherit no-topup flag
       const nextK=dk(nW(new Date(dateK+"T12:00:00")));
       if(!processedMain.has(nextK)&&!mainQueue.slice(mqi).includes(nextK)){
         let ins=mqi;while(ins<mainQueue.length&&mainQueue[ins]<nextK)ins++;
         mainQueue.splice(ins,0,nextK);
       }
+    } else {
+      _inheritedCap=0;_inheritedNoTopUp=false;// no overflow, stop inheriting
     }
 
     // Finalize day
@@ -12190,20 +12196,23 @@ function rConstraints(){
       h+='<div style="display:flex;flex-direction:column;gap:4px">';
       for(const d of dates){
         const ov=dOvr[d];
-        const dLabel=d.slice(5);
-        h+='<div style="display:flex;align-items:center;gap:4px;font-size:10px;font-family:var(--fm);padding:4px 6px;background:var(--bg);border-radius:6px;border:1px solid var(--bd)">'
-          +'<span style="font-weight:600;min-width:42px">'+dLabel+'</span>'
-          +'<label style="color:var(--ts);font-size:9px">Cap:</label><input type="number" min="1" max="26" value="'+(ov.tc||'')+'" data-drovr-date="'+d+'" data-drovr-field="tc" style="width:36px;font-size:10px;font-family:var(--fm);padding:1px 3px;border:1px solid var(--bd);border-radius:4px;text-align:center">'
-          +'<label style="color:var(--ts);font-size:9px">Max:</label><input type="number" min="1" max="10" value="'+(ov.mt||'')+'" data-drovr-date="'+d+'" data-drovr-field="mt" style="width:30px;font-size:10px;font-family:var(--fm);padding:1px 3px;border:1px solid var(--bd);border-radius:4px;text-align:center">'
-          +'<label style="display:flex;align-items:center;gap:2px;font-size:9px;color:var(--ts);cursor:pointer"><input type="checkbox" '+(ov.noTopUp?'checked':'')+' data-drovr-date="'+d+'" data-drovr-field="noTopUp" style="margin:0"> No top-up</label>'
-          +'<button onclick="_removeDateRule(\''+d+'\')" class="rbtn" style="padding:1px 5px;font-size:9px;margin-left:auto;color:var(--rd);border-color:var(--rd)40">✕</button>'
+        const _dt=new Date(d+'T12:00:00');
+        const _dlabel=_dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:0;padding:4px 6px;background:var(--bg);border-radius:6px;font-size:10px">'
+          +'<span style="font-weight:700;min-width:44px;color:var(--tp);font-family:var(--fm)">'+_dlabel+'</span>'
+          +'<input type="number" min="1" max="26" value="'+(ov.tc||'')+'" data-drovr-date="'+d+'" data-drovr-field="tc" style="width:36px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm);text-align:center" title="Truck cap (pallets)">'
+          +'<span style="font-size:8px;color:var(--tt)">plt</span>'
+          +'<input type="number" min="1" max="10" value="'+(ov.mt||'')+'" data-drovr-date="'+d+'" data-drovr-field="mt" style="width:30px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm);text-align:center" title="Max trucks/day">'
+          +'<span style="font-size:8px;color:var(--tt)">trk</span>'
+          +'<label style="display:flex;align-items:center;gap:2px;font-size:9px;color:var(--or);cursor:pointer" title="No top-up"><input type="checkbox" '+(ov.noTopUp?'checked':'')+' data-drovr-date="'+d+'" data-drovr-field="noTopUp" style="margin:0"> No top-up</label>'
+          +'<button onclick="_removeDateRule(\''+d+'\')" style="background:none;border:none;cursor:pointer;color:var(--rd);font-size:12px;padding:0 2px;margin-left:auto" title="Remove">✕</button>'
           +'</div>';
       }
       h+='</div>';
     } else {
       h+='<div style="font-size:10px;color:var(--tt);font-style:italic">No date-specific rules</div>';
     }
-    h+='<button onclick="_addDateRule()" class="rbtn admin-only" style="margin-top:6px;font-size:10px;width:100%">+ Add date rule</button></div>';
+    h+='<div style="display:flex;gap:4px;margin-top:6px"><input type="date" id="_dr_new_date" style="flex:1;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;font-size:10px;font-family:var(--fm)"><button onclick="_addDateRule()" class="rbtn admin-only" style="font-size:10px;padding:3px 8px">+ Add</button></div></div>';
     return h;
   })()}`;
   if(!isV){
@@ -12257,9 +12266,10 @@ function _addDateRule(){
   if(ROLE==='viewer')return;
   const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
   if(!key||key.startsWith('__'))return;
-  // Prompt for date
-  const d=prompt('Enter date (YYYY-MM-DD):','2026-');
-  if(!d||!/^\d{4}-\d{2}-\d{2}$/.test(d))return;
+  // Read from inline date input
+  const _drInp=document.getElementById('_dr_new_date');
+  const d=_drInp?.value;
+  if(!d||!/^\d{4}-\d{2}-\d{2}$/.test(d)){alert('Select a date');return}
   if(!VS[key])VS[key]={};
   if(!VS[key].dateOverrides)VS[key].dateOverrides={};
   if(VS[key].dateOverrides[d]){alert('Rule for '+d+' already exists.');return}
@@ -13093,6 +13103,7 @@ h+=`<div class="dg fin"><div class="dh ${dhCls}" ${isWknd?'style="border:2px sol
 <div><div class="dtt">${isWknd?'⚠ ':''}📅 Dispatch: ${fF(day.dDate)} → ${day.isNoBi?'No arrival date':`<span style="${arrWknd?'color:var(--rd);font-weight:700':'color:var(--gn)'}">Arrival: ${fS(day.biDate)}${arrWknd?' ⚠':''}</span>`}</div><div class="dss">${day.isNoBi?'No bump-in date · pool fill':'lead '+P.lt+'d'}</div></div>
 ${B(day.trucks.length+" truck"+(day.trucks.length>1?"s":""),"bl")} ${B(day.exactPlt.toFixed(1)+" plt","gn")} ${B(day.totalQty.toLocaleString()+" pcs","gy")}
 ${day.isEarly?B("Early","pu"):""} ${day.hasOverflow?B("Overflow","or"):""} ${day.isNoBi?B("No BI","pu"):""} ${isWknd?B("Dispatch Wknd","rd"):""} ${arrWknd?B("Arrival Wknd","rd"):""}
+${(()=>{const _doBiK=day.trucks[0]?.biK;const _dayOvr=_doBiK&&VS[cacheKey]?.dateOverrides?.[_doBiK];return _dayOvr?((_dayOvr.tc?B(_dayOvr.tc+' plt cap','pu'):'')+' '+(_dayOvr.noTopUp?B('No top-up','or'):'')):''})()}
 <div class="dpr">${day.dayP}% · ${day.cumP}% cum</div></div><div class="tgr">`;
 day.trucks.forEach(tr=>{const ti=LP.allT.indexOf(tr);
 const arrLabel=day.isNoBi?'':'📅 '+fS(day.dDate)+(day.biDate?' → '+fS(day.biDate):'');
