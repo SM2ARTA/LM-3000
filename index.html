@@ -2179,7 +2179,7 @@ function LM_buildLPArrivalFifo(){
   console.log('[ML3K] LP FIFO built:',_fifoStats,'from',LP_STATE.generatedPlan.length,'plan rows');
   // Sort each SKU's arrivals by date then truckId
   for(const abbr in LP_ARRIVAL_FIFO)for(const sku in LP_ARRIVAL_FIFO[abbr])
-    LP_ARRIVAL_FIFO[abbr][sku].sort((a,b)=>a.date.localeCompare(b.date)||a.truckId.localeCompare(b.truckId));
+    LP_ARRIVAL_FIFO[abbr][sku].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.truckId||'').localeCompare(String(b.truckId||'')));
 }
 // FIFO waterfall: find firstArrival and readyBy for a SKU at LP-fed destination
 // Returns {firstArr, firstTrk, readyBy, readyTrk} or null
@@ -2192,7 +2192,7 @@ function LM_skuArrivalFifo(sku,lpAbbrs,neededQty){
     if(m&&m[sku])all=all.concat(m[sku]);
   }
   if(!all.length)return null;
-  all.sort((a,b)=>a.date.localeCompare(b.date)||a.truckId.localeCompare(b.truckId));
+  all.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.truckId||'').localeCompare(String(b.truckId||'')));
   const firstArr=all[0].date;
   const firstTrk=all[0].truckId;
   const firstShip=all[0].shipDate||'';
