@@ -12988,13 +12988,14 @@ if(cv==="dashboard"){
           let _whs='';
           const _isIbc=_tVenue==='International Broadcast Centre'||getVC(_tVenue).includes('IBC');
           const _isSta=isStadium(_tVenue)&&!_isIbc;
+          const _whsParts=(cl,prefix)=>{return cl.replace(prefix,'').split(/\s*\/\s*/).filter(p=>!/^(RGS|RGN|RGE|RGW|RGC|REGION|CORT|USA|CAN|MEX)$/i.test(p.trim())).map(p=>CITY_ABBR[p.trim()]||p.trim()).filter(Boolean)};
           if(_isIbc){_whs='Dallas Warehouse'}
-          else if(_isSta&&vcIsCAN(_vCluster)){const parts=_vCluster.replace(/^CAN\s*/i,'').split(/\s*\/\s*/);_whs=parts.map(p=>CITY_ABBR[p.trim()]||p.trim()).filter(Boolean).join(' / ')+' Warehouse'||'Canada Warehouse'}
-          else if(_isSta&&vcIsMEX(_vCluster)){const parts=_vCluster.replace(/^MEX\s*/i,'').split(/\s*\/\s*/);_whs=parts.map(p=>CITY_ABBR[p.trim()]||p.trim()).filter(Boolean).join(' / ')+' Warehouse'||'Mexico Warehouse'}
+          else if(_isSta&&vcIsCAN(_vCluster)){const c=_whsParts(_vCluster,/^CAN\s*/i);_whs=(c.join(' / ')||'Canada')+' Warehouse'}
+          else if(_isSta&&vcIsMEX(_vCluster)){const c=_whsParts(_vCluster,/^MEX\s*/i);_whs=(c.join(' / ')||'Mexico')+' Warehouse'}
           else if(_isSta){const city=_tVenue.replace(/\s*Stadium\s*$/i,'').trim();_whs=(city==='Dallas'?'Dallas Warehouse':city+' Satellite Warehouse')}
-          else if(vcIsCAN(_vCluster)){const parts=_vCluster.replace(/^CAN\s*/i,'').split(/\s*\/\s*/);_whs=parts.map(p=>CITY_ABBR[p.trim()]||p.trim()).filter(Boolean).join(' / ')||'Canada Warehouse'}
-          else if(vcIsMEX(_vCluster)){const parts=_vCluster.replace(/^MEX\s*/i,'').split(/\s*\/\s*/);_whs=parts.map(p=>CITY_ABBR[p.trim()]||p.trim()).filter(Boolean).join(' / ')||'Mexico Warehouse'}
-          else if(_vCluster){_whs=(clDisp(_vCluster)||_vCluster)+' Satellite Warehouse'}
+          else if(vcIsCAN(_vCluster)){const c=_whsParts(_vCluster,/^CAN\s*/i);_whs=c.join(' / ')||'Canada Warehouse'}
+          else if(vcIsMEX(_vCluster)){const c=_whsParts(_vCluster,/^MEX\s*/i);_whs=c.join(' / ')||'Mexico Warehouse'}
+          else if(_vCluster){const c=_whsParts(_vCluster,/^USA\s*/i);_whs=(c.join(' / ')||_vCluster)+' Satellite Warehouse'}
           else{_whs='Dallas Warehouse'}
           _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs});
         });
