@@ -13077,10 +13077,10 @@ if(cv==="dashboard"){
         }
         // Format Ready By cell
         if(r.readyBy){
-          if(r.readyBy===r.firstArr){_rbHtml='<span style="color:var(--gn);font-weight:600">✓</span>'}
+          const _isLate=r.dd&&r.readyBy>r.dd;
+          if(r.readyBy===r.firstArr&&!_isLate){_rbHtml='<span style="color:var(--gn);font-weight:600">✓</span>'}
           else{
             const _rbDt=new Date(r.readyBy+'T12:00:00');
-            const _isLate=r.dd&&r.readyBy>r.dd;
             _rbHtml=`<span style="color:${_isLate?'var(--rd)':'var(--gn)'};font-weight:600">${_isLate?'⚠ ':''}${fS(_rbDt)}</span>`+(r.isLp&&r.readyTrk?' <span class="mono" style="font-size:9px;color:var(--tt)">('+r.readyTrk+')</span>':'');
           }
         } else if(r.firstArr&&!r.readyBy){
