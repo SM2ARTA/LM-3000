@@ -8501,7 +8501,7 @@ function cortRowHtml(c){
 // ── Shared truck card (used in V26 timeline + LM trucks view) ──
 // t: truck object, opts: {tCap, displayName, dayLabel, onClickFn, exportFn, showExcludeCheckbox, isLM}
 function renderTruckCard(t,opts){
-  const tCap=opts.tCap||26;
+  const tCap=t.tCap||opts.tCap||26;
   const fp=Math.round((t.pallets||0)/tCap*100);
   const fc=fp>90?'var(--gn)':fp>70?'var(--or)':'var(--rd)';
   const pDisp=Number.isInteger(t.pallets)?t.pallets:(t.pallets||0).toFixed(1);
@@ -8672,6 +8672,7 @@ function build(venue,venueList,skipNoBi){
   // Determine venue type for pallet resolution (individual: venue's type; cluster: first venue's type)
   const _buildVt=isCluster?(LM_vtMap[venuesToUse[0]]||''):(LM_vtMap[venue]||'');
   const tCap=gTC(venue),maxT=gMT(venue);
+  const _dateOvr=VS[venue]?.dateOverrides||{};
   let lt=gLT(venue);
   // USA cluster trucks: add satellite warehouse turnaround to lead time
   const _isUSACluster=isCluster&&!vcIsCAN(venue)&&!vcIsMEX(venue);
@@ -8879,6 +8880,12 @@ function build(venue,venueList,skipNoBi){
     const dateK=mainQueue[mqi];mqi++;
     if(processedMain.has(dateK))continue;processedMain.add(dateK);
 
+    // Per-date constraint overrides
+    const _dovr=_dateOvr[dateK]||{};
+    const dayTCap=_dovr.tc||tCap;
+    const dayMaxT=_dovr.mt||maxT;
+    const noTopUp=!!_dovr.noTopUp;
+
     // Collect items for today: requested items + carry-over from previous day
     const dateItems=byDate[dateK]||[];
     const todayRequests=[];
@@ -8911,6 +8918,8 @@ function build(venue,venueList,skipNoBi){
       let qty=Math.min(it.qty,avail);
       let topUp=0;
 
+      // If noTopUp: skip pallet-completion logic, just load exact scheduled qty
+      if(!noTopUp){
       // If total pool for this SKU is less than 2 full pallets,
       // load everything from pool on this first encounter
       if(avail<it.pq*2){
@@ -8929,6 +8938,7 @@ function build(venue,venueList,skipNoBi){
           }
         }
       }
+      }// end !noTopUp
 
       _planned[it.sku]=(_planned[it.sku]||0)+qty;// shadow-deduct so next entry sees reduced avail
       const loadPlt=(qty/it.pq)*it.ps;
@@ -8937,7 +8947,7 @@ function build(venue,venueList,skipNoBi){
         pulled:topUp>0,pulledFrom:topUp>0?'pool':'',remainder:0,origReq:it.origReq||0});
     }
 
-    // Pack into trucks, respecting tCap and maxT
+    // Pack into trucks, respecting dayTCap and dayMaxT
     const dayTrucks=[];
     let curTruck={items:[],pallets:0,pcs:0};
     dayTrucks.push(curTruck);
@@ -8945,14 +8955,14 @@ function build(venue,venueList,skipNoBi){
 
     for(const it of loadList){
       // Check if we've hit max trucks for the day
-      if(dayTrucks.length>maxT){
+      if(dayTrucks.length>dayMaxT){
         overflow.push({sku:it.sku,nm:it.nm,qty:it.loadQty,pq:it.pq,ps:it.ps,biK:it.biK,origReq:it.origReq||0});
         continue;
       }
 
       let remaining={...it};
       while(remaining.loadQty>0){
-        const space=tCap-curTruck.pallets;
+        const space=dayTCap-curTruck.pallets;
         const itPlt=(remaining.loadQty/remaining.pq)*remaining.ps;
 
         if(space>=itPlt-0.001){
@@ -8979,7 +8989,7 @@ function build(venue,venueList,skipNoBi){
           }
 
           // Start new truck if allowed
-          if(dayTrucks.length<maxT){
+          if(dayTrucks.length<dayMaxT){
             curTruck={items:[],pallets:0,pcs:0};
             dayTrucks.push(curTruck);
           } else {
@@ -8994,8 +9004,9 @@ function build(venue,venueList,skipNoBi){
     }
 
     // ── FILL-UP: trucks with space keep pulling full pallets from pool ──
+    if(!noTopUp){
     for(const truck of dayTrucks){
-      let space=tCap-truck.pallets;
+      let space=dayTCap-truck.pallets;
       if(space<0.01)continue;
 
       // Candidates: SKUs on this truck first, then other SKUs from today, then any remaining pool SKUs (incl. no-BI)
@@ -9026,7 +9037,7 @@ function build(venue,venueList,skipNoBi){
       }
 
       // Pass 2: pull partial remainders (pool < 1 pallet) to use remaining truck space
-      space=tCap-truck.pallets;
+      space=dayTCap-truck.pallets;
       if(space>=0.01){
         const partCands=[];
         const onTruck2=new Set(truck.items.map(x=>x.sku));
@@ -9050,7 +9061,7 @@ function build(venue,venueList,skipNoBi){
       }
 
       // Pass 3: truck still not full — pull from future dates' SKUs
-      space=tCap-truck.pallets;
+      space=dayTCap-truck.pallets;
       if(space>=0.5){
         // Look at upcoming dates in the queue for SKUs with pool remaining
         for(let fi=mqi;fi<mainQueue.length&&space>=0.5;fi++){
@@ -9090,6 +9101,7 @@ function build(venue,venueList,skipNoBi){
         }
       }
     }
+    }// end !noTopUp fill-up
 
     // Carry over overflow to next working day
     if(overflow.length>0){
@@ -9113,7 +9125,7 @@ function build(venue,venueList,skipNoBi){
     const isOverflow=!allDates.includes(dateK);
 
     realTrucks.forEach(t=>{
-      t.biK=dateK;t.dd=dk(dispDate);t.idealDisp=dk(dispDate);t.isOverflow=isOverflow;t.isEarly=false;
+      t.biK=dateK;t.dd=dk(dispDate);t.idealDisp=dk(dispDate);t.isOverflow=isOverflow;t.isEarly=false;t.tCap=dayTCap;
       // Stamp pool remaining after this truck's loads
       t.items.forEach(it=>{it.poolAfter=pool[it.sku]?.remaining||0});
     });
@@ -11473,7 +11485,7 @@ function LM_applyDateOverrides(){
     P.allT.forEach(t=>{const ov=LM_dateOverrides[LM_fp(t)];if(ov)t.dd=ov});
   }
 }
-function showM(i){const t=LP.allT[i];if(!t)return;const fp=Math.round(t.pallets/LP.tCap*100);
+function showM(i){const t=LP.allT[i];if(!t)return;const _showTCap=t.tCap||LP.tCap;const fp=Math.round(t.pallets/_showTCap*100);
 const pDisp=Number.isInteger(t.pallets)?t.pallets:t.pallets.toFixed(1);
 const ovLabel=t.isOverflow?' · <span style="color:var(--or);font-weight:600">Overflow</span> (ideal: '+fS(new Date(t.idealDisp+"T12:00:00"))+')':'';
 const isClusterTruck=!!(selCluster&&CLUSTERS[selCluster]);
@@ -11484,7 +11496,7 @@ const _mLpAbbrs=LM_isLPFed(_mCacheKey)?LM_getLPDestAbbrs(_mCacheKey):[];
 const _mIsLpFed=_mLpAbbrs.length>0&&Object.keys(LP_ARRIVAL_MAP).length>0;
 let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stopPropagation()">
 <div class="mdh"><div><h3>🚛 ${t.id}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
-<div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${LP.tCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span>${(()=>{const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,_mVt,_mCountry)).length;return ac>0?`<span style="color:var(--or)">🔧 <strong>${ac}</strong> assembly</span>`:''})()}</div>${PB(t.pallets,LP.tCap)}
+<div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${_showTCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span>${(()=>{const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,_mVt,_mCountry)).length;return ac>0?`<span style="color:var(--or)">🔧 <strong>${ac}</strong> assembly</span>`:''})()}</div>${PB(t.pallets,_showTCap)}
 ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10px 0;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:11px;flex-wrap:wrap">
   <input type="checkbox" ${LM_isDispatched(t)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_isDispatched(t)?'🔒 Locked':'Lock'}</span>
   <span style="color:var(--bd)">|</span>
@@ -12169,7 +12181,31 @@ function rConstraints(){
     ${_field('i-lt','Lead time (d)',lt,defLT,'number',0)}
     ${_field('i-bi','Bump-in',bi,defBI,'date')}
   </div>
-  ${(()=>{const _isCl=CLUSTERS[key]&&!vcIsCAN(key)&&!vcIsMEX(key);return _isCl?`<div class="cgrid" style="margin-top:6px${isV?';pointer-events:none':''}"><div class="cf"><label style="display:flex;justify-content:space-between;align-items:center">WH Turnaround (d)<span style="font-size:8px;color:var(--gn)">def:5</span></label><input type="number" min="0" max="30" id="i-cta" value="${LM_clusterTurnaround}" style="border-color:${LM_clusterTurnaround!==5?'var(--pu)':'var(--bd)'}${isV?';opacity:.6':''}"${isV?' disabled':''}></div></div>`:''})()}`;
+  ${(()=>{const _isCl=CLUSTERS[key]&&!vcIsCAN(key)&&!vcIsMEX(key);return _isCl?`<div class="cgrid" style="margin-top:6px${isV?';pointer-events:none':''}"><div class="cf"><label style="display:flex;justify-content:space-between;align-items:center">WH Turnaround (d)<span style="font-size:8px;color:var(--gn)">def:5</span></label><input type="number" min="0" max="30" id="i-cta" value="${LM_clusterTurnaround}" style="border-color:${LM_clusterTurnaround!==5?'var(--pu)':'var(--bd)'}${isV?';opacity:.6':''}"${isV?' disabled':''}></div></div>`:''})()}
+  ${(()=>{
+    const dOvr=VS[key]?.dateOverrides||{};
+    const dates=Object.keys(dOvr).sort();
+    let h='<div class="admin-only" style="margin-top:10px;border-top:1px solid var(--bd);padding-top:8px"><div style="font-size:10px;font-weight:700;color:var(--ts);margin-bottom:6px">Date Rules</div>';
+    if(dates.length){
+      h+='<div style="display:flex;flex-direction:column;gap:4px">';
+      for(const d of dates){
+        const ov=dOvr[d];
+        const dLabel=d.slice(5);
+        h+='<div style="display:flex;align-items:center;gap:4px;font-size:10px;font-family:var(--fm);padding:4px 6px;background:var(--bg);border-radius:6px;border:1px solid var(--bd)">'
+          +'<span style="font-weight:600;min-width:42px">'+dLabel+'</span>'
+          +'<label style="color:var(--ts);font-size:9px">Cap:</label><input type="number" min="1" max="26" value="'+(ov.tc||'')+'" data-drovr-date="'+d+'" data-drovr-field="tc" style="width:36px;font-size:10px;font-family:var(--fm);padding:1px 3px;border:1px solid var(--bd);border-radius:4px;text-align:center">'
+          +'<label style="color:var(--ts);font-size:9px">Max:</label><input type="number" min="1" max="10" value="'+(ov.mt||'')+'" data-drovr-date="'+d+'" data-drovr-field="mt" style="width:30px;font-size:10px;font-family:var(--fm);padding:1px 3px;border:1px solid var(--bd);border-radius:4px;text-align:center">'
+          +'<label style="display:flex;align-items:center;gap:2px;font-size:9px;color:var(--ts);cursor:pointer"><input type="checkbox" '+(ov.noTopUp?'checked':'')+' data-drovr-date="'+d+'" data-drovr-field="noTopUp" style="margin:0"> No top-up</label>'
+          +'<button onclick="_removeDateRule(\''+d+'\')" class="rbtn" style="padding:1px 5px;font-size:9px;margin-left:auto;color:var(--rd);border-color:var(--rd)40">✕</button>'
+          +'</div>';
+      }
+      h+='</div>';
+    } else {
+      h+='<div style="font-size:10px;color:var(--tt);font-style:italic">No date-specific rules</div>';
+    }
+    h+='<button onclick="_addDateRule()" class="rbtn admin-only" style="margin-top:6px;font-size:10px;width:100%">+ Add date rule</button></div>';
+    return h;
+  })()}`;
   if(!isV){
     ['i-tc','i-mt','i-lt','i-bi'].forEach(id=>{
       const inp=document.getElementById(id);
@@ -12182,7 +12218,12 @@ function rConstraints(){
       for(const cl in CLUSTERS){if(!vcIsCAN(cl)&&!vcIsMEX(cl))delete PLAN_CACHE[cl]}
       LM_saveClusterTA();numberAll();rVL();rMain();
     });
+    // Date rule input listeners
+    document.querySelectorAll('[data-drovr-date]').forEach(inp=>{
+      inp.addEventListener('change',_onDateRuleChange);
+    });
   }
+  if(ROLE==='viewer')applyRole();
 }
 function _resetVenueConstraints(){
   const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
@@ -12211,6 +12252,55 @@ function _onConstraintChange(){
   delete PLAN_CACHE[cK];
   numberAll();
   saveSharedData();rVL();rMain();LP_refreshLate();
+}
+function _addDateRule(){
+  if(ROLE==='viewer')return;
+  const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
+  if(!key||key.startsWith('__'))return;
+  // Prompt for date
+  const d=prompt('Enter date (YYYY-MM-DD):','2026-');
+  if(!d||!/^\d{4}-\d{2}-\d{2}$/.test(d))return;
+  if(!VS[key])VS[key]={};
+  if(!VS[key].dateOverrides)VS[key].dateOverrides={};
+  if(VS[key].dateOverrides[d]){alert('Rule for '+d+' already exists.');return}
+  VS[key].dateOverrides[d]={tc:gTC(key),mt:gMT(key)};
+  delete PLAN_CACHE[key];
+  numberAll();saveSharedData();rConstraints();rVL();rMain();
+}
+function _removeDateRule(d){
+  if(ROLE==='viewer')return;
+  const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
+  if(!key||!VS[key]?.dateOverrides?.[d])return;
+  delete VS[key].dateOverrides[d];
+  if(Object.keys(VS[key].dateOverrides).length===0)delete VS[key].dateOverrides;
+  if(Object.keys(VS[key]).length===0)delete VS[key];
+  delete PLAN_CACHE[key];
+  numberAll();saveSharedData();rConstraints();rVL();rMain();
+}
+function _onDateRuleChange(e){
+  if(ROLE==='viewer')return;
+  const key=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
+  if(!key||key.startsWith('__'))return;
+  const d=e.target.dataset.drovrDate;
+  const field=e.target.dataset.drovrField;
+  if(!d||!field)return;
+  if(!VS[key])VS[key]={};
+  if(!VS[key].dateOverrides)VS[key].dateOverrides={};
+  if(!VS[key].dateOverrides[d])VS[key].dateOverrides[d]={};
+  if(field==='noTopUp'){
+    VS[key].dateOverrides[d].noTopUp=e.target.checked;
+    if(!e.target.checked)delete VS[key].dateOverrides[d].noTopUp;
+  } else {
+    const v=parseInt(e.target.value)||0;
+    if(v>0)VS[key].dateOverrides[d][field]=v;
+    else delete VS[key].dateOverrides[d][field];
+  }
+  // Clean up empty overrides
+  if(Object.keys(VS[key].dateOverrides[d]).length===0)delete VS[key].dateOverrides[d];
+  if(VS[key].dateOverrides&&Object.keys(VS[key].dateOverrides).length===0)delete VS[key].dateOverrides;
+  if(Object.keys(VS[key]).length===0)delete VS[key];
+  delete PLAN_CACHE[key];
+  numberAll();saveSharedData();rVL();rMain();
 }
 
 // ── LM DEMAND TAB ──
@@ -12659,7 +12749,7 @@ if(cv==="dashboard"){
           cortN:cortDels.length,cortPcs:cortDels.reduce((s,d)=>s+d.totalQty,0),
           stpN:_stpVArr2.length,stpPcs:_stpVArr2.reduce((s,t)=>s+t.pcs,0),
           days:P.days.length,
-          avgU:newT>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/(P.tCap||26))*100,0)/newT):0});
+          avgU:newT>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/(t.tCap||P.tCap||26))*100,0)/newT):0});
       }
     }catch(e){}
   };
@@ -12950,7 +13040,7 @@ if(venueName&&CORT_CACHE[venueName])P.cortDeliveries=CORT_CACHE[venueName];
 if(P.allT.length>0&&!P.allT[0].id){let fn=1;P.allT.forEach(t=>{if(!t.id)t.id=`LM-${fn++}`});if(P.cortDeliveries)P.cortDeliveries.forEach((cd,i)=>{if(!cd.id)cd.id=`C-${i+1}`})}
 const totalPlt=isClusterSel?CLUSTERS[selCluster].plt:(VN.find(v=>v.name===sel)?.ep||0);
 const totalPcs=isClusterSel?CLUSTERS[selCluster].pcs:(VN.find(v=>v.name===sel)?.it||0);
-const nT=LM_countActive(P),nD=P.days.length,avgU=nT>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/P.tCap)*100,0)/nT):0;
+const nT=LM_countActive(P),nD=P.days.length,avgU=nT>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/(t.tCap||P.tCap))*100,0)/nT):0;
 const _showCort=!isClusterSel||vcIsCAN(selCluster)||vcIsMEX(selCluster);
 const nCort=_showCort&&P.cortDeliveries?P.cortDeliveries.filter(cd=>!LM_excluded.has(cd.id)).length:0;
 const nCortPcs=P.cortDeliveries?P.cortDeliveries.filter(cd=>!LM_excluded.has(cd.id)).reduce((s,d)=>s+d.totalQty,0):0;
@@ -13427,7 +13517,7 @@ function exportXL(){
     try{
       const P=vl?build(name,vl):build(name);
       P.days.forEach(day=>{
-        const avgU=day.trucks.length>0?Math.round(day.trucks.reduce((s,t)=>s+(t.pallets/P.tCap)*100,0)/day.trucks.length):0;
+        const avgU=day.trucks.length>0?Math.round(day.trucks.reduce((s,t)=>s+(t.pallets/(t.tCap||P.tCap))*100,0)/day.trucks.length):0;
         dispRows.push({
           'Venue/Cluster':label,
           'Dispatch Date':fF(day.dDate),
@@ -13484,7 +13574,7 @@ function exportXL(){
       const P=vl?build(name,vl):build(name);
       const plt=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.ep,0):(VN.find(v=>v.name===name)?.ep||0);
       const pcs=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.it,0):(VN.find(v=>v.name===name)?.it||0);
-      const avgU=LM_countActive(P)>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/P.tCap)*100,0)/LM_countActive(P)):0;
+      const avgU=LM_countActive(P)>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/(t.tCap||P.tCap))*100,0)/LM_countActive(P)):0;
       const cortDels=vl?(vl.flatMap(v=>CORT_CACHE[v]||[]).filter(cd=>!LM_excluded.has(cd.id))):(CORT_CACHE[name]||P.cortDeliveries||[]).filter(cd=>!LM_excluded.has(cd.id));
       const cortN=cortDels.length;
       const cortPcs=cortDels.reduce((s,d)=>s+d.totalQty,0);
