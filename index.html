@@ -13046,8 +13046,17 @@ if(cv==="dashboard"){
           else{_whs='Dallas Warehouse'}
           // Compute full supply chain dates
           let _r={dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,
-            lpDeparts:null,arrivesWhs:null,leavesWhs:null,bumpin:null,isLp:false,notInLp:false,firstTrk:null,readyTrk:null};
+            arrivesDallas:null,inStock:false,lpDeparts:null,arrivesWhs:null,leavesWhs:null,bumpin:null,isLp:false,notInLp:false,firstTrk:null,readyTrk:null};
           try{
+            // Arrives Dallas: from stock report or LP container arrivals
+            if(STOCK_SKUS.has(it.sku)){_r.arrivesDallas='in-stock';_r.inStock=true}
+            else if(LP_STATE&&LP_STATE.arrivals){
+              // Find earliest ready date for this SKU from container arrivals (FIFO)
+              let _needed=it.loadQty||0,_lastDate=null;
+              const _skuArrs=LP_STATE.arrivals.filter(a=>a.sku===it.sku&&a.readyDate).sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
+              for(const a of _skuArrs){_needed-=(a.qty||0);_lastDate=a.readyDate;if(_needed<=0)break}
+              if(_lastDate)_r.arrivesDallas=_lastDate;
+            }
             // Bump-in = truck biK or compute from dispatch + total lead time
             const _biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
             _r.bumpin=_biK;
@@ -13087,7 +13096,7 @@ if(cv==="dashboard"){
       h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></div>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
       <table class="dtb"><thead><tr>
-        <th>Leaves Dallas</th><th>Arrives Satellite</th><th>Leaves Satellite</th><th>Bump-in</th>
+        <th>Arrives Dallas</th><th>Leaves Dallas</th><th>Arrives Satellite</th><th>Leaves Satellite</th><th>Bump-in</th>
         <th>Truck</th><th>Assembly At</th><th>Ship To</th>
         <th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th><th>Status</th>
       </tr></thead><tbody>`;
@@ -13096,6 +13105,8 @@ if(cv==="dashboard"){
       const _nilp='<span style="color:var(--or);font-size:9px;font-weight:600">Not in LP</span>';
       _asmRows.forEach(r=>{
         const isNewDate=r.dd!==_prevDd;_prevDd=r.dd;
+        // Arrives Dallas
+        const _adHtml=r.inStock?'<span style="color:var(--gn);font-weight:600">In stock</span>':_fmtDt(r.arrivesDallas);
         // Leaves Dallas
         let _ldHtml=r.notInLp?_nilp:_fmtDt(r.lpDeparts);
         if(r.isLp&&r.lpDeparts&&r.readyTrk)_ldHtml+=` <span class="mono" style="font-size:8px;color:var(--tt)">(${r.readyTrk})</span>`;
@@ -13112,6 +13123,7 @@ if(cv==="dashboard"){
         else if(r.leavesWhs&&r.arrivesWhs>r.leavesWhs){const days=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
         else{_stHtml='<span class="bg bgs bg-gn">On time</span>'}
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
+          <td style="font-size:10px;white-space:nowrap">${_adHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_ldHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_awHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_lwHtml}</td>
@@ -13125,7 +13137,7 @@ if(cv==="dashboard"){
           <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td>
           <td style="text-align:center">${_stHtml}</td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="10">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="11">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></div>`;
     }
   }
 
@@ -13905,6 +13917,7 @@ async function LM_exportAsmTimeline(){
     const wb=new ExcelJS.Workbook();
     const ws=wb.addWorksheet('Assembly Timeline');
     ws.columns=[
+      {header:'Arrives Dallas',key:'arrDal',width:16},
       {header:'Leaves Dallas',key:'lpDep',width:16},
       {header:'Arrives Satellite',key:'arrWhs',width:16},
       {header:'Leaves Satellite',key:'lvWhs',width:14},
@@ -13924,12 +13937,13 @@ async function LM_exportAsmTimeline(){
     hdrRow.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};
     const _fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
     rows.forEach(r=>{
+      const arrDal=r.inStock?'In stock':_fmtD(r.arrivesDallas);
       const lpDep=r.notInLp?'Not in LP':(r.lpDeparts?_fmtD(r.lpDeparts)+(r.isLp&&r.readyTrk?' ('+r.readyTrk+')':''):'—');
       const arrWhs=r.notInLp?'Not in LP':_fmtD(r.arrivesWhs);
       const _isLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
       const days=_isLate?Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000):0;
       const status=r.notInLp?'Not in LP':!r.arrivesWhs?'—':_isLate?days+'d late':'On time';
-      ws.addRow({lpDep,arrWhs,lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
+      ws.addRow({arrDal,lpDep,arrWhs,lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
         truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty,status});
     });
     // Color status cells
