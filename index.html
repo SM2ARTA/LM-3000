@@ -13051,7 +13051,7 @@ if(cv==="dashboard"){
             // Bump-in = truck biK or compute from dispatch + total lead time
             const _biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
             _r.bumpin=_biK;
-            // Leaves WHS = bump-in − outbound transit
+            // Leaves Satellite = bump-in − outbound transit
             const _outLt=gLT(_tLabel);
             if(_biK){const _lwDt=disp(new Date(_biK+'T12:00:00'),_outLt);_r.leavesWhs=dk(_lwDt)}
             else if(dd){_r.leavesWhs=dd}
@@ -13087,7 +13087,7 @@ if(cv==="dashboard"){
       h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></div>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
       <table class="dtb"><thead><tr>
-        <th>Leaves Dallas</th><th>Arrives WHS</th><th>Leaves WHS</th><th>Bump-in</th>
+        <th>Leaves Dallas</th><th>Arrives Satellite</th><th>Leaves Satellite</th><th>Bump-in</th>
         <th>Truck</th><th>Assembly At</th><th>Ship To</th>
         <th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th><th>Status</th>
       </tr></thead><tbody>`;
@@ -13099,9 +13099,9 @@ if(cv==="dashboard"){
         // Leaves Dallas
         let _ldHtml=r.notInLp?_nilp:_fmtDt(r.lpDeparts);
         if(r.isLp&&r.lpDeparts&&r.readyTrk)_ldHtml+=` <span class="mono" style="font-size:8px;color:var(--tt)">(${r.readyTrk})</span>`;
-        // Arrives WHS
+        // Arrives Satellite
         let _awHtml=r.notInLp?_nilp:_fmtDt(r.arrivesWhs);
-        // Leaves WHS
+        // Leaves Satellite
         const _lwHtml=_fmtDt(r.leavesWhs);
         // Bump-in
         const _biHtml=_fmtDt(r.bumpin);
@@ -13906,8 +13906,8 @@ async function LM_exportAsmTimeline(){
     const ws=wb.addWorksheet('Assembly Timeline');
     ws.columns=[
       {header:'Leaves Dallas',key:'lpDep',width:16},
-      {header:'Arrives WHS',key:'arrWhs',width:16},
-      {header:'Leaves WHS',key:'lvWhs',width:14},
+      {header:'Arrives Satellite',key:'arrWhs',width:16},
+      {header:'Leaves Satellite',key:'lvWhs',width:14},
       {header:'Bump-in',key:'bumpin',width:14},
       {header:'Truck',key:'truckId',width:10},
       {header:'Assembly At',key:'whs',width:22},
