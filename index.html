@@ -8211,6 +8211,7 @@ function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt
 // Default bump-in dates per stadium (from Stadium Bump-in Schedule)
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-16","Boston Stadium":"2026-04-20","Dallas Stadium":"2026-05-08","Guadalajara Stadium":"2026-04-21","Houston Stadium":"2026-05-14","International Broadcast Centre":"2026-04-27","International Broadcast Coordination Centre":"2026-04-27","Kansas City Stadium":"2026-04-24","Los Angeles Stadium":"2026-04-20","Los Angeles - Rose Bowl Stadium":"2026-05-13","Mexico City Stadium":"2026-05-12","Miami Stadium":"2026-05-11","Monterrey Stadium":"2026-05-15","New York / New Jersey Stadium":"2026-04-27","Philadelphia Stadium":"2026-05-01","San Francisco Bay Area Stadium":"2026-04-22","Seattle Stadium":"2026-04-22","Toronto Stadium":"2026-04-01","Vancouver Stadium":"2026-05-14"};
 function gBI(v){return vG(v).bi||LM_DEFAULT_BI[v]||"2026-05-04"}
+function gWP(v){const wp=vG(v).wp;return wp!==undefined&&wp!==null?Math.max(0,wp):0}// WHS processing days
 
 // ── USA Cluster Turnaround (days at satellite warehouse before re-dispatch) ──
 let LM_clusterTurnaround=5;
@@ -8673,7 +8674,7 @@ function build(venue,venueList,skipNoBi){
   const _buildVt=isCluster?(LM_vtMap[venuesToUse[0]]||''):(LM_vtMap[venue]||'');
   const tCap=gTC(venue),maxT=gMT(venue);
   const _dateOvr=VS[venue]?.dateOverrides||{};
-  let lt=gLT(venue);
+  let lt=gLT(venue)+gWP(venue);
   // USA cluster trucks: add satellite warehouse turnaround to lead time
   const _isUSACluster=isCluster&&!vcIsCAN(venue)&&!vcIsMEX(venue);
   if(_isUSACluster)lt+=LM_clusterTurnaround;
@@ -12231,8 +12232,8 @@ function rConstraints(){
     el.innerHTML=`<div class="cnst">Venue Constraints</div><div style="font-size:11px;color:var(--tt);padding:0 2px">Select a venue to configure</div>`;
     return;
   }
-  const tc=gTC(key),mt=gMT(key),lt=gLT(key),bi=gBI(key);
-  console.log('[ML3000 v10.1] rConstraints',key,': tc='+tc,'mt='+mt,'lt='+lt,'bi='+bi,'VS[key]=',JSON.stringify(VS[key]||null));
+  const tc=gTC(key),mt=gMT(key),lt=gLT(key),wp=gWP(key),bi=gBI(key);
+  console.log('[ML3000 v10.1] rConstraints',key,': tc='+tc,'mt='+mt,'lt='+lt,'wp='+wp,'bi='+bi,'VS[key]=',JSON.stringify(VS[key]||null));
   const defTC=LM_DEFAULT_TC[key]||12;
   const defMT=LM_DEFAULT_MT[key]||2;
   const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;
@@ -12249,6 +12250,7 @@ function rConstraints(){
     ${_field('i-tc','Truck cap (plt)',tc,defTC,'number',1)}
     ${_field('i-mt','Max trucks/day',mt,defMT,'number',1)}
     ${_field('i-lt','Lead time (d)',lt,defLT,'number',0)}
+    ${_field('i-wp','WHS processing (d)',wp,0,'number',0)}
     ${_field('i-bi','Bump-in',bi,defBI,'date')}
   </div>
   ${(()=>{const _isCl=CLUSTERS[key]&&!vcIsCAN(key)&&!vcIsMEX(key);return _isCl?`<div class="cgrid" style="margin-top:6px${isV?';pointer-events:none':''}"><div class="cf"><label style="display:flex;justify-content:space-between;align-items:center">WH Turnaround (d)<span style="font-size:8px;color:var(--gn)">def:5</span></label><input type="number" min="0" max="30" id="i-cta" value="${LM_clusterTurnaround}" style="border-color:${LM_clusterTurnaround!==5?'var(--pu)':'var(--bd)'}${isV?';opacity:.6':''}"${isV?' disabled':''}></div></div>`:''})()}
@@ -12280,7 +12282,7 @@ function rConstraints(){
     return h;
   })()}`;
   if(!isV){
-    ['i-tc','i-mt','i-lt','i-bi'].forEach(id=>{
+    ['i-tc','i-mt','i-lt','i-wp','i-bi'].forEach(id=>{
       const inp=document.getElementById(id);
       if(inp)inp.addEventListener('change',_onConstraintChange);
     });
@@ -12312,6 +12314,7 @@ function _onConstraintChange(){
   const tc=parseInt(document.getElementById('i-tc')?.value)||26;
   const mt=parseInt(document.getElementById('i-mt')?.value)||2;
   const ltVal=parseInt(document.getElementById('i-lt')?.value);const lt=isNaN(ltVal)?0:Math.max(0,ltVal);
+  const wpVal=parseInt(document.getElementById('i-wp')?.value);const wp=isNaN(wpVal)?0:Math.max(0,wpVal);
   const bi=document.getElementById('i-bi')?.value||'';
   const defTC=LM_DEFAULT_TC[key]||12;const defMT=LM_DEFAULT_MT[key]||2;
   const defLT=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
@@ -12319,6 +12322,7 @@ function _onConstraintChange(){
   if(tc!==defTC)VS[key].tc=tc;else delete VS[key].tc;
   if(mt!==defMT)VS[key].mt=mt;else delete VS[key].mt;
   if(lt!==defLT)VS[key].lt=lt;else delete VS[key].lt;
+  if(wp>0)VS[key].wp=wp;else delete VS[key].wp;
   if(bi&&bi!==defBI)VS[key].bi=bi;else delete VS[key].bi;
   if(VS[key]&&Object.keys(VS[key]).length===0)delete VS[key];
   const cK=selCluster&&CLUSTERS[selCluster]?selCluster:sel;
@@ -13136,7 +13140,8 @@ const nCortPcs=P.cortDeliveries?P.cortDeliveries.filter(cd=>!LM_excluded.has(cd.
 let h=`<div class="fin"><h2 style="font-size:19px;font-weight:700">${displayName}</h2>`;
 if(isClusterSel)h+=`<p style="font-size:11px;color:var(--ts);margin-top:3px">${clusterVenues.length} venues: ${clusterVenues.slice(0,4).join(', ')}${clusterVenues.length>4?' +'+( clusterVenues.length-4)+' more':''}</p>`;
 const _isUSACl=isClusterSel&&!vcIsCAN(selCluster)&&!vcIsMEX(selCluster);
-h+=`<p style="font-size:12px;color:var(--ts);margin-top:3px">Lead: ${P.lt}d${_isUSACl?' <span style="color:var(--pu)">('+gLT(cacheKey)+'d transit + '+LM_clusterTurnaround+'d turnaround)</span>':''} · ${P.maxT} trucks/day · ${P.tCap} plt/truck · ${nT} trucks · ${nD} days${nCort>0?' · '+nCort+' CORT':''}</p></div>`;
+const _wpD=gWP(cacheKey);const _ltBreak=(()=>{const parts=[];const _lt0=gLT(cacheKey);if(_lt0>0)parts.push(_lt0+'d transit');if(_wpD>0)parts.push(_wpD+'d WHS');if(_isUSACl)parts.push(LM_clusterTurnaround+'d turnaround');return parts.length>1?' <span style="color:var(--pu)">('+parts.join(' + ')+')</span>':''})();
+h+=`<p style="font-size:12px;color:var(--ts);margin-top:3px">Lead: ${P.lt}d${_ltBreak} · ${P.maxT} trucks/day · ${P.tCap} plt/truck · ${nT} trucks · ${nD} days${nCort>0?' · '+nCort+' CORT':''}</p></div>`;
 if(P.bi)h+=`<div class="note note-pu fin">📌 Bump-in starts <strong>${fF(new Date(P.bi+"T12:00:00"))}</strong></div>`;
 if(P.noPN>0){
   h+=`<div class="note note-or fin" style="cursor:pointer" onclick="showNoP()">⚠ ${P.noPN} SKUs (${P.noPQ.toLocaleString()} pcs) — no pallet data. <span style="font-size:10px;color:var(--tt)">Click to view</span></div>`;
