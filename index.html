@@ -2164,6 +2164,7 @@ let LP_ARRIVAL_FIFO={};
 function LM_buildLPArrivalFifo(){
   LP_ARRIVAL_FIFO={};
   if(!LP_STATE||!LP_STATE.generatedPlan||!LP_STATE.generatedPlan.length)return;
+  const _fifoUnmatched=new Set();
   for(const r of LP_STATE.generatedPlan){
     const arrDate=LP_getArrivalDate(r.date,r.destination);
     const abbr=LP_matchTransitAbbr(r.destination);
@@ -2171,8 +2172,11 @@ function LM_buildLPArrivalFifo(){
       if(!LP_ARRIVAL_FIFO[abbr])LP_ARRIVAL_FIFO[abbr]={};
       if(!LP_ARRIVAL_FIFO[abbr][r.sku])LP_ARRIVAL_FIFO[abbr][r.sku]=[];
       LP_ARRIVAL_FIFO[abbr][r.sku].push({date:arrDate,shipDate:r.date||'',qty:r.qty||0,truckId:r.truckId||''});
-    }
+    } else {_fifoUnmatched.add(r.destination)}
   }
+  if(_fifoUnmatched.size)console.warn('[ML3K] LP FIFO: unmatched destinations:',_fifoUnmatched);
+  const _fifoStats={};for(const a in LP_ARRIVAL_FIFO)_fifoStats[a]=Object.keys(LP_ARRIVAL_FIFO[a]).length;
+  console.log('[ML3K] LP FIFO built:',_fifoStats,'from',LP_STATE.generatedPlan.length,'plan rows');
   // Sort each SKU's arrivals by date then truckId
   for(const abbr in LP_ARRIVAL_FIFO)for(const sku in LP_ARRIVAL_FIFO[abbr])
     LP_ARRIVAL_FIFO[abbr][sku].sort((a,b)=>a.date.localeCompare(b.date)||a.truckId.localeCompare(b.truckId));
@@ -13086,7 +13090,7 @@ if(cv==="dashboard"){
               if(_asmLpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
                 const fifo=LM_skuArrivalFifo(it.sku,_asmLpAbbrs,it.loadQty||0);
                 if(fifo){_r.arrivesWhs=fifo.readyBy||fifo.firstArr;_r.lpDeparts=fifo.readyShip||fifo.firstShip;_r.firstTrk=fifo.firstTrk;_r.readyTrk=fifo.readyTrk}
-                else{_r.notInLp=true}
+                else{_r.notInLp=true;console.warn('[ML3K] Asm FIFO miss:',it.sku,'abbrs:',_asmLpAbbrs,'FIFO keys:',Object.keys(LP_ARRIVAL_FIFO),'SKUs in FIFO['+_asmLpAbbrs[0]+']:',LP_ARRIVAL_FIFO[_asmLpAbbrs[0]]?Object.keys(LP_ARRIVAL_FIFO[_asmLpAbbrs[0]]).slice(0,5):'none')}
               } else{_r.notInLp=true}
             } else {
               // Non-LP: compute chain backwards from leavesWhs
