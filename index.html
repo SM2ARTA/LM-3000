@@ -13955,12 +13955,13 @@ async function LM_exportAsmTimeline(){
       {header:'Item',key:'nm',width:35},
       {header:'Source',key:'src',width:10},
       {header:'Qty',key:'qty',width:10},
-      {header:'Status',key:'status',width:12}
+      {header:'Status',key:'status',width:16}
     ];
     const hdrRow=ws.getRow(1);
     hdrRow.font={bold:true,size:10};
     hdrRow.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
     hdrRow.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};
+    ws.views=[{state:'frozen',ySplit:1}];
     const _fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
     rows.forEach(r=>{
       const arrDal=r.inStock?'In stock':_fmtD(r.arrivesDallas);
@@ -13985,7 +13986,7 @@ async function LM_exportAsmTimeline(){
       else if(r.arrivesWhs||r.arrivesDallas)stCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
     });
     // Total row
-    const totRow=ws.addRow({dd:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
+    const totRow=ws.addRow({arrDal:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
     totRow.font={bold:true};totRow.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
     totRow.border={top:{style:'medium',color:{argb:'FFE2E4E9'}}};
     // Style qty column as numbers
