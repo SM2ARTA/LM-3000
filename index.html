@@ -2076,15 +2076,17 @@ let LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};// dest abbr -> satellite WHS proce
 function LP_matchTransitAbbr(dest){
   const u=(dest||'').toUpperCase();
   if(!u)return null;
-  // First pass: exact abbreviation boundary match (word boundaries to avoid Monterrey→TOR)
-  for(const abbr of Object.keys(LP_transitDays)){
-    const re=new RegExp('\\b'+abbr+'\\b');
-    if(re.test(u))return abbr;
-  }
-  // Second pass: match full city names from CITY_ABBR
-  for(const abbr of Object.keys(LP_transitDays)){
+  const keys=Object.keys(LP_transitDays);
+  // Pass 1: full city name match (most specific — "Houston"→HOU, "Toronto"→TOR, "Monterrey"→MTY)
+  // Sort by city name length desc to match longer names first
+  const byLen=[...keys].sort((a,b)=>(CITY_ABBR[b]||'').length-(CITY_ABBR[a]||'').length);
+  for(const abbr of byLen){
     const full=(CITY_ABBR[abbr]||'').toUpperCase();
     if(full&&full.length>2&&u.includes(full))return abbr;
+  }
+  // Pass 2: word-boundary abbreviation match (for "CAN TOR", "MEX CDMX" format)
+  for(const abbr of keys){
+    if(new RegExp('\\b'+abbr+'\\b').test(u))return abbr;
   }
   return null;
 }
@@ -2111,16 +2113,18 @@ function LM_getLPDestAbbrs(rawName){
   if(LM_LPFED_STADIUM_KEYS[rawName])return[LM_LPFED_STADIUM_KEYS[rawName]];
   const u=(rawName||'').toUpperCase();
   const abbrs=Object.keys(LP_TRANSIT_DEFAULTS);
-  // Match with word boundaries first (avoids Monterrey→TOR), then full city names
-  const m=abbrs.filter(a=>{
-    const re=new RegExp('\\b'+a+'\\b');
-    if(re.test(u))return true;
-    const full=(CITY_ABBR[a]||'').toUpperCase();
-    return full&&full.length>2&&u.includes(full);
-  });
+  const _match=s=>{
+    const r=[];
+    // Full city name match first
+    for(const a of abbrs){const full=(CITY_ABBR[a]||'').toUpperCase();if(full&&full.length>2&&s.includes(full)&&!r.includes(a))r.push(a)}
+    // Word-boundary abbreviation match
+    for(const a of abbrs){if(!r.includes(a)&&new RegExp('\\b'+a+'\\b').test(s))r.push(a)}
+    return r;
+  };
+  const m=_match(u);
   if(m.length)return m;
   // Fallback: check venue's cluster name
-  if(typeof VN!=='undefined'){const v=VN.find(vn=>vn.name===rawName);if(v&&v.cluster){const cu=v.cluster.toUpperCase();return abbrs.filter(a=>{const re=new RegExp('\\b'+a+'\\b');if(re.test(cu))return true;const full=(CITY_ABBR[a]||'').toUpperCase();return full&&full.length>2&&cu.includes(full)})}}
+  if(typeof VN!=='undefined'){const v=VN.find(vn=>vn.name===rawName);if(v&&v.cluster)return _match(v.cluster.toUpperCase())}
   return[];
 }
 let LP_ARRIVAL_MAP={};// abbr -> { sku -> earliestArrivalDate }
