@@ -2075,14 +2075,16 @@ let LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};// dest abbr -> satellite WHS proce
 // Match destination string to transit abbreviation (checks both abbr and full city name)
 function LP_matchTransitAbbr(dest){
   const u=(dest||'').toUpperCase();
-  // First pass: match full city names (more specific, avoids substring collisions like Monterrey containing TOR)
+  if(!u)return null;
+  // First pass: exact abbreviation boundary match (word boundaries to avoid Monterrey→TOR)
+  for(const abbr of Object.keys(LP_transitDays)){
+    const re=new RegExp('\\b'+abbr+'\\b');
+    if(re.test(u))return abbr;
+  }
+  // Second pass: match full city names from CITY_ABBR
   for(const abbr of Object.keys(LP_transitDays)){
     const full=(CITY_ABBR[abbr]||'').toUpperCase();
-    if(full&&u.includes(full))return abbr;
-  }
-  // Second pass: match abbreviations (shorter, less specific)
-  for(const abbr of Object.keys(LP_transitDays)){
-    if(u.includes(abbr))return abbr;
+    if(full&&full.length>2&&u.includes(full))return abbr;
   }
   return null;
 }
@@ -2109,13 +2111,16 @@ function LM_getLPDestAbbrs(rawName){
   if(LM_LPFED_STADIUM_KEYS[rawName])return[LM_LPFED_STADIUM_KEYS[rawName]];
   const u=(rawName||'').toUpperCase();
   const abbrs=Object.keys(LP_TRANSIT_DEFAULTS);
+  // Match with word boundaries first (avoids Monterrey→TOR), then full city names
   const m=abbrs.filter(a=>{
-    if(u.includes(a))return true;
+    const re=new RegExp('\\b'+a+'\\b');
+    if(re.test(u))return true;
     const full=(CITY_ABBR[a]||'').toUpperCase();
-    return full&&u.includes(full);
+    return full&&full.length>2&&u.includes(full);
   });
   if(m.length)return m;
-  if(typeof VN!=='undefined'){const v=VN.find(vn=>vn.name===rawName);if(v&&v.cluster){const cu=v.cluster.toUpperCase();return abbrs.filter(a=>{if(cu.includes(a))return true;const full=(CITY_ABBR[a]||'').toUpperCase();return full&&cu.includes(full)})}}
+  // Fallback: check venue's cluster name
+  if(typeof VN!=='undefined'){const v=VN.find(vn=>vn.name===rawName);if(v&&v.cluster){const cu=v.cluster.toUpperCase();return abbrs.filter(a=>{const re=new RegExp('\\b'+a+'\\b');if(re.test(cu))return true;const full=(CITY_ABBR[a]||'').toUpperCase();return full&&full.length>2&&cu.includes(full)})}}
   return[];
 }
 let LP_ARRIVAL_MAP={};// abbr -> { sku -> earliestArrivalDate }
