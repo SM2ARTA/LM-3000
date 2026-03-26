@@ -2093,8 +2093,8 @@ function LP_getArrivalDate(shipDate,dest){
 }
 
 // ── LP-fed location logic (CAN, MEX, 3 USA stadiums) ──
-const LM_LPFED_STADIUMS=new Set(['New York / New Jersey Stadium','Kansas City Stadium','Houston Stadium']);
-const LM_LPFED_STADIUM_KEYS={'New York / New Jersey Stadium':'NY','Kansas City Stadium':'KC','Houston Stadium':'HOU'};
+const LM_LPFED_STADIUMS=new Set(['New York / New Jersey Stadium','Kansas City Stadium','Houston Stadium','Toronto Stadium','Vancouver Stadium','Guadalajara Stadium','Mexico City Stadium','Monterrey Stadium']);
+const LM_LPFED_STADIUM_KEYS={'New York / New Jersey Stadium':'NY','Kansas City Stadium':'KC','Houston Stadium':'HOU','Toronto Stadium':'TOR','Vancouver Stadium':'VAN','Guadalajara Stadium':'GDL','Mexico City Stadium':'CDMX','Monterrey Stadium':'MTY'};
 function LM_isLPFed(rawName){
   if(LM_LPFED_STADIUMS.has(rawName))return true;
   const u=(rawName||'').toUpperCase();
@@ -13039,18 +13039,22 @@ if(cv==="dashboard"){
           // Compute arrival dates (LP-fed FIFO waterfall or WHS processing)
           let _asmFirstArr=null,_asmFirstTrk=null,_asmReadyBy=null,_asmReadyTrk=null,_asmIsLp=false,_asmNotInLp=false;
           try{
-            const _asmLpAbbrs=LM_isLPFed(_tLabel)?LM_getLPDestAbbrs(_tLabel):[];
+            const _isLpFed=LM_isLPFed(_tLabel);
+            const _asmLpAbbrs=_isLpFed?LM_getLPDestAbbrs(_tLabel):[];
             if(_asmLpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
               _asmIsLp=true;
               const fifo=LM_skuArrivalFifo(it.sku,_asmLpAbbrs,it.loadQty||0);
               if(fifo){_asmFirstArr=fifo.firstArr;_asmFirstTrk=fifo.firstTrk;_asmReadyBy=fifo.readyBy;_asmReadyTrk=fifo.readyTrk}
               else{_asmNotInLp=true}
+            } else if(_isLpFed){
+              // LP-fed but no LP plan loaded or no abbrs matched
+              _asmIsLp=true;_asmNotInLp=true;
             } else if(dd){
               const _wpDays=gWP(_tLabel);
               if(_wpDays>0){const _arrDt=disp(new Date(dd+'T12:00:00'),_wpDays);const _arrStr=dk(_arrDt);_asmFirstArr=_arrStr;_asmReadyBy=_arrStr}
               else{_asmFirstArr=dd;_asmReadyBy=dd}
             }
-          }catch(e){}
+          }catch(e){console.warn('Asm arrival:',it.sku,e)}
           _asmRows.push({dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,firstArr:_asmFirstArr,firstTrk:_asmFirstTrk,readyBy:_asmReadyBy,readyTrk:_asmReadyTrk,isLp:_asmIsLp,notInLp:_asmNotInLp});
         });
       });
