@@ -11960,7 +11960,10 @@ function generateDailyDigest(){
       const P=PLAN_CACHE[label];if(!P)continue;
       const activeT=(P.allT||[]).filter(t=>!LM_excluded.has(t.id));
       const activeCort=(P.cortDeliveries||[]).filter(c=>!LM_excluded.has(c.id));
-      _digestData.planCache[label]={trucks:activeT.length,cort:activeCort.length,cortPcs:activeCort.reduce((s,c)=>s+(c.totalQty||c.qty||0),0),items:activeT.reduce((s,t)=>s+(t.items?t.items.reduce((ss,i)=>ss+(i.loadQty||0),0):0),0)};
+      // Use CORT_CACHE for accurate CORT counts (PLAN_CACHE.cortDeliveries may have duplicates across venues in same cluster)
+      const _ccKey=CLUSTERS[label]?CLUSTERS[label].venues:[label];
+      const _ccDels=(_ccKey.flatMap?_ccKey.flatMap(v=>(CORT_CACHE[v]||[])):(CORT_CACHE[label]||[])).filter(c=>!LM_excluded.has(c.id));
+      _digestData.planCache[label]={trucks:activeT.length,cort:_ccDels.length,cortPcs:_ccDels.reduce((s,c)=>s+(c.totalQty||c.qty||0),0),items:activeT.reduce((s,t)=>s+(t.items?t.items.reduce((ss,i)=>ss+(i.loadQty||0),0):0),0)};
     }
   }
   // LP truck display names
