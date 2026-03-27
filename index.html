@@ -11942,9 +11942,9 @@ function generateDailyDigest(){
     asmTimeline:window._asmTimelineData||[],
     kitTimeline:window._kitTimelineData||[],
     // Venue count (from VN, excluding duplicates from clusters)
-    venueCount:(()=>{const c=typeof VN!=='undefined'?VN.length:0;console.log('[Digest] VN.length:',c);return c})(),
-    // Total LM items — debug: log what we're summing
-    lmTotalItems:(()=>{if(typeof RW==='undefined'||!RW.length)return 0;const total=RW.reduce((s,r)=>s+(r._effQty||parseInt(r.Required)||0),0);console.log('[Digest] RW rows:',RW.length,'total _effQty:',total,'sample row:',JSON.stringify({eff:RW[0]?._effQty,req:RW[0]?.Required,sku:RW[0]?.Nomenclature}));return total})(),
+    venueCount:typeof VN!=='undefined'?VN.length:0,
+    // Total LM items = sum of VN[].it (same as All Venues dashboard "Pieces" KPI)
+    lmTotalItems:typeof VN!=='undefined'?VN.reduce((s,v)=>s+(v.it||0),0):0,
     // Supabase config for upload
     sbUrl:'https://stwopndhnxcjyomkufii.supabase.co',
     sbKey:SB?SB.supabaseKey:''

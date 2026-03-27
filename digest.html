@@ -196,7 +196,6 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const freightTrucks=lpTotal+lmTrucks;// LP + LM freight only (no CORT/Staples)
     const totalItems=D.lmTotalItems>0?D.lmTotalItems:lmItems;
     const venues=D.venueCount>0?D.venueCount:lmVenues;
-    console.log('[Digest] Overall: D.lmTotalItems=',D.lmTotalItems,'lmItems=',lmItems,'→ totalItems=',totalItems,'D.venueCount=',D.venueCount,'lmVenues=',lmVenues,'→ venues=',venues);
     const overallDispatched=lpDispatched;
     const overallPct=freightTrucks>0?Math.round((overallDispatched/freightTrucks)*100):0;
     return _sec('&#127758;','Overall Project Status','#00897B')+
