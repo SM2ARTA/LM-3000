@@ -190,15 +190,34 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
       '<span style="font-size:42px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">'+daysToKickoff+'</span><br>'+
       '<span style="font-size:12px;color:#751312;font-weight:600;letter-spacing:1px;text-transform:uppercase">Days to Kickoff &middot; Jun 11</span>'+
     '</td></tr></table></td></tr>'+
+
+  // Overall Project Status
+  (function(){
+    const totalTrucks=lpTotal+lmTrucks+(lmCort||0);
+    const totalItems=lpTotalQty+lmItems;
+    const overallPct=totalTrucks>0?Math.round((lpDispatched/totalTrucks)*100):0;
+    return _sec('&#127758;','Overall Project Status','#00897B')+
+    '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#E0F7F3" style="border:1px solid #80CBC4">'+
+      '<tr>'+_stat('total trucks',totalTrucks,'#00897B')+_stat('total items',totalItems.toLocaleString(),'#4A148C')+_stat('venues',lmVenues,'#304FFE')+_stat('CORT',lmCort||0,'#C62828')+'</tr>'+
+      '<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#B8DFCA" style="height:8px;padding:0"><table width="'+overallPct+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#00897B" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>'+
+        '<p style="font-size:10px;color:#555;text-align:center;margin:4px 0 0">LP Phase: '+lpPctDone+'% dispatched &middot; LM Phase: starts when LP delivers to warehouses</p></td></tr>'+
+    '</table></td></tr>';
+  })()+
+
+  // LP Status
   _sec('&#128230;','Load Plan &#8212; Dallas &#8594; Regional / Satellite Warehouses','#4A148C')+
   '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">'+
     '<tr>'+_stat(lpTotal+' trucks',lpTotalPlt.toLocaleString(),'#4A148C')+_stat('dispatched',lpDispatched+' ('+lpPctDone+'%)','#12804A')+_stat('ready',lpReady,'#304FFE')+_stat('pending',lpPending,'#C4550A')+'</tr>'+
     '<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+lpPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#12804A" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>'+
       '<p style="font-size:10px;color:#888888;text-align:center;margin:4px 0 0">'+lpPctDone+'% dispatched &middot; '+lpTotalQty.toLocaleString()+' total qty</p></td></tr>'+
   '</table></td></tr>'+
+
+  // LM Status (matching LP layout: 4 stats + progress bar)
   _sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE')+
   '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">'+
-    '<tr>'+_stat('venues',lmVenues,'#304FFE')+_stat('trucks',lmTrucks,'#4A148C')+_stat('items',lmItems.toLocaleString(),'#00897B')+(lmCort?_stat('CORT',lmCort,'#C62828'):'<td></td>')+'</tr>'+
+    '<tr>'+_stat(lmVenues+' venues',lmTrucks.toLocaleString(),'#304FFE')+_stat('items',lmItems.toLocaleString(),'#4A148C')+_stat('CORT',lmCort||0,'#C62828')+_stat('Staples',Object.keys(D.planCache).length>0?'TBD':'—','#C4550A')+'</tr>'+
+    '<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="0%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#304FFE" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>'+
+      '<p style="font-size:10px;color:#888888;text-align:center;margin:4px 0 0">LM dispatch begins after LP delivers stock to warehouses &middot; '+lmTrucks+' trucks planned</p></td></tr>'+
   '</table></td></tr>'+
   _sec('&#128229;','Inbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#00897B')+
   '<tr><td style="padding:0 32px 8px"><table cellpadding="0" cellspacing="0"><tr>'+
