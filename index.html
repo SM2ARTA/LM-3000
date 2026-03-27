@@ -13882,56 +13882,42 @@ function _downloadNetworkPNG(){
 function exportXL(){
   const wb=XLSX.utils.book_new();
 
-  // ── Sheet 1: Truck Plan (all venues, every truck, every item) ──
+  // ── Sheet 1: Truck Plan (from PLAN_CACHE — uses numbered truck IDs) ──
   const truckRows=[];
-  const builtClusters2=new Set();
 
-  // Helper: build a venue/cluster and collect truck rows
-  const addVenue=(name,label,vl)=>{
-    try{
-      const P=vl?build(name,vl):build(name);
-      P.days.forEach(day=>{
-        day.trucks.forEach(tr=>{
-          tr.items.forEach(it=>{
-            const _nom=NOM[it.sku]||{};
-            truckRows.push({
-              'Venue/Cluster':label,
-              'Truck':tr.id,
-              'Dispatch Date':fF(day.dDate),
-              'Bump-In Date':day.isNoBi?'No BI':fS(day.biDate),
-              'SKU':it.sku,
-              'Item':it.nm,
-              'Qty':it.loadQty,
-              'Pallets':Number.isInteger(it.loadPlt)?it.loadPlt:Math.round(it.loadPlt*100)/100,
-              'Note':_nom._kitNom?'KIT':(it.noPallet?'No pallet data':(it.pulledFrom==='no-bi'?'No bump-in':(it.topUp>0?'Top-up':(it.sched===0?'From pool':''))))
-            });
-            // Expand kit contents
-            if(_nom._kitNom&&_nom._kitId){const kit=LM_getKitById(_nom._kitId);if(kit){kit.items.forEach(ci=>{truckRows.push({'Venue/Cluster':label,'Truck':tr.id,'Dispatch Date':'','Bump-In Date':'','SKU':'  ↳ '+ci.sku,'Item':NOM[ci.sku]?.nm||ci.sku,'Qty':ci.qty,'Pallets':'','Note':'in kit'})})}}
-          });
-          // Append manual items for this truck
-          for(const mi of MI_get(MI_lmKey(tr))){
-            truckRows.push({
-              'Venue/Cluster':label,'Truck':tr.id,'Dispatch Date':fF(day.dDate),'Bump-In Date':'',
-              'SKU':mi.sku,'Item':mi.name||'','Qty':mi.qty||0,'Pallets':mi.pallets||0,'Note':'MANUAL'
-            });
-          }
+  for(const label in PLAN_CACHE){
+    const P=PLAN_CACHE[label];if(!P||!P.allT)continue;
+    P.allT.forEach(tr=>{
+      if(LM_excluded.has(tr.id))return;
+      const dd=tr.dd||'';
+      const biK=tr.biK||'';
+      const ddDisp=dd?fF(new Date(dd+'T12:00:00')):'';
+      const biDisp=biK&&biK!=='no-bi'&&biK!=='sweep'?fS(new Date(biK+'T12:00:00')):(biK==='no-bi'?'No BI':'');
+      tr.items.forEach(it=>{
+        const _nom=NOM[it.sku]||{};
+        truckRows.push({
+          'Venue/Cluster':label,
+          'Truck':tr.id,
+          'Dispatch Date':ddDisp,
+          'Bump-In Date':biDisp,
+          'SKU':it.sku,
+          'Item':it.nm,
+          'Qty':it.loadQty,
+          'Pallets':Number.isInteger(it.loadPlt)?it.loadPlt:Math.round(it.loadPlt*100)/100,
+          'Note':_nom._kitNom?'KIT':(it.noPallet?'No pallet data':(it.pulledFrom==='no-bi'?'No bump-in':(it.topUp>0?'Top-up':(it.sched===0?'From pool':''))))
         });
+        // Expand kit contents
+        if(_nom._kitNom&&_nom._kitId){const kit=LM_getKitById(_nom._kitId);if(kit){kit.items.forEach(ci=>{truckRows.push({'Venue/Cluster':label,'Truck':tr.id,'Dispatch Date':'','Bump-In Date':'','SKU':'  ↳ '+ci.sku,'Item':NOM[ci.sku]?.nm||ci.sku,'Qty':ci.qty,'Pallets':'','Note':'in kit'})})}}
       });
-    }catch(e){}
-  };
-
-  // Stadiums (STA/IBC)
-  VN.filter(v=>isStadium(v.name)).forEach(v=>addVenue(v.name,v.name));
-  // US clusters
-  for(const cl in CLUSTERS){
-    if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
-    if(builtClusters2.has(cl))continue;builtClusters2.add(cl);
-    addVenue(cl,cl,CLUSTERS[cl].venues);
+      // Append manual items for this truck
+      for(const mi of MI_get(MI_lmKey(tr))){
+        truckRows.push({
+          'Venue/Cluster':label,'Truck':tr.id,'Dispatch Date':ddDisp,'Bump-In Date':'',
+          'SKU':mi.sku,'Item':mi.name||'','Qty':mi.qty||0,'Pallets':mi.pallets||0,'Note':'MANUAL'
+        });
+      }
+    });
   }
-  // USA individual venues in clusters (now have their own trucks)
-  VN.filter(v=>!isStadium(v.name)&&v.cluster&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>addVenue(v.name,v.name));
-  // CAN/MEX individual
-  VN.filter(v=>!isStadium(v.name)&&(vcIsCAN(v.cluster)||vcIsMEX(v.cluster))).forEach(v=>addVenue(v.name,v.name));
 
   // STP Direct Deliveries
   for(const del of LM_STP_DELIVERIES){
@@ -13952,36 +13938,32 @@ function exportXL(){
     XLSX.utils.book_append_sheet(wb,ws1,'Truck Plan');
   }
 
-  // ── Sheet 2: Dispatch Summary (one row per venue per day) ──
+  // ── Sheet 2: Dispatch Summary (from PLAN_CACHE — uses numbered trucks) ──
   const dispRows=[];
-  const builtClusters3=new Set();
-  const addDispatch=(name,label,vl)=>{
-    try{
-      const P=vl?build(name,vl):build(name);
-      P.days.forEach(day=>{
-        const avgU=day.trucks.length>0?Math.round(day.trucks.reduce((s,t)=>s+(t.pallets/(t.tCap||P.tCap))*100,0)/day.trucks.length):0;
-        dispRows.push({
-          'Venue/Cluster':label,
-          'Dispatch Date':fF(day.dDate),
-          'Day':day.dDate.toLocaleDateString('en-US',{weekday:'short'}),
-          'Bump-In':day.isNoBi?'No BI':fS(day.biDate),
-          'Trucks':day.trucks.length,
-          'Pallets':Math.round(day.exactPlt*10)/10,
-          'Qty':day.totalQty,
-          'Day %':day.dayP,
-          'Cumulative %':day.cumP,
-          'Avg Utilization':avgU+'%',
-          'Early':day.isEarly?'Yes':'',
-          'Overflow':day.hasOverflow?'Yes':'',
-          'No BI':day.isNoBi?'Yes':''
-        });
+  for(const label in PLAN_CACHE){
+    const P=PLAN_CACHE[label];if(!P||!P.days)continue;
+    P.days.forEach(day=>{
+      const activeTrucks=day.trucks.filter(t=>!LM_excluded.has(t.id));
+      if(!activeTrucks.length)return;
+      const tCap=P.tCap||26;
+      const avgU=activeTrucks.length>0?Math.round(activeTrucks.reduce((s,t)=>s+(t.pallets/(t.tCap||tCap))*100,0)/activeTrucks.length):0;
+      dispRows.push({
+        'Venue/Cluster':label,
+        'Dispatch Date':fF(day.dDate),
+        'Day':day.dDate.toLocaleDateString('en-US',{weekday:'short'}),
+        'Bump-In':day.isNoBi?'No BI':fS(day.biDate),
+        'Trucks':activeTrucks.length,
+        'Pallets':Math.round(day.exactPlt*10)/10,
+        'Qty':day.totalQty,
+        'Day %':day.dayP,
+        'Cumulative %':day.cumP,
+        'Avg Utilization':avgU+'%',
+        'Early':day.isEarly?'Yes':'',
+        'Overflow':day.hasOverflow?'Yes':'',
+        'No BI':day.isNoBi?'Yes':''
       });
-    }catch(e){}
-  };
-  VN.filter(v=>isStadium(v.name)).forEach(v=>addDispatch(v.name,v.name));
-  for(const cl in CLUSTERS){if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;if(builtClusters3.has(cl))continue;builtClusters3.add(cl);addDispatch(cl,cl,CLUSTERS[cl].venues)}
-  VN.filter(v=>!isStadium(v.name)&&v.cluster&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>addDispatch(v.name,v.name));
-  VN.filter(v=>!isStadium(v.name)&&(vcIsCAN(v.cluster)||vcIsMEX(v.cluster))).forEach(v=>addDispatch(v.name,v.name));
+    });
+  }
 
   // STP Direct deliveries as dispatch rows
   for(const del of LM_STP_DELIVERIES){
@@ -14008,20 +13990,21 @@ function exportXL(){
     XLSX.utils.book_append_sheet(wb,ws2,'Dispatch Summary');
   }
 
-  // ── Sheet 3: Venue Summary ──
+  // ── Sheet 3: Venue Summary (from PLAN_CACHE) ──
   const venRows=[];
-  const builtClusters4=new Set();
-  const addVenueSummary=(name,label,vl)=>{
+  for(const label in PLAN_CACHE){
     try{
-      const P=vl?build(name,vl):build(name);
-      const plt=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.ep,0):(VN.find(v=>v.name===name)?.ep||0);
-      const pcs=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.it,0):(VN.find(v=>v.name===name)?.it||0);
-      const avgU=LM_countActive(P)>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/(t.tCap||P.tCap))*100,0)/LM_countActive(P)):0;
-      const cortDels=vl?(vl.flatMap(v=>CORT_CACHE[v]||[]).filter(cd=>!LM_excluded.has(cd.id))):(CORT_CACHE[name]||P.cortDeliveries||[]).filter(cd=>!LM_excluded.has(cd.id));
+      const P=PLAN_CACHE[label];if(!P)continue;
+      const isCluster=!!CLUSTERS[label];
+      const vl=isCluster?CLUSTERS[label].venues:null;
+      const plt=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.ep,0):(VN.find(v=>v.name===label)?.ep||0);
+      const pcs=vl?VN.filter(v=>vl.includes(v.name)).reduce((s,v)=>s+v.it,0):(VN.find(v=>v.name===label)?.it||0);
+      const activeCount=LM_countActive(P);
+      const avgU=activeCount>0?Math.round(P.allT.filter(t=>!LM_excluded.has(t.id)).reduce((s,t)=>s+(t.pallets/(t.tCap||P.tCap))*100,0)/activeCount):0;
+      const cortDels=vl?(vl.flatMap(v=>CORT_CACHE[v]||[]).filter(cd=>!LM_excluded.has(cd.id))):(CORT_CACHE[label]||P.cortDeliveries||[]).filter(cd=>!LM_excluded.has(cd.id));
       const cortN=cortDels.length;
       const cortPcs=cortDels.reduce((s,d)=>s+d.totalQty,0);
-      // STP: count deliveries for venues in this group
-      const stpVenues=vl?vl:[name];
+      const stpVenues=vl||[label];
       const stpDels=LM_STP_DELIVERIES.filter(d=>stpVenues.includes(d.venue)&&LM_STP_TRUCKS[d.id]);
       const stpN=stpDels.length;
       const stpPcs=stpDels.reduce((s,d)=>s+(LM_STP_TRUCKS[d.id]?.pcs||0),0);
@@ -14029,7 +14012,7 @@ function exportXL(){
         'Venue/Cluster':label,
         'Pallets':plt,
         'Qty':pcs,
-        'Trucks':LM_countActive(P),
+        'Trucks':activeCount,
         'Dispatch Days':P.days.length,
         'Avg Utilization':avgU+'%',
         'CORT':cortN||'',
@@ -14043,11 +14026,7 @@ function exportXL(){
         'No BI SKUs':P.noBiN
       });
     }catch(e){}
-  };
-  VN.filter(v=>isStadium(v.name)).forEach(v=>addVenueSummary(v.name,v.name));
-  for(const cl in CLUSTERS){if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;if(builtClusters4.has(cl))continue;builtClusters4.add(cl);addVenueSummary(cl,cl,CLUSTERS[cl].venues)}
-  VN.filter(v=>!isStadium(v.name)&&v.cluster&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>addVenueSummary(v.name,v.name));
-  VN.filter(v=>!isStadium(v.name)&&(vcIsCAN(v.cluster)||vcIsMEX(v.cluster))).forEach(v=>addVenueSummary(v.name,v.name));
+  }
 
   if(venRows.length>0){
     const ws3=XLSX.utils.json_to_sheet(venRows);
