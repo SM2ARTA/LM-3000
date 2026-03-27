@@ -11931,18 +11931,23 @@ async function generateDailyDigest(){
   const lpTrucks={};
   for(const r of plan){if(!lpTrucks[r.truckId])lpTrucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,plt:0,qty:0};lpTrucks[r.truckId].plt+=r.pallets||0;lpTrucks[r.truckId].qty+=r.qty||0}
   const lpList=Object.values(lpTrucks);
-  const lpTotal=lpList.length;
   const lpMaxPlt=LP_STATE?.maxPallets||26;
-  // Total qty includes planned + held items
-  const lpPlannedQty=lpList.reduce((s,t)=>s+t.qty,0);
+  // Total demand = ALL materialPlan (planned + held)
+  const lpTotalDemandQty=(LP_STATE?.materialPlan||[]).reduce((s,d)=>s+(d.effQty||0),0);
+  // Held items qty + estimated truck forecast
   const lpHeldQty=(LP_STATE?.materialPlan||[]).filter(d=>LP_holds.has(d.destination+'|'+d.sku)).reduce((s,d)=>s+(d.effQty||0),0);
-  const lpTotalQty=lpPlannedQty+lpHeldQty;
-  const lpTotalPlt=Math.round(lpList.reduce((s,t)=>s+t.plt,0));
+  const lpHeldPlt=(LP_STATE?.materialPlan||[]).filter(d=>LP_holds.has(d.destination+'|'+d.sku)).reduce((s,d)=>{const nm=LP_STATE.nomenclature?.[d.sku];const pq=nm?.palletQty||0;const ps=nm?.palletSpaces||0;return s+(pq>0?(d.effQty||0)/pq*ps:0)},0);
+  const lpHeldTrucks=lpMaxPlt>0?Math.ceil(lpHeldPlt/lpMaxPlt):0;
+  // Totals including forecast
+  const lpPlannedTrucks=lpList.length;
+  const lpTotal=lpPlannedTrucks+lpHeldTrucks;
+  const lpTotalPlt=Math.round(lpList.reduce((s,t)=>s+t.plt,0)+lpHeldPlt);
+  const lpTotalQty=lpTotalDemandQty;
   // Dispatched = locked + has LSR + date <= today
   const lpDispatched=lpList.filter(t=>LP_dispatched.has(t.id)&&LP_lsrNumbers[t.id]&&t.date<=dShort).length;
   // Ready = locked + has LSR + date > today (future)
   const lpReady=lpList.filter(t=>LP_dispatched.has(t.id)&&LP_lsrNumbers[t.id]&&t.date>dShort).length;
-  // Pending = everything else
+  // Pending = everything else (including held truck forecast)
   const lpPending=lpTotal-lpDispatched-lpReady;
   const lpPctDone=lpTotal>0?Math.round(lpDispatched/lpTotal*100):0;
 
