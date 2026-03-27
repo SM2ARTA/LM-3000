@@ -11927,25 +11927,19 @@ async function generateDailyDigest(){
   const greeting=hr<12?'Good morning':'Good afternoon';
 
   // ── LP Status ──
-  if(typeof LP_recomputeStockHolds==='function')LP_recomputeStockHolds();// ensure stock holds are fresh
   const plan=LP_STATE?.generatedPlan||[];
   const lpTrucks={};
   for(const r of plan){if(!lpTrucks[r.truckId])lpTrucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,plt:0,qty:0};lpTrucks[r.truckId].plt+=r.pallets||0;lpTrucks[r.truckId].qty+=r.qty||0}
   const lpList=Object.values(lpTrucks);
   const lpMaxPlt=LP_STATE?.maxPallets||26;
-  // Held items (manual + stock holds): estimate pallets + trucks they would produce
-  const _allHolds=new Set([...LP_holds,...LP_stockHolds]);
-  const _heldRows=(LP_STATE?.materialPlan||[]).filter(d=>_allHolds.has(d.destination+'|'+d.sku));
-  const lpHeldPlt=_heldRows.reduce((s,d)=>{const nm=LP_STATE.nomenclature?.[d.sku];const pq=nm?.palletQty||0;const ps=nm?.palletSpaces||0;return s+(pq>0?(d.effQty||0)/pq*ps:0)},0);
-  const lpHeldQty=_heldRows.reduce((s,d)=>s+(d.effQty||0),0);
-  const lpHeldTrucks=lpMaxPlt>0?Math.ceil(lpHeldPlt/lpMaxPlt):0;
-  // Totals: planned + held forecast
-  const lpPlannedTrucks=lpList.length;
-  const lpTotal=lpPlannedTrucks+lpHeldTrucks;
-  const lpPlannedPlt=lpList.reduce((s,t)=>s+t.plt,0);
-  const lpTotalPlt=Math.round(lpPlannedPlt+lpHeldPlt);
-  const lpPlannedQty=lpList.reduce((s,t)=>s+t.qty,0);
-  const lpTotalQty=lpPlannedQty+lpHeldQty;
+  const nom=LP_STATE?.nomenclature||{};
+  // Total demand from materialPlan (same as Demand tab — includes held items)
+  const _isTruckDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
+  const _lpAllDemand=(LP_STATE?.materialPlan||[]).filter(d=>_isTruckDest(d.destination));
+  const lpTotalQty=_lpAllDemand.reduce((s,d)=>s+(d.effQty||0),0);
+  const lpTotalPlt=Math.round(_lpAllDemand.reduce((s,d)=>{const n=nom[d.sku];const pq=n?.palletQty||0;const ps=n?.palletSpc||0;return s+(pq>0?(d.effQty||0)/pq*ps:0)},0));
+  const lpTotalTrucks=lpMaxPlt>0?Math.ceil(lpTotalPlt/lpMaxPlt):0;
+  const lpTotal=Math.max(lpList.length,lpTotalTrucks);// at least as many as generated
   // Dispatched = locked + has LSR + date <= today
   const lpDispatched=lpList.filter(t=>LP_dispatched.has(t.id)&&LP_lsrNumbers[t.id]&&t.date<=dShort).length;
   // Ready = locked + has LSR + date > today (future)
