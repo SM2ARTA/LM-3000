@@ -12032,119 +12032,119 @@ async function generateDailyDigest(){
       const{data:urlData}=SB.storage.from('digests').getPublicUrl('FF&E_Digest_'+dShort+'.xlsx');
       if(urlData?.publicUrl)downloadUrl=urlData.publicUrl;
     }catch(storageErr){
-      console.warn('Supabase storage upload failed, falling back to local download:',storageErr);
-      // Fallback: local download
-      const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-      a.download='FF&E_Daily_Digest_'+dShort+'.xlsx';a.click();URL.revokeObjectURL(a.href);
+      console.warn('Supabase storage upload failed:',storageErr);
+      downloadUrl='';// no link available — email will show note instead
     }
   }catch(e){console.error('Digest Excel error:',e)}
 
   // ── Build HTML email ──
-  const _bar=(pct,color)=>`<div style="background:#E8E8ED;border-radius:6px;height:8px;width:100%"><div style="background:${color};border-radius:6px;height:8px;width:${Math.min(pct,100)}%"></div></div>`;
-  const _stat=(label,value,color)=>`<td style="padding:12px 16px;text-align:center"><div style="font-size:24px;font-weight:800;color:${color};font-family:'Courier New',monospace">${value}</div><div style="font-size:11px;color:#666;margin-top:2px">${label}</div></td>`;
-  const _trow=(cells,bg)=>'<tr>'+cells.map(c=>`<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid #E8E8ED;background:${bg||'#fff'};${c.style||''}">${c.v}</td>`).join('')+'</tr>';
+  // Outlook-safe helpers: bgcolor instead of CSS background, no border-radius, no gradients
+  const _stat=(label,value,color)=>'<td width="25%" style="padding:12px 8px;text-align:center;border-bottom:1px solid #E0E0EE"><span style="font-size:24px;font-weight:800;color:'+color+';font-family:Courier New,monospace">'+value+'</span><br><span style="font-size:11px;color:#666">'+label+'</span></td>';
+  const _trow=(cells,bg)=>'<tr>'+cells.map(c=>'<td bgcolor="'+(bg||'#ffffff')+'" style="padding:6px 10px;font-size:12px;border-bottom:1px solid #E8E8ED;'+(c.style||'')+'">'+c.v+'</td>').join('')+'</tr>';
+  const _sec=(emoji,title,color)=>'<tr><td style="padding:20px 32px 8px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-bottom:2px solid '+color+';padding-bottom:6px"><span style="font-size:14px;font-weight:700;color:'+color+'">'+emoji+' '+title+'</span></td></tr></table></td></tr>';
 
-  let html=`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#F0F0F5;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#F0F0F5;padding:20px 0"><tr><td align="center">
-<table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)">
+  let html='<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F0F0F5" style="font-family:Segoe UI,Helvetica,Arial,sans-serif"><tr><td align="center" style="padding:20px 0">'+
+  '<table width="640" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="border:1px solid #D0D0DD">'+
 
-<!-- Header -->
-<tr><td style="background:linear-gradient(135deg,#4A148C 0%,#751312 100%);padding:28px 32px;color:#fff">
-  <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:0.8;margin-bottom:6px">FIFA World Cup 2026™ · FF&E Supply Chain</div>
-  <div style="font-size:26px;font-weight:800;margin-bottom:4px">Daily Digest</div>
-  <div style="font-size:14px;opacity:0.9">${dStr}</div>
-</td></tr>
+  // Header
+  '<tr><td bgcolor="#4A148C" style="padding:28px 32px">'+
+    '<span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#C5B3E6">FIFA World Cup 2026&#8482; &middot; FF&amp;E Supply Chain</span><br>'+
+    '<span style="font-size:26px;font-weight:800;color:#ffffff">Daily Digest</span><br>'+
+    '<span style="font-size:14px;color:#E8D5F0">'+dStr+'</span>'+
+  '</td></tr>'+
 
-<!-- Greeting -->
-<tr><td style="padding:24px 32px 16px">
-  <div style="font-size:15px;color:#333">${greeting} team,</div>
-  <div style="font-size:13px;color:#666;margin-top:6px;line-height:1.5">Here is today's supply chain status. Please share with relevant teams and stakeholders.</div>
-</td></tr>
+  // Greeting
+  '<tr><td style="padding:24px 32px 16px">'+
+    '<span style="font-size:15px;color:#333333">'+greeting+' team,</span><br><br>'+
+    '<span style="font-size:13px;color:#666666;line-height:1.5">Here is today&#8217;s supply chain status. Please share with relevant teams and stakeholders.</span>'+
+  '</td></tr>'+
 
-<!-- Countdown -->
-<tr><td style="padding:0 32px 20px">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#FDF0F0,#F0EBFE);border-radius:10px;border:1px solid #E8D5E8"><tr>
-    <td style="padding:16px 24px;text-align:center">
-      <div style="font-size:42px;font-weight:800;color:#4A148C;font-family:'Courier New',monospace">${daysToKickoff}</div>
-      <div style="font-size:12px;color:#751312;font-weight:600;letter-spacing:1px;text-transform:uppercase">Days to Kickoff · Jun 11</div>
-    </td>
-  </tr></table>
-</td></tr>
+  // Countdown
+  '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
+    '<td bgcolor="#F0EBFE" style="padding:16px 24px;text-align:center;border:1px solid #C5B3E6">'+
+      '<span style="font-size:42px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">'+daysToKickoff+'</span><br>'+
+      '<span style="font-size:12px;color:#751312;font-weight:600;letter-spacing:1px;text-transform:uppercase">Days to Kickoff &middot; Jun 11</span>'+
+    '</td>'+
+  '</tr></table></td></tr>'+
 
-<!-- LP Status -->
-<tr><td style="padding:0 32px 20px">
-  <div style="font-size:13px;font-weight:700;color:#4A148C;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">📦 Load Plan — Dallas → Warehouses</div>
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F8F8FC;border-radius:10px;border:1px solid #E0E0EE">
-    <tr>${_stat(lpTotal+' trucks',lpTotalPlt.toLocaleString(),'#4A148C')}${_stat('dispatched',lpLocked+' ('+lpPctDone+'%)','#12804A')}${_stat('ready',lpReady,'#304FFE')}${_stat('pending',lpPending,'#C4550A')}</tr>
-    <tr><td colspan="4" style="padding:4px 16px 12px">${_bar(lpPctDone,'#12804A')}<div style="font-size:10px;color:#888;text-align:center;margin-top:4px">${lpPctDone}% dispatched · ${lpTotalQty.toLocaleString()} total qty</div></td></tr>
-  </table>
-</td></tr>
+  // LP Status
+  _sec('&#128230;','Load Plan &#8212; Dallas &#8594; Warehouses','#4A148C')+
+  '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">'+
+    '<tr>'+_stat(lpTotal+' trucks',lpTotalPlt.toLocaleString(),'#4A148C')+_stat('dispatched',lpLocked+' ('+lpPctDone+'%)','#12804A')+_stat('ready',lpReady,'#304FFE')+_stat('pending',lpPending,'#C4550A')+'</tr>'+
+    '<tr><td colspan="4" style="padding:4px 16px 12px">'+
+      '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+lpPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#12804A" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>'+
+      '<p style="font-size:10px;color:#888888;text-align:center;margin:4px 0 0">'+lpPctDone+'% dispatched &middot; '+lpTotalQty.toLocaleString()+' total qty</p>'+
+    '</td></tr>'+
+  '</table></td></tr>'+
 
-<!-- LM Status -->
-<tr><td style="padding:0 32px 20px">
-  <div style="font-size:13px;font-weight:700;color:#304FFE;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">🚛 Last Mile — Warehouses → Venues</div>
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F8F8FC;border-radius:10px;border:1px solid #E0E0EE">
-    <tr>${_stat('venues',lmVenues,'#304FFE')}${_stat('trucks',lmTrucks,'#4A148C')}${_stat('items',lmItems.toLocaleString(),'#00897B')}${lmCort?_stat('CORT',lmCort,'#C62828'):'<td></td>'}</tr>
-  </table>
-</td></tr>
+  // LM Status
+  _sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE')+
+  '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">'+
+    '<tr>'+_stat('venues',lmVenues,'#304FFE')+_stat('trucks',lmTrucks,'#4A148C')+_stat('items',lmItems.toLocaleString(),'#00897B')+(lmCort?_stat('CORT',lmCort,'#C62828'):'<td></td>')+'</tr>'+
+  '</table></td></tr>'+
 
-<!-- Inbounds -->
-<tr><td style="padding:0 32px 20px">
-  <div style="font-size:13px;font-weight:700;color:#00897B;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">📥 Inbounds — Container Arrivals</div>
-  <div style="display:flex;gap:12px;margin-bottom:10px">
-    <span style="background:#E6F5ED;color:#12804A;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700">✅ ${arrived.length} arrived</span>
-    <span style="background:#FEF3EB;color:#C4550A;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700">⏳ ${upcoming.length} upcoming</span>
-  </div>
-  ${upcoming.length?`<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE;border-radius:8px;overflow:hidden">
-    <tr style="background:#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">CONTAINER</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">READY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">QTY</td></tr>
-    ${upcoming.slice(0,6).map((c,i)=>_trow([{v:`<span style="font-family:monospace;font-weight:600">${c.name}</span>`},{v:fD(c.readyDate)},{v:c.skus.size,style:'text-align:right;font-weight:600'},{v:c.qty.toLocaleString(),style:'text-align:right;font-family:monospace;font-weight:600'}],i%2?'#FAFBFC':'#fff')).join('')}
-    ${upcoming.length>6?`<tr><td colspan="4" style="padding:6px 10px;font-size:11px;color:#888;text-align:center">+ ${upcoming.length-6} more containers</td></tr>`:''}
-  </table>`:''}
-</td></tr>
+  // Inbounds
+  _sec('&#128229;','Inbounds &#8212; Container Arrivals','#00897B')+
+  '<tr><td style="padding:0 32px 8px">'+
+    '<table cellpadding="0" cellspacing="0"><tr>'+
+      '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+arrived.length+' arrived</td>'+
+      '<td style="width:10px"></td>'+
+      '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">&#9203; '+upcoming.length+' upcoming</td>'+
+    '</tr></table>'+
+  '</td></tr>'+
+  (upcoming.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
+    '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">CONTAINER</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">READY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">QTY</td></tr>'+
+    upcoming.slice(0,6).map((c,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:600">'+c.name+'</span>'},{v:fD(c.readyDate)},{v:c.skus.size,style:'text-align:right;font-weight:600'},{v:c.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#ffffff')).join('')+
+    (upcoming.length>6?'<tr><td colspan="4" bgcolor="#FAFBFC" style="padding:6px 10px;font-size:11px;color:#888888;text-align:center">+ '+(upcoming.length-6)+' more containers</td></tr>':'')+
+  '</table></td></tr>':'<tr><td style="padding:0 32px 12px"></td></tr>')+
 
-<!-- Outbounds -->
-<tr><td style="padding:0 32px 20px">
-  <div style="font-size:13px;font-weight:700;color:#751312;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">📤 Outbounds — Next Shipments</div>
-  <div style="margin-bottom:10px"><span style="background:#E6F5ED;color:#12804A;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700">✅ ${lpLocked} trucks dispatched</span></div>
-  ${nextToShip.length?`<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE;border-radius:8px;overflow:hidden">
-    <tr style="background:#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TRUCK</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">PALLETS</td></tr>
-    ${nextToShip.map((t,i)=>_trow([{v:`<span style="font-family:monospace;font-weight:700">LP-${t.id}</span>`},{v:clDisp(t.dest)},{v:fD(t.date)},{v:t.plt.toFixed(1),style:'text-align:right;font-family:monospace;font-weight:600'}],i%2?'#FAFBFC':'#fff')).join('')}
-    ${lpPending>8?`<tr><td colspan="4" style="padding:6px 10px;font-size:11px;color:#888;text-align:center">+ ${lpPending-8} more pending trucks</td></tr>`:''}
-  </table>`:''}
-</td></tr>
+  // Outbounds
+  _sec('&#128228;','Outbounds &#8212; Next Shipments','#751312')+
+  '<tr><td style="padding:0 32px 8px">'+
+    '<table cellpadding="0" cellspacing="0"><tr><td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpLocked+' trucks dispatched</td></tr></table>'+
+  '</td></tr>'+
+  (nextToShip.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
+    '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">TRUCK</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">PALLETS</td></tr>'+
+    nextToShip.map((t,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:700">LP-'+t.id+'</span>'},{v:clDisp(t.dest)},{v:fD(t.date)},{v:t.plt.toFixed(1),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#ffffff')).join('')+
+    (lpPending>8?'<tr><td colspan="4" bgcolor="#FAFBFC" style="padding:6px 10px;font-size:11px;color:#888888;text-align:center">+ '+(lpPending-8)+' more pending trucks</td></tr>':'')+
+  '</table></td></tr>':'<tr><td style="padding:0 32px 12px"></td></tr>')+
 
-<!-- Risks -->
-<tr><td style="padding:0 32px 20px">
-  <div style="font-size:13px;font-weight:700;color:#C62828;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">⚠️ Risks — Late Arrivals</div>
-  ${lateItems.length===0?`<div style="background:#E6F5ED;border:1px solid #B8DFCA;border-radius:10px;padding:14px 18px;font-size:13px;color:#12804A;font-weight:600">✅ No late arrival risks detected. All items on track.</div>`:`
-  <div style="background:#FDEBED;border:1px solid #F5B8BA;border-radius:10px;padding:14px 18px;margin-bottom:10px;font-size:13px;color:#C62828;font-weight:600">${lateItems.length} items at risk across ${Object.keys(lateByDest).length} destinations</div>
-  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #F5B8BA;border-radius:8px;overflow:hidden">
-    <tr style="background:#FDEBED"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">NEED BY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">ITEMS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">MAX DELAY</td></tr>
-    ${Object.values(lateByDest).sort((a,b)=>b.maxDays-a.maxDays).map((ds,i)=>_trow([{v:`<span style="font-weight:700">${ds.dest}</span>`},{v:fD(ds.bi)},{v:ds.items.length,style:'text-align:right;font-weight:600'},{v:`<span style="color:#C62828;font-weight:800">${ds.maxDays}d</span>`,style:'text-align:right'}],i%2?'#FFF8F8':'#fff')).join('')}
-  </table>`}
-</td></tr>
+  // Risks
+  _sec('&#9888;&#65039;','Risks &#8212; Late Arrivals','#C62828')+
+  '<tr><td style="padding:0 32px 20px">'+
+  (lateItems.length===0?
+    '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E6F5ED" style="padding:14px 18px;font-size:13px;color:#12804A;font-weight:600;border:1px solid #B8DFCA">&#10004; No late arrival risks detected. All items on track.</td></tr></table>'
+  :
+    '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#FDEBED" style="padding:12px 18px;font-size:13px;color:#C62828;font-weight:600;border:1px solid #F5B8BA">'+lateItems.length+' items at risk across '+Object.keys(lateByDest).length+' destinations</td></tr></table>'+
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #F5B8BA;margin-top:10px">'+
+    '<tr bgcolor="#FDEBED"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">NEED BY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">ITEMS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">MAX DELAY</td></tr>'+
+    Object.values(lateByDest).sort((a,b)=>b.maxDays-a.maxDays).map((ds,i)=>_trow([{v:'<span style="font-weight:700">'+ds.dest+'</span>'},{v:fD(ds.bi)},{v:ds.items.length,style:'text-align:right;font-weight:600'},{v:'<span style="color:#C62828;font-weight:800">'+ds.maxDays+'d</span>',style:'text-align:right'}],i%2?'#FFF8F8':'#ffffff')).join('')+
+    '</table>'
+  )+
+  '</td></tr>'+
 
-<!-- Download link -->
-${downloadUrl?`<tr><td style="padding:0 32px 24px">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#F0EBFE,#E8EAF6);border-radius:10px;border:1px solid #C5B3E6"><tr>
-    <td style="padding:18px 24px;text-align:center">
-      <div style="font-size:12px;color:#4A148C;font-weight:600;margin-bottom:10px">📎 Detailed Reports (Assembly Timeline · Kitting Timeline · Late Arrivals)</div>
-      <a href="${downloadUrl}" style="display:inline-block;background:#4A148C;color:#fff;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:0.5px">⬇ Download Excel Report</a>
-    </td>
-  </tr></table>
-</td></tr>`:`<tr><td style="padding:0 32px 24px">
-  <div style="background:#FEF3EB;border:1px solid #F5D6B8;border-radius:10px;padding:12px 18px;font-size:12px;color:#C4550A;text-align:center">📎 Excel report downloaded separately (Assembly Timeline · Kitting Timeline · Late Arrivals)</div>
-</td></tr>`}
+  // Download link
+  (downloadUrl?
+    '<tr><td style="padding:0 32px 24px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
+      '<td bgcolor="#F0EBFE" style="padding:18px 24px;text-align:center;border:1px solid #C5B3E6">'+
+        '<span style="font-size:12px;color:#4A148C;font-weight:600">&#128206; Detailed Reports (Assembly Timeline &middot; Kitting Timeline &middot; Late Arrivals)</span><br><br>'+
+        '<a href="'+downloadUrl+'" style="background-color:#4A148C;color:#ffffff;padding:10px 28px;font-size:13px;font-weight:700;text-decoration:none;display:inline-block">&#11015; Download Excel Report</a>'+
+      '</td>'+
+    '</tr></table></td></tr>'
+  :
+    '<tr><td style="padding:0 32px 24px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
+      '<td bgcolor="#FDEBED" style="padding:12px 18px;font-size:12px;color:#C62828;text-align:center;border:1px solid #F5B8BA">'+
+        '&#9888; Report upload pending. Data available at <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600">ml3000.smmarta.com</a>'+
+      '</td></tr></table></td></tr>'
+  )+
 
-<!-- Footer -->
-<tr><td style="background:#F8F8FC;padding:20px 32px;border-top:1px solid #E0E0EE">
-  <div style="font-size:11px;color:#888;line-height:1.6">
-    Generated from <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600;text-decoration:none">ML3K</a> · ml3000.smmarta.com<br>
-    <span style="color:#666;font-weight:600">Vladislav Abramov</span> · SM²ARTA™
-  </div>
-</td></tr>
+  // Footer
+  '<tr><td bgcolor="#F8F8FC" style="padding:20px 32px;border-top:1px solid #E0E0EE">'+
+    '<span style="font-size:11px;color:#888888">Generated from <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600;text-decoration:none">ML3K</a> &middot; ml3000.smmarta.com</span><br>'+
+    '<span style="font-size:11px;color:#666666;font-weight:600">Vladislav Abramov</span> <span style="font-size:11px;color:#888888">&middot; SM&#178;ARTA&#8482;</span>'+
+  '</td></tr>'+
 
-</table></td></tr></table></body></html>`;
+  '</table></td></tr></table>';
 
   // ── Show preview + copy to clipboard ──
   const _mailSubj=encodeURIComponent('FF&E Supply Chain \u2014 '+dStr);
