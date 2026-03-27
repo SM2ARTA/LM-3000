@@ -11932,9 +11932,11 @@ async function generateDailyDigest(){
   for(const r of plan){if(!lpTrucks[r.truckId])lpTrucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,plt:0,qty:0};lpTrucks[r.truckId].plt+=r.pallets||0;lpTrucks[r.truckId].qty+=r.qty||0}
   const lpList=Object.values(lpTrucks);
   const lpMaxPlt=LP_STATE?.maxPallets||26;
-  // Held items: estimate pallets + trucks they would produce
-  const lpHeldPlt=(LP_STATE?.materialPlan||[]).filter(d=>LP_holds.has(d.destination+'|'+d.sku)).reduce((s,d)=>{const nm=LP_STATE.nomenclature?.[d.sku];const pq=nm?.palletQty||0;const ps=nm?.palletSpaces||0;return s+(pq>0?(d.effQty||0)/pq*ps:0)},0);
-  const lpHeldQty=(LP_STATE?.materialPlan||[]).filter(d=>LP_holds.has(d.destination+'|'+d.sku)).reduce((s,d)=>s+(d.effQty||0),0);
+  // Held items (manual + stock holds): estimate pallets + trucks they would produce
+  const _allHolds=new Set([...LP_holds,...LP_stockHolds]);
+  const _heldRows=(LP_STATE?.materialPlan||[]).filter(d=>_allHolds.has(d.destination+'|'+d.sku));
+  const lpHeldPlt=_heldRows.reduce((s,d)=>{const nm=LP_STATE.nomenclature?.[d.sku];const pq=nm?.palletQty||0;const ps=nm?.palletSpaces||0;return s+(pq>0?(d.effQty||0)/pq*ps:0)},0);
+  const lpHeldQty=_heldRows.reduce((s,d)=>s+(d.effQty||0),0);
   const lpHeldTrucks=lpMaxPlt>0?Math.ceil(lpHeldPlt/lpMaxPlt):0;
   // Totals: planned + held forecast
   const lpPlannedTrucks=lpList.length;
