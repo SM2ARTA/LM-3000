@@ -189,56 +189,51 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     '<td bgcolor="#F0EBFE" style="padding:16px 24px;text-align:center;border:1px solid #C5B3E6">'+
       '<span style="font-size:42px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">'+daysToKickoff+'</span><br>'+
       '<span style="font-size:12px;color:#751312;font-weight:600;letter-spacing:1px;text-transform:uppercase">Days to Kickoff &middot; Jun 11</span>'+
-    '</td></tr></table></td></tr>'+
+    '</td></tr></table></td></tr>';
 
-  // ── Shared values ──
-  (function(){
-    const stpCount=D.stpTrucks||0;
-    const totalItems=D.lmTotalItems>0?D.lmTotalItems:lmItems;
-    const venues=D.venueCount>0?D.venueCount:lmVenues;
-    const allTrucks=lpTotal+lmTrucks+lmCort+stpCount;
+  // ── Shared values for status sections ──
+  const _stpCount=D.stpTrucks||0;
+  const _totalItems=D.lmTotalItems>0?D.lmTotalItems:lmItems;
+  const _venues=D.venueCount>0?D.venueCount:lmVenues;
+  const _allTrucks=lpTotal+lmTrucks+lmCort+_stpCount;
+  const _segDisp=_allTrucks>0?Math.round(lpDispatched/_allTrucks*100):0;
+  const _segReady=_allTrucks>0?Math.round(lpReady/_allTrucks*100):0;
 
-    // ── Overall ──
-    html+=_sec('&#127758;','Overall Project Status','#00897B');
-    html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#E0F7F3" style="border:1px solid #80CBC4">';
-    html+='<tr>'+_stat('items',totalItems.toLocaleString(),'#00897B')+_stat('venues',venues,'#4A148C')+_stat('trucks',allTrucks,'#304FFE')+_stat('dispatched',lpDispatched,'#12804A')+'</tr>';
-    html+='<tr><td colspan="4" style="padding:8px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr>';
-    // Stacked bar: dispatched | ready | pending
-    const barW=100;
-    const segDisp=allTrucks>0?Math.round(lpDispatched/allTrucks*barW):0;
-    const segReady=allTrucks>0?Math.round(lpReady/allTrucks*barW):0;
-    html+='<td bgcolor="#E8E8ED" style="height:10px;padding:0">';
-    html+='<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed"><tr>';
-    if(segDisp>0)html+='<td bgcolor="#12804A" style="height:10px;padding:0;width:'+segDisp+'%;font-size:1px">&nbsp;</td>';
-    if(segReady>0)html+='<td bgcolor="#304FFE" style="height:10px;padding:0;width:'+segReady+'%;font-size:1px">&nbsp;</td>';
-    html+='<td style="height:10px;padding:0;font-size:1px">&nbsp;</td>';
-    html+='</tr></table></td>';
-    html+='</tr></table>';
-    html+='<p style="font-size:10px;color:#555;text-align:center;margin:4px 0 0">';
-    html+='<span style="color:#12804A;font-weight:600">'+lpDispatched+' dispatched</span> &middot; ';
-    html+='<span style="color:#304FFE;font-weight:600">'+lpReady+' ready</span> &middot; ';
-    html+='<span style="color:#C4550A;font-weight:600">'+lpPending+' LP pending</span> &middot; ';
-    html+='<span style="color:#888">'+lmTrucks+' LM + '+lmCort+' CORT + '+stpCount+' Staples</span>';
-    html+='</p></td></tr></table></td></tr>';
+  // ── Overall ──
+  html+=_sec('&#127758;','Overall Project Status','#00897B');
+  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#E0F7F3" style="border:1px solid #80CBC4">';
+  html+='<tr>'+_stat('items',_totalItems.toLocaleString(),'#00897B')+_stat('venues',_venues,'#4A148C')+_stat('trucks',_allTrucks,'#304FFE')+_stat('dispatched',lpDispatched,'#12804A')+'</tr>';
+  html+='<tr><td colspan="4" style="padding:8px 16px 12px">';
+  html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:10px;padding:0">';
+  html+='<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed"><tr>';
+  if(_segDisp>0)html+='<td bgcolor="#12804A" style="height:10px;padding:0;width:'+_segDisp+'%;font-size:1px">&nbsp;</td>';
+  if(_segReady>0)html+='<td bgcolor="#304FFE" style="height:10px;padding:0;width:'+_segReady+'%;font-size:1px">&nbsp;</td>';
+  html+='<td style="height:10px;padding:0;font-size:1px">&nbsp;</td>';
+  html+='</tr></table></td></tr></table>';
+  html+='<p style="font-size:10px;color:#555;text-align:center;margin:4px 0 0">';
+  html+='<span style="color:#12804A;font-weight:600">'+lpDispatched+' dispatched</span> &middot; ';
+  html+='<span style="color:#304FFE;font-weight:600">'+lpReady+' ready</span> &middot; ';
+  html+='<span style="color:#C4550A;font-weight:600">'+lpPending+' LP pending</span> &middot; ';
+  html+='<span style="color:#888">'+lmTrucks+' LM + '+lmCort+' CORT + '+_stpCount+' Staples</span>';
+  html+='</p></td></tr></table></td></tr>';
 
-    // ── LP ──
-    html+=_sec('&#128230;','Load Plan &#8212; Dallas &#8594; Regional / Satellite Warehouses','#4A148C');
-    html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
-    html+='<tr>'+_stat(lpTotalPlt.toLocaleString(),'pallets','#4A148C')+_stat(lpDispatched,'dispatched','#12804A')+_stat(lpReady,'ready','#304FFE')+_stat(lpPending,'pending','#C4550A')+'</tr>';
-    html+='<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+lpPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#12804A" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>';
-    html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+lpTotal+' trucks &middot; '+lpTotalQty.toLocaleString()+' qty &middot; '+lpPctDone+'% dispatched</p></td></tr>';
-    html+='</table></td></tr>';
+  // ── LP ──
+  html+=_sec('&#128230;','Load Plan &#8212; Dallas &#8594; Regional / Satellite Warehouses','#4A148C');
+  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
+  html+='<tr>'+_stat(lpTotalPlt.toLocaleString(),'pallets','#4A148C')+_stat(lpDispatched,'dispatched','#12804A')+_stat(lpReady,'ready','#304FFE')+_stat(lpPending,'pending','#C4550A')+'</tr>';
+  html+='<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+lpPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#12804A" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>';
+  html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+lpTotal+' trucks &middot; '+lpTotalQty.toLocaleString()+' qty &middot; '+lpPctDone+'% dispatched</p></td></tr>';
+  html+='</table></td></tr>';
 
-    // ── LM ──
-    html+=_sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE');
-    html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
-    html+='<tr>'+_stat(totalItems.toLocaleString(),'items','#304FFE')+_stat(lmTrucks,'freight','#4A148C')+_stat(lmCort,'CORT','#C62828')+_stat(stpCount,'Staples','#C4550A')+'</tr>';
-    html+='<tr><td colspan="4" style="padding:4px 16px 12px">';
-    html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+venues+' venues &middot; '+(lmTrucks+lmCort+stpCount)+' total deliveries</p></td></tr>';
-    html+='</table></td></tr>';
+  // ── LM ──
+  html+=_sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE');
+  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
+  html+='<tr>'+_stat(_totalItems.toLocaleString(),'items','#304FFE')+_stat(lmTrucks,'freight','#4A148C')+_stat(lmCort,'CORT','#C62828')+_stat(_stpCount,'Staples','#C4550A')+'</tr>';
+  html+='<tr><td colspan="4" style="padding:4px 16px 12px">';
+  html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+_venues+' venues &middot; '+(lmTrucks+lmCort+_stpCount)+' total deliveries</p></td></tr>';
+  html+='</table></td></tr>';
 
-    return '';
-  })()+
+  html+=
   _sec('&#128229;','Inbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#00897B')+
   '<tr><td style="padding:0 32px 8px"><table cellpadding="0" cellspacing="0"><tr>'+
     '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+arrived.length+' arrived</td><td style="width:10px"></td>'+
