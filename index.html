@@ -12150,39 +12150,42 @@ ${downloadUrl?`<tr><td style="padding:0 32px 24px">
   const _mailSubj=encodeURIComponent('FF&E Supply Chain \u2014 '+dStr);
   const win=window.open('','_blank','width=720,height=800');
   if(!win){alert('Popup blocked. Please allow popups for this site.');return}
-  const _previewDoc=`<!DOCTYPE html><html><head><title>Daily Digest</title>
-<style>body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
-.toolbar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #ddd;padding:10px 20px;display:flex;align-items:center;gap:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
-.toolbar button{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none}
-.btn-copy{background:#4A148C;color:#fff}.btn-copy:hover{background:#6A1B9A}
-.btn-mail{background:#304FFE;color:#fff}.btn-mail:hover{background:#1E40FF}
-.btn-close{background:#eee;color:#333}.btn-close:hover{background:#ddd}
-.status{font-size:12px;color:#12804A;font-weight:600;display:none}
-.preview{padding:20px}</style></head><body>
-<div class="toolbar">
-  <button class="btn-copy" onclick="copyEmail()">Copy to Clipboard</button>
-  <button class="btn-mail" onclick="openMail()">Open in Outlook</button>
-  <button class="btn-close" onclick="window.close()">Close</button>
-  <span class="status" id="copyStatus">Copied! Paste into your email.</span>
-</div>
-<div class="preview" id="emailContent"></div>
-<script>
-function copyEmail(){
-  var el=document.getElementById('emailContent');
-  var range=document.createRange();range.selectNodeContents(el);
-  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
-  document.execCommand('copy');sel.removeAllRanges();
-  try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([el.innerHTML],{type:'text/html'})})])}catch(e){}
-  document.getElementById('copyStatus').style.display='inline';
-  setTimeout(function(){document.getElementById('copyStatus').style.display='none'},3000);
-}
-function openMail(){window.location.href='mailto:?subject=`+_mailSubj+`';}
-</script></body></html>`;
   win.document.open();
-  win.document.write(_previewDoc);
+  win.document.write('<!DOCTYPE html><html><head><title>Daily Digest</title>'+
+    '<style>body{margin:0;font-family:"Segoe UI",sans-serif;background:#F0F0F5}'+
+    '.toolbar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #ddd;padding:10px 20px;display:flex;align-items:center;gap:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}'+
+    '.toolbar button{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none}'+
+    '.btn-copy{background:#4A148C;color:#fff}.btn-copy:hover{background:#6A1B9A}'+
+    '.btn-mail{background:#304FFE;color:#fff}.btn-mail:hover{background:#1E40FF}'+
+    '.btn-close{background:#eee;color:#333}.btn-close:hover{background:#ddd}'+
+    '.status{font-size:12px;color:#12804A;font-weight:600;display:none}'+
+    '.preview{padding:20px}</style></head><body>'+
+    '<div class="toolbar">'+
+    '<button class="btn-copy" id="_btnCopy">Copy to Clipboard</button>'+
+    '<button class="btn-mail" id="_btnMail">Open in Outlook</button>'+
+    '<button class="btn-close" onclick="window.close()">Close</button>'+
+    '<span class="status" id="copyStatus">Copied! Paste into your email.</span>'+
+    '</div><div class="preview" id="emailContent"></div></body></html>');
   win.document.close();
-  // Inject HTML content safely after document is ready
-  setTimeout(()=>{try{win.document.getElementById('emailContent').innerHTML=html}catch(e){}},100);
+  // Inject content and wire up buttons after document ready
+  setTimeout(()=>{
+    try{
+      const ec=win.document.getElementById('emailContent');
+      if(ec)ec.innerHTML=html;
+      win.document.getElementById('_btnCopy').onclick=function(){
+        const el=win.document.getElementById('emailContent');
+        const range=win.document.createRange();range.selectNodeContents(el);
+        const sel=win.getSelection();sel.removeAllRanges();sel.addRange(range);
+        win.document.execCommand('copy');sel.removeAllRanges();
+        try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([el.innerHTML],{type:'text/html'})})])}catch(e){}
+        const st=win.document.getElementById('copyStatus');st.style.display='inline';
+        setTimeout(function(){st.style.display='none'},3000);
+      };
+      win.document.getElementById('_btnMail').onclick=function(){
+        window.location.href='mailto:?subject='+_mailSubj;
+      };
+    }catch(e){console.error('Digest preview error:',e)}
+  },150);
 }
 
 function showHelp(){
