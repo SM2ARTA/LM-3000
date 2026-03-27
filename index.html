@@ -11945,11 +11945,36 @@ function generateDailyDigest(){
     venueCount:typeof VN!=='undefined'?VN.length:0,
     // Total LM items = sum of VN[].it (same as All Venues dashboard "Pieces" KPI)
     lmTotalItems:typeof VN!=='undefined'?VN.reduce((s,v)=>s+(v.it||0),0):0,
-    // STP truck count + qty
+    // STP
     stpTrucks:typeof LM_STP_TRUCKS!=='undefined'?Object.keys(LM_STP_TRUCKS).filter(k=>LM_STP_TRUCKS[k]?.items?.length>0).length:0,
     stpQty:typeof LM_STP_TRUCKS!=='undefined'?Object.values(LM_STP_TRUCKS).reduce((s,t)=>s+(t?.pcs||0),0):0,
-    // LM dispatched = trucks with dispatch date <= today
-    lmDispatched:(()=>{if(typeof PLAN_CACHE==='undefined')return 0;const td=new Date().toISOString().slice(0,10);let c=0;for(const label in PLAN_CACHE){const P=PLAN_CACHE[label];if(!P||!P.allT)continue;P.allT.forEach(t=>{if(!LM_excluded.has(t.id)&&t.dd&&t.dd<=td)c++})}return c})(),
+    // Pre-computed LM totals (avoids double-counting from cluster+venue entries in planCache)
+    lmTotals:(()=>{
+      if(typeof PLAN_CACHE==='undefined')return{trucks:0,cort:0,cortPcs:0,items:0,dispatched:0};
+      const td=new Date().toISOString().slice(0,10);
+      // Use same dedup logic as dashboard: count unique truck IDs
+      const seenTrucks=new Set(),seenCort=new Set();
+      let trucks=0,cort=0,cortPcs=0,items=0,dispatched=0;
+      for(const label in PLAN_CACHE){
+        const P=PLAN_CACHE[label];if(!P)continue;
+        (P.allT||[]).forEach(t=>{
+          if(LM_excluded.has(t.id)||seenTrucks.has(t.id))return;
+          seenTrucks.add(t.id);trucks++;
+          if(t.items)items+=t.items.reduce((s,i)=>s+(i.loadQty||0),0);
+          if(t.dd&&t.dd<=td)dispatched++;
+        });
+      }
+      // CORT: use CORT_CACHE with dedup by delivery ID
+      if(typeof CORT_CACHE!=='undefined'){
+        for(const v in CORT_CACHE){
+          (CORT_CACHE[v]||[]).forEach(c=>{
+            if(LM_excluded.has(c.id)||seenCort.has(c.id))return;
+            seenCort.add(c.id);cort++;cortPcs+=(c.totalQty||c.qty||0);
+          });
+        }
+      }
+      return{trucks,cort,cortPcs,items,dispatched};
+    })(),
     // Supabase config for upload
     sbUrl:'https://stwopndhnxcjyomkufii.supabase.co',
     sbKey:SB?SB.supabaseKey:''

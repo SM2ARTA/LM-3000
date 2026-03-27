@@ -68,13 +68,12 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const lpPending=lpTotal-lpDispatched-lpReady;
   const lpPctDone=lpTotal>0?Math.round(lpDispatched/lpTotal*100):0;
 
-  // ── LM Status ──
-  const lmExcluded=new Set(D.lmExcluded);
-  let lmTrucks=0,lmVenues=0,lmItems=0,lmCort=0,lmCortPcs=0;
-  for(const label in D.planCache){
-    const p=D.planCache[label];lmVenues++;
-    lmTrucks+=p.trucks;lmCort+=p.cort;lmCortPcs+=(p.cortPcs||0);lmItems+=p.items;
-  }
+  // ── LM Status (pre-computed with dedup in index.html) ──
+  const _lm=D.lmTotals||{trucks:0,cort:0,cortPcs:0,items:0,dispatched:0};
+  const lmTrucks=_lm.trucks;
+  const lmCort=_lm.cort;
+  const lmCortPcs=_lm.cortPcs;
+  const lmItems=_lm.items;
   const _stpQty=D.stpQty||0;
 
   // ── Inbounds ──
@@ -195,7 +194,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // ── Shared values for status sections ──
   const _stpCount=D.stpTrucks||0;
   const _totalItems=D.lmTotalItems>0?D.lmTotalItems:lmItems;
-  const _venues=D.venueCount>0?D.venueCount:lmVenues;
+  const _venues=D.venueCount||217;
   const _allTrucks=lpTotal+lmTrucks+lmCort+_stpCount;
   const _segDisp=_allTrucks>0?Math.round(lpDispatched/_allTrucks*100):0;
   const _segReady=_allTrucks>0?Math.round(lpReady/_allTrucks*100):0;
@@ -227,7 +226,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+='</table></td></tr>';
 
   // ── LM ──
-  const _lmDisp=D.lmDispatched||0;
+  const _lmDisp=_lm.dispatched||0;
   const _lmTotal=lmTrucks+lmCort+_stpCount;
   const _lmPct=_lmTotal>0?Math.round(_lmDisp/_lmTotal*100):0;
   html+=_sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE');
