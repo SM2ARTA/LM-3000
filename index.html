@@ -11941,6 +11941,10 @@ function generateDailyDigest(){
     // Timelines
     asmTimeline:window._asmTimelineData||[],
     kitTimeline:window._kitTimelineData||[],
+    // Venue count (actual VN venues, not PLAN_CACHE labels which include clusters)
+    venueCount:typeof VN!=='undefined'?VN.length:0,
+    // Total LM items from demand (RW effQty — the ~162K number)
+    lmTotalItems:typeof RW!=='undefined'?RW.reduce((s,r)=>s+(r._effQty||0),0):0,
     // Supabase config for upload
     sbUrl:'https://stwopndhnxcjyomkufii.supabase.co',
     sbKey:SB?SB.supabaseKey:''
