@@ -11917,294 +11917,50 @@ function showNoBi(){
 }
 
 // ── Daily Digest Email ──
-async function generateDailyDigest(){
+function generateDailyDigest(){
   if(ROLE==='viewer')return;
-  const today=new Date();
-  const dStr=today.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  const dShort=today.toISOString().slice(0,10);
-  const fD=d=>{if(!d||d==='—')return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}catch(e){return d}};
-  const hr=today.getHours();
-  const greeting=hr<12?'Good morning':'Good afternoon';
-
-  // ── LP Status ──
-  const plan=LP_STATE?.generatedPlan||[];
-  const lpTrucks={};
-  for(const r of plan){if(!lpTrucks[r.truckId])lpTrucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,plt:0,qty:0};lpTrucks[r.truckId].plt+=r.pallets||0;lpTrucks[r.truckId].qty+=r.qty||0}
-  const lpList=Object.values(lpTrucks);
-  const lpMaxPlt=LP_STATE?.maxPallets||26;
-  const nom=LP_STATE?.nomenclature||{};
-  // Total demand from materialPlan (same as Demand tab — includes held items)
-  const _isTruckDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
-  const _lpAllDemand=(LP_STATE?.materialPlan||[]).filter(d=>_isTruckDest(d.destination));
-  const lpTotalQty=_lpAllDemand.reduce((s,d)=>s+(d.effQty||0),0);
-  const lpTotalPlt=Math.round(_lpAllDemand.reduce((s,d)=>{const n=nom[d.sku];const pq=n?.palletQty||0;const ps=n?.palletSpc||0;return s+(pq>0?(d.effQty||0)/pq*ps:0)},0));
-  const lpTotalTrucks=lpMaxPlt>0?Math.ceil(lpTotalPlt/lpMaxPlt):0;
-  const lpTotal=Math.max(lpList.length,lpTotalTrucks);// at least as many as generated
-  // Dispatched = locked + has LSR + date <= today
-  const lpDispatched=lpList.filter(t=>LP_dispatched.has(t.id)&&LP_lsrNumbers[t.id]&&t.date<=dShort).length;
-  // Ready = locked + has LSR + date > today (future)
-  const lpReady=lpList.filter(t=>LP_dispatched.has(t.id)&&LP_lsrNumbers[t.id]&&t.date>dShort).length;
-  // Pending = everything else (including held truck forecast)
-  const lpPending=lpTotal-lpDispatched-lpReady;
-  const lpPctDone=lpTotal>0?Math.round(lpDispatched/lpTotal*100):0;
-
-  // ── LM Status ──
-  let lmTrucks=0,lmVenues=0,lmItems=0,lmCort=0;
+  // Serialize current app state into sessionStorage, open digest.html
+  const _serializeSet=s=>[...s];
+  const _digestData={
+    // LP
+    generatedPlan:LP_STATE?.generatedPlan||[],
+    materialPlan:LP_STATE?.materialPlan||[],
+    nomenclature:LP_STATE?.nomenclature||{},
+    arrivals:LP_STATE?.arrivals||[],
+    maxPallets:LP_STATE?.maxPallets||26,
+    dispatched:_serializeSet(LP_dispatched||new Set()),
+    lsrNumbers:LP_lsrNumbers||{},
+    holds:_serializeSet(LP_holds||new Set()),
+    stockHolds:_serializeSet(LP_stockHolds||new Set()),
+    // LM
+    planCache:{},
+    lmExcluded:_serializeSet(LM_excluded||new Set()),
+    nom:NOM||{},
+    // Late
+    lateItems:window._LP_ALL_LATE_ITEMS||[],
+    // Timelines
+    asmTimeline:window._asmTimelineData||[],
+    kitTimeline:window._kitTimelineData||[],
+    // Supabase config for upload
+    sbUrl:'https://stwopndhnxcjyomkufii.supabase.co',
+    sbKey:SB?SB.supabaseKey:''
+  };
+  // Serialize PLAN_CACHE (lightweight: just allT + cortDeliveries counts)
   if(typeof PLAN_CACHE!=='undefined'){
     for(const label in PLAN_CACHE){
       const P=PLAN_CACHE[label];if(!P)continue;
-      lmVenues++;
-      if(P.allT)lmTrucks+=P.allT.filter(t=>!LM_excluded.has(t.id)).length;
-      if(P.cortDeliveries)lmCort+=P.cortDeliveries.filter(c=>!LM_excluded.has(c.id)).length;
-      if(P.allT)P.allT.forEach(t=>{if(!LM_excluded.has(t.id)&&t.items)lmItems+=t.items.reduce((s,i)=>s+(i.loadQty||0),0)});
+      const activeT=(P.allT||[]).filter(t=>!LM_excluded.has(t.id));
+      const activeCort=(P.cortDeliveries||[]).filter(c=>!LM_excluded.has(c.id));
+      _digestData.planCache[label]={trucks:activeT.length,cort:activeCort.length,items:activeT.reduce((s,t)=>s+(t.items?t.items.reduce((ss,i)=>ss+(i.loadQty||0),0):0),0)};
     }
   }
-
-  // ── 3-day forecast window ──
-  const _d3=new Date(today);_d3.setDate(_d3.getDate()+3);
-  const d3Short=_d3.toISOString().slice(0,10);
-
-  // ── Inbounds (containers + local deliveries) ──
-  const arrivals=LP_STATE?.arrivals||[];
-  const contMap={};
-  for(const a of arrivals){
-    // Group by container ID, local delivery name, or fallback to arrival date
-    const key=a.container||a._localName||('Ungrouped-'+(a.arrivalDate||'unknown'));
-    const isLocal=!!a._localName||!a.container;
-    if(!contMap[key])contMap[key]={name:a._localName||a.container||'Ungrouped',arrDate:a.arrivalDate||'—',readyDate:a.readyDate||'—',skus:new Set(),qty:0,isLocal};
-    contMap[key].skus.add(a.sku);contMap[key].qty+=(a.qty||0);
-    if(a.readyDate&&a.readyDate<contMap[key].readyDate)contMap[key].readyDate=a.readyDate;
+  // LP truck display names
+  _digestData.destNames={};
+  if(typeof clDisp==='function'){
+    for(const t of _digestData.generatedPlan){if(t.destination&&!_digestData.destNames[t.destination])_digestData.destNames[t.destination]=clDisp(t.destination)}
   }
-  const allInbounds=Object.values(contMap).sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
-  const arrived=allInbounds.filter(c=>c.readyDate<=dShort);
-  const upcoming=allInbounds.filter(c=>c.readyDate>dShort);
-  const upcoming3d=upcoming.filter(c=>c.readyDate<=d3Short);// next 3 days only for email
-
-  // ── Outbounds (3-day forecast) ──
-  const pendingShips=lpList.filter(t=>!LP_dispatched.has(t.id)).sort((a,b)=>a.date.localeCompare(b.date));
-  const nextToShip=pendingShips.filter(t=>t.date<=d3Short);
-  const nextToShipDisplay=nextToShip.length>0?nextToShip:pendingShips.slice(0,4);// fallback: show next 4 if nothing in 3d
-
-  // ── Late Arrivals ──
-  const lateItems=window._LP_ALL_LATE_ITEMS||[];
-  const lateByDest={};
-  for(const it of lateItems){
-    if(!lateByDest[it.dest])lateByDest[it.dest]={dest:it.dest,abbr:it.destAbbr,bi:it.bi,items:[],maxDays:0};
-    lateByDest[it.dest].items.push(it);
-    if(it.daysLate>lateByDest[it.dest].maxDays)lateByDest[it.dest].maxDays=it.daysLate;
-  }
-
-  // ── Kickoff countdown ──
-  const daysToKickoff=Math.round((new Date('2026-06-11T12:00:00')-today)/86400000);
-
-  // ── Generate Excel → upload to Supabase Storage ──
-  let downloadUrl='';
-  try{
-    const wb=new ExcelJS.Workbook();
-    const _hdr=ws=>{const r=ws.getRow(1);r.font={bold:true,size:10};r.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};r.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};ws.views=[{state:'frozen',ySplit:1}]};
-    const _fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
-
-    // Sheet 1: Assembly Timeline
-    const asmRows=window._asmTimelineData||[];
-    const ws1=wb.addWorksheet('Assembly Timeline');
-    ws1.columns=[{header:'Arrives Dallas',key:'arrDal',width:16},{header:'Leaves Dallas',key:'lpDep',width:16},{header:'Arrives Satellite',key:'arrWhs',width:16},{header:'Leaves Satellite',key:'lvWhs',width:14},{header:'Bump-in',key:'bumpin',width:14},{header:'Truck',key:'truckId',width:10},{header:'Assembly At',key:'whs',width:22},{header:'Ship To',key:'dest',width:30},{header:'SKU',key:'sku',width:18},{header:'Item',key:'nm',width:35},{header:'Source',key:'src',width:10},{header:'Qty',key:'qty',width:10},{header:'Status',key:'status',width:16}];
-    _hdr(ws1);
-    for(const r of asmRows){
-      const arrDal=r.inStock?'In stock':_fmtD(r.arrivesDallas);
-      const _dL=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
-      const _sL=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
-      const days=_dL?Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/86400000):(_sL?Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000):0);
-      const status=r.notInLp?'Not in LP':(!r.arrivesWhs&&!r.arrivesDallas)?'—':_dL?days+'d late (Dallas)':_sL?days+'d late':'On time';
-      ws1.addRow({arrDal,lpDep:r.notInLp?'Not in LP':_fmtD(r.lpDeparts),arrWhs:r.notInLp?'Not in LP':_fmtD(r.arrivesWhs),lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty,status});
-    }
-    ws1.getColumn('qty').numFmt='#,##0';ws1.getColumn('qty').alignment={horizontal:'right'};
-
-    // Sheet 2: Kitting Timeline
-    const kitRows=window._kitTimelineData||[];
-    const ws2=wb.addWorksheet('Kitting Timeline');
-    ws2.columns=[{header:'Dispatch',key:'dd',width:14},{header:'Truck',key:'truckId',width:10},{header:'Destination',key:'dest',width:28},{header:'Type',key:'kitType',width:12},{header:'Kit',key:'kitName',width:22},{header:'Venue',key:'venue',width:28},{header:'Component SKU',key:'compSku',width:18},{header:'Component',key:'compNm',width:35},{header:'Qty',key:'compQty',width:8},{header:'Readiness',key:'readiness',width:12}];
-    _hdr(ws2);
-    for(const r of kitRows){r.items.forEach((item,i)=>{const n=NOM[item.sku];ws2.addRow({dd:i===0?_fmtD(r.dd):'',truckId:i===0?r.truckId:'',dest:i===0?r.dest:'',kitType:i===0?r.kitType:'',kitName:i===0?r.kitName:'',venue:i===0?r.venue:'',compSku:item.sku,compNm:n?.nm||item.sku,compQty:item.qty,readiness:i===0?r.readiness.pct+'%':''})})}
-    ws2.getColumn('compQty').numFmt='#,##0';ws2.getColumn('compQty').alignment={horizontal:'right'};
-
-    // Sheet 3: Late Arrivals
-    const ws3=wb.addWorksheet('Late Arrivals');
-    ws3.columns=[{header:'Destination',key:'dest',width:22},{header:'Need By',key:'bi',width:14},{header:'Days Late',key:'daysLate',width:10},{header:'SKU',key:'sku',width:18},{header:'Item',key:'name',width:35},{header:'Source',key:'src',width:10},{header:'Container',key:'container',width:16},{header:'Container Arrives',key:'contArrival',width:16},{header:'Container Ready',key:'contReady',width:14},{header:'Projected Arrival',key:'destReady',width:16},{header:'Required Dispatch',key:'reqDispatch',width:16}];
-    _hdr(ws3);
-    for(const it of lateItems.sort((a,b)=>b.daysLate-a.daysLate)){ws3.addRow({dest:it.dest,bi:fD(it.bi),daysLate:it.daysLate,sku:it.sku,name:it.name,src:it.src,container:it.container,contArrival:fD(it.contArrival),contReady:fD(it.contReady),destReady:fD(it.destReady),reqDispatch:fD(it.reqDispatch)})}
-    ws3.getColumn('daysLate').numFmt='#,##0';ws3.getColumn('daysLate').alignment={horizontal:'right'};
-    lateItems.forEach((_,i)=>{ws3.getRow(i+2).getCell('daysLate').font={bold:true,color:{argb:'FFC62A2F'}}});
-
-    const buf=await wb.xlsx.writeBuffer();
-    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    const fileName='digests/FF&E_Digest_'+dShort+'.xlsx';
-
-    // Upload to Supabase Storage
-    try{
-      // Ensure bucket exists (public, 50MB limit)
-      await SB.storage.createBucket('digests',{public:true,fileSizeLimit:52428800}).catch(()=>{});
-      const{error:upErr}=await SB.storage.from('digests').upload('FF&E_Digest_'+dShort+'.xlsx',blob,{upsert:true,contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-      if(upErr)throw upErr;
-      const{data:urlData}=SB.storage.from('digests').getPublicUrl('FF&E_Digest_'+dShort+'.xlsx');
-      if(urlData?.publicUrl)downloadUrl=urlData.publicUrl;
-    }catch(storageErr){
-      console.warn('Supabase storage upload failed:',storageErr);
-      downloadUrl='';// no link available — email will show note instead
-    }
-  }catch(e){console.error('Digest Excel error:',e)}
-
-  // ── Build HTML email ──
-  // Outlook-safe helpers: bgcolor instead of CSS background, no border-radius, no gradients
-  const _stat=(label,value,color)=>'<td width="25%" style="padding:12px 8px;text-align:center;border-bottom:1px solid #E0E0EE"><span style="font-size:24px;font-weight:800;color:'+color+';font-family:Courier New,monospace">'+value+'</span><br><span style="font-size:11px;color:#666">'+label+'</span></td>';
-  const _trow=(cells,bg)=>'<tr>'+cells.map(c=>'<td bgcolor="'+(bg||'#ffffff')+'" style="padding:6px 10px;font-size:12px;border-bottom:1px solid #E8E8ED;'+(c.style||'')+'">'+c.v+'</td>').join('')+'</tr>';
-  const _sec=(emoji,title,color)=>'<tr><td style="padding:20px 32px 8px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-bottom:2px solid '+color+';padding-bottom:6px"><span style="font-size:14px;font-weight:700;color:'+color+'">'+emoji+' '+title+'</span></td></tr></table></td></tr>';
-
-  let html='<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F0F0F5" style="font-family:Segoe UI,Helvetica,Arial,sans-serif"><tr><td align="center" style="padding:20px 0">'+
-  '<table width="640" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="border:1px solid #D0D0DD">'+
-
-  // Header
-  '<tr><td bgcolor="#4A148C" style="padding:28px 32px">'+
-    '<span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#C5B3E6">FIFA World Cup 2026&#8482; &middot; FF&amp;E Supply Chain</span><br>'+
-    '<span style="font-size:26px;font-weight:800;color:#ffffff">Daily Digest</span><br>'+
-    '<span style="font-size:14px;color:#E8D5F0">'+dStr+'</span>'+
-  '</td></tr>'+
-
-  // Greeting
-  '<tr><td style="padding:24px 32px 16px">'+
-    '<span style="font-size:15px;color:#333333">'+greeting+' team,</span><br><br>'+
-    '<span style="font-size:13px;color:#666666;line-height:1.5">Here is today&#8217;s FF&amp;E Supply Chain update. Please share with relevant teams and stakeholders.</span>'+
-  '</td></tr>'+
-
-  // Countdown
-  '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
-    '<td bgcolor="#F0EBFE" style="padding:16px 24px;text-align:center;border:1px solid #C5B3E6">'+
-      '<span style="font-size:42px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">'+daysToKickoff+'</span><br>'+
-      '<span style="font-size:12px;color:#751312;font-weight:600;letter-spacing:1px;text-transform:uppercase">Days to Kickoff &middot; Jun 11</span>'+
-    '</td>'+
-  '</tr></table></td></tr>'+
-
-  // LP Status
-  _sec('&#128230;','Load Plan &#8212; Dallas &#8594; Regional / Satellite Warehouses','#4A148C')+
-  '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">'+
-    '<tr>'+_stat(lpTotal+' trucks',lpTotalPlt.toLocaleString(),'#4A148C')+_stat('dispatched',lpDispatched+' ('+lpPctDone+'%)','#12804A')+_stat('ready',lpReady,'#304FFE')+_stat('pending',lpPending,'#C4550A')+'</tr>'+
-    '<tr><td colspan="4" style="padding:4px 16px 12px">'+
-      '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+lpPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#12804A" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>'+
-      '<p style="font-size:10px;color:#888888;text-align:center;margin:4px 0 0">'+lpPctDone+'% dispatched &middot; '+lpTotalQty.toLocaleString()+' total qty</p>'+
-    '</td></tr>'+
-  '</table></td></tr>'+
-
-  // LM Status
-  _sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE')+
-  '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">'+
-    '<tr>'+_stat('venues',lmVenues,'#304FFE')+_stat('trucks',lmTrucks,'#4A148C')+_stat('items',lmItems.toLocaleString(),'#00897B')+(lmCort?_stat('CORT',lmCort,'#C62828'):'<td></td>')+'</tr>'+
-  '</table></td></tr>'+
-
-  // Inbounds (3-day forecast)
-  _sec('&#128229;','Inbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#00897B')+
-  '<tr><td style="padding:0 32px 8px">'+
-    '<table cellpadding="0" cellspacing="0"><tr>'+
-      '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+arrived.length+' arrived</td>'+
-      '<td style="width:10px"></td>'+
-      '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">&#9203; '+upcoming.length+' upcoming ('+upcoming3d.length+' in 3 days)</td>'+
-    '</tr></table>'+
-  '</td></tr>'+
-  (upcoming3d.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
-    '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">SOURCE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">TYPE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">READY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">QTY</td></tr>'+
-    upcoming3d.map((c,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:600">'+c.name+'</span>'},{v:c.isLocal?'<span style="color:#C4550A;font-weight:600">Local</span>':'<span style="color:#304FFE;font-weight:600">Container</span>'},{v:fD(c.readyDate)},{v:c.skus.size,style:'text-align:right;font-weight:600'},{v:c.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#ffffff')).join('')+
-  '</table></td></tr>':'<tr><td style="padding:0 32px 4px"><span style="font-size:12px;color:#888888;padding:0 32px">No inbounds expected in the next 3 days.</span></td></tr>')+
-
-  // Outbounds (3-day forecast)
-  _sec('&#128228;','Outbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#751312')+
-  '<tr><td style="padding:0 32px 8px">'+
-    '<table cellpadding="0" cellspacing="0"><tr>'+
-      '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpDispatched+' dispatched</td>'+
-      '<td style="width:10px"></td>'+
-      '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">'+lpPending+' pending ('+nextToShip.length+' in 3 days)</td>'+
-    '</tr></table>'+
-  '</td></tr>'+
-  (nextToShipDisplay.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
-    '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">TRUCK</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">PALLETS</td></tr>'+
-    nextToShipDisplay.map((t,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:700">LP-'+t.id+'</span>'},{v:clDisp(t.dest)},{v:fD(t.date)},{v:t.plt.toFixed(1),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#ffffff')).join('')+
-    (nextToShip.length===0&&pendingShips.length>4?'<tr><td colspan="4" bgcolor="#FAFBFC" style="padding:6px 10px;font-size:11px;color:#888888;text-align:center;font-style:italic">No trucks scheduled in 3-day window. Showing next '+nextToShipDisplay.length+'.</td></tr>':'')+
-  '</table></td></tr>':'<tr><td style="padding:0 32px 4px"><span style="font-size:12px;color:#888888;padding:0 32px">No outbound trucks pending.</span></td></tr>')+
-
-  // Risks
-  _sec('&#9888;&#65039;','Risks &#8212; Late Arrivals','#C62828')+
-  '<tr><td style="padding:0 32px 20px">'+
-  (lateItems.length===0?
-    '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E6F5ED" style="padding:14px 18px;font-size:13px;color:#12804A;font-weight:600;border:1px solid #B8DFCA">&#10004; No late arrival risks detected. All items on track.</td></tr></table>'
-  :
-    '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#FDEBED" style="padding:12px 18px;font-size:13px;color:#C62828;font-weight:600;border:1px solid #F5B8BA">'+lateItems.length+' items at risk across '+Object.keys(lateByDest).length+' destinations</td></tr></table>'+
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #F5B8BA;margin-top:10px">'+
-    '<tr bgcolor="#FDEBED"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">NEED BY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">ITEMS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">MAX DELAY</td></tr>'+
-    Object.values(lateByDest).sort((a,b)=>b.maxDays-a.maxDays).map((ds,i)=>_trow([{v:'<span style="font-weight:700">'+ds.dest+'</span>'},{v:fD(ds.bi)},{v:ds.items.length,style:'text-align:right;font-weight:600'},{v:'<span style="color:#C62828;font-weight:800">'+ds.maxDays+'d</span>',style:'text-align:right'}],i%2?'#FFF8F8':'#ffffff')).join('')+
-    '</table>'
-  )+
-  '</td></tr>'+
-
-  // Download link
-  (downloadUrl?
-    '<tr><td style="padding:0 32px 24px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
-      '<td bgcolor="#F0EBFE" style="padding:18px 24px;text-align:center;border:1px solid #C5B3E6">'+
-        '<span style="font-size:12px;color:#4A148C;font-weight:600">&#128206; Detailed Reports (Assembly Timeline &middot; Kitting Timeline &middot; Late Arrivals)</span><br><br>'+
-        '<a href="'+downloadUrl+'" style="background-color:#4A148C;color:#ffffff;padding:10px 28px;font-size:13px;font-weight:700;text-decoration:none;display:inline-block">&#11015; Download Excel Report</a>'+
-      '</td>'+
-    '</tr></table></td></tr>'
-  :
-    '<tr><td style="padding:0 32px 24px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
-      '<td bgcolor="#FDEBED" style="padding:12px 18px;font-size:12px;color:#C62828;text-align:center;border:1px solid #F5B8BA">'+
-        '&#9888; Report upload pending. Data available at <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600">ml3000.smmarta.com</a>'+
-      '</td></tr></table></td></tr>'
-  )+
-
-  // Footer
-  '<tr><td bgcolor="#F8F8FC" style="padding:20px 32px;border-top:1px solid #E0E0EE">'+
-    '<span style="font-size:11px;color:#888888">Generated from <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600;text-decoration:none">ML3K</a> &middot; ml3000.smmarta.com</span><br>'+
-    '<span style="font-size:11px;color:#666666;font-weight:600">Vladislav Abramov</span> <span style="font-size:11px;color:#888888">&middot; SM&#178;ARTA&#8482;</span>'+
-  '</td></tr>'+
-
-  '</table></td></tr></table>';
-
-  // ── Show preview + copy to clipboard ──
-  const _mailSubj=encodeURIComponent('FF&E Supply Chain \u2014 '+dStr);
-  const win=window.open('','_blank','width=720,height=800');
-  if(!win){alert('Popup blocked. Please allow popups for this site.');return}
-  win.document.open();
-  win.document.write('<!DOCTYPE html><html><head><title>Daily Digest</title>'+
-    '<style>body{margin:0;font-family:"Segoe UI",sans-serif;background:#F0F0F5}'+
-    '.toolbar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #ddd;padding:10px 20px;display:flex;align-items:center;gap:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}'+
-    '.toolbar button{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none}'+
-    '.btn-copy{background:#4A148C;color:#fff}.btn-copy:hover{background:#6A1B9A}'+
-    '.btn-mail{background:#304FFE;color:#fff}.btn-mail:hover{background:#1E40FF}'+
-    '.btn-close{background:#eee;color:#333}.btn-close:hover{background:#ddd}'+
-    '.status{font-size:12px;color:#12804A;font-weight:600;display:none}'+
-    '.preview{padding:20px}</style></head><body>'+
-    '<div class="toolbar">'+
-    '<button class="btn-copy" id="_btnCopy">Copy to Clipboard</button>'+
-    '<button class="btn-mail" id="_btnMail">Open in Outlook</button>'+
-    '<button class="btn-close" onclick="window.close()">Close</button>'+
-    '<span class="status" id="copyStatus">Copied! Paste into your email.</span>'+
-    '</div><div class="preview" id="emailContent"></div></body></html>');
-  win.document.close();
-  // Inject content and wire up buttons after document ready
-  setTimeout(()=>{
-    try{
-      const ec=win.document.getElementById('emailContent');
-      if(ec)ec.innerHTML=html;
-      win.document.getElementById('_btnCopy').onclick=function(){
-        const el=win.document.getElementById('emailContent');
-        const range=win.document.createRange();range.selectNodeContents(el);
-        const sel=win.getSelection();sel.removeAllRanges();sel.addRange(range);
-        win.document.execCommand('copy');sel.removeAllRanges();
-        try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([el.innerHTML],{type:'text/html'})})])}catch(e){}
-        const st=win.document.getElementById('copyStatus');st.style.display='inline';
-        setTimeout(function(){st.style.display='none'},3000);
-      };
-      win.document.getElementById('_btnMail').onclick=function(){
-        window.location.href='mailto:?subject='+_mailSubj;
-      };
-    }catch(e){console.error('Digest preview error:',e)}
-  },150);
+  try{sessionStorage.setItem('_digestData',JSON.stringify(_digestData))}catch(e){console.error('Digest data too large:',e);return}
+  window.open('/digest.html','_blank');
 }
 
 function showHelp(){
