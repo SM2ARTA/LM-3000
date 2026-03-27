@@ -11932,13 +11932,19 @@ async function generateDailyDigest(){
   for(const r of plan){if(!lpTrucks[r.truckId])lpTrucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,plt:0,qty:0};lpTrucks[r.truckId].plt+=r.pallets||0;lpTrucks[r.truckId].qty+=r.qty||0}
   const lpList=Object.values(lpTrucks);
   const lpTotal=lpList.length;
-  const lpLocked=LP_dispatched?LP_dispatched.size:0;
   const lpMaxPlt=LP_STATE?.maxPallets||26;
-  const lpReady=lpList.filter(t=>!LP_dispatched.has(t.id)&&t.plt/lpMaxPlt>=0.95).length;
-  const lpPending=lpTotal-lpLocked;
+  // Total qty includes planned + held items
+  const lpPlannedQty=lpList.reduce((s,t)=>s+t.qty,0);
+  const lpHeldQty=(LP_STATE?.materialPlan||[]).filter(d=>LP_holds.has(d.destination+'|'+d.sku)).reduce((s,d)=>s+(d.effQty||0),0);
+  const lpTotalQty=lpPlannedQty+lpHeldQty;
   const lpTotalPlt=Math.round(lpList.reduce((s,t)=>s+t.plt,0));
-  const lpTotalQty=lpList.reduce((s,t)=>s+t.qty,0);
-  const lpPctDone=lpTotal>0?Math.round(lpLocked/lpTotal*100):0;
+  // Dispatched = locked + has LSR + date <= today
+  const lpDispatched=lpList.filter(t=>LP_dispatched.has(t.id)&&LP_lsrNumbers[t.id]&&t.date<=dShort).length;
+  // Ready = locked + has LSR + date > today (future)
+  const lpReady=lpList.filter(t=>LP_dispatched.has(t.id)&&LP_lsrNumbers[t.id]&&t.date>dShort).length;
+  // Pending = everything else
+  const lpPending=lpTotal-lpDispatched-lpReady;
+  const lpPctDone=lpTotal>0?Math.round(lpDispatched/lpTotal*100):0;
 
   // ── LM Status ──
   let lmTrucks=0,lmVenues=0,lmItems=0,lmCort=0;
@@ -12064,7 +12070,7 @@ async function generateDailyDigest(){
   // Greeting
   '<tr><td style="padding:24px 32px 16px">'+
     '<span style="font-size:15px;color:#333333">'+greeting+' team,</span><br><br>'+
-    '<span style="font-size:13px;color:#666666;line-height:1.5">Here is today&#8217;s supply chain status. Please share with relevant teams and stakeholders.</span>'+
+    '<span style="font-size:13px;color:#666666;line-height:1.5">Here is today&#8217;s FF&amp;E Supply Chain update. Please share with relevant teams and stakeholders.</span>'+
   '</td></tr>'+
 
   // Countdown
@@ -12076,9 +12082,9 @@ async function generateDailyDigest(){
   '</tr></table></td></tr>'+
 
   // LP Status
-  _sec('&#128230;','Load Plan &#8212; Dallas &#8594; Warehouses','#4A148C')+
+  _sec('&#128230;','Load Plan &#8212; Dallas &#8594; Regional / Satellite Warehouses','#4A148C')+
   '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">'+
-    '<tr>'+_stat(lpTotal+' trucks',lpTotalPlt.toLocaleString(),'#4A148C')+_stat('dispatched',lpLocked+' ('+lpPctDone+'%)','#12804A')+_stat('ready',lpReady,'#304FFE')+_stat('pending',lpPending,'#C4550A')+'</tr>'+
+    '<tr>'+_stat(lpTotal+' trucks',lpTotalPlt.toLocaleString(),'#4A148C')+_stat('dispatched',lpDispatched+' ('+lpPctDone+'%)','#12804A')+_stat('ready',lpReady,'#304FFE')+_stat('pending',lpPending,'#C4550A')+'</tr>'+
     '<tr><td colspan="4" style="padding:4px 16px 12px">'+
       '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+lpPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#12804A" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>'+
       '<p style="font-size:10px;color:#888888;text-align:center;margin:4px 0 0">'+lpPctDone+'% dispatched &middot; '+lpTotalQty.toLocaleString()+' total qty</p>'+
@@ -12109,7 +12115,7 @@ async function generateDailyDigest(){
   _sec('&#128228;','Outbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#751312')+
   '<tr><td style="padding:0 32px 8px">'+
     '<table cellpadding="0" cellspacing="0"><tr>'+
-      '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpLocked+' dispatched</td>'+
+      '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpDispatched+' dispatched</td>'+
       '<td style="width:10px"></td>'+
       '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">'+lpPending+' pending ('+nextToShip.length+' in 3 days)</td>'+
     '</tr></table>'+
