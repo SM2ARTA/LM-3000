@@ -767,3 +767,63 @@ Stored in `VS[venue]` (venue settings), accessed via helper functions:
 - Column seam bolts
 - Pulsing red alerts (box-shadow animation)
 - Radial gauges with clock tick marks
+
+## FF&E Daily Digest (`digest.html`)
+
+### Overview
+- **Automated daily email digest** — generates Outlook-safe HTML email with supply chain status
+- Standalone page: data passed via `sessionStorage` from ML3K `generateDailyDigest()`
+- Admin-only: `📧 Digest` button in ML3K header (all 3 modules)
+- Generates Excel report (3 sheets), uploads to Supabase Storage bucket `digests`
+- Copy to clipboard → paste into Outlook workflow
+
+### Data Pipeline
+- `generateDailyDigest()` in `index.html`:
+  - Builds `PLAN_CACHE` for all venues if not yet built
+  - Computes Assembly Timeline, Kitting Timeline, Late LP Arrivals fresh (not dependent on dashboard view)
+  - Pre-computes LM totals with dedup (trucks, pallets, CORT, items)
+  - Serializes all data to `sessionStorage._digestData`
+  - Opens `digest.html` in new tab
+
+### Email Sections
+1. **Header** — FIFA branding, date, kickoff countdown
+2. **Overall Project Status** — items, venues, trucks, dispatched + progress bar + legend
+3. **Load Plan** — pallets, dispatched/ready/pending + progress bar
+4. **Last Mile** — pallets, dispatched, CORT, Staples + progress bar
+5. **This Week** — Mon–Sun grid with IN/OUT rows, today highlighted, weekend "No activities"
+6. **Inbounds Forecast** — day-by-day from tomorrow, 3 active days, overdue items
+7. **Outbounds Forecast** — LP READY trucks with LSR numbers, status badges, destination
+8. **Risks — Late LP Arrivals** — summary by destination (items >0d late only), from LM All Venues
+9. **Reports & Links** — Excel download, Product Catalog, Palletisation Guide
+10. **Footer** — ML3K link, Materials Management Team
+
+### Excel Report (3 sheets)
+- **Assembly Timeline** — full supply chain date chain per assembled item
+- **Kitting Timeline** — kit dispatch dates with component details
+- **Late Arrivals** — items where LP arrival > bump-in date (>0d filter)
+- Uploaded to Supabase Storage `digests` bucket with `upsert:true`
+- Also available via toolbar `⬇ Excel Report` button (local blob download)
+
+### Supabase Storage
+- **Bucket**: `digests` (public)
+- **RLS policies**: INSERT (anon), UPDATE (anon), SELECT (anon)
+- **Files**: `FF&E_Digest_YYYY-MM-DD.xlsx` (daily, overwritten), `Palletisation_Guide.pdf` (static)
+
+### Outlook Compatibility
+- All styling via inline CSS on elements (no `<style>` block for email content)
+- `bgcolor` attribute for backgrounds (survives Outlook paste)
+- Buttons use table-as-button pattern: `<td bgcolor><a style="color:#fff">`
+- Text colors via inline `style="color:..."` (works when sent as email, may be stripped on paste)
+- Stat cards: grey bg with colored left border accent
+- Legend: bgcolor squares (10×10px cells) next to text
+- Copy uses `navigator.clipboard.write` with raw innerHTML for best style preservation
+- MSO boilerplate in `<head>`: `PixelsPerInch`, `mso-table-lspace`, `mso-line-height-rule`
+
+### Late LP Arrivals (Dashboard)
+- Added to LM Dashboard view (after Assembly Timeline, before Kitting Timeline)
+- Works for All Venues, Region (CAN/MEX), Cluster Overview, Single venue
+- Summary table by destination: SKUs, Trucks, Qty, Max Late
+- Detail table in collapsible `<details>` toggle
+- Excel export: `LM_exportLateArrivals()` — Summary sheet + All Items sheet + per-destination sheets
+- Data stored in `window._lateArrivalData`, `window._lateByDestData`
+- Digest uses filtered version: only items with `daysLate > 0` (excludes +0d and no-LP-shipment)

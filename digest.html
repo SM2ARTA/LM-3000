@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FF&E Daily Digest</title>
+<meta name="x-apple-disable-message-reformatting">
+<!--[if mso]>
+<noscript><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+<style type="text/css">table{border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt}td{mso-line-height-rule:exactly}</style>
+<![endif]-->
+<title>FF&amp;E Daily Digest</title>
 <style>
 body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 .toolbar{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #ddd;padding:10px 20px;display:flex;align-items:center;gap:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
@@ -21,6 +26,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 <div class="toolbar">
   <button class="btn-copy" id="btnCopy" disabled>Copy to Clipboard</button>
   <button class="btn-mail" id="btnMail" disabled>Open in Outlook</button>
+  <button id="btnXl" style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:#12804A;color:#fff;display:none">⬇ Excel Report</button>
   <button class="btn-close" onclick="window.close()">Close</button>
   <span class="status" id="copyStatus">Copied! Paste into your email.</span>
   <span id="uploadStatus" style="font-size:11px;color:#888;margin-left:auto"></span>
@@ -92,17 +98,23 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const upcoming3d=upcoming.filter(c=>c.readyDate<=d3Short);
 
   // ── Outbounds ──
-  const pendingShips=lpList.filter(t=>!dispatched.has(t.id)).sort((a,b)=>a.date.localeCompare(b.date));
+  // Include all non-sent LP trucks: pending (not locked) + ready (locked+LSR but date > today)
+  const _isSent=t=>dispatched.has(t.id)&&lsrNumbers[t.id]&&t.date<=dShort;
+  const _isReady=t=>dispatched.has(t.id)&&lsrNumbers[t.id]&&t.date>dShort;
+  const pendingShips=lpList.filter(t=>_isReady(t)).sort((a,b)=>a.date.localeCompare(b.date));
   const nextToShip=pendingShips.filter(t=>t.date<=d3Short);
   const nextToShipDisplay=nextToShip.length>0?nextToShip:pendingShips.slice(0,4);
 
-  // ── Late Arrivals ──
-  const lateItems=D.lateItems||[];
+  // ── Late Arrivals (from LM All Venues dashboard) — exclude +0d items ──
+  const lmLate=(D.lmLateArrivals||[]).filter(l=>l.daysLate!=null&&l.daysLate>0);
   const lateByDest={};
-  for(const it of lateItems){
-    if(!lateByDest[it.dest])lateByDest[it.dest]={dest:it.dest,bi:it.bi,items:[],maxDays:0};
+  for(const it of lmLate){
+    if(!lateByDest[it.dest])lateByDest[it.dest]={dest:it.dest,skus:new Set(),trucks:new Set(),items:[],qty:0,maxDays:0};
     lateByDest[it.dest].items.push(it);
-    if(it.daysLate>lateByDest[it.dest].maxDays)lateByDest[it.dest].maxDays=it.daysLate;
+    lateByDest[it.dest].skus.add(it.sku);
+    lateByDest[it.dest].trucks.add(it.truckId);
+    lateByDest[it.dest].qty+=(it.qty||0);
+    if(it.daysLate!=null&&it.daysLate>lateByDest[it.dest].maxDays)lateByDest[it.dest].maxDays=it.daysLate;
   }
 
   // ── Kickoff ──
@@ -140,16 +152,22 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     for(const r of kitRows){(r.items||[]).forEach((item,i)=>{const n=D.nom[item.sku];ws2.addRow({dd:i===0?_fmtD(r.dd):'',truckId:i===0?r.truckId:'',dest:i===0?r.dest:'',kitType:i===0?r.kitType:'',kitName:i===0?r.kitName:'',venue:i===0?r.venue:'',compSku:item.sku,compNm:n?.nm||item.sku,compQty:item.qty,readiness:i===0?r.readiness?.pct+'%':''})})}
     ws2.getColumn('compQty').numFmt='#,##0';ws2.getColumn('compQty').alignment={horizontal:'right'};
 
-    // Sheet 3: Late Arrivals
+    // Sheet 3: Late LP Arrivals (from LM All Venues)
+    const _xlLate=(D.lmLateArrivals||[]).filter(l=>l.daysLate!=null&&l.daysLate>0);
     const ws3=wb.addWorksheet('Late Arrivals');
-    ws3.columns=[{header:'Destination',key:'dest',width:22},{header:'Need By',key:'bi',width:14},{header:'Days Late',key:'daysLate',width:10},{header:'SKU',key:'sku',width:18},{header:'Item',key:'name',width:35},{header:'Source',key:'src',width:10},{header:'Container',key:'container',width:16},{header:'Container Arrives',key:'contArrival',width:16},{header:'Container Ready',key:'contReady',width:14},{header:'Projected Arrival',key:'destReady',width:16},{header:'Required Dispatch',key:'reqDispatch',width:16}];
+    ws3.columns=[{header:'Destination',key:'dest',width:32},{header:'SKU',key:'sku',width:18},{header:'Item',key:'name',width:35},{header:'Source',key:'src',width:10},{header:'Truck',key:'truckId',width:10},{header:'LM Dispatch',key:'dispatch',width:14},{header:'Bump-in',key:'bumpin',width:14},{header:'LP Arrival',key:'lpArrival',width:14},{header:'Days Late',key:'daysLate',width:10},{header:'Qty',key:'qty',width:10}];
     _hdr(ws3);
-    for(const it of [...lateItems].sort((a,b)=>b.daysLate-a.daysLate)){ws3.addRow({dest:it.dest,bi:fD(it.bi),daysLate:it.daysLate,sku:it.sku,name:it.name,src:it.src,container:it.container,contArrival:fD(it.contArrival),contReady:fD(it.contReady),destReady:fD(it.destReady),reqDispatch:fD(it.reqDispatch)})}
+    for(const it of [..._xlLate].sort((a,b)=>(b.daysLate||0)-(a.daysLate||0))){ws3.addRow({dest:it.dest,sku:it.sku,name:it.name,src:it.src||'—',truckId:it.truckId,dispatch:_fmtD(it.dispatch),bumpin:_fmtD(it.bumpin),lpArrival:it.lpArrival==='None'?'No LP shipment':_fmtD(it.lpArrival),daysLate:it.daysLate,qty:it.qty})}
     ws3.getColumn('daysLate').numFmt='#,##0';ws3.getColumn('daysLate').alignment={horizontal:'right'};
-    lateItems.forEach((_,i)=>{try{ws3.getRow(i+2).getCell('daysLate').font={bold:true,color:{argb:'FFC62A2F'}}}catch(e){}});
+    ws3.getColumn('qty').numFmt='#,##0';ws3.getColumn('qty').alignment={horizontal:'right'};
+    _xlLate.forEach((_,i)=>{try{ws3.getRow(i+2).getCell('daysLate').font={bold:true,color:{argb:'FFC62A2F'}}}catch(e){}});
 
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+    // Save blob for local download button
+    window._digestExcelBlob=blob;
+    window._digestExcelName='FF&E_Digest_'+dShort+'.xlsx';
 
     // Upload to Supabase Storage
     if(D.sbUrl&&D.sbKey){
@@ -164,31 +182,31 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
         statusEl.textContent='Uploaded';statusEl.style.color='#12804A';
       }catch(storageErr){
         console.warn('Upload failed:',storageErr);
-        statusEl.textContent='Upload failed';statusEl.style.color='#C62828';
+        statusEl.textContent='Upload failed — local download available';statusEl.style.color='#C4550A';
       }
     }
   }catch(e){console.error('Excel error:',e);statusEl.textContent='Excel error';statusEl.style.color='#C62828'}
 
   // ── Build Outlook-safe HTML email ──
-  const _stat=(label,value,color,sub)=>'<td width="25%" style="padding:12px 8px;text-align:center;border-bottom:1px solid #E0E0EE"><span style="font-size:24px;font-weight:800;color:'+color+';font-family:Courier New,monospace">'+value+'</span><br><span style="font-size:11px;color:#666">'+label+'</span>'+(sub?'<br><span style="font-size:10px;color:#888">'+sub+'</span>':'')+'</td>';
+  const _stat=(label,value,color,sub)=>'<td width="25%" valign="top" style="padding:4px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#F4F5F7" style="padding:12px 8px;border-left:4px solid '+color+'" align="center"><b style="font-size:20px;font-family:Courier New,monospace">'+value+'</b><br><span style="font-size:11px">'+label+'</span>'+(sub?'<br><span style="font-size:10px">'+sub+'</span>':'')+'</td></tr></table></td>';
   const _trow=(cells,bg)=>'<tr>'+cells.map(c=>'<td bgcolor="'+(bg||'#ffffff')+'" style="padding:6px 10px;font-size:12px;border-bottom:1px solid #E8E8ED;'+(c.style||'')+'">'+c.v+'</td>').join('')+'</tr>';
   const _sec=(emoji,title,color)=>'<tr><td style="padding:20px 32px 8px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-bottom:2px solid '+color+';padding-bottom:6px"><span style="font-size:14px;font-weight:700;color:'+color+'">'+emoji+' '+title+'</span></td></tr></table></td></tr>';
 
-  let html='<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F0F0F5" style="font-family:Segoe UI,Helvetica,Arial,sans-serif"><tr><td align="center" style="padding:20px 0">'+
-  '<table width="640" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="border:1px solid #D0D0DD">'+
+  let html='<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F0F0F5" style="font-family:Segoe UI,Helvetica,Arial,sans-serif"><tr><td bgcolor="#F0F0F5">&nbsp;</td><td align="center" bgcolor="#F0F0F5" style="padding:20px 0" width="800">'+
+  '<table width="800" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="border:1px solid #D0D0DD">'+
   '<tr><td bgcolor="#4A148C" style="padding:28px 32px">'+
-    '<span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#C5B3E6">FIFA World Cup 2026&#8482; &middot; FF&amp;E Supply Chain</span><br>'+
-    '<span style="font-size:26px;font-weight:800;color:#ffffff">Daily Digest</span><br>'+
-    '<span style="font-size:14px;color:#E8D5F0">'+dStr+'</span>'+
+    '<table cellpadding="0" cellspacing="0"><tr><td style="font-size:11px;color:#C5B3E6;font-family:Segoe UI,Helvetica,Arial,sans-serif">FIFA WORLD CUP 2026&#8482; &middot; FF&amp;E SUPPLY CHAIN</td></tr>'+
+    '<tr><td style="font-size:26px;font-weight:800;color:#ffffff;font-family:Segoe UI,Helvetica,Arial,sans-serif;padding:4px 0">FF&amp;E Daily Digest</td></tr>'+
+    '<tr><td style="font-size:14px;color:#E8D5F0;font-family:Segoe UI,Helvetica,Arial,sans-serif">'+dStr+'</td></tr></table>'+
   '</td></tr>'+
   '<tr><td style="padding:24px 32px 16px">'+
-    '<span style="font-size:15px;color:#333333">'+greeting+' team,</span><br><br>'+
-    '<span style="font-size:13px;color:#666666;line-height:1.5">Here is today&#8217;s FF&amp;E Supply Chain update. Please share with relevant teams and stakeholders.</span>'+
+    '<table cellpadding="0" cellspacing="0"><tr><td style="font-size:15px;color:#333333;font-family:Segoe UI,Helvetica,Arial,sans-serif;padding-bottom:12px">'+greeting+' Team,</td></tr>'+
+    '<tr><td style="font-size:13px;color:#666666;font-family:Segoe UI,Helvetica,Arial,sans-serif">Here is today&#8217;s FF&amp;E Supply Chain update. Please share with relevant teams and stakeholders.</td></tr></table>'+
   '</td></tr>'+
   '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
-    '<td bgcolor="#F0EBFE" style="padding:16px 24px;text-align:center;border:1px solid #C5B3E6">'+
+    '<td bgcolor="#F0EBFE" align="center" style="padding:16px 24px;border:1px solid #C5B3E6">'+
       '<span style="font-size:42px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">'+daysToKickoff+'</span><br>'+
-      '<span style="font-size:12px;color:#751312;font-weight:600;letter-spacing:1px;text-transform:uppercase">Days to Kickoff &middot; Jun 11</span>'+
+      '<span style="font-size:12px;font-weight:600;color:#751312;font-family:Segoe UI,Helvetica,Arial,sans-serif">DAYS TO KICKOFF &middot; JUN 11</span>'+
     '</td></tr></table></td></tr>';
 
   // ── Shared values for status sections ──
@@ -210,20 +228,17 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   if(_segReady>0)html+='<td bgcolor="#304FFE" style="height:10px;padding:0;width:'+_segReady+'%;font-size:1px">&nbsp;</td>';
   html+='<td style="height:10px;padding:0;font-size:1px">&nbsp;</td>';
   html+='</tr></table></td></tr></table>';
-  html+='<p style="font-size:10px;color:#555;text-align:center;margin:4px 0 0">';
-  html+='<span style="color:#12804A;font-weight:600">&#9632; '+lpDispatched+' dispatched</span> &middot; ';
-  html+='<span style="color:#304FFE;font-weight:600">&#9632; '+lpReady+' ready</span> &middot; ';
-  html+='<span style="color:#C4550A;font-weight:600">'+lpPending+' LP pending</span> &middot; ';
-  html+='<span style="color:#304FFE;font-weight:600">'+lmTrucks+' LM pending</span> &middot; ';
-  html+='<span style="color:#C62828;font-weight:600">'+lmCort+' CORT pending</span> &middot; ';
-  html+='<span style="color:#C4550A;font-weight:600">'+_stpCount+' Staples pending</span>';
-  html+='</p></td></tr></table></td></tr>';
+  html+='<table cellpadding="0" cellspacing="0" align="center" style="margin-top:4px"><tr>';
+  html+='<td bgcolor="#12804A" style="width:10px;height:10px;font-size:1px">&nbsp;</td><td style="padding:0 12px 0 4px;font-size:10px;font-weight:600">'+lpDispatched+' dispatched</td>';
+  html+='<td bgcolor="#304FFE" style="width:10px;height:10px;font-size:1px">&nbsp;</td><td style="padding:0 0 0 4px;font-size:10px;font-weight:600">'+lpReady+' ready</td>';
+  html+='</tr></table>';
+  html+='</td></tr></table></td></tr>';
 
   // ── LP ──
   html+=_sec('&#128230;','Load Plan &#8212; Dallas &#8594; Regional / Satellite Warehouses','#4A148C');
   html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
   html+='<tr>'+_stat(lpTotal+' trucks',lpTotalPlt.toLocaleString(),'#4A148C')+_stat('dispatched ('+lpPctDone+'%)',lpDispatched,'#12804A')+_stat('ready',lpReady,'#304FFE')+_stat('pending',lpPending,'#C4550A')+'</tr>';
-  html+='<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+lpPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#12804A" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>';
+  html+='<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0">'+( lpPctDone>0?'<table width="'+lpPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#12804A" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table>':'')+'</td></tr></table>';
   html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+lpPctDone+'% dispatched &middot; '+lpTotalQty.toLocaleString()+' total qty</p></td></tr>';
   html+='</table></td></tr>';
 
@@ -235,57 +250,348 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+=_sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE');
   html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
   html+='<tr>'+_stat(lmTrucks+' trucks',_lmPlt.toLocaleString(),'#304FFE')+_stat('dispatched ('+_lmPct+'%)',_lmDisp,'#12804A')+_stat('CORT',lmCort,'#C62828',lmCortPcs.toLocaleString()+' pcs')+_stat('Staples',_stpCount,'#C4550A',_stpQty.toLocaleString()+' qty')+'</tr>';
-  html+='<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+_lmPct+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#304FFE" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>';
+  html+='<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0">'+(_lmPct>0?'<table width="'+_lmPct+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#304FFE" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table>':'')+'</td></tr></table>';
   html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+_lmPct+'% dispatched &middot; '+_venues+' venues &middot; '+_totalItems.toLocaleString()+' items</p></td></tr>';
   html+='</table></td></tr>';
 
-  html+=
-  _sec('&#128229;','Inbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#00897B')+
-  '<tr><td style="padding:0 32px 8px"><table cellpadding="0" cellspacing="0"><tr>'+
+  // ── This Week Overview ──
+  const _dow=today.getDay();// 0=Sun
+  const _monOff=_dow===0?-6:1-_dow;
+  const _mon=new Date(today);_mon.setDate(_mon.getDate()+_monOff);
+  const _weekDays=[];
+  const _dayNames=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const _dayShort=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  for(let i=0;i<7;i++){const d=new Date(_mon);d.setDate(_mon.getDate()+i);_weekDays.push(d.toISOString().slice(0,10))}
+  // Always show full week (Mon-Sun)
+  const _showDays=7;
+
+  // Bucket inbounds by day
+  const _wkIn={};for(let i=0;i<_showDays;i++)_wkIn[_weekDays[i]]=[];
+  for(const c of allInbounds){if(_wkIn[c.readyDate]!==undefined)_wkIn[c.readyDate].push(c)}
+
+  // Bucket outbounds by day (all LP trucks, not just pending)
+  const _wkOut={};for(let i=0;i<_showDays;i++)_wkOut[_weekDays[i]]=[];
+  for(const t of lpList){if(_wkOut[t.date]!==undefined)_wkOut[t.date].push(t)}
+
+  // Weekend helper
+  const _isWeekend=i=>i>=5;
+
+  // Week label
+  const _wkLabel=fD(_weekDays[0])+' &#8211; '+fD(_weekDays[_showDays-1]);
+
+  html+=_sec('&#128197;','This Week &#8212; '+_wkLabel,'#1565C0');
+  html+='<tr><td style="padding:0 32px 20px">';
+
+  // Compute week totals for header
+  let _wkTotalIn=0,_wkTotalOut=0;
+  for(let i=0;i<_showDays;i++){_wkTotalIn+=_wkIn[_weekDays[i]].length;_wkTotalOut+=_wkOut[_weekDays[i]].length}
+
+  // Week summary chips
+  html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px"><tr>';
+  html+='<td style="padding:0"><table cellpadding="0" cellspacing="0"><tr>';
+  html+='<td bgcolor="#E6F5ED" style="padding:5px 14px;font-size:11px;font-weight:700;color:#12804A;border:1px solid #B8DFCA">&#128229; '+_wkTotalIn+' inbound</td>';
+  html+='<td style="width:8px"></td>';
+  html+='<td bgcolor="#F0EBFE" style="padding:5px 14px;font-size:11px;font-weight:700;color:#4A148C;border:1px solid #C5B3E6">&#128228; '+_wkTotalOut+' outbound</td>';
+  html+='</tr></table></td></tr></table>';
+
+  // Main grid
+  html+='<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E2E4E9">';
+
+  // Header row
+  html+='<tr>';
+  html+='<td bgcolor="#F4F5F7" style="padding:10px 10px;width:52px;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9"></td>';
+  for(let i=0;i<_showDays;i++){
+    const isToday=_weekDays[i]===dShort;
+    const dateLabel=(new Date(_weekDays[i]+'T12:00:00')).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    if(isToday){
+      html+='<td bgcolor="#4A148C" style="padding:8px 4px;text-align:center;border-right:1px solid #6A1B9A;border-bottom:1px solid #4A148C">';
+      html+='<span style="font-size:11px;font-weight:800;color:#fff;letter-spacing:0.5px">'+_dayShort[i]+'</span><br>';
+      html+='<span style="font-size:10px;color:#D1C4E9;font-weight:600">'+dateLabel+'</span><br>';
+      html+='<span style="font-size:8px;color:#CE93D8;font-weight:700;letter-spacing:1px">TODAY</span>';
+    }else{
+      html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;text-align:center;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9">';
+      html+='<span style="font-size:11px;font-weight:700;color:#444">'+_dayShort[i]+'</span><br>';
+      html+='<span style="font-size:10px;color:#999">'+dateLabel+'</span>';
+    }
+    html+='</td>';
+  }
+  html+='</tr>';
+
+  // Destination color palette for outbound trucks
+  const _destClr={'MEX CDMX':['#1B5E20','#E8F5E9'],'MEX GDL':['#2E7D32','#F1F8E9'],'MEX MTY':['#33691E','#F9FBE7'],
+    'CAN TOR':['#0D47A1','#E3F2FD'],'CAN VAN':['#1565C0','#E1F5FE'],
+    'RIC HOU':['#4A148C','#F3E5F5'],'RIC KC':['#6A1B9A','#F3E5F5'],'RIC NY':['#7B1FA2','#EDE7F6'],
+    _default:['#37474F','#ECEFF1']};
+  const _dClr=dest=>{for(const k in _destClr){if(k!=='_default'&&(dest||'').toUpperCase().includes(k.split(' ')[1]))return _destClr[k]}return _destClr._default};
+
+  // Inbound row
+  html+='<tr>';
+  html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#12804A;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9;border-bottom:2px solid #E2E4E9">&#128229; IN<br><span style="font-size:14px;font-weight:800">'+_wkTotalIn+'</span></td>';
+  for(let i=0;i<_showDays;i++){
+    const d=_weekDays[i];const items=_wkIn[d];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
+    const wkndEmpty=wknd&&items.length===0&&_wkOut[d].length===0;
+    const cellBg=isPast?'#F4F5F7':isToday?'#FFF8E1':wknd?'#FAFAFA':'#ffffff';
+    html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED;border-bottom:2px solid #E2E4E9">';
+    if(wkndEmpty){html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:12px 4px;text-align:center"><span style="font-size:10px;color:#C0C0C0;font-style:italic">No activities</span></td></tr></table>'}
+    else if(items.length===0){html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>'}
+    else{
+      for(const c of items){
+        const isLocal=c.isLocal;
+        const cardBg=isPast?(isLocal?'#F5F0EB':'#EEF3EE'):(isLocal?'#FFF3E0':'#E8F5E9');
+        const cardBorder=isPast?'#CCCCCC':(isLocal?'#E65100':'#2E7D32');
+        const cardTxt=isPast?'#999999':(isLocal?'#BF360C':'#1B5E20');
+        const subTxt=isPast?'#BBBBBB':'#666666';
+        html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px"><tr>';
+        html+='<td bgcolor="'+cardBg+'" style="padding:5px 7px;border-left:4px solid '+cardBorder+'">';
+        html+='<span style="font-size:10px;font-weight:700;color:'+cardTxt+';font-family:Courier New,monospace">'+c.name.replace(/^(RGS|Container)\s*/i,'').substring(0,14)+'</span>';
+        html+='<br><span style="font-size:9px;color:'+subTxt+';font-weight:600">'+(isLocal?'Local':'Container')+' &middot; '+c.skuCount+' SKUs &middot; '+c.qty.toLocaleString()+'</span>';
+        html+='</td></tr></table>';
+      }
+    }
+    html+='</td>';
+  }
+  html+='</tr>';
+
+  // Outbound row
+  html+='<tr>';
+  html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#4A148C;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9">&#128228; OUT<br><span style="font-size:14px;font-weight:800">'+_wkTotalOut+'</span></td>';
+  for(let i=0;i<_showDays;i++){
+    const d=_weekDays[i];const trucks=_wkOut[d];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
+    const wkndEmpty=wknd&&trucks.length===0&&_wkIn[d].length===0;
+    const cellBg=isPast?'#F4F5F7':isToday?'#FFF8E1':wknd?'#FAFAFA':'#ffffff';
+    html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED">';
+    if(wkndEmpty){html+=''}
+    else if(trucks.length===0){html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>'}
+    else{
+      for(const t of trucks){
+        const isDisp=dispatched.has(t.id)&&lsrNumbers[t.id]&&t.date<=dShort;
+        const isReady=dispatched.has(t.id)&&lsrNumbers[t.id]&&t.date>dShort;
+        const dc=isPast?['#999999','#F0F0F0']:_dClr(t.dest);
+        const dest=clDisp(t.dest);
+        const lsr=lsrNumbers[t.id]||'';
+        const statusIcon=isDisp?'&#10004;':isReady?'&#9654;':'&#9203;';
+        const statusBg=isPast?'#E8E8E8':(isDisp?'#C8E6C9':isReady?'#BBDEFB':'#FFE0B2');
+        const statusClr=isPast?'#999999':(isDisp?'#1B5E20':isReady?'#0D47A1':'#E65100');
+        const destClr=isPast?'#AAAAAA':'#444444';
+        const lsrClr=isPast?'#CCCCCC':'#888888';
+        html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px"><tr>';
+        html+='<td bgcolor="'+dc[1]+'" style="padding:5px 7px;border-left:4px solid '+dc[0]+'">';
+        html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">LP-'+t.id+'</span>';
+        html+=' <span style="font-size:9px;font-weight:700;color:'+statusClr+';background:'+statusBg+';padding:1px 5px">'+statusIcon+'</span>';
+        html+='<br><span style="font-size:10px;color:'+destClr+';font-weight:600">'+dest+'</span>';
+        if(lsr)html+='<br><span style="font-size:9px;color:'+lsrClr+';font-family:Courier New,monospace">LSR '+lsr+'</span>';
+        html+='</td></tr></table>';
+      }
+    }
+    html+='</td>';
+  }
+  html+='</tr>';
+
+  html+='</table>';
+
+  // (legend removed)
+
+  html+='</td></tr>';
+
+  // ── LM trucks for outbounds ──
+  const lmTruckData=D.lmTrucks||[];
+
+  // ── Combined outbounds: LP + LM trucks ──
+  const _allOutbound=[];
+  for(const t of pendingShips){
+    const isReady=dispatched.has(t.id)&&lsrNumbers[t.id];
+    _allOutbound.push({id:'LP-'+t.id,dest:clDisp(t.dest),date:t.date,pallets:t.plt.toFixed(1),type:'LP',status:isReady?'ready':'pending',lsr:lsrNumbers[t.id]||''})
+  }
+  for(const t of lmTruckData){if(t.dd&&t.dd>dShort){_allOutbound.push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM'})}}
+  _allOutbound.sort((a,b)=>a.date.localeCompare(b.date));
+
+  // ── Tomorrow baseline ──
+  const _tomorrow=new Date(today);_tomorrow.setDate(_tomorrow.getDate()+1);
+  const _tomorrowShort=_tomorrow.toISOString().slice(0,10);
+
+  // ── Overdue items: scheduled before tomorrow but not yet done ──
+  const _overdueIn=upcoming.filter(c=>c.readyDate<_tomorrowShort);
+  const _overdueOut=_allOutbound.filter(t=>t.date<_tomorrowShort);
+
+  // ── Smart forecast window: walk forward from TOMORROW until 3 days with activity found ──
+  const _futureInDates=new Set(upcoming.filter(c=>c.readyDate>=_tomorrowShort).map(c=>c.readyDate));
+  const _futureOutDates=new Set(_allOutbound.filter(t=>t.date>=_tomorrowShort).map(t=>t.date));
+  const _actAllDates=new Set([..._futureInDates,..._futureOutDates]);
+
+  const _fcAllDays=[];
+  let _fcActiveCt=0;
+  const _cursor=new Date(_tomorrow);
+  for(let n=0;n<21&&_fcActiveCt<3;n++){
+    const ds=_cursor.toISOString().slice(0,10);
+    const hasActivity=_actAllDates.has(ds);
+    _fcAllDays.push(ds);
+    if(hasActivity)_fcActiveCt++;
+    _cursor.setDate(_cursor.getDate()+1);
+  }
+  const _fcEnd=_fcAllDays[_fcAllDays.length-1];
+  const _fcLabel=fD(_tomorrowShort)+' &#8211; '+fD(_fcEnd);
+
+  // Group inbounds and outbounds by date within window
+  const _fcInByDate={};const _fcOutByDate={};
+  for(const d of _fcAllDays){_fcInByDate[d]=[];_fcOutByDate[d]=[]}
+  for(const c of upcoming){if(c.readyDate>=_tomorrowShort&&_fcInByDate[c.readyDate]!==undefined)_fcInByDate[c.readyDate].push(c)}
+  for(const t of _allOutbound){if(t.date>=_tomorrowShort&&_fcOutByDate[t.date]!==undefined)_fcOutByDate[t.date].push(t)}
+  // Bucket overdue items onto first forecast day (tomorrow)
+  if(_fcAllDays.length>0){
+    for(const c of _overdueIn){_fcInByDate[_fcAllDays[0]].push(c)}
+    for(const t of _overdueOut){_fcOutByDate[_fcAllDays[0]].push(t)}
+  }
+
+  // ── Inbounds Forecast ──
+  const _fcInTotal=_fcAllDays.reduce((s,d)=>s+_fcInByDate[d].length,0);
+  html+=_sec('&#128229;','Inbounds &#8212; Forecast ('+_fcLabel+')','#00897B');
+  html+='<tr><td style="padding:0 32px 8px"><table cellpadding="0" cellspacing="0"><tr>'+
     '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+arrived.length+' arrived</td><td style="width:10px"></td>'+
-    '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">&#9203; '+upcoming.length+' upcoming ('+upcoming3d.length+' in 3 days)</td>'+
-  '</tr></table></td></tr>'+
-  (upcoming3d.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
-    '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">SOURCE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TYPE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">READY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">QTY</td></tr>'+
-    upcoming3d.map((c,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:600">'+c.name+'</span>'},{v:c.isLocal?'<span style="color:#C4550A;font-weight:600">Local</span>':'<span style="color:#304FFE;font-weight:600">Container</span>'},{v:fD(c.readyDate)},{v:c.skuCount,style:'text-align:right;font-weight:600'},{v:c.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#fff')).join('')+
-  '</table></td></tr>':'<tr><td style="padding:0 32px 4px"><span style="font-size:12px;color:#888">No inbounds expected in the next 3 days.</span></td></tr>')+
-  _sec('&#128228;','Outbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#751312')+
-  '<tr><td style="padding:0 32px 8px"><table cellpadding="0" cellspacing="0"><tr>'+
-    '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpDispatched+' dispatched</td><td style="width:10px"></td>'+
-    '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">'+lpPending+' pending ('+nextToShip.length+' in 3 days)</td>'+
-  '</tr></table></td></tr>'+
-  (nextToShipDisplay.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
-    '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TRUCK</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">PALLETS</td></tr>'+
-    nextToShipDisplay.map((t,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:700">LP-'+t.id+'</span>'},{v:clDisp(t.dest)},{v:fD(t.date)},{v:t.plt.toFixed(1),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#fff')).join('')+
-    (nextToShip.length===0&&pendingShips.length>4?'<tr><td colspan="4" bgcolor="#FAFBFC" style="padding:6px 10px;font-size:11px;color:#888;text-align:center;font-style:italic">No trucks in 3-day window. Showing next '+nextToShipDisplay.length+'.</td></tr>':'')+
-  '</table></td></tr>':'<tr><td style="padding:0 32px 4px"><span style="font-size:12px;color:#888">No outbound trucks pending.</span></td></tr>')+
-  _sec('&#9888;&#65039;','Risks &#8212; Late Arrivals','#C62828')+
+    '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">&#9203; '+upcoming.length+' upcoming ('+_fcInTotal+' in window)</td>'+
+  '</tr></table></td></tr>';
+  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">';
+  html+='<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">SOURCE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TYPE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">QTY</td></tr>';
+  let _inRowIdx=0;
+  for(const d of _fcAllDays){
+    const items=_fcInByDate[d];
+    const dow=new Date(d+'T12:00:00').getDay();const isWknd=dow===0||dow===6;
+    const dayLabel=fD(d)+(isWknd?' <span style="font-size:9px;color:#999">(weekend)</span>':'');
+    const overdueIn=d===_tomorrowShort?items.filter(c=>c.readyDate<_tomorrowShort):[];
+    const onTimeIn=d===_tomorrowShort?items.filter(c=>c.readyDate>=_tomorrowShort):items;
+    if(overdueIn.length>0){
+      html+='<tr><td colspan="5" bgcolor="#FDEBED" style="padding:5px 10px;font-size:11px;color:#C62828;font-weight:700;border-bottom:1px solid #F5B8BA">&#9888; '+overdueIn.length+' overdue inbound(s)</td></tr>';
+      for(let j=0;j<overdueIn.length;j++){
+        const c=overdueIn[j];
+        html+=_trow([
+          {v:'<span style="color:#C62828;font-weight:600">'+fD(c.readyDate)+'</span>',style:'color:#C62828'},
+          {v:'<span style="font-family:Courier New,monospace;font-weight:600">'+c.name+'</span>'},
+          {v:c.isLocal?'<span style="color:#C4550A;font-weight:600">Local</span>':'<span style="color:#304FFE;font-weight:600">Container</span>'},
+          {v:c.skuCount,style:'text-align:right;font-weight:600'},
+          {v:c.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}
+        ],'#FFF8F8');
+        _inRowIdx++;
+      }
+    }
+    if(onTimeIn.length===0&&overdueIn.length===0){
+      html+='<tr><td colspan="5" bgcolor="#F9F9FB" style="padding:5px 10px;font-size:11px;color:#BBB;border-bottom:1px solid #E8E8ED">'+dayLabel+' &#8212; <span style="font-style:italic">No inbounds</span></td></tr>';
+    }else if(onTimeIn.length>0){
+      for(let j=0;j<onTimeIn.length;j++){
+        const c=onTimeIn[j];const bg=_inRowIdx%2?'#FAFBFC':'#ffffff';
+        html+=_trow([
+          {v:j===0?'<span style="font-weight:700">'+dayLabel+'</span>':''},
+          {v:'<span style="font-family:Courier New,monospace;font-weight:600">'+c.name+'</span>'},
+          {v:c.isLocal?'<span style="color:#C4550A;font-weight:600">Local</span>':'<span style="color:#304FFE;font-weight:600">Container</span>'},
+          {v:c.skuCount,style:'text-align:right;font-weight:600'},
+          {v:c.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}
+        ],bg);
+        _inRowIdx++;
+      }
+    }
+  }
+  html+='</table></td></tr>';
+
+  // ── Outbounds Forecast ──
+  const _fcOutTotal=_fcAllDays.reduce((s,d)=>s+_fcOutByDate[d].length,0);
+  html+=_sec('&#128228;','Outbounds &#8212; Forecast ('+_fcLabel+')','#751312');
+  html+='<tr><td style="padding:0 32px 8px"><table cellpadding="0" cellspacing="0"><tr>'+
+    '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpDispatched+' sent</td><td style="width:10px"></td>'+
+    '<td bgcolor="#E3F2FD" style="padding:4px 12px;font-size:12px;font-weight:700;color:#304FFE">'+lpReady+' ready</td><td style="width:10px"></td>'+
+    '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">'+lpPending+' pending</td><td style="width:10px"></td>'+
+    '<td bgcolor="#F4F5F7" style="padding:4px 12px;font-size:12px;font-weight:600;color:#666">'+_fcOutTotal+' in window</td>'+
+  '</tr></table></td></tr>';
+  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">';
+  html+='<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TRUCK</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TYPE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">STATUS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">PALLETS</td></tr>';
+  let _outRowIdx=0;
+  for(const d of _fcAllDays){
+    const trucks=_fcOutByDate[d];
+    const dow=new Date(d+'T12:00:00').getDay();const isWknd=dow===0||dow===6;
+    const dayLabel=fD(d)+(isWknd?' <span style="font-size:9px;color:#999">(weekend)</span>':'');
+    // Separate overdue from on-time for today's bucket
+    const overdue=d===_tomorrowShort?trucks.filter(t=>t.date<_tomorrowShort):[];
+    const onTime=d===_tomorrowShort?trucks.filter(t=>t.date>=_tomorrowShort):trucks;
+    // Show overdue header if any
+    if(overdue.length>0){
+      html+='<tr><td colspan="6" bgcolor="#FDEBED" style="padding:5px 10px;font-size:11px;color:#C62828;font-weight:700;border-bottom:1px solid #F5B8BA">&#9888; '+overdue.length+' overdue (scheduled before today)</td></tr>';
+      for(let j=0;j<overdue.length;j++){
+        const t=overdue[j];const bg='#FFF8F8';
+        const typeClr=t.type==='LP'?'#4A148C':'#304FFE';
+        const typeBg=t.type==='LP'?'#F0EBFE':'#E3F2FD';
+        const _st=t.status==='ready'?'<span style="font-size:9px;font-weight:700;color:#304FFE;background:#E3F2FD;padding:2px 6px">READY</span>':'<span style="font-size:9px;font-weight:700;color:#C4550A;background:#FEF3EB;padding:2px 6px">PENDING</span>';
+        html+=_trow([
+          {v:'<span style="color:#C62828;font-weight:600">'+fD(t.date)+'</span>',style:'color:#C62828'},
+          {v:'<span style="font-family:Courier New,monospace;font-weight:700">'+t.id+'</span>'+(t.lsr?'<br><span style="font-size:9px;color:#888">LSR '+t.lsr+'</span>':'')},
+          {v:'<span style="font-size:10px;font-weight:700;color:'+typeClr+';background:'+typeBg+';padding:2px 6px">'+t.type+'</span>'},
+          {v:t.dest},
+          {v:_st},
+          {v:t.pallets,style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}
+        ],bg);
+        _outRowIdx++;
+      }
+    }
+    if(onTime.length===0&&overdue.length===0){
+      html+='<tr><td colspan="6" bgcolor="#F9F9FB" style="padding:5px 10px;font-size:11px;color:#BBB;border-bottom:1px solid #E8E8ED">'+dayLabel+' &#8212; <span style="font-style:italic">No dispatches</span></td></tr>';
+    }else if(onTime.length>0){
+      for(let j=0;j<onTime.length;j++){
+        const t=onTime[j];const bg=_outRowIdx%2?'#FAFBFC':'#ffffff';
+        const typeClr=t.type==='LP'?'#4A148C':'#304FFE';
+        const typeBg=t.type==='LP'?'#F0EBFE':'#E3F2FD';
+        const _st=t.status==='ready'?'<span style="font-size:9px;font-weight:700;color:#304FFE;background:#E3F2FD;padding:2px 6px">READY</span>':'<span style="font-size:9px;font-weight:700;color:#C4550A;background:#FEF3EB;padding:2px 6px">PENDING</span>';
+        html+=_trow([
+          {v:j===0?'<span style="font-weight:700">'+dayLabel+'</span>':''},
+          {v:'<span style="font-family:Courier New,monospace;font-weight:700">'+t.id+'</span>'+(t.lsr?'<br><span style="font-size:9px;color:#888">LSR '+t.lsr+'</span>':'')},
+          {v:'<span style="font-size:10px;font-weight:700;color:'+typeClr+';background:'+typeBg+';padding:2px 6px">'+t.type+'</span>'},
+          {v:t.dest},
+          {v:_st},
+          {v:t.pallets,style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}
+        ],bg);
+        _outRowIdx++;
+      }
+    }
+  }
+  html+='</table></td></tr>';
+
+  const _lateDestKeys=Object.keys(lateByDest).sort((a,b)=>lateByDest[b].maxDays-lateByDest[a].maxDays);
+  const _lateTotalSKUs=[...new Set(lmLate.map(l=>l.sku))].length;
+  const _lateTotalTrucks=[...new Set(lmLate.map(l=>l.truckId))].length;
+  const _lateTotalQty=lmLate.reduce((s,l)=>s+(l.qty||0),0);
+  const _maxLateAll=lmLate.length>0?Math.max(...lmLate.filter(l=>l.daysLate!=null).map(l=>l.daysLate),0):0;
+
+  html+=
+  _sec('&#9888;&#65039;','Risks &#8212; Late LP Arrivals','#C62828')+
   '<tr><td style="padding:0 32px 20px">'+
-  (lateItems.length===0?
+  (lmLate.length===0?
     '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E6F5ED" style="padding:14px 18px;font-size:13px;color:#12804A;font-weight:600;border:1px solid #B8DFCA">&#10004; No late arrival risks detected. All items on track.</td></tr></table>'
   :
-    '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#FDEBED" style="padding:12px 18px;font-size:13px;color:#C62828;font-weight:600;border:1px solid #F5B8BA">'+lateItems.length+' items at risk across '+Object.keys(lateByDest).length+' destinations</td></tr></table>'+
+    '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#FDEBED" style="padding:12px 18px;font-size:13px;color:#C62828;font-weight:600;border:1px solid #F5B8BA">'+
+      lmLate.length+' items &middot; '+_lateTotalSKUs+' SKUs &middot; '+_lateTotalTrucks+' trucks &middot; max +'+_maxLateAll+'d'+
+    '</td></tr></table>'+
     '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #F5B8BA;margin-top:10px">'+
-    '<tr bgcolor="#FDEBED"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">NEED BY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">ITEMS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">MAX DELAY</td></tr>'+
-    Object.values(lateByDest).sort((a,b)=>b.maxDays-a.maxDays).map((ds,i)=>_trow([{v:'<b>'+ds.dest+'</b>'},{v:fD(ds.bi)},{v:ds.items.length,style:'text-align:right;font-weight:600'},{v:'<span style="color:#C62828;font-weight:800">'+ds.maxDays+'d</span>',style:'text-align:right'}],i%2?'#FFF8F8':'#fff')).join('')+
+    '<tr bgcolor="#FDEBED"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">TRUCKS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">QTY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">MAX LATE</td></tr>'+
+    _lateDestKeys.map((dest,i)=>{const d=lateByDest[dest];return _trow([
+      {v:'<b>'+dest+'</b>'},
+      {v:d.skus.size,style:'text-align:right;font-weight:600'},
+      {v:d.trucks.size,style:'text-align:right;font-weight:600'},
+      {v:d.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'},
+      {v:'<span style="color:#C62828;font-weight:800">+'+d.maxDays+'d</span>',style:'text-align:right'}
+    ],i%2?'#FFF8F8':'#fff')}).join('')+
+    '<tr bgcolor="#F0F1F3" style="font-weight:700;border-top:2px solid #F5B8BA"><td style="padding:6px 10px;font-size:10px">Total &middot; '+_lateDestKeys.length+' destinations</td><td style="padding:6px 10px;font-size:10px;text-align:right">'+_lateTotalSKUs+'</td><td style="padding:6px 10px;font-size:10px;text-align:right">'+_lateTotalTrucks+'</td><td style="padding:6px 10px;font-size:10px;text-align:right;font-family:Courier New,monospace">'+_lateTotalQty.toLocaleString()+'</td><td style="padding:6px 10px;font-size:10px;text-align:right;color:#C62828;font-weight:800">+'+_maxLateAll+'d</td></tr>'+
     '</table>'
   )+'</td></tr>'+
   (downloadUrl?
     '<tr><td style="padding:0 32px 24px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
-      '<td bgcolor="#F0EBFE" style="padding:18px 24px;text-align:center;border:1px solid #C5B3E6">'+
-        '<span style="font-size:12px;color:#4A148C;font-weight:600">&#128206; Detailed Reports (Assembly Timeline &middot; Kitting Timeline &middot; Late Arrivals)</span><br><br>'+
-        '<a href="'+downloadUrl+'" style="background-color:#4A148C;color:#ffffff;padding:10px 28px;font-size:13px;font-weight:700;text-decoration:none;display:inline-block">&#11015; Download Excel Report</a>'+
+      '<td bgcolor="#F0EBFE" style="padding:18px 24px;border:1px solid #C5B3E6">'+
+        '<b style="font-size:12px">&#128206; Reports &amp; Links</b><br><br>'+
+        '<table width="100%" cellpadding="0" cellspacing="0">'+
+          '<tr><td bgcolor="#F4F5F7" style="padding:8px 14px;border-bottom:1px solid #E2E4E9">&#128202; <a href="'+downloadUrl+'" style="color:#4A148C;font-size:12px;font-weight:600;text-decoration:none">Download Excel Report</a> <span style="font-size:10px;color:#888">(Assembly Timeline &middot; Kitting Timeline &middot; Late Arrivals)</span></td></tr>'+
+          '<tr><td bgcolor="#F4F5F7" style="padding:8px 14px;border-bottom:1px solid #E2E4E9">&#128214; <a href="https://ecatalogs.plytix.com/68a86f753a74399b2298f8ee" style="color:#4A148C;font-size:12px;font-weight:600;text-decoration:none">Product Catalog &amp; Assembly Instructions</a></td></tr>'+
+          '<tr><td bgcolor="#F4F5F7" style="padding:8px 14px">&#128230; <a href="https://stwopndhnxcjyomkufii.supabase.co/storage/v1/object/public/digests/Palletisation_Guide.pdf" style="color:#4A148C;font-size:12px;font-weight:600;text-decoration:none">Palletisation Guide (PDF)</a></td></tr>'+
+        '</table>'+
       '</td></tr></table></td></tr>'
-  :
-    '<tr><td style="padding:0 32px 24px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
-      '<td bgcolor="#FDEBED" style="padding:12px 18px;font-size:12px;color:#C62828;text-align:center;border:1px solid #F5B8BA">'+
-        '&#9888; Report upload pending. Data available at <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600">ml3000.smmarta.com</a>'+
-      '</td></tr></table></td></tr>'
-  )+
+  :'')+
   '<tr><td bgcolor="#F8F8FC" style="padding:20px 32px;border-top:1px solid #E0E0EE">'+
-    '<span style="font-size:11px;color:#888">Generated from <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600;text-decoration:none">ML3K</a> &middot; ml3000.smmarta.com</span><br>'+
-    '<span style="font-size:11px;color:#666;font-weight:600">Vladislav Abramov</span> <span style="font-size:11px;color:#888">&middot; SM&#178;ARTA&#8482;</span>'+
-  '</td></tr></table></td></tr></table>';
+    '<table cellpadding="0" cellspacing="0"><tr><td style="font-size:11px;color:#888888;font-family:Segoe UI,Helvetica,Arial,sans-serif">Generated from <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600;text-decoration:none">ML3K</a> &middot; <a href="https://ml3000.smmarta.com" style="color:#4A148C;text-decoration:none">ml3000.smmarta.com</a> &middot; view &middot; me</td></tr>'+
+    '<tr><td style="font-size:11px;font-family:Segoe UI,Helvetica,Arial,sans-serif;padding-top:4px;color:#666666;font-weight:600">Materials Management Team</td></tr></table>'+
+  '</td></tr></table></td><td bgcolor="#F0F0F5">&nbsp;</td></tr></table>';
 
   // ── Render ──
   document.getElementById('emailContent').innerHTML=html;
@@ -295,14 +601,37 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const btnCopy=document.getElementById('btnCopy');
   const btnMail=document.getElementById('btnMail');
   btnCopy.disabled=false;btnMail.disabled=false;
+  const btnXl=document.getElementById('btnXl');
+  if(window._digestExcelBlob){
+    btnXl.style.display='';
+    btnXl.onclick=function(){
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(window._digestExcelBlob);
+      a.download=window._digestExcelName;
+      a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+    };
+  }
 
-  btnCopy.onclick=function(){
+  btnCopy.onclick=async function(){
     const el=document.getElementById('emailContent');
-    const range=document.createRange();range.selectNodeContents(el);
-    const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
-    document.execCommand('copy');sel.removeAllRanges();
-    try{navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([el.innerHTML],{type:'text/html'})})])}catch(e){}
-    const st=document.getElementById('copyStatus');st.style.display='inline';
+    const rawHtml=el.innerHTML;
+    const st=document.getElementById('copyStatus');
+    try{
+      // Use clipboard API with raw HTML — preserves all inline styles including color
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html':new Blob([rawHtml],{type:'text/html'}),
+        'text/plain':new Blob([el.innerText],{type:'text/plain'})
+      })]);
+      st.textContent='Copied! Paste into your email.';
+    }catch(e){
+      // Fallback: execCommand (may lose some colors)
+      const range=document.createRange();range.selectNodeContents(el);
+      const sel2=window.getSelection();sel2.removeAllRanges();sel2.addRange(range);
+      document.execCommand('copy');sel2.removeAllRanges();
+      st.textContent='Copied (basic). Some formatting may differ.';
+    }
+    st.style.display='inline';
     setTimeout(function(){st.style.display='none'},3000);
   };
   btnMail.onclick=function(){window.location.href='mailto:?subject='+mailSubj};
