@@ -194,13 +194,13 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // Overall Project Status
   (function(){
     const freightTrucks=lpTotal+lmTrucks;// LP + LM freight only (no CORT/Staples)
-    const totalItems=D.lmTotalItems||lmItems;// full RW demand (~162K)
-    const venues=D.venueCount||lmVenues;
+    const totalItems=D.lmTotalItems>0?D.lmTotalItems:lmItems;
+    const venues=D.venueCount>0?D.venueCount:lmVenues;
     const overallDispatched=lpDispatched;
     const overallPct=freightTrucks>0?Math.round((overallDispatched/freightTrucks)*100):0;
     return _sec('&#127758;','Overall Project Status','#00897B')+
     '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#E0F7F3" style="border:1px solid #80CBC4">'+
-      '<tr>'+_stat('freight trucks',freightTrucks,'#00897B')+_stat('items',totalItems.toLocaleString(),'#4A148C')+_stat('venues',venues,'#304FFE')+_stat('dispatched',overallDispatched+' ('+overallPct+'%)','#12804A')+'</tr>'+
+      '<tr>'+_stat('LP + LM trucks',freightTrucks,'#00897B')+_stat('LM items',totalItems.toLocaleString(),'#4A148C')+_stat('venues',venues,'#304FFE')+_stat('dispatched',overallDispatched+' ('+overallPct+'%)','#12804A')+'</tr>'+
       '<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#B8DFCA" style="height:8px;padding:0"><table width="'+overallPct+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#00897B" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>'+
         '<p style="font-size:10px;color:#555;text-align:center;margin:4px 0 0">'+overallPct+'% of all freight trucks dispatched</p></td></tr>'+
     '</table></td></tr>';
