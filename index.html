@@ -11927,6 +11927,7 @@ async function generateDailyDigest(){
   const greeting=hr<12?'Good morning':'Good afternoon';
 
   // ── LP Status ──
+  if(typeof LP_recomputeStockHolds==='function')LP_recomputeStockHolds();// ensure stock holds are fresh
   const plan=LP_STATE?.generatedPlan||[];
   const lpTrucks={};
   for(const r of plan){if(!lpTrucks[r.truckId])lpTrucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,plt:0,qty:0};lpTrucks[r.truckId].plt+=r.pallets||0;lpTrucks[r.truckId].qty+=r.qty||0}
