@@ -216,14 +216,14 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
   // LM Status (matching LP layout: 4 stats + progress bar)
   (function(){
-    const lmDispCount=D.lmDispatched||0;
     const stpCount=D.stpTrucks||0;
-    const lmPctDone=lmTrucks>0?Math.round(lmDispCount/lmTrucks*100):0;
+    const lmTotalItems=D.lmTotalItems>0?D.lmTotalItems:lmItems;
+    const lmVenueCount=D.venueCount>0?D.venueCount:lmVenues;
     return _sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE')+
     '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">'+
-      '<tr>'+_stat(lmTrucks+' trucks',lmItems.toLocaleString(),'#304FFE')+_stat('dispatched',lmDispCount+' ('+lmPctDone+'%)','#12804A')+_stat('CORT',lmCort||0,'#C62828')+_stat('Staples',stpCount,'#C4550A')+'</tr>'+
-      '<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+lmPctDone+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#304FFE" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>'+
-        '<p style="font-size:10px;color:#888888;text-align:center;margin:4px 0 0">'+lmPctDone+'% dispatched &middot; '+lmVenues+' venues &middot; '+lmItems.toLocaleString()+' items</p></td></tr>'+
+      '<tr>'+_stat(lmVenueCount+' venues',lmTotalItems.toLocaleString(),'#304FFE')+_stat('trucks',lmTrucks,'#4A148C')+_stat('CORT',lmCort||0,'#C62828')+_stat('Staples',stpCount,'#C4550A')+'</tr>'+
+      '<tr><td colspan="4" style="padding:4px 16px 12px">'+
+        '<p style="font-size:10px;color:#888888;text-align:center;margin:4px 0 0">'+lmTotalItems.toLocaleString()+' items across '+lmVenueCount+' venues &middot; '+lmTrucks+' freight + '+lmCort+' CORT + '+stpCount+' Staples</p></td></tr>'+
     '</table></td></tr>';
   })()+
   _sec('&#128229;','Inbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#00897B')+
