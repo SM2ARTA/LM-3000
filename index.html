@@ -8299,9 +8299,18 @@ async function LM_loadClusterTA(){
 // Always wipe VS on load — all defaults are now hard-coded in LM_DEFAULT_* maps
 // VS only stores admin overrides that DIFFER from defaults (written by saveCurrentConstraints)
 function LM_cleanVS(){
-  const oldKeys=Object.keys(VS).length;
-  VS={};
-  console.log('[ML3000 v10.1] LM_cleanVS: wiped '+oldKeys+' VS entries. Defaults: TC=',JSON.stringify(LM_DEFAULT_TC),' MT=',JSON.stringify(LM_DEFAULT_MT));
+  // Remove VS entries for venues/clusters that no longer exist in VN/CLUSTERS
+  // but KEEP all valid overrides (tc, mt, lt, lt2, wp, bi, dateOverrides)
+  const validKeys=new Set();
+  if(typeof VN!=='undefined')for(const v of VN)validKeys.add(v.name);
+  if(typeof CLUSTERS!=='undefined')for(const c in CLUSTERS)validKeys.add(c);
+  let removed=0;
+  for(const k in VS){
+    // If VN/CLUSTERS not loaded yet, keep everything
+    if(validKeys.size===0)break;
+    if(!validKeys.has(k)){delete VS[k];removed++}
+  }
+  if(removed)console.log('[ML3000] LM_cleanVS: removed '+removed+' stale VS entries, kept '+Object.keys(VS).length);
 }
 
 function isCort(sku){const s=(NOM[sku]?.src||'').toUpperCase().trim();return s==='CT RNT'||s==='CT RTL'}
@@ -8589,7 +8598,7 @@ function renderTruckCard(t,opts){
   let h=`<div class="tc" style="${ovBorder}${exStyle}" onclick="${opts.onClickFn||''}">
     <div class="tto"><div class="tin"><span style="font-size:18px">${isLmDisp?'🔒':(isExcl?'🚫':'🚛')}</span><div>
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
-      <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty</div>
+      <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty${(()=>{if(!t.items||!t.items.length)return'';const schedPlt=t.items.reduce((s,it)=>{if(!it.sched||!it.pq||it.pq===0)return s;return s+(it.sched/it.pq)*(it.ps||1)},0);const roundSched=Math.round(schedPlt*10)/10;if(roundSched>0&&Math.abs(roundSched-(t.pallets||0))>0.2)return' · <span style="color:var(--or);font-weight:600" title="Pallets originally requested for this date (before top-up)">req '+roundSched+'</span>';return''})()}</div>
       ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const _lpA=opts.lpFedAbbrs;const _dd=t.dd||'';if(_lpA&&_lpA.length&&_dd&&Object.keys(LP_ARRIVAL_MAP).length){const onTime=nonStp.filter(it=>LM_kitArrivedOnTime(it.sku,_lpA,_dd)).length;const late=nonStp.length-onTime;const pct=Math.round(onTime/nonStp.length*100);const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">🚚 ${pct}% arrived (${onTime}/${nonStp.length})</span>${late>0?`<span class="bg bgs" style="background:var(--rs);color:var(--rd);margin-left:3px">⚠ ${late} late</span>`:''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>LM_kitInStock(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}${isExcl?'':rateInputHtml(t.id,t.destLabel||t.dest||opts.displayName||'',tCap,true,'rMain()')}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
