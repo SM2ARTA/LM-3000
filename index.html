@@ -11952,22 +11952,30 @@ async function generateDailyDigest(){
     }
   }
 
-  // ── Inbounds ──
+  // ── 3-day forecast window ──
+  const _d3=new Date(today);_d3.setDate(_d3.getDate()+3);
+  const d3Short=_d3.toISOString().slice(0,10);
+
+  // ── Inbounds (containers + local deliveries) ──
   const arrivals=LP_STATE?.arrivals||[];
   const contMap={};
   for(const a of arrivals){
-    if(!a.container&&!a._localName)continue;
-    const key=a.container||a._localName||'Unknown';
-    if(!contMap[key])contMap[key]={name:key,arrDate:a.arrivalDate||'—',readyDate:a.readyDate||'—',skus:new Set(),qty:0};
+    // Group by container ID, local delivery name, or fallback to arrival date
+    const key=a.container||a._localName||('Ungrouped-'+(a.arrivalDate||'unknown'));
+    const isLocal=!!a._localName||!a.container;
+    if(!contMap[key])contMap[key]={name:a._localName||a.container||'Ungrouped',arrDate:a.arrivalDate||'—',readyDate:a.readyDate||'—',skus:new Set(),qty:0,isLocal};
     contMap[key].skus.add(a.sku);contMap[key].qty+=(a.qty||0);
     if(a.readyDate&&a.readyDate<contMap[key].readyDate)contMap[key].readyDate=a.readyDate;
   }
-  const containers=Object.values(contMap).sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
-  const arrived=containers.filter(c=>c.readyDate<=dShort);
-  const upcoming=containers.filter(c=>c.readyDate>dShort);
+  const allInbounds=Object.values(contMap).sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
+  const arrived=allInbounds.filter(c=>c.readyDate<=dShort);
+  const upcoming=allInbounds.filter(c=>c.readyDate>dShort);
+  const upcoming3d=upcoming.filter(c=>c.readyDate<=d3Short);// next 3 days only for email
 
-  // ── Outbounds ──
-  const nextToShip=lpList.filter(t=>!LP_dispatched.has(t.id)).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);
+  // ── Outbounds (3-day forecast) ──
+  const pendingShips=lpList.filter(t=>!LP_dispatched.has(t.id)).sort((a,b)=>a.date.localeCompare(b.date));
+  const nextToShip=pendingShips.filter(t=>t.date<=d3Short);
+  const nextToShipDisplay=nextToShip.length>0?nextToShip:pendingShips.slice(0,4);// fallback: show next 4 if nothing in 3d
 
   // ── Late Arrivals ──
   const lateItems=window._LP_ALL_LATE_ITEMS||[];
@@ -12083,31 +12091,34 @@ async function generateDailyDigest(){
     '<tr>'+_stat('venues',lmVenues,'#304FFE')+_stat('trucks',lmTrucks,'#4A148C')+_stat('items',lmItems.toLocaleString(),'#00897B')+(lmCort?_stat('CORT',lmCort,'#C62828'):'<td></td>')+'</tr>'+
   '</table></td></tr>'+
 
-  // Inbounds
-  _sec('&#128229;','Inbounds &#8212; Container Arrivals','#00897B')+
+  // Inbounds (3-day forecast)
+  _sec('&#128229;','Inbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#00897B')+
   '<tr><td style="padding:0 32px 8px">'+
     '<table cellpadding="0" cellspacing="0"><tr>'+
       '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+arrived.length+' arrived</td>'+
       '<td style="width:10px"></td>'+
-      '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">&#9203; '+upcoming.length+' upcoming</td>'+
+      '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">&#9203; '+upcoming.length+' upcoming ('+upcoming3d.length+' in 3 days)</td>'+
     '</tr></table>'+
   '</td></tr>'+
-  (upcoming.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
-    '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">CONTAINER</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">READY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">QTY</td></tr>'+
-    upcoming.slice(0,6).map((c,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:600">'+c.name+'</span>'},{v:fD(c.readyDate)},{v:c.skus.size,style:'text-align:right;font-weight:600'},{v:c.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#ffffff')).join('')+
-    (upcoming.length>6?'<tr><td colspan="4" bgcolor="#FAFBFC" style="padding:6px 10px;font-size:11px;color:#888888;text-align:center">+ '+(upcoming.length-6)+' more containers</td></tr>':'')+
-  '</table></td></tr>':'<tr><td style="padding:0 32px 12px"></td></tr>')+
+  (upcoming3d.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
+    '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">SOURCE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">TYPE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">READY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">QTY</td></tr>'+
+    upcoming3d.map((c,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:600">'+c.name+'</span>'},{v:c.isLocal?'<span style="color:#C4550A;font-weight:600">Local</span>':'<span style="color:#304FFE;font-weight:600">Container</span>'},{v:fD(c.readyDate)},{v:c.skus.size,style:'text-align:right;font-weight:600'},{v:c.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#ffffff')).join('')+
+  '</table></td></tr>':'<tr><td style="padding:0 32px 4px"><span style="font-size:12px;color:#888888;padding:0 32px">No inbounds expected in the next 3 days.</span></td></tr>')+
 
-  // Outbounds
-  _sec('&#128228;','Outbounds &#8212; Next Shipments','#751312')+
+  // Outbounds (3-day forecast)
+  _sec('&#128228;','Outbounds &#8212; 3-Day Forecast ('+fD(dShort)+' &#8211; '+fD(d3Short)+')','#751312')+
   '<tr><td style="padding:0 32px 8px">'+
-    '<table cellpadding="0" cellspacing="0"><tr><td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpLocked+' trucks dispatched</td></tr></table>'+
+    '<table cellpadding="0" cellspacing="0"><tr>'+
+      '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpLocked+' dispatched</td>'+
+      '<td style="width:10px"></td>'+
+      '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">'+lpPending+' pending ('+nextToShip.length+' in 3 days)</td>'+
+    '</tr></table>'+
   '</td></tr>'+
-  (nextToShip.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
+  (nextToShipDisplay.length?'<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E0E0EE">'+
     '<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">TRUCK</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666666;text-align:right">PALLETS</td></tr>'+
-    nextToShip.map((t,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:700">LP-'+t.id+'</span>'},{v:clDisp(t.dest)},{v:fD(t.date)},{v:t.plt.toFixed(1),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#ffffff')).join('')+
-    (lpPending>8?'<tr><td colspan="4" bgcolor="#FAFBFC" style="padding:6px 10px;font-size:11px;color:#888888;text-align:center">+ '+(lpPending-8)+' more pending trucks</td></tr>':'')+
-  '</table></td></tr>':'<tr><td style="padding:0 32px 12px"></td></tr>')+
+    nextToShipDisplay.map((t,i)=>_trow([{v:'<span style="font-family:Courier New,monospace;font-weight:700">LP-'+t.id+'</span>'},{v:clDisp(t.dest)},{v:fD(t.date)},{v:t.plt.toFixed(1),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}],i%2?'#FAFBFC':'#ffffff')).join('')+
+    (nextToShip.length===0&&pendingShips.length>4?'<tr><td colspan="4" bgcolor="#FAFBFC" style="padding:6px 10px;font-size:11px;color:#888888;text-align:center;font-style:italic">No trucks scheduled in 3-day window. Showing next '+nextToShipDisplay.length+'.</td></tr>':'')+
+  '</table></td></tr>':'<tr><td style="padding:0 32px 4px"><span style="font-size:12px;color:#888888;padding:0 32px">No outbound trucks pending.</span></td></tr>')+
 
   // Risks
   _sec('&#9888;&#65039;','Risks &#8212; Late Arrivals','#C62828')+
