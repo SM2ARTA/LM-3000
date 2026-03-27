@@ -11950,16 +11950,15 @@ function generateDailyDigest(){
     stpQty:typeof LM_STP_TRUCKS!=='undefined'?Object.values(LM_STP_TRUCKS).reduce((s,t)=>s+(t?.pcs||0),0):0,
     // Pre-computed LM totals (avoids double-counting from cluster+venue entries in planCache)
     lmTotals:(()=>{
-      if(typeof PLAN_CACHE==='undefined')return{trucks:0,cort:0,cortPcs:0,items:0,dispatched:0};
+      if(typeof PLAN_CACHE==='undefined')return{trucks:0,pallets:0,cort:0,cortPcs:0,items:0,dispatched:0};
       const td=new Date().toISOString().slice(0,10);
-      // Use same dedup logic as dashboard: count unique truck IDs
       const seenTrucks=new Set(),seenCort=new Set();
-      let trucks=0,cort=0,cortPcs=0,items=0,dispatched=0;
+      let trucks=0,pallets=0,cort=0,cortPcs=0,items=0,dispatched=0;
       for(const label in PLAN_CACHE){
         const P=PLAN_CACHE[label];if(!P)continue;
         (P.allT||[]).forEach(t=>{
           if(LM_excluded.has(t.id)||seenTrucks.has(t.id))return;
-          seenTrucks.add(t.id);trucks++;
+          seenTrucks.add(t.id);trucks++;pallets+=(t.pallets||0);
           if(t.items)items+=t.items.reduce((s,i)=>s+(i.loadQty||0),0);
           if(t.dd&&t.dd<=td)dispatched++;
         });
@@ -11973,7 +11972,7 @@ function generateDailyDigest(){
           });
         }
       }
-      return{trucks,cort,cortPcs,items,dispatched};
+      return{trucks,pallets:Math.round(pallets),cort,cortPcs,items,dispatched};
     })(),
     // Supabase config for upload
     sbUrl:'https://stwopndhnxcjyomkufii.supabase.co',

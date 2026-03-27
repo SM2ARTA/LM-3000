@@ -214,7 +214,9 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+='<span style="color:#12804A;font-weight:600">&#9632; '+lpDispatched+' dispatched</span> &middot; ';
   html+='<span style="color:#304FFE;font-weight:600">&#9632; '+lpReady+' ready</span> &middot; ';
   html+='<span style="color:#C4550A;font-weight:600">'+lpPending+' LP pending</span> &middot; ';
-  html+='<span style="color:#888">'+lmTrucks+' LM &middot; '+lmCort+' CORT &middot; '+_stpCount+' Staples</span>';
+  html+='<span style="color:#304FFE;font-weight:600">'+lmTrucks+' LM pending</span> &middot; ';
+  html+='<span style="color:#C62828;font-weight:600">'+lmCort+' CORT pending</span> &middot; ';
+  html+='<span style="color:#C4550A;font-weight:600">'+_stpCount+' Staples pending</span>';
   html+='</p></td></tr></table></td></tr>';
 
   // ── LP ──
@@ -227,13 +229,14 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
   // ── LM ──
   const _lmDisp=_lm.dispatched||0;
-  const _lmTotal=lmTrucks+lmCort+_stpCount;
-  const _lmPct=_lmTotal>0?Math.round(_lmDisp/_lmTotal*100):0;
+  const _lmPlt=_lm.pallets||0;
+  const _lmPending=lmTrucks-_lmDisp;
+  const _lmPct=lmTrucks>0?Math.round(_lmDisp/lmTrucks*100):0;
   html+=_sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE');
   html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
-  html+='<tr>'+_stat(_venues+' venues',_totalItems.toLocaleString(),'#304FFE')+_stat('dispatched ('+_lmPct+'%)',_lmDisp,'#12804A')+_stat('CORT',lmCort,'#C62828',lmCortPcs.toLocaleString()+' pcs')+_stat('Staples',_stpCount,'#C4550A',_stpQty.toLocaleString()+' qty')+'</tr>';
+  html+='<tr>'+_stat(lmTrucks+' trucks',_lmPlt.toLocaleString(),'#304FFE')+_stat('dispatched ('+_lmPct+'%)',_lmDisp,'#12804A')+_stat('CORT',lmCort,'#C62828',lmCortPcs.toLocaleString()+' pcs')+_stat('Staples',_stpCount,'#C4550A',_stpQty.toLocaleString()+' qty')+'</tr>';
   html+='<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+_lmPct+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#304FFE" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>';
-  html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+_lmPct+'% dispatched &middot; '+lmTrucks+' freight + '+lmCort+' CORT + '+_stpCount+' Staples = '+_lmTotal+' total</p></td></tr>';
+  html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+_lmPct+'% dispatched &middot; '+_venues+' venues &middot; '+_totalItems.toLocaleString()+' items</p></td></tr>';
   html+='</table></td></tr>';
 
   html+=
