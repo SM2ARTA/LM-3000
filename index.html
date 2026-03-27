@@ -11945,6 +11945,10 @@ function generateDailyDigest(){
     venueCount:typeof VN!=='undefined'?VN.length:0,
     // Total LM items = sum of VN[].it (same as All Venues dashboard "Pieces" KPI)
     lmTotalItems:typeof VN!=='undefined'?VN.reduce((s,v)=>s+(v.it||0),0):0,
+    // STP truck count
+    stpTrucks:typeof LM_STP_TRUCKS!=='undefined'?Object.keys(LM_STP_TRUCKS).filter(k=>LM_STP_TRUCKS[k]?.items?.length>0).length:0,
+    // LM dispatched count (locked LM trucks)
+    lmDispatched:typeof LM_dispatched!=='undefined'?LM_dispatched.size:0,
     // Supabase config for upload
     sbUrl:'https://stwopndhnxcjyomkufii.supabase.co',
     sbKey:SB?SB.supabaseKey:''
