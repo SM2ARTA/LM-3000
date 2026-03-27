@@ -11945,8 +11945,9 @@ function generateDailyDigest(){
     venueCount:typeof VN!=='undefined'?VN.length:0,
     // Total LM items = sum of VN[].it (same as All Venues dashboard "Pieces" KPI)
     lmTotalItems:typeof VN!=='undefined'?VN.reduce((s,v)=>s+(v.it||0),0):0,
-    // STP truck count
+    // STP truck count + qty
     stpTrucks:typeof LM_STP_TRUCKS!=='undefined'?Object.keys(LM_STP_TRUCKS).filter(k=>LM_STP_TRUCKS[k]?.items?.length>0).length:0,
+    stpQty:typeof LM_STP_TRUCKS!=='undefined'?Object.values(LM_STP_TRUCKS).reduce((s,t)=>s+(t?.pcs||0),0):0,
     // LM dispatched = trucks with dispatch date <= today
     lmDispatched:(()=>{if(typeof PLAN_CACHE==='undefined')return 0;const td=new Date().toISOString().slice(0,10);let c=0;for(const label in PLAN_CACHE){const P=PLAN_CACHE[label];if(!P||!P.allT)continue;P.allT.forEach(t=>{if(!LM_excluded.has(t.id)&&t.dd&&t.dd<=td)c++})}return c})(),
     // Supabase config for upload
@@ -11959,7 +11960,7 @@ function generateDailyDigest(){
       const P=PLAN_CACHE[label];if(!P)continue;
       const activeT=(P.allT||[]).filter(t=>!LM_excluded.has(t.id));
       const activeCort=(P.cortDeliveries||[]).filter(c=>!LM_excluded.has(c.id));
-      _digestData.planCache[label]={trucks:activeT.length,cort:activeCort.length,items:activeT.reduce((s,t)=>s+(t.items?t.items.reduce((ss,i)=>ss+(i.loadQty||0),0):0),0)};
+      _digestData.planCache[label]={trucks:activeT.length,cort:activeCort.length,cortPcs:activeCort.reduce((s,c)=>s+(c.totalQty||c.qty||0),0),items:activeT.reduce((s,t)=>s+(t.items?t.items.reduce((ss,i)=>ss+(i.loadQty||0),0):0),0)};
     }
   }
   // LP truck display names

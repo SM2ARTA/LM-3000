@@ -70,11 +70,12 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
   // ── LM Status ──
   const lmExcluded=new Set(D.lmExcluded);
-  let lmTrucks=0,lmVenues=0,lmItems=0,lmCort=0;
+  let lmTrucks=0,lmVenues=0,lmItems=0,lmCort=0,lmCortPcs=0;
   for(const label in D.planCache){
     const p=D.planCache[label];lmVenues++;
-    lmTrucks+=p.trucks;lmCort+=p.cort;lmItems+=p.items;
+    lmTrucks+=p.trucks;lmCort+=p.cort;lmCortPcs+=(p.cortPcs||0);lmItems+=p.items;
   }
+  const _stpQty=D.stpQty||0;
 
   // ── Inbounds ──
   const contMap={};
@@ -170,7 +171,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   }catch(e){console.error('Excel error:',e);statusEl.textContent='Excel error';statusEl.style.color='#C62828'}
 
   // ── Build Outlook-safe HTML email ──
-  const _stat=(label,value,color)=>'<td width="25%" style="padding:12px 8px;text-align:center;border-bottom:1px solid #E0E0EE"><span style="font-size:24px;font-weight:800;color:'+color+';font-family:Courier New,monospace">'+value+'</span><br><span style="font-size:11px;color:#666">'+label+'</span></td>';
+  const _stat=(label,value,color,sub)=>'<td width="25%" style="padding:12px 8px;text-align:center;border-bottom:1px solid #E0E0EE"><span style="font-size:24px;font-weight:800;color:'+color+';font-family:Courier New,monospace">'+value+'</span><br><span style="font-size:11px;color:#666">'+label+'</span>'+(sub?'<br><span style="font-size:10px;color:#888">'+sub+'</span>':'')+'</td>';
   const _trow=(cells,bg)=>'<tr>'+cells.map(c=>'<td bgcolor="'+(bg||'#ffffff')+'" style="padding:6px 10px;font-size:12px;border-bottom:1px solid #E8E8ED;'+(c.style||'')+'">'+c.v+'</td>').join('')+'</tr>';
   const _sec=(emoji,title,color)=>'<tr><td style="padding:20px 32px 8px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-bottom:2px solid '+color+';padding-bottom:6px"><span style="font-size:14px;font-weight:700;color:'+color+'">'+emoji+' '+title+'</span></td></tr></table></td></tr>';
 
@@ -231,7 +232,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _lmPct=_lmTotal>0?Math.round(_lmDisp/_lmTotal*100):0;
   html+=_sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE');
   html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
-  html+='<tr>'+_stat(_venues+' venues',_totalItems.toLocaleString(),'#304FFE')+_stat('dispatched ('+_lmPct+'%)',_lmDisp,'#12804A')+_stat('CORT',lmCort,'#C62828')+_stat('Staples',_stpCount,'#C4550A')+'</tr>';
+  html+='<tr>'+_stat(_venues+' venues',_totalItems.toLocaleString(),'#304FFE')+_stat('dispatched ('+_lmPct+'%)',_lmDisp,'#12804A')+_stat('CORT',lmCort,'#C62828',lmCortPcs.toLocaleString()+' pcs')+_stat('Staples',_stpCount,'#C4550A',_stpQty.toLocaleString()+' qty')+'</tr>';
   html+='<tr><td colspan="4" style="padding:4px 16px 12px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:8px;padding:0"><table width="'+_lmPct+'%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#304FFE" style="height:8px;padding:0;font-size:1px">&nbsp;</td></tr></table></td></tr></table>';
   html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+_lmPct+'% dispatched &middot; '+lmTrucks+' freight + '+lmCort+' CORT + '+_stpCount+' Staples = '+_lmTotal+' total</p></td></tr>';
   html+='</table></td></tr>';
