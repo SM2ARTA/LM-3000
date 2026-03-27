@@ -202,8 +202,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // ── Overall ──
   html+=_sec('&#127758;','Overall Project Status','#00897B');
   html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#E0F7F3" style="border:1px solid #80CBC4">';
-  html+='<tr>'+_stat('items',_totalItems.toLocaleString(),'#00897B')+_stat('venues',_venues,'#4A148C')+_stat('trucks',_allTrucks,'#304FFE')+_stat('dispatched',lpDispatched,'#12804A')+'</tr>';
-  html+='<tr><td colspan="4" style="padding:8px 16px 12px">';
+  html+='<tr>'+_stat(_totalItems.toLocaleString()+' items',_venues+' venues','#00897B')+_stat(_allTrucks+' trucks',lpDispatched+' dispatched','#4A148C')+'</tr>';
+  html+='<tr><td colspan="2" style="padding:8px 16px 12px">';
   html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:10px;padding:0">';
   html+='<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed"><tr>';
   if(_segDisp>0)html+='<td bgcolor="#12804A" style="height:10px;padding:0;width:'+_segDisp+'%;font-size:1px">&nbsp;</td>';
@@ -211,10 +211,10 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+='<td style="height:10px;padding:0;font-size:1px">&nbsp;</td>';
   html+='</tr></table></td></tr></table>';
   html+='<p style="font-size:10px;color:#555;text-align:center;margin:4px 0 0">';
-  html+='<span style="color:#12804A;font-weight:600">'+lpDispatched+' dispatched</span> &middot; ';
-  html+='<span style="color:#304FFE;font-weight:600">'+lpReady+' ready</span> &middot; ';
+  html+='<span style="color:#12804A;font-weight:600">&#9632; '+lpDispatched+' dispatched</span> &middot; ';
+  html+='<span style="color:#304FFE;font-weight:600">&#9632; '+lpReady+' ready</span> &middot; ';
   html+='<span style="color:#C4550A;font-weight:600">'+lpPending+' LP pending</span> &middot; ';
-  html+='<span style="color:#888">'+lmTrucks+' LM + '+lmCort+' CORT + '+_stpCount+' Staples</span>';
+  html+='<span style="color:#888">'+lmTrucks+' LM &middot; '+lmCort+' CORT &middot; '+_stpCount+' Staples</span>';
   html+='</p></td></tr></table></td></tr>';
 
   // ── LP ──
@@ -226,11 +226,13 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+='</table></td></tr>';
 
   // ── LM ──
+  const _lmDispCount=D.lmDispatched||0;
+  const _lmPctDone=lmTrucks>0?Math.round(_lmDispCount/lmTrucks*100):0;
   html+=_sec('&#128666;','Last Mile &#8212; Warehouses &#8594; Venues','#304FFE');
   html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F8F8FC" style="border:1px solid #E0E0EE">';
-  html+='<tr>'+_stat(_totalItems.toLocaleString(),'items','#304FFE')+_stat(lmTrucks,'freight','#4A148C')+_stat(lmCort,'CORT','#C62828')+_stat(_stpCount,'Staples','#C4550A')+'</tr>';
+  html+='<tr>'+_stat(_totalItems.toLocaleString(),'items','#304FFE')+_stat(lmTrucks,'freight trucks','#4A148C')+_stat(lmCort,'CORT','#C62828')+_stat(_stpCount,'Staples','#C4550A')+'</tr>';
   html+='<tr><td colspan="4" style="padding:4px 16px 12px">';
-  html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+_venues+' venues &middot; '+(lmTrucks+lmCort+_stpCount)+' total deliveries</p></td></tr>';
+  html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+_venues+' venues &middot; '+(lmTrucks+lmCort+_stpCount)+' total deliveries'+(_lmDispCount>0?' &middot; '+_lmDispCount+' dispatched':'')+'</p></td></tr>';
   html+='</table></td></tr>';
 
   html+=
