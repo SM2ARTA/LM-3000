@@ -669,7 +669,7 @@ Stored in `VS[venue]` (venue settings), accessed via helper functions:
 ## Supply Chain Presentation (`supply-chain-overview.html`)
 
 ### Overview
-- **21 slides**, single HTML file, FIFA brand colors
+- **22 slides**, single HTML file, FIFA brand colors
 - CSS custom properties: `--pri` (#4A148C purple), `--a3` (#304FFE blue), `--a4` (#03BFA5 teal), `--sec` (#751312 burgundy)
 - Viewport: `1920×1080`, padding `72px 90px`
 - Served via `_server.js` on port 8888
@@ -688,16 +688,17 @@ Stored in `VS[venue]` (venue settings), accessed via helper functions:
 9. **Venue Assembly** — 6,658 RGS items at 10 stadiums + IBC, per-stadium table, tools per stadium (10 tools, 3 sets each), VLM tools disclaimer
 10. **CORT Stadiums** — 2,128 items, What's Ours/Theirs, 37 CORT SKUs (24 rental + 13 retail), 32,627 items
 11. **Staples** — USA Direct/Kits/MEX&CAN, 166 SKUs, 83 kits, 69 direct, delivery split table
-12. **Cardboard Furniture** — Re-Board tables (900) + LOOK welcome desks (278), product images
-13. **Operations Matrix** — 214 venues, full route/WHS/assembly breakdown table, MEX/CAN/USA/CORT rows
-14. **Action Items** — 6 workstreams in 3×2 grid (Materials, Customs, Distribution, Warehousing, Venue Logistics, CORT)
-15. **Timeline** — 94-day SVG (Mar 9–Jun 11), Phase 1 LP bars (Bucket 1/2), Phase 2 LM bars (Apr 3–Jun 9), assembly (Apr 15–Jun 29), KICKOFF star, summary chips
-16. **Platform (ML3K)** — ml3000.smmarta.com, credentials view/me, LP Engine V5 + LM Engine details
-17. **LP Engine V5.1** — Three-stage visual: Plan (two-bucket with stock pool + V5.1 stock rebuild between buckets), Build (4-pass SR-first loading), Optimize (tail reconstruction with 162B+ search). Real example flow: LP-31 Monterrey walkthrough. Constraint cards (26 plt, 4 trucks, 2 dests).
-18. **LM Engine** — Three-section visual: Dispatch dates (bump-in − lead time, MEX/CAN 0d, USA 0–3d), Fill each truck (3-pass: scheduled → top-up → pool → future), Day loop & overflow (carry-over, max trucks/day, no-BI items, CORT separate)
-19. **Late Engine** — "Will It Arrive on Time?" — 3 KPI cards (166K items, ~500 trucks, 3 paths), path determination logic, three-column layout: Path 1 LP-Fed (journey strip + 4 "what can go wrong" cards), Path 2 USA via Satellite (backwards computation story + chain visual), Path 3 Dallas Direct + outputs (Dashboard/Digest) + WHS processing defaults. Pure HTML/CSS (no SVG).
-20. **Assembly Timeline** — Date chain logic (5-step flow diagram), LP-fed vs non-LP paths, 6-path assembly detection matrix, WHS routing, constraint parameters, status indicators
-21. **Risk Register** — 7 top risks with likelihood/impact/mitigation, critical window + peak risk + monitoring callouts
+12. **Kitting Operations** — "One Box, Everything Inside" — problem/solution visual, FF&E kits (tools/fixtures) + Stationery kits (office supplies), auto-strategy grid by country/venue type, 201 kits / 214 venues, kit lifecycle flow, readiness tracking (100%/67%/0%). Pure HTML/CSS.
+13. **Cardboard Furniture** — Re-Board tables (900) + LOOK welcome desks (278), product images
+14. **Operations Matrix** — 214 venues, full route/WHS/assembly breakdown table, MEX/CAN/USA/CORT rows
+15. **Action Items** — 6 workstreams in 3×2 grid (Materials, Customs, Distribution, Warehousing, Venue Logistics, CORT)
+16. **Timeline** — 94-day SVG (Mar 9–Jun 11), Phase 1 LP bars (Bucket 1/2), Phase 2 LM bars (Apr 3–Jun 9), assembly (Apr 15–Jun 29), KICKOFF star, summary chips
+17. **Platform (ML3K)** — ml3000.smmarta.com, credentials view/me, LP Engine V5.1 + LM Engine details
+18. **LP Engine V5.1** — Three-stage visual: Plan (two-bucket with stock pool + V5.1 stock rebuild between buckets), Build (4-pass SR-first loading), Optimize (tail reconstruction with 162B+ search). Real example flow: LP-31 Monterrey walkthrough. Constraint cards (26 plt, 4 trucks, 2 dests).
+19. **LM Engine** — Three-section visual: Dispatch dates (bump-in − lead time, MEX/CAN 0d, USA 0–3d), Fill each truck (3-pass: scheduled → top-up → pool → future), Day loop & overflow (carry-over, max trucks/day, no-BI items, CORT separate)
+20. **Late Engine** — "Will It Arrive on Time?" — 3 KPI cards (166K items, ~500 trucks, 3 paths), path determination logic, three-column layout: Path 1 LP-Fed (journey strip + 4 "what can go wrong" cards), Path 2 USA via Satellite (backwards computation story + chain visual), Path 3 Dallas Direct + outputs (Dashboard/Digest) + WHS processing defaults. Pure HTML/CSS (no SVG).
+21. **Assembly Timeline** — Date chain logic (5-step flow diagram), LP-fed vs non-LP paths, 6-path assembly detection matrix, WHS routing, constraint parameters, status indicators
+22. **Risk Register** — 7 top risks with likelihood/impact/mitigation, critical window + peak risk + monitoring callouts
 
 ### CSS Design System
 - Standardized spacing: `.sub-tight` (16px), `.sub-std` (24px), default `.sub` (32px)
