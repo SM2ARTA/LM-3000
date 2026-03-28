@@ -14426,13 +14426,15 @@ async function LM_exportAsmTimeline(){
     const wb=new ExcelJS.Workbook();
     const ws=wb.addWorksheet('Assembly Timeline');
     ws.columns=[
-      {header:'Arrives Dallas',key:'arrDal',width:16},
+      {header:'Arrives Dallas',key:'rawArr',width:16},
+      {header:'Ready Dallas',key:'arrDal',width:14},
       {header:'Leaves Dallas',key:'lpDep',width:16},
-      {header:'Arrives Satellite',key:'arrWhs',width:16},
-      {header:'Leaves Satellite',key:'lvWhs',width:14},
+      {header:'Arrives Warehouse',key:'arrWhs',width:16},
+      {header:'Assembly at WHS',key:'whsProc',width:14},
+      {header:'Leaves Warehouse',key:'lvWhs',width:16},
       {header:'Bump-in',key:'bumpin',width:14},
       {header:'Truck',key:'truckId',width:10},
-      {header:'Assembly At',key:'whs',width:22},
+      {header:'Warehouse',key:'whs',width:22},
       {header:'Ship To',key:'dest',width:30},
       {header:'SKU',key:'sku',width:18},
       {header:'Item',key:'nm',width:35},
@@ -14447,15 +14449,16 @@ async function LM_exportAsmTimeline(){
     ws.views=[{state:'frozen',ySplit:1}];
     const _fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
     rows.forEach(r=>{
-      const arrDal=r.inStock?'In stock':_fmtD(r.arrivesDallas);
+      const rawArr=r.inStock?'In stock':_fmtD(r.rawArrival);
+      const arrDal=r.inStock?'':_fmtD(r.arrivesDallas);
       const lpDep=r.notInLp?'Not in LP':(r.lpDeparts?_fmtD(r.lpDeparts)+(r.isLp&&r.readyTrk?' ('+r.readyTrk+')':''):'—');
       const arrWhs=r.notInLp?'Not in LP':_fmtD(r.arrivesWhs);
+      const _wpDays=gWP(r.dest||'');
       const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
       const _satLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
-      const _isLate=_dalLate||_satLate;
       const days=_dalLate?Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/86400000):(_satLate?Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000):0);
       const status=r.notInLp?'Not in LP':(!r.arrivesWhs&&!r.arrivesDallas)?'—':_dalLate?days+'d late (Dallas)':_satLate?days+'d late':'On time';
-      ws.addRow({arrDal,lpDep,arrWhs,lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
+      ws.addRow({rawArr,arrDal,lpDep,arrWhs,whsProc:_wpDays>0?_wpDays+'d':'—',lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
         truckId:r.truckId,whs:r.whs||'',dest:r.dest,sku:r.sku,nm:r.nm,src:r.src,qty:r.qty,status});
     });
     // Color status cells
@@ -14464,15 +14467,12 @@ async function LM_exportAsmTimeline(){
       const stCell=exRow.getCell('status');
       const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
       const _satLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
-      const _isLate=_dalLate||_satLate;
-      if(_isLate||r.notInLp)stCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
+      if(_dalLate||_satLate||r.notInLp)stCell.font={bold:true,size:10,color:{argb:'FFC62A2F'}};
       else if(r.arrivesWhs||r.arrivesDallas)stCell.font={bold:true,size:10,color:{argb:'FF12804A'}};
     });
-    // Total row
-    const totRow=ws.addRow({arrDal:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
+    const totRow=ws.addRow({rawArr:'Total',qty:rows.reduce((s,r)=>s+r.qty,0)});
     totRow.font={bold:true};totRow.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
     totRow.border={top:{style:'medium',color:{argb:'FFE2E4E9'}}};
-    // Style qty column as numbers
     ws.getColumn('qty').numFmt='#,##0';ws.getColumn('qty').alignment={horizontal:'right'};
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -14536,16 +14536,17 @@ async function LM_exportLateArrivals(){
     const ws1=wb.addWorksheet('Summary');
     ws1.columns=[
       {header:'Destination',key:'dest',width:32},
+      {header:'Path',key:'path',width:8},
       {header:'SKUs',key:'skus',width:10},
-      {header:'Trucks Affected',key:'trucks',width:14},
+      {header:'Trucks',key:'trucks',width:10},
       {header:'Total Qty',key:'qty',width:12},
       {header:'Max Late (days)',key:'maxLate',width:14}
     ];
     _hdr(ws1);
-    const destKeys=Object.keys(byDest).sort();
+    const destKeys=Object.keys(byDest).sort((a,b)=>(byDest[b].maxLate||0)-(byDest[a].maxLate||0));
     destKeys.forEach(dest=>{
       const d=byDest[dest];
-      ws1.addRow({dest,skus:d.skus.size,trucks:d.trucks.size,qty:d.qty,maxLate:d.maxLate});
+      ws1.addRow({dest,path:d.path||'',skus:d.skus.size,trucks:d.trucks.size,qty:d.qty,maxLate:d.maxLate});
     });
     const totRow1=ws1.addRow({dest:'Total · '+destKeys.length+' destinations',skus:[...new Set(rows.map(r=>r.sku))].length,trucks:[...new Set(rows.map(r=>r.truckId))].length,qty:rows.reduce((s,r)=>s+(r.qty||0),0),maxLate:Math.max(...rows.filter(r=>r.daysLate!=null).map(r=>r.daysLate),0)});
     totRow1.font={bold:true};totRow1.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
@@ -14554,35 +14555,39 @@ async function LM_exportLateArrivals(){
     ws1.getColumn('trucks').alignment={horizontal:'right'};
     ws1.getColumn('qty').numFmt='#,##0';ws1.getColumn('qty').alignment={horizontal:'right'};
     ws1.getColumn('maxLate').alignment={horizontal:'right'};
-    // Color max late cells red
     destKeys.forEach((_,i)=>{const c=ws1.getRow(i+2).getCell('maxLate');c.font={bold:true,size:10,color:{argb:'FFC62A2F'}}});
 
-    // Sheet 2: All Items — full supply chain columns
+    // Sheet 2: All Items — full supply chain columns matching dashboard
     const ws2=wb.addWorksheet('All Late Items');
     const _lateCols=[
       {header:'Destination',key:'dest',width:32},
+      {header:'Path',key:'path',width:8},
       {header:'SKU',key:'sku',width:18},
       {header:'Item',key:'name',width:35},
       {header:'Source',key:'src',width:10},
       {header:'Truck',key:'truckId',width:10},
+      {header:'Arrives Dallas',key:'rawArr',width:14},
+      {header:'Ready Dallas',key:'arrDal',width:14},
+      {header:'LP Ship',key:'lpShip',width:14},
+      {header:'Arrives WHS',key:'satArr',width:14},
+      {header:'WHS Processing',key:'whsProc',width:14},
       {header:'LM Dispatch',key:'dispatch',width:14},
-      {header:'Arrives Dallas',key:'arrDal',width:14},
-      {header:'Leaves Dallas',key:'lpDep',width:14},
-      {header:'Arrives WHS',key:'arrWhs',width:14},
-      {header:'Leaves WHS',key:'lvWhs',width:14},
       {header:'Bump-in',key:'bumpin',width:14},
-      {header:'Late Type',key:'lateType',width:10},
+      {header:'Why Late',key:'lateType',width:20},
       {header:'Days Late',key:'daysLate',width:10},
       {header:'Qty',key:'qty',width:10}
     ];
     ws2.columns=_lateCols;
     _hdr(ws2);
     rows.forEach(r=>{
-      ws2.addRow({dest:r.dest,sku:r.sku,name:r.name,src:r.src,truckId:r.truckId,
-        dispatch:_fmtD(r.dispatch),arrDal:r.arrivesDallas==='In stock'?'In stock':_fmtD(r.arrivesDallas),
-        lpDep:r.notInLp?'N/A':_fmtD(r.lpDeparts),arrWhs:r.notInLp?'N/A':_fmtD(r.arrivesWhs),
-        lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
-        lateType:r.lateType||'—',daysLate:r.daysLate!=null?r.daysLate:'N/A',qty:r.qty});
+      ws2.addRow({dest:r.dest,path:r.path||'',sku:r.sku,name:r.name,src:r.src,truckId:r.truckId,
+        rawArr:r.rawArrival==='In stock'?'In stock':_fmtD(r.rawArrival),
+        arrDal:r.arrDallas==='In stock'?'':_fmtD(r.arrDallas),
+        lpShip:r.path==='LP'?(r.notInLp?'None':_fmtD(r.lpShip)):'—',
+        satArr:r.path==='LP'?(r.notInLp?'None':_fmtD(r.satArr)):'—',
+        whsProc:r.whsProc>0?r.whsProc+'d':'—',
+        dispatch:_fmtD(r.dispatch),bumpin:_fmtD(r.bumpin),
+        lateType:r.notInLp?'Not in LP plan':r.lateType||'—',daysLate:r.daysLate!=null?r.daysLate:'N/A',qty:r.qty});
     });
     const totRow2=ws2.addRow({dest:'Total',qty:rows.reduce((s,r)=>s+(r.qty||0),0)});
     totRow2.font={bold:true};totRow2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
@@ -14605,23 +14610,27 @@ async function LM_exportLateArrivals(){
         {header:'Item',key:'name',width:35},
         {header:'Source',key:'src',width:10},
         {header:'Truck',key:'truckId',width:10},
+        {header:'Arrives Dallas',key:'rawArr',width:14},
+        {header:'Ready Dallas',key:'arrDal',width:14},
+        {header:'LP Ship',key:'lpShip',width:14},
+        {header:'Arrives WHS',key:'satArr',width:14},
+        {header:'WHS Processing',key:'whsProc',width:14},
         {header:'LM Dispatch',key:'dispatch',width:14},
-        {header:'Arrives Dallas',key:'arrDal',width:14},
-        {header:'Leaves Dallas',key:'lpDep',width:14},
-        {header:'Arrives WHS',key:'arrWhs',width:14},
-        {header:'Leaves WHS',key:'lvWhs',width:14},
         {header:'Bump-in',key:'bumpin',width:14},
-        {header:'Late Type',key:'lateType',width:10},
+        {header:'Why Late',key:'lateType',width:20},
         {header:'Days Late',key:'daysLate',width:10},
         {header:'Qty',key:'qty',width:10}
       ];
       _hdr(ws);
       destItems.forEach(r=>{
         ws.addRow({sku:r.sku,name:r.name,src:r.src,truckId:r.truckId,
-          dispatch:_fmtD(r.dispatch),arrDal:r.arrivesDallas==='In stock'?'In stock':_fmtD(r.arrivesDallas),
-          lpDep:r.notInLp?'N/A':_fmtD(r.lpDeparts),arrWhs:r.notInLp?'N/A':_fmtD(r.arrivesWhs),
-          lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
-          lateType:r.lateType||'—',daysLate:r.daysLate!=null?r.daysLate:'N/A',qty:r.qty});
+          rawArr:r.rawArrival==='In stock'?'In stock':_fmtD(r.rawArrival),
+          arrDal:r.arrDallas==='In stock'?'':_fmtD(r.arrDallas),
+          lpShip:r.path==='LP'?(r.notInLp?'None':_fmtD(r.lpShip)):'—',
+          satArr:r.path==='LP'?(r.notInLp?'None':_fmtD(r.satArr)):'—',
+          whsProc:r.whsProc>0?r.whsProc+'d':'—',
+          dispatch:_fmtD(r.dispatch),bumpin:_fmtD(r.bumpin),
+          lateType:r.notInLp?'Not in LP plan':r.lateType||'—',daysLate:r.daysLate!=null?r.daysLate:'N/A',qty:r.qty});
       });
       const tot=ws.addRow({sku:'Total · '+destItems.length+' items',qty:destItems.reduce((s,r)=>s+(r.qty||0),0)});
       tot.font={bold:true};tot.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
