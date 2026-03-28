@@ -1163,6 +1163,10 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   // ════════════════════════════════════════════════════════
   const _lastLocked=cfg.lastLockedDate||'';
   const b1Start=_lastLocked?advBlk(LP_nextWorkday(LP_addDays(_lastLocked,1))):advBlk(LP_nextWorkday(today));
+  // Snapshot total inventory per SKU BEFORE Bucket 1 (for B2 stock rebuild)
+  const _totalInvSnap={};
+  for(const dt of Object.keys(delta)){for(const[sku,qty]of Object.entries(delta[dt]))_totalInvSnap[sku]=(_totalInvSnap[sku]||0)+qty}
+  for(const[sku,qty]of Object.entries(stock))_totalInvSnap[sku]=(_totalInvSnap[sku]||0)+qty;
   const b1=planStream(d=>isMC(d), mcSort, b1Start, MAX_DST, MAX_TRK,
     {startBefore:today, consolidate:true});
   for(const r of b1)plan.push(r);
@@ -1170,17 +1174,54 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   // ════════════════════════════════════════════════════════
   // BUCKET 2: USA (RIC) → from RIC start date, respect arrival dates
   // ════════════════════════════════════════════════════════
-  // Fix: Undo future stock additions that Bucket 1 walked past.
-  // Bucket 1 advanced fPtr through all dates, adding future arrivals to stock.
-  // USA must only use stock available on or before each truck's date.
-  // Step 1: Subtract back delta entries with readyDate >= RIC_START from stock
-  // Step 2: Reset fPtr to first date >= RIC_START so Bucket 2 re-adds them as dates pass
-  for(let i=0;i<futDates.length;i++){
-    if(futDates[i]<RIC_START)continue;
-    for(const[sku,qty]of Object.entries(delta[futDates[i]]||{})){
-      if(!stock[sku])continue;// Bucket 1 consumed everything from this arrival — nothing to subtract
-      stock[sku]=Math.max(0,stock[sku]-qty);
-      if(stock[sku]<=0)delete stock[sku];
+  // B1 consumed = snapshot - remaining stock. Rebuild stock for B2:
+  // Start with all inventory that has readyDate < RIC_START, minus what B1 consumed.
+  // Post-RIC arrivals will be added by planStream's fPtr loop as dates pass.
+  {
+    // Compute B1 consumption per SKU
+    const b1Eaten={};
+    for(const sku of Object.keys(_totalInvSnap)){
+      const consumed=_totalInvSnap[sku]-(stock[sku]||0);
+      if(consumed>0)b1Eaten[sku]=consumed;
+    }
+    // Compute total pre-RIC inventory per SKU (readyDate < RIC_START)
+    // This includes: pre-loaded stock (readyDate <= today, already deleted from delta)
+    //                + delta entries with date < RIC_START
+    const preRic={};
+    // Pre-loaded = totalSnap - sum of all remaining delta entries
+    for(const sku of Object.keys(_totalInvSnap)){
+      let inDelta=0;for(const dt of futDates)inDelta+=(delta[dt]?.[sku]||0);
+      const preloaded=_totalInvSnap[sku]-inDelta;
+      if(preloaded>0)preRic[sku]=(preRic[sku]||0)+preloaded;
+    }
+    for(const dt of futDates){
+      if(dt>=RIC_START)break;
+      for(const[sku,qty]of Object.entries(delta[dt]))preRic[sku]=(preRic[sku]||0)+qty;
+    }
+    // B2 starting stock = preRic - b1Eaten (clamped to 0)
+    for(const sku of Object.keys(stock))delete stock[sku];
+    for(const[sku,qty]of Object.entries(preRic)){
+      const avail=qty-(b1Eaten[sku]||0);
+      if(avail>0)stock[sku]=avail;
+    }
+    // If B1 consumed MORE than pre-RIC stock (ate into post-RIC arrivals),
+    // reduce remaining b1Eaten to track the overshoot
+    const b1Overshoot={};
+    for(const sku of Object.keys(b1Eaten)){
+      const preRicQty=preRic[sku]||0;
+      if(b1Eaten[sku]>preRicQty)b1Overshoot[sku]=b1Eaten[sku]-preRicQty;
+    }
+    // Reduce future delta entries by B1 overshoot (B1 consumed from post-RIC arrivals)
+    // Walk post-RIC deltas chronologically, deduct overshoot
+    for(const dt of futDates){
+      if(dt<RIC_START)continue;
+      for(const sku of Object.keys(b1Overshoot)){
+        if(!b1Overshoot[sku]||!delta[dt]?.[sku])continue;
+        const deduct=Math.min(b1Overshoot[sku],delta[dt][sku]);
+        delta[dt][sku]-=deduct;
+        b1Overshoot[sku]-=deduct;
+        if(delta[dt][sku]<=0)delete delta[dt][sku];
+      }
     }
   }
   // Reset fPtr to first date >= RIC_START
