@@ -13454,43 +13454,129 @@ if(cv==="dashboard"){
     }
   }
 
-  // ── Late Arrivals (Dashboard) — derived from Assembly Timeline (covers ALL venues) ──
+  // ── Late Engine — ALL items, 3 supply chain paths ──
   {
-    // _asmRows is already computed above and filtered to current view scope
     const _lateItems=[];
-    for(const r of _asmRows){
-      if(!r.bumpin&&!r.leavesWhs)continue;
-      let daysLate=null;let lateType='';
-      const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
-      const _whsLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
-      if(_dalLate){
-        daysLate=Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/864e5);
-        lateType='Dallas';
-      }else if(_whsLate){
-        daysLate=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/864e5);
-        lateType='WHS';
-      }else if(r.notInLp){
-        daysLate=null;lateType='No LP';
+    const _lateSeen=new Set();
+    const _isDallasDirect=label=>{
+      const n=(label||'');
+      return n==='Dallas Stadium'||n==='International Broadcast Centre'||vcIsIBC(n)||(isStadium(n)&&n.includes('Dallas'));
+    };
+    for(const label in PLAN_CACHE){
+      const P2=PLAN_CACHE[label];if(!P2)continue;
+      // View-scope filter (same as Assembly Timeline)
+      if(isFiltered){
+        const lab=isClusterSel2?selCluster:sel;
+        if(label!==lab&&!(isClusterSel2&&CLUSTERS[selCluster]?.venues.includes(label)))continue;
+      } else if(isRegion){
+        if(regionCat==='can'&&!vcIsCAN(label)&&!VN.find(v=>v.name===label&&vcIsCAN(v.cluster)))continue;
+        if(regionCat==='mex'&&!vcIsMEX(label)&&!VN.find(v=>v.name===label&&vcIsMEX(v.cluster)))continue;
+      } else if(isClusterOv){
+        if(label!==clusterOvName&&!(CLUSTERS[clusterOvName]?.venues.includes(label)))continue;
       }
-      if(daysLate!==null||lateType==='No LP'){
-        _lateItems.push({sku:r.sku,name:r.nm,truckId:r.truckId,dispatch:r.dd,bumpin:r.bumpin||r.leavesWhs,
-          arrivesDallas:r.inStock?'In stock':(r.arrivesDallas||'—'),lpDeparts:r.lpDeparts||'—',
-          arrivesWhs:r.arrivesWhs||'—',leavesWhs:r.leavesWhs||'—',
-          dest:r.dest,qty:r.qty,daysLate,src:r.src||'—',whs:r.whs||'',lateType,isLp:r.isLp,notInLp:r.notInLp});
-      }
+      const _tLabel=label;
+      const _isLp=LM_isLPFed(_tLabel);
+      const _isDal=_isDallasDirect(_tLabel);
+      const _lpAbbrs=_isLp?LM_getLPDestAbbrs(_tLabel):[];
+      // Path label for display
+      const _path=_isDal?'Dallas':(_isLp?'LP':'LM');
+
+      P2.allT.forEach(t=>{
+        if(LM_excluded.has(t.id))return;
+        const dd=t.dd||'';
+        const biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
+        if(!biK&&!dd)return;// no dates at all
+
+        t.items.forEach(it=>{
+          const k=_tLabel+'|'+it.sku+'|'+t.id;
+          if(_lateSeen.has(k))return;
+          const src=(NOM[it.sku]?.src||'').toUpperCase();
+          if(src.startsWith('STP')||src.startsWith('CT'))return;// skip Staples/CORT
+
+          // ── Step 1: When does it arrive in Dallas? ──
+          let arrDallas=null;let inStock=false;
+          if(STOCK_SKUS.has(it.sku)){arrDallas='in-stock';inStock=true}
+          else if(LP_STATE?.arrivals){
+            let need=it.loadQty||0,last=null;
+            const sa=LP_STATE.arrivals.filter(a=>a.sku===it.sku&&a.readyDate).sort((a,b)=>a.readyDate.localeCompare(b.readyDate));
+            for(const a of sa){need-=(a.qty||0);last=a.readyDate;if(need<=0)break}
+            if(last)arrDallas=last;
+          }
+
+          // ── Compute chain based on path ──
+          let lpShip=null,satArr=null,lmDisp=dd,bumpin=biK,daysLate=null,lateType='',notInLp=false;
+
+          if(_isDal){
+            // PATH 3: Dallas direct — arrival → ready → transit → bump-in
+            // Late if: arrDallas > dispatch date (item not ready when truck leaves)
+            if(!inStock&&arrDallas&&dd&&arrDallas>dd){
+              daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);
+              lateType='Dallas';
+            }
+          } else if(_isLp){
+            // PATH 1: LP fed — Dallas → LP ship → satellite arrival → WHS → LM dispatch → bump-in
+            if(_lpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
+              const fifo=LM_skuArrivalFifo(it.sku,_lpAbbrs,it.loadQty||0);
+              if(fifo){
+                lpShip=fifo.readyShip||fifo.firstShip;
+                satArr=fifo.readyBy||fifo.firstArr;
+              } else { notInLp=true }
+            } else { notInLp=true }
+            // Late check 1: Dallas arrival after LP ship
+            if(!inStock&&arrDallas&&lpShip&&arrDallas>lpShip){
+              daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(lpShip+'T12:00:00'))/864e5);
+              lateType='Dallas';
+            }
+            // Late check 2: satellite arrival after LM dispatch
+            if(!daysLate&&satArr&&dd&&satArr>dd){
+              daysLate=Math.round((new Date(satArr+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);
+              lateType='WHS';
+            }
+          } else {
+            // PATH 2: USA non-LP — Dallas → inbound transit → WHS → outbound → LM dispatch → bump-in
+            // Compute backwards from dispatch: when must it arrive in Dallas?
+            const wp=gWP(_tLabel),lt2=gLT2(_tLabel);
+            let needByDallas=dd;// latest date item must be in Dallas
+            if(dd&&(wp>0||lt2>0)){
+              const dispDt=new Date(dd+'T12:00:00');
+              const arrWhs=disp(dispDt,wp);// subtract WHS processing
+              const dallasLeave=lt2>0?disp(arrWhs,lt2):arrWhs;// subtract inbound transit
+              needByDallas=dk(dallasLeave);
+            }
+            // Late if: arrDallas > needByDallas
+            if(!inStock&&arrDallas&&needByDallas&&arrDallas>needByDallas){
+              daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(needByDallas+'T12:00:00'))/864e5);
+              lateType='Dallas';
+            }
+          }
+
+          // Only include late items (daysLate > 0) or notInLp
+          if((daysLate!=null&&daysLate>0)||notInLp){
+            _lateSeen.add(k);
+            _lateItems.push({
+              sku:it.sku,name:it.nm||NOM[it.sku]?.nm||it.sku,truckId:t.id,
+              dispatch:dd,bumpin:biK||dd,
+              arrDallas:inStock?'In stock':(arrDallas||'—'),
+              lpShip:lpShip||'—',satArr:satArr||'—',
+              dest:label,qty:it.loadQty||0,daysLate,
+              src:NOM[it.sku]?.src||'—',path:_path,lateType:notInLp?'No LP':lateType,notInLp
+            });
+          }
+        });
+      });
     }
+
     if(_lateItems.length>0){
-      _lateItems.sort((a,b)=>(a.dest||'').localeCompare(b.dest||'')||(a.bumpin||'').localeCompare(b.bumpin||'')||(a.sku||'').localeCompare(b.sku||''));
-      // Summary by destination
+      _lateItems.sort((a,b)=>(b.daysLate||0)-(a.daysLate||0)||(a.dest||'').localeCompare(b.dest||''));
       const _lateByDest={};
       _lateItems.forEach(l=>{
-        if(!_lateByDest[l.dest])_lateByDest[l.dest]={skus:new Set(),trucks:new Set(),qty:0,maxLate:0};
+        if(!_lateByDest[l.dest])_lateByDest[l.dest]={skus:new Set(),trucks:new Set(),qty:0,maxLate:0,path:l.path};
         _lateByDest[l.dest].skus.add(l.sku);
         _lateByDest[l.dest].trucks.add(l.truckId);
         _lateByDest[l.dest].qty+=l.qty||0;
         if(l.daysLate!=null&&l.daysLate>_lateByDest[l.dest].maxLate)_lateByDest[l.dest].maxLate=l.daysLate;
       });
-      const _lateDestKeys=Object.keys(_lateByDest).sort();
+      const _lateDestKeys=Object.keys(_lateByDest).sort((a,b)=>(_lateByDest[b].maxLate||0)-(_lateByDest[a].maxLate||0));
       const _lateTotalSKUs=[...new Set(_lateItems.map(l=>l.sku))].length;
       const _lateTotalTrucks=[...new Set(_lateItems.map(l=>l.truckId))].length;
       const _lateTotalQty=_lateItems.reduce((s,l)=>s+(l.qty||0),0);
@@ -13507,26 +13593,59 @@ if(cv==="dashboard"){
           <span class="bg bgs" style="background:var(--os);color:var(--or)">max +${_maxLateAll}d</span>
           <button class="rbtn" onclick="event.stopPropagation();LM_exportLateArrivals()" style="margin-left:auto;background:var(--rs);color:var(--rd);border-color:#F5B8BA">⬇ Excel</button>
         </summary>
-        <p style="font-size:10px;color:var(--tt);margin:0 0 10px">Items arriving late in the supply chain — Dallas late, WHS late, or missing LP shipment</p>`;
+        <p style="font-size:10px;color:var(--tt);margin:0 0 10px">Items that won't arrive on time — checked across the full supply chain for all venues</p>`;
 
-      // Summary table by destination/region
-      h+=`<div style="margin-bottom:12px"><table class="dtb" style="font-size:11px"><thead><tr><th>Destination</th><th style="text-align:right">SKUs</th><th style="text-align:right">Trucks</th><th style="text-align:right">Qty</th><th style="text-align:right">Max Late</th></tr></thead><tbody>`;
+      // ── Summary: how to read this ──
+      h+=`<div style="margin-bottom:12px;padding:10px 14px;background:#FFF8F0;border:1px solid #FFE0B2;font-size:11px;line-height:1.6">
+        <b>How it works:</b> For each item on each truck, we check if it will arrive on time.<br>
+        <span class="bg bgs" style="background:#F0EBFE;color:#6E3FF3;font-size:9px">LP</span> <b>LP destinations</b> (MEX, CAN, HOU, NY, KC) — item ships from Dallas on LP truck to satellite warehouse, then LM truck to venue<br>
+        <span class="bg bgs" style="background:#E3F2FD;color:#1565C0;font-size:9px">LM</span> <b>USA destinations</b> — item ships from Dallas via satellite warehouse to venue<br>
+        <span class="bg bgs" style="background:#E8F5E9;color:#2E7D32;font-size:9px">Dallas</span> <b>Dallas Stadium &amp; IBC</b> — item ships directly from Dallas warehouse
+      </div>`;
+
+      // ── Summary table by destination ──
+      h+=`<div style="margin-bottom:12px"><table class="dtb" style="font-size:11px"><thead><tr><th>Destination</th><th>Path</th><th style="text-align:right">SKUs</th><th style="text-align:right">Trucks</th><th style="text-align:right">Qty</th><th style="text-align:right">Max Late</th></tr></thead><tbody>`;
       _lateDestKeys.forEach(dest=>{
         const d=_lateByDest[dest];
-        h+=`<tr><td class="fw6">${dest}</td><td class="mono" style="text-align:right">${d.skus.size}</td><td class="mono" style="text-align:right">${d.trucks.size}</td><td class="mono fw6" style="text-align:right">${d.qty.toLocaleString()}</td><td style="text-align:right"><span style="color:var(--rd);font-weight:700">+${d.maxLate}d</span></td></tr>`;
+        const _pClr=d.path==='LP'?'background:#F0EBFE;color:#6E3FF3':d.path==='LM'?'background:#E3F2FD;color:#1565C0':'background:#E8F5E9;color:#2E7D32';
+        h+=`<tr><td class="fw6">${dest}</td><td><span class="bg bgs" style="${_pClr};font-size:9px">${d.path}</span></td><td class="mono" style="text-align:right">${d.skus.size}</td><td class="mono" style="text-align:right">${d.trucks.size}</td><td class="mono fw6" style="text-align:right">${d.qty.toLocaleString()}</td><td style="text-align:right"><span style="color:var(--rd);font-weight:700">+${d.maxLate}d</span></td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td>Total · ${_lateDestKeys.length} destinations</td><td class="mono" style="text-align:right">${_lateTotalSKUs}</td><td class="mono" style="text-align:right">${_lateTotalTrucks}</td><td class="mono" style="text-align:right">${_lateTotalQty.toLocaleString()}</td><td style="text-align:right;color:var(--rd);font-weight:700">+${_maxLateAll}d</td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td>Total · ${_lateDestKeys.length} destinations</td><td></td><td class="mono" style="text-align:right">${_lateTotalSKUs}</td><td class="mono" style="text-align:right">${_lateTotalTrucks}</td><td class="mono" style="text-align:right">${_lateTotalQty.toLocaleString()}</td><td style="text-align:right;color:var(--rd);font-weight:700">+${_maxLateAll}d</td></tr></tfoot></table></div>`;
 
-      // Full detail table
+      // ── Detail table ──
       h+=`<details><summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--rd);margin-bottom:8px">Show all ${_lateItems.length} items</summary>
-      <div style="overflow-x:auto"><table class="dtb" style="font-size:11px;white-space:nowrap"><thead><tr><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th>Truck</th><th>LM Dispatch</th><th>Arrives Dallas</th><th>Leaves Dallas</th><th>Arrives WHS</th><th>Leaves WHS</th><th>Bump-in</th><th>Type</th><th>Late</th><th>Qty</th></tr></thead><tbody>`;
-      const _sd2=d=>d?d.slice(5):'';
+      <div style="overflow-x:auto"><table class="dtb" style="font-size:11px;white-space:nowrap"><thead><tr>
+        <th>Destination</th><th>Path</th><th>SKU</th><th>Item</th><th>Source</th><th>Truck</th>
+        <th>Arrives Dallas</th><th>LP Ship</th><th>Arrives WHS</th>
+        <th>LM Dispatch</th><th>Bump-in</th><th>Why Late</th><th>Days</th><th style="text-align:right">Qty</th>
+      </tr></thead><tbody>`;
+      const _sd2=d=>d&&d!=='—'?d.slice(5):'—';
       _lateItems.forEach(l=>{
         const daysL=l.daysLate!=null?`<span style="color:var(--rd);font-weight:700">+${l.daysLate}d</span>`:'<span style="color:var(--rd)">—</span>';
-        const _typeBg=l.lateType==='Dallas'?'bg-or':l.lateType==='WHS'?'bg-rd':'bg-gy';
-        h+=`<tr><td style="font-size:10px;font-weight:600">${l.dest}</td><td class="mono">${l.sku}</td><td class="tcl" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${l.name}</td><td style="font-size:10px;color:var(--ts)">${l.src}</td><td class="mono">${l.truckId}</td><td class="mono">${_sd2(l.dispatch)}</td><td class="mono">${l.arrivesDallas==='In stock'?'<span style="color:var(--gn)">In stock</span>':_sd2(l.arrivesDallas)}</td><td class="mono">${l.notInLp?'<span style="color:var(--or)">N/A</span>':_sd2(l.lpDeparts)}</td><td class="mono">${l.notInLp?'<span style="color:var(--or)">N/A</span>':_sd2(l.arrivesWhs)}</td><td class="mono">${_sd2(l.leavesWhs)}</td><td class="mono">${_sd2(l.bumpin)}</td><td><span class="bg bgs ${_typeBg}" style="font-size:9px">${l.lateType||'—'}</span></td><td>${daysL}</td><td class="mono fw6">${l.qty.toLocaleString()}</td></tr>`;
+        const _pClr=l.path==='LP'?'background:#F0EBFE;color:#6E3FF3':l.path==='LM'?'background:#E3F2FD;color:#1565C0':'background:#E8F5E9;color:#2E7D32';
+        const _whyClr=l.lateType==='Dallas'?'bg-or':l.lateType==='WHS'?'bg-rd':'bg-gy';
+        const _why=l.notInLp?'Not in LP plan':l.lateType==='Dallas'?'Not ready in Dallas':l.lateType==='WHS'?'Late at warehouse':'—';
+        h+=`<tr>
+          <td style="font-size:10px;font-weight:600">${l.dest}</td>
+          <td><span class="bg bgs" style="${_pClr};font-size:9px">${l.path}</span></td>
+          <td class="mono">${l.sku}</td>
+          <td class="tcl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${l.name}</td>
+          <td style="font-size:10px;color:var(--ts)">${l.src}</td>
+          <td class="mono">${l.truckId}</td>
+          <td class="mono">${l.arrDallas==='In stock'?'<span style="color:var(--gn)">✓ In stock</span>':_sd2(l.arrDallas)}</td>
+          <td class="mono">${l.path==='LP'?(l.notInLp?'<span style="color:var(--or)">None</span>':_sd2(l.lpShip)):'<span style="color:var(--tt)">—</span>'}</td>
+          <td class="mono">${l.path==='LP'?(l.notInLp?'<span style="color:var(--or)">None</span>':_sd2(l.satArr)):'<span style="color:var(--tt)">—</span>'}</td>
+          <td class="mono">${_sd2(l.dispatch)}</td>
+          <td class="mono">${_sd2(l.bumpin)}</td>
+          <td><span class="bg bgs ${_whyClr}" style="font-size:9px">${_why}</span></td>
+          <td>${daysL}</td>
+          <td class="mono fw6" style="text-align:right">${l.qty.toLocaleString()}</td>
+        </tr>`;
       });
       h+=`</tbody></table></div></details></details>`;
+    } else {
+      window._lateArrivalData=[];
+      window._lateByDestData={};
     }
   }
 
