@@ -1168,9 +1168,24 @@ function LP_buildPlanV3(demand,arrivals,cfg){
   for(const r of b1)plan.push(r);
 
   // ════════════════════════════════════════════════════════
-  // BUCKET 2: USA (RIC) → from RIC start date, ship whatever available
+  // BUCKET 2: USA (RIC) → from RIC start date, respect arrival dates
   // ════════════════════════════════════════════════════════
-  // NOTE: fPtr NOT reset — future arrivals consumed by Bucket 1 are already in stock pool
+  // Fix: Undo future stock additions that Bucket 1 walked past.
+  // Bucket 1 advanced fPtr through all dates, adding future arrivals to stock.
+  // USA must only use stock available on or before each truck's date.
+  // Step 1: Subtract back delta entries with readyDate >= RIC_START from stock
+  // Step 2: Reset fPtr to first date >= RIC_START so Bucket 2 re-adds them as dates pass
+  for(let i=0;i<futDates.length;i++){
+    if(futDates[i]<RIC_START)continue;
+    for(const[sku,qty]of Object.entries(delta[futDates[i]]||{})){
+      if(!stock[sku])continue;// Bucket 1 consumed everything from this arrival — nothing to subtract
+      stock[sku]=Math.max(0,stock[sku]-qty);
+      if(stock[sku]<=0)delete stock[sku];
+    }
+  }
+  // Reset fPtr to first date >= RIC_START
+  fPtr=0;
+  while(fPtr<futDates.length&&futDates[fPtr]<RIC_START)fPtr++;
   const b2=planStream(d=>isRic(d), usSort, RIC_START, MAX_DST, MAX_TRK,
     {startBefore:today});
   for(const r of b2)plan.push(r);
@@ -12015,32 +12030,37 @@ function generateDailyDigest(){
     // Late
     lateItems:window._LP_ALL_LATE_ITEMS||[],
     lmLateArrivals:(()=>{
-      // Compute fresh — don't rely on dashboard having been rendered
-      if(typeof PLAN_CACHE==='undefined'||typeof LP_ARRIVAL_MAP==='undefined')return[];
-      try{LM_buildLPArrivalMap()}catch(e){}
-      const _li=[];const _seen=new Set();
-      for(const label in PLAN_CACHE){
-        const P2=PLAN_CACHE[label];if(!P2)continue;
-        const _abbrs=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
-        if(!_abbrs.length||!Object.keys(LP_ARRIVAL_MAP).length)continue;
-        P2.allT.forEach(t=>{
-          if(LM_excluded.has(t.id))return;
-          P2.days.forEach(day=>{
-            if(!day.trucks.includes(t))return;
-            const biKey=day.biK&&day.biK!=='no-bi'?day.biK:null;
-            const dd=t.dd||day.dKey;if(!dd)return;
-            const deadline=biKey||dd;
-            t.items.forEach(it=>{
-              const dk=label+'|'+it.sku+'|'+t.id;
-              if(_seen.has(dk))return;
-              const src=(NOM[it.sku]?.src||'').toUpperCase();
-              if(src.startsWith('STP')||src.startsWith('CT'))return;
-              const lpArr=LM_getSkuLPArrival(it.sku,_abbrs);
-              if(!lpArr){_seen.add(dk);_li.push({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',truckId:t.id,dispatch:dd,bumpin:biKey||dd,lpArrival:'None',dest:label,qty:it.loadQty||0,daysLate:null,src:NOM[it.sku]?.src||'—'})}
-              else if(lpArr>deadline){_seen.add(dk);const dl=Math.round((new Date(lpArr+'T12:00:00')-new Date(deadline+'T12:00:00'))/864e5);_li.push({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',truckId:t.id,dispatch:dd,bumpin:biKey||dd,lpArrival:lpArr,dest:label,qty:it.loadQty||0,daysLate:dl,src:NOM[it.sku]?.src||'—'})}
-            });
-          });
-        });
+      // Derive late items from assembly timeline — covers ALL venues (LP-fed + non-LP)
+      // Late = arrives at WHS after it needs to leave, OR arrives in Dallas after LP truck departs
+      const _asmData=window._asmTimelineData||[];
+      const _li=[];
+      for(const r of _asmData){
+        if(!r.bumpin&&!r.leavesWhs)continue;// no deadline
+        const deadline=r.bumpin||r.leavesWhs;
+        let daysLate=null;let lateType='';
+        // Check 1: Dallas late (arrives Dallas after LP truck departs)
+        const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
+        // Check 2: WHS late (arrives at satellite after needs to leave)
+        const _whsLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
+        // Check 3: Not in LP (LP-fed but no LP shipment found)
+        if(_dalLate){
+          daysLate=Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/864e5);
+          lateType='Dallas';
+        }else if(_whsLate){
+          daysLate=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/864e5);
+          lateType='WHS';
+        }else if(r.notInLp){
+          daysLate=null;lateType='No LP';
+        }
+        if(daysLate!==null||lateType==='No LP'){
+          _li.push({sku:r.sku,name:r.nm,truckId:r.truckId,dispatch:r.dd,bumpin:r.bumpin||r.leavesWhs,
+            arrivesDallas:r.inStock?'In stock':(r.arrivesDallas||'—'),
+            lpDeparts:r.lpDeparts||'—',
+            arrivesWhs:r.arrivesWhs||'—',
+            leavesWhs:r.leavesWhs||'—',
+            dest:r.dest,qty:r.qty,daysLate,src:r.src||'—',whs:r.whs||'',
+            lateType,isLp:r.isLp,notInLp:r.notInLp});
+        }
       }
       return _li;
     })(),
@@ -13210,7 +13230,7 @@ if(cv==="dashboard"){
 
   // ── Day-by-day detail table ──
   if(calDates.length>0){
-    h+=`<div class="csf fin" style="margin-top:16px"><div class="sti">Daily Dispatch Detail</div>
+    h+=`<details class="csf fin" style="margin-top:16px" open><summary class="sti" style="cursor:pointer;user-select:none">📅 Daily Dispatch Detail <span class="bg bgs bg-gy" style="font-weight:400">${calDates.length} days</span></summary>
     <table class="dtb"><thead><tr><th>Dispatch</th><th>Day</th><th>Trucks</th><th style="color:#E31837">CORT</th><th style="color:#EF6C00">STP</th><th>Pallets</th><th>Qty</th><th>CORT Qty</th><th>STP Qty</th><th style="width:140px">Load</th></tr></thead><tbody>`;
     let _totTrk=0,_totCrt=0,_totStp=0,_totPlt=0,_totPcs=0,_totCrtPcs=0,_totStpPcs=0;
     calDates.forEach(dk3=>{
@@ -13234,12 +13254,12 @@ if(cv==="dashboard"){
       <td style="color:#EF6C00">${d.stpPcs>0?d.stpPcs.toLocaleString():'—'}</td>
       <td><div style="height:14px;background:#F0F1F3;border-radius:3px;overflow:hidden"><div style="width:${barW}%;height:100%;background:${d.trucks>=10?"#C0392B":d.trucks>=6?"#E8745A":d.trucks>=3?"#F0C36D":"#78C68D"};border-radius:3px"></div></div></td></tr>`;
     });
-    h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="2" style="font-size:12px">Total · ${calDates.length} days</td><td style="color:var(--gn)">${_totTrk}</td><td style="color:#E31837">${_totCrt||'—'}</td><td style="color:#EF6C00">${_totStp||'—'}</td><td>${Number.isInteger(_totPlt)?_totPlt:_totPlt.toFixed(1)}</td><td>${_totPcs.toLocaleString()}</td><td style="color:#E31837">${_totCrtPcs>0?_totCrtPcs.toLocaleString():"—"}</td><td style="color:#EF6C00">${_totStpPcs>0?_totStpPcs.toLocaleString():"—"}</td><td></td></tr></tfoot></table></div>`;
+    h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="2" style="font-size:12px">Total · ${calDates.length} days</td><td style="color:var(--gn)">${_totTrk}</td><td style="color:#E31837">${_totCrt||'—'}</td><td style="color:#EF6C00">${_totStp||'—'}</td><td>${Number.isInteger(_totPlt)?_totPlt:_totPlt.toFixed(1)}</td><td>${_totPcs.toLocaleString()}</td><td style="color:#E31837">${_totCrtPcs>0?_totCrtPcs.toLocaleString():"—"}</td><td style="color:#EF6C00">${_totStpPcs>0?_totStpPcs.toLocaleString():"—"}</td><td></td></tr></tfoot></table></details>`;
   }
 
   // ── Assembly Timeline ──
+  const _asmRows=[];
   {
-    const _asmRows=[];
     const _asmSeen=new Set();
     for(const label in PLAN_CACHE){
       const P2=PLAN_CACHE[label];if(!P2)continue;
@@ -13332,7 +13352,7 @@ if(cv==="dashboard"){
       window._asmTimelineData=_asmRows;
       const _asmTotalQty=_asmRows.reduce((s,r)=>s+r.qty,0);
       const _asmSkus=new Set(_asmRows.map(r=>r.sku)).size;
-      h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></div>
+      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="event.stopPropagation();LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></summary>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
       <table class="dtb"><thead><tr>
         <th>Arrives Dallas</th><th>Leaves Dallas</th><th>Arrives Satellite</th><th>Leaves Satellite</th><th>Bump-in</th>
@@ -13383,52 +13403,34 @@ if(cv==="dashboard"){
           <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td>
           <td style="text-align:center">${_stHtml}</td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="11">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="11">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></details>`;
     }
   }
 
-  // ── Late LP Arrivals (Dashboard) ──
+  // ── Late Arrivals (Dashboard) — derived from Assembly Timeline (covers ALL venues) ──
   {
+    // _asmRows is already computed above and filtered to current view scope
     const _lateItems=[];
-    const _lateSeen=new Set();
-    for(const label in PLAN_CACHE){
-      const P2=PLAN_CACHE[label];if(!P2)continue;
-      // Same view-scope filter as Assembly Timeline
-      if(isFiltered){
-        const lab=isClusterSel2?selCluster:sel;
-        if(label!==lab&&!(isClusterSel2&&CLUSTERS[selCluster]?.venues.includes(label)))continue;
-      } else if(isRegion){
-        if(regionCat==='can'&&!vcIsCAN(label)&&!VN.find(v=>v.name===label&&vcIsCAN(v.cluster)))continue;
-        if(regionCat==='mex'&&!vcIsMEX(label)&&!VN.find(v=>v.name===label&&vcIsMEX(v.cluster)))continue;
-      } else if(isClusterOv){
-        if(label!==clusterOvName&&!(CLUSTERS[clusterOvName]?.venues.includes(label)))continue;
+    for(const r of _asmRows){
+      if(!r.bumpin&&!r.leavesWhs)continue;
+      let daysLate=null;let lateType='';
+      const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
+      const _whsLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
+      if(_dalLate){
+        daysLate=Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/864e5);
+        lateType='Dallas';
+      }else if(_whsLate){
+        daysLate=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/864e5);
+        lateType='WHS';
+      }else if(r.notInLp){
+        daysLate=null;lateType='No LP';
       }
-      const _abbrs=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
-      if(!_abbrs.length||!Object.keys(LP_ARRIVAL_MAP).length)continue;
-      P2.allT.forEach(t=>{
-        if(LM_excluded.has(t.id))return;
-        P2.days.forEach(day=>{
-          if(!day.trucks.includes(t))return;
-          const biKey=day.biK&&day.biK!=='no-bi'?day.biK:null;
-          const dd=t.dd||day.dKey;if(!dd)return;
-          const deadline=biKey||dd;
-          t.items.forEach(it=>{
-            const dedupKey=label+'|'+it.sku+'|'+t.id;
-            if(_lateSeen.has(dedupKey))return;
-            const src=(NOM[it.sku]?.src||'').toUpperCase();
-            if(src.startsWith('STP')||src.startsWith('CT'))return;
-            const lpArr=LM_getSkuLPArrival(it.sku,_abbrs);
-            if(!lpArr){
-              _lateSeen.add(dedupKey);
-              _lateItems.push({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',truckId:t.id,dispatch:dd,bumpin:biKey||dd,lpArrival:'None',dest:label,qty:it.loadQty||0,daysLate:null,src:NOM[it.sku]?.src||'—'});
-            }else if(lpArr>deadline){
-              _lateSeen.add(dedupKey);
-              const daysLate=Math.round((new Date(lpArr+'T12:00:00')-new Date(deadline+'T12:00:00'))/864e5);
-              _lateItems.push({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',truckId:t.id,dispatch:dd,bumpin:biKey||dd,lpArrival:lpArr,dest:label,qty:it.loadQty||0,daysLate,src:NOM[it.sku]?.src||'—'});
-            }
-          });
-        });
-      });
+      if(daysLate!==null||lateType==='No LP'){
+        _lateItems.push({sku:r.sku,name:r.nm,truckId:r.truckId,dispatch:r.dd,bumpin:r.bumpin||r.leavesWhs,
+          arrivesDallas:r.inStock?'In stock':(r.arrivesDallas||'—'),lpDeparts:r.lpDeparts||'—',
+          arrivesWhs:r.arrivesWhs||'—',leavesWhs:r.leavesWhs||'—',
+          dest:r.dest,qty:r.qty,daysLate,src:r.src||'—',whs:r.whs||'',lateType,isLp:r.isLp,notInLp:r.notInLp});
+      }
     }
     if(_lateItems.length>0){
       _lateItems.sort((a,b)=>(a.dest||'').localeCompare(b.dest||'')||(a.bumpin||'').localeCompare(b.bumpin||'')||(a.sku||'').localeCompare(b.sku||''));
@@ -13450,15 +13452,15 @@ if(cv==="dashboard"){
       window._lateArrivalData=_lateItems;
       window._lateByDestData=_lateByDest;
 
-      h+=`<div class="csf fin" style="margin-top:16px;border:2px solid var(--rd);background:linear-gradient(135deg,#fff,#FEF0F0)">
-        <div class="sti" style="display:flex;align-items:center;gap:8px">⚠ Late LP Arrivals
+      h+=`<details class="csf fin" style="margin-top:16px;border:2px solid var(--rd);background:linear-gradient(135deg,#fff,#FEF0F0)" open>
+        <summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">⚠ Late Arrivals
           <span class="bg bgs bg-rd">${_lateItems.length} items</span>
           <span class="bg bgs bg-rd">${_lateTotalSKUs} SKUs</span>
           <span class="bg bgs" style="background:var(--os);color:var(--or)">${_lateTotalTrucks} trucks</span>
           <span class="bg bgs" style="background:var(--os);color:var(--or)">max +${_maxLateAll}d</span>
-          <button class="rbtn" onclick="LM_exportLateArrivals()" style="margin-left:auto;background:var(--rs);color:var(--rd);border-color:#F5B8BA">⬇ Excel</button>
-        </div>
-        <p style="font-size:10px;color:var(--tt);margin:0 0 10px">SKUs where LP truck arrival date is after the venue bump-in date</p>`;
+          <button class="rbtn" onclick="event.stopPropagation();LM_exportLateArrivals()" style="margin-left:auto;background:var(--rs);color:var(--rd);border-color:#F5B8BA">⬇ Excel</button>
+        </summary>
+        <p style="font-size:10px;color:var(--tt);margin:0 0 10px">Items arriving late in the supply chain — Dallas late, WHS late, or missing LP shipment</p>`;
 
       // Summary table by destination/region
       h+=`<div style="margin-bottom:12px"><table class="dtb" style="font-size:11px"><thead><tr><th>Destination</th><th style="text-align:right">SKUs</th><th style="text-align:right">Trucks</th><th style="text-align:right">Qty</th><th style="text-align:right">Max Late</th></tr></thead><tbody>`;
@@ -13470,14 +13472,14 @@ if(cv==="dashboard"){
 
       // Full detail table
       h+=`<details><summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--rd);margin-bottom:8px">Show all ${_lateItems.length} items</summary>
-      <div style="overflow-x:auto"><table class="dtb" style="font-size:11px;white-space:nowrap"><thead><tr><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th>Truck</th><th>LM Dispatch</th><th>Bump-in</th><th>LP Arrival</th><th>Late</th><th>Qty</th></tr></thead><tbody>`;
+      <div style="overflow-x:auto"><table class="dtb" style="font-size:11px;white-space:nowrap"><thead><tr><th>Destination</th><th>SKU</th><th>Item</th><th>Source</th><th>Truck</th><th>LM Dispatch</th><th>Arrives Dallas</th><th>Leaves Dallas</th><th>Arrives WHS</th><th>Leaves WHS</th><th>Bump-in</th><th>Type</th><th>Late</th><th>Qty</th></tr></thead><tbody>`;
       const _sd2=d=>d?d.slice(5):'';
       _lateItems.forEach(l=>{
-        const arrDisp=l.lpArrival==='None'?`<span style="color:var(--rd);font-weight:600">None</span>`:`<span class="mono">${_sd2(l.lpArrival)}</span>`;
         const daysL=l.daysLate!=null?`<span style="color:var(--rd);font-weight:700">+${l.daysLate}d</span>`:'<span style="color:var(--rd)">—</span>';
-        h+=`<tr><td style="font-size:10px;font-weight:600">${l.dest}</td><td class="mono">${l.sku}</td><td class="tcl" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${l.name}</td><td style="font-size:10px;color:var(--ts)">${l.src}</td><td class="mono">${l.truckId}</td><td class="mono">${_sd2(l.dispatch)}</td><td class="mono">${_sd2(l.bumpin)}</td><td>${arrDisp}</td><td>${daysL}</td><td class="mono fw6">${l.qty.toLocaleString()}</td></tr>`;
+        const _typeBg=l.lateType==='Dallas'?'bg-or':l.lateType==='WHS'?'bg-rd':'bg-gy';
+        h+=`<tr><td style="font-size:10px;font-weight:600">${l.dest}</td><td class="mono">${l.sku}</td><td class="tcl" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${l.name}</td><td style="font-size:10px;color:var(--ts)">${l.src}</td><td class="mono">${l.truckId}</td><td class="mono">${_sd2(l.dispatch)}</td><td class="mono">${l.arrivesDallas==='In stock'?'<span style="color:var(--gn)">In stock</span>':_sd2(l.arrivesDallas)}</td><td class="mono">${l.notInLp?'<span style="color:var(--or)">N/A</span>':_sd2(l.lpDeparts)}</td><td class="mono">${l.notInLp?'<span style="color:var(--or)">N/A</span>':_sd2(l.arrivesWhs)}</td><td class="mono">${_sd2(l.leavesWhs)}</td><td class="mono">${_sd2(l.bumpin)}</td><td><span class="bg bgs ${_typeBg}" style="font-size:9px">${l.lateType||'—'}</span></td><td>${daysL}</td><td class="mono fw6">${l.qty.toLocaleString()}</td></tr>`;
       });
-      h+=`</tbody></table></div></details></div>`;
+      h+=`</tbody></table></div></details></details>`;
     }
   }
 
@@ -13509,7 +13511,7 @@ if(cv==="dashboard"){
       window._kitTimelineData=_kitRows;
       const _kitTotal=_kitRows.length;
       const _kitComps=_kitRows.reduce((s,r)=>s+r.compCount,0);
-      h+=`<div class="csf fin" style="margin-top:16px"><div class="sti" style="display:flex;align-items:center;gap:8px">📦 Kitting Timeline <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${_kitTotal} kits</span> <span class="bg bgs bg-gy">${_kitComps} components</span><button class="rbtn" onclick="LM_exportKitTimeline()" style="margin-left:auto;background:var(--gs);color:var(--gn);border-color:#B8DFCA">⬇ Excel</button></div>
+      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">📦 Kitting Timeline <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${_kitTotal} kits</span> <span class="bg bgs bg-gy">${_kitComps} components</span><button class="rbtn" onclick="event.stopPropagation();LM_exportKitTimeline()" style="margin-left:auto;background:var(--gs);color:var(--gn);border-color:#B8DFCA">⬇ Excel</button></summary>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">FF&amp;E and Stationery kits requiring warehouse kitting before dispatch — grouped by dispatch date</p>
       <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>Type</th><th>Kit</th><th>Venue</th><th style="text-align:center">Components</th><th style="text-align:center">Readiness</th></tr></thead><tbody>`;
       let _prevDd='';
@@ -13532,7 +13534,7 @@ if(cv==="dashboard"){
           <td class="mono" style="text-align:center">${r.compCount}</td>
           <td style="text-align:center"><span class="bg bgs" style="background:${rBg};color:${rColor}">${rPct}% (${r.readiness.inStock}/${r.readiness.total})</span></td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="6">Total</td><td class="mono" style="text-align:center">${_kitComps}</td><td></td></tr></tfoot></table></div>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="6">Total</td><td class="mono" style="text-align:center">${_kitComps}</td><td></td></tr></tfoot></table></details>`;
     }
   }
 
@@ -14367,26 +14369,32 @@ async function LM_exportLateArrivals(){
     // Color max late cells red
     destKeys.forEach((_,i)=>{const c=ws1.getRow(i+2).getCell('maxLate');c.font={bold:true,size:10,color:{argb:'FFC62A2F'}}});
 
-    // Sheet 2: All Items
+    // Sheet 2: All Items — full supply chain columns
     const ws2=wb.addWorksheet('All Late Items');
-    ws2.columns=[
+    const _lateCols=[
       {header:'Destination',key:'dest',width:32},
       {header:'SKU',key:'sku',width:18},
       {header:'Item',key:'name',width:35},
       {header:'Source',key:'src',width:10},
       {header:'Truck',key:'truckId',width:10},
       {header:'LM Dispatch',key:'dispatch',width:14},
+      {header:'Arrives Dallas',key:'arrDal',width:14},
+      {header:'Leaves Dallas',key:'lpDep',width:14},
+      {header:'Arrives WHS',key:'arrWhs',width:14},
+      {header:'Leaves WHS',key:'lvWhs',width:14},
       {header:'Bump-in',key:'bumpin',width:14},
-      {header:'LP Arrival',key:'lpArrival',width:14},
+      {header:'Late Type',key:'lateType',width:10},
       {header:'Days Late',key:'daysLate',width:10},
       {header:'Qty',key:'qty',width:10}
     ];
+    ws2.columns=_lateCols;
     _hdr(ws2);
     rows.forEach(r=>{
       ws2.addRow({dest:r.dest,sku:r.sku,name:r.name,src:r.src,truckId:r.truckId,
-        dispatch:_fmtD(r.dispatch),bumpin:_fmtD(r.bumpin),
-        lpArrival:r.lpArrival==='None'?'No LP shipment':_fmtD(r.lpArrival),
-        daysLate:r.daysLate!=null?r.daysLate:'N/A',qty:r.qty});
+        dispatch:_fmtD(r.dispatch),arrDal:r.arrivesDallas==='In stock'?'In stock':_fmtD(r.arrivesDallas),
+        lpDep:r.notInLp?'N/A':_fmtD(r.lpDeparts),arrWhs:r.notInLp?'N/A':_fmtD(r.arrivesWhs),
+        lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
+        lateType:r.lateType||'—',daysLate:r.daysLate!=null?r.daysLate:'N/A',qty:r.qty});
     });
     const totRow2=ws2.addRow({dest:'Total',qty:rows.reduce((s,r)=>s+(r.qty||0),0)});
     totRow2.font={bold:true};totRow2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
@@ -14410,17 +14418,22 @@ async function LM_exportLateArrivals(){
         {header:'Source',key:'src',width:10},
         {header:'Truck',key:'truckId',width:10},
         {header:'LM Dispatch',key:'dispatch',width:14},
+        {header:'Arrives Dallas',key:'arrDal',width:14},
+        {header:'Leaves Dallas',key:'lpDep',width:14},
+        {header:'Arrives WHS',key:'arrWhs',width:14},
+        {header:'Leaves WHS',key:'lvWhs',width:14},
         {header:'Bump-in',key:'bumpin',width:14},
-        {header:'LP Arrival',key:'lpArrival',width:14},
+        {header:'Late Type',key:'lateType',width:10},
         {header:'Days Late',key:'daysLate',width:10},
         {header:'Qty',key:'qty',width:10}
       ];
       _hdr(ws);
       destItems.forEach(r=>{
         ws.addRow({sku:r.sku,name:r.name,src:r.src,truckId:r.truckId,
-          dispatch:_fmtD(r.dispatch),bumpin:_fmtD(r.bumpin),
-          lpArrival:r.lpArrival==='None'?'No LP shipment':_fmtD(r.lpArrival),
-          daysLate:r.daysLate!=null?r.daysLate:'N/A',qty:r.qty});
+          dispatch:_fmtD(r.dispatch),arrDal:r.arrivesDallas==='In stock'?'In stock':_fmtD(r.arrivesDallas),
+          lpDep:r.notInLp?'N/A':_fmtD(r.lpDeparts),arrWhs:r.notInLp?'N/A':_fmtD(r.arrivesWhs),
+          lvWhs:_fmtD(r.leavesWhs),bumpin:_fmtD(r.bumpin),
+          lateType:r.lateType||'—',daysLate:r.daysLate!=null?r.daysLate:'N/A',qty:r.qty});
       });
       const tot=ws.addRow({sku:'Total · '+destItems.length+' items',qty:destItems.reduce((s,r)=>s+(r.qty||0),0)});
       tot.font={bold:true};tot.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
