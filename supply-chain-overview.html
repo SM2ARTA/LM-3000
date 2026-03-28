@@ -1683,48 +1683,62 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
   <h2 style="font-size:30px;margin-bottom:4px">Kitting — One Box, Everything Inside</h2>
   <div class="sub" style="font-size:15px;margin-bottom:12px">Instead of sending 12 separate items to each venue, we bundle them into a single kit at the warehouse. One SKU, one line on the truck.</div>
 
-  <!-- ROW 1: Problem → Solution → CORT — single strip -->
-  <div style="display:flex;gap:0;margin-bottom:12px;align-items:stretch">
-    <div style="flex:3;background:var(--rd-s);border:1px solid var(--rd-b);border-radius:12px 0 0 12px;padding:14px 18px">
-      <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--rd);text-transform:uppercase;margin-bottom:6px">Without kitting</div>
-      <div style="display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap">
-        <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:3px 8px;font-size:9px">Padlocks ×8</div>
-        <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:3px 8px;font-size:9px">Shelving ×4</div>
-        <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:3px 8px;font-size:9px">Bins ×8</div>
-        <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:3px 8px;font-size:9px">Hangers ×2</div>
-        <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:3px 8px;font-size:9px">Mirrors ×18</div>
-        <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:3px 8px;font-size:9px">Benches ×6</div>
-        <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:3px 8px;font-size:9px">Tape ×6</div>
-        <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:3px 8px;font-size:9px">+5 more</div>
-      </div>
-      <div style="font-size:10px;color:var(--rd);font-weight:700">12 separate line items per venue × 214 venues = chaos</div>
-    </div>
-    <div style="display:flex;align-items:center;font-size:24px;font-weight:800;color:#00897B;padding:0 14px;background:#E0F7F3">→</div>
-    <div style="flex:2;background:#E0F7F3;border:1px solid #80CBC4;padding:14px 18px">
-      <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:#00897B;text-transform:uppercase;margin-bottom:6px">With kitting</div>
-      <div style="background:#fff;border:2px solid #00897B;border-radius:10px;padding:10px 14px;text-align:center;margin-bottom:6px">
-        <div style="font-size:16px;font-weight:800;color:#00897B">1 Kit = 1 SKU</div>
-        <div style="font-size:10px;color:var(--ts)">12 items inside · tracked as one unit</div>
-      </div>
-      <div style="font-size:10px;color:#00897B;font-weight:700">1 line on the truck · nothing gets lost</div>
-    </div>
-    <div style="flex:3;background:var(--sec-s);border:1px solid var(--sec-b);border-left:4px solid var(--sec);border-radius:0 12px 12px 0;padding:14px 18px">
-      <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--sec);text-transform:uppercase;margin-bottom:4px">Why it matters for CORT</div>
-      <div style="font-size:11px;color:var(--ts);line-height:1.5;margin-bottom:6px">
-        CORT will <b>not</b> pick-and-pack — they only <b>cross-dock</b>. We send <b>pre-built kits</b> to CORT, who holds them for all venues in their cluster and delivers per <b>bump-in schedule</b>.
-      </div>
-      <div style="display:flex;gap:6px">
-        <div style="flex:1;background:#fff;border:1px solid var(--sec-b);border-radius:6px;padding:5px 8px;text-align:center">
-          <div style="font-size:11px;font-weight:800;color:var(--sec)">1 truck to CORT</div>
-          <div style="font-size:9px;color:var(--ts)">instead of many</div>
+  <!-- ROW 1: Before → After (2 cols) + CORT context -->
+  <div style="display:flex;gap:14px;margin-bottom:14px;align-items:stretch">
+    <!-- Before / After -->
+    <div style="flex:1;display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch">
+      <!-- Before -->
+      <div style="background:var(--rd-s);border:1px solid var(--rd-b);border-radius:12px 0 0 12px;padding:16px 20px;display:flex;flex-direction:column">
+        <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--rd);text-transform:uppercase;margin-bottom:8px">Before — 12 separate items</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">
+          <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:4px 8px;font-size:10px;display:flex;justify-content:space-between"><span>Padlocks</span><span style="color:var(--rd);font-weight:700">×8</span></div>
+          <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:4px 8px;font-size:10px;display:flex;justify-content:space-between"><span>Shelving</span><span style="color:var(--rd);font-weight:700">×4</span></div>
+          <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:4px 8px;font-size:10px;display:flex;justify-content:space-between"><span>Storage bins</span><span style="color:var(--rd);font-weight:700">×8</span></div>
+          <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:4px 8px;font-size:10px;display:flex;justify-content:space-between"><span>Mirrors</span><span style="color:var(--rd);font-weight:700">×18</span></div>
+          <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:4px 8px;font-size:10px;display:flex;justify-content:space-between"><span>Benches</span><span style="color:var(--rd);font-weight:700">×6</span></div>
+          <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:4px 8px;font-size:10px;display:flex;justify-content:space-between"><span>Hangers</span><span style="color:var(--rd);font-weight:700">×2</span></div>
+          <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:4px 8px;font-size:10px;display:flex;justify-content:space-between"><span>Tape</span><span style="color:var(--rd);font-weight:700">×6</span></div>
+          <div style="background:#fff;border:1px solid var(--rd-b);border-radius:5px;padding:4px 8px;font-size:10px;color:var(--tt);text-align:center">+5 more items</div>
         </div>
-        <div style="flex:1;background:#fff;border:1px solid var(--sec-b);border-radius:6px;padding:5px 8px;text-align:center">
-          <div style="font-size:11px;font-weight:800;color:var(--sec)">Pre-built in Dallas</div>
-          <div style="font-size:9px;color:var(--ts)">ready to cross-dock</div>
+        <div style="font-size:11px;color:var(--rd);font-weight:700;margin-top:auto">12 lines × 214 venues = <span style="font-size:13px">2,568</span> line items to track</div>
+      </div>
+      <!-- Arrow -->
+      <div style="display:flex;align-items:center;padding:0 16px;background:linear-gradient(90deg,var(--rd-s) 0%,#E0F7F3 100%)">
+        <div style="font-size:28px;font-weight:800;color:#00897B">→</div>
+      </div>
+      <!-- After -->
+      <div style="background:#E0F7F3;border:1px solid #80CBC4;border-radius:0 12px 12px 0;padding:16px 20px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+        <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:#00897B;text-transform:uppercase;margin-bottom:10px">After — 1 kit per venue</div>
+        <div style="background:#fff;border:2px solid #00897B;border-radius:12px;padding:16px 28px;margin-bottom:10px;width:100%;max-width:280px">
+          <div style="font-size:22px;font-weight:800;color:#00897B;letter-spacing:-0.5px">1 Kit = 1 SKU</div>
+          <div style="font-size:11px;color:var(--ts);margin-top:4px">12 items inside · tracked as one unit</div>
         </div>
-        <div style="flex:1;background:#fff;border:1px solid var(--sec-b);border-radius:6px;padding:5px 8px;text-align:center">
-          <div style="font-size:11px;font-weight:800;color:var(--sec)">Per bump-in</div>
-          <div style="font-size:9px;color:var(--ts)">CORT delivers on time</div>
+        <div style="font-size:12px;color:#00897B;font-weight:700">1 line on the truck</div>
+        <div style="font-size:11px;color:var(--ts)">nothing gets lost · easy to track</div>
+      </div>
+    </div>
+
+    <!-- CORT context -->
+    <div style="width:420px;background:var(--sec-s);border:1px solid var(--sec-b);border-left:4px solid var(--sec);border-radius:10px;padding:16px 20px;display:flex;flex-direction:column">
+      <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sec);text-transform:uppercase;margin-bottom:8px">Why it matters for CORT stadiums</div>
+      <div style="font-size:12px;color:var(--ts);line-height:1.6;margin-bottom:10px">
+        CORT will <b>not</b> pick-and-pack individual items — they only <b>cross-dock</b>.
+      </div>
+      <div style="font-size:12px;color:var(--ts);line-height:1.6;margin-bottom:10px">
+        We send <b>pre-built kits</b> to CORT. They hold kits for all venues in their cluster and deliver per the <b>bump-in schedule</b>.
+      </div>
+      <div style="display:flex;gap:8px;margin-top:auto">
+        <div style="flex:1;background:#fff;border:1px solid var(--sec-b);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:13px;font-weight:800;color:var(--sec)">1 truck</div>
+          <div style="font-size:9px;color:var(--ts);margin-top:2px">to CORT per cluster<br>instead of many</div>
+        </div>
+        <div style="flex:1;background:#fff;border:1px solid var(--sec-b);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:13px;font-weight:800;color:var(--sec)">Pre-built</div>
+          <div style="font-size:9px;color:var(--ts);margin-top:2px">assembled in Dallas<br>ready to cross-dock</div>
+        </div>
+        <div style="flex:1;background:#fff;border:1px solid var(--sec-b);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:13px;font-weight:800;color:var(--sec)">Per bump-in</div>
+          <div style="font-size:9px;color:var(--ts);margin-top:2px">CORT delivers<br>on venue schedule</div>
         </div>
       </div>
     </div>
