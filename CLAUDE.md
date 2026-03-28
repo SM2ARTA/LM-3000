@@ -688,7 +688,7 @@ Stored in `VS[venue]` (venue settings), accessed via helper functions:
 9. **Venue Assembly** — 6,658 RGS items at 10 stadiums + IBC, per-stadium table, tools per stadium (10 tools, 3 sets each), VLM tools disclaimer
 10. **CORT Stadiums** — 2,128 items, What's Ours/Theirs, 37 CORT SKUs (24 rental + 13 retail), 32,627 items
 11. **Staples** — USA Direct/Kits/MEX&CAN, 166 SKUs, 83 kits, 69 direct, delivery split table
-12. **Kitting Operations** — "One Box, Everything Inside" — problem/solution visual, FF&E kits (tools/fixtures) + Stationery kits (office supplies), auto-strategy grid by country/venue type, 201 kits / 214 venues, kit lifecycle flow, readiness tracking (100%/67%/0%). Pure HTML/CSS.
+12. **Kitting Operations** — "One Box, Everything Inside" — before/after visual (12 items → 1 kit SKU), CORT cross-dock context (won't pick-and-pack, only cross-dock, pre-built kits, per bump-in), FF&E kits (🔧 tools/fixtures, FNKIT, ~12 items) + Stationery kits (📎 office supplies, OSKIT, ~14 items, packed by Staples — via Dallas or direct TBC), WHS kitting process (Decide → OOR → Pack → ASN Inbound → Ship 1 kit SKU on OOR → Venue), 118 FF&E kits / 214 venues, readiness tracking (100%/67%/0%). Pure HTML/CSS.
 13. **Cardboard Furniture** — Re-Board tables (900) + LOOK welcome desks (278), product images
 14. **Operations Matrix** — 214 venues, full route/WHS/assembly breakdown table, MEX/CAN/USA/CORT rows
 15. **Action Items** — 6 workstreams in 3×2 grid (Materials, Customs, Distribution, Warehousing, Venue Logistics, CORT)
