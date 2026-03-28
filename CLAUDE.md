@@ -818,6 +818,7 @@ Stored in `VS[venue]` (venue settings), accessed via helper functions:
 - Legend: bgcolor squares (10×10px cells) next to text
 - Copy uses `navigator.clipboard.write` with raw innerHTML for best style preservation
 - MSO boilerplate in `<head>`: `PixelsPerInch`, `mso-table-lspace`, `mso-line-height-rule`
+- **Inter-table gap**: Outlook adds default spacing between adjacent `<table>` elements that CSS cannot remove. Fix: merge summary chips/banners into the same table as the data grid (as a first row with `colspan`) instead of using separate tables. Applied to: This Week, Inbounds Forecast, Outbounds Forecast, Late Arrivals sections.
 
 ### Late Engine V1 (Dashboard + Digest)
 Checks ALL items on ALL LM trucks (not just assembled) across 3 supply chain paths:

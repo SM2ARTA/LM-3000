@@ -311,18 +311,16 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   let _wkTotalIn=0,_wkTotalOut=0;
   for(let i=0;i<_showDays;i++){_wkTotalIn+=_wkIn[_weekDays[i]].length;_wkTotalOut+=_wkOut[_weekDays[i]].length}
 
-  // Week summary chips
-  html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px"><tr>';
-  html+='<td style="padding:0"><table cellpadding="0" cellspacing="0"><tr>';
+  // Main grid (chips merged as first row to avoid Outlook inter-table gap)
+  html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
+
+  // Week summary chips row
+  html+='<tr><td colspan="'+(_showDays+1)+'" style="padding:0 0 4px 0">';
+  html+='<table cellpadding="0" cellspacing="0" border="0"><tr>';
   html+='<td bgcolor="#E6F5ED" style="padding:5px 14px;font-size:11px;font-weight:700;color:#12804A;border:none">&#128229; '+_wkTotalIn+' inbound</td>';
   html+='<td style="width:8px"></td>';
   html+='<td bgcolor="#F0EBFE" style="padding:5px 14px;font-size:11px;font-weight:700;color:#4A148C;border:none">&#128228; '+_wkTotalOut+' outbound</td>';
-  html+='</tr></table></td></tr></table>';
-  // Spacer (Outlook ignores margin on tables)
-  html+='<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding:0;height:2px;font-size:2px;line-height:2px">&nbsp;</td></tr></table>';
-
-  // Main grid
-  html+='<table width="100%" cellpadding="0" cellspacing="0" style="'+_T+'">';
+  html+='</tr></table></td></tr>';
 
   // Header row
   html+='<tr>';
@@ -472,11 +470,12 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // ── Inbounds Forecast ──
   const _fcInTotal=_fcAllDays.reduce((s,d)=>s+_fcInByDate[d].length,0);
   html+=_sec('&#128229;','Inbounds &#8212; Forecast ('+_fcLabel+')','#00897B');
-  html+='<tr><td style="padding:0 32px 8px"><table cellpadding="0" cellspacing="0"><tr>'+
-    '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+arrived.length+' arrived</td><td style="width:10px"></td>'+
-    '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">&#9203; '+upcoming.length+' upcoming ('+_fcInTotal+' in window)</td>'+
+  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
+  // Chips row merged into data table
+  html+='<tr><td colspan="5" style="padding:0 0 4px 0"><table cellpadding="0" cellspacing="0" border="0"><tr>'+
+    '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A;border:none">&#10004; '+arrived.length+' arrived</td><td style="width:10px"></td>'+
+    '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A;border:none">&#9203; '+upcoming.length+' upcoming ('+_fcInTotal+' in window)</td>'+
   '</tr></table></td></tr>';
-  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="'+_T+'">';
   html+='<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">SOURCE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TYPE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">QTY</td></tr>';
   let _inRowIdx=0;
   for(const d of _fcAllDays){
@@ -520,13 +519,14 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // ── Outbounds Forecast ──
   const _fcOutTotal=_fcAllDays.reduce((s,d)=>s+_fcOutByDate[d].length,0);
   html+=_sec('&#128228;','Outbounds &#8212; Forecast ('+_fcLabel+')','#751312');
-  html+='<tr><td style="padding:0 32px 8px"><table cellpadding="0" cellspacing="0"><tr>'+
-    '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A">&#10004; '+lpDispatched+' sent</td><td style="width:10px"></td>'+
-    '<td bgcolor="#E3F2FD" style="padding:4px 12px;font-size:12px;font-weight:700;color:#304FFE">'+lpReady+' ready</td><td style="width:10px"></td>'+
-    '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A">'+lpPending+' pending</td><td style="width:10px"></td>'+
-    '<td bgcolor="#F4F5F7" style="padding:4px 12px;font-size:12px;font-weight:600;color:#666">'+_fcOutTotal+' in window</td>'+
+  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
+  // Chips row merged into data table
+  html+='<tr><td colspan="6" style="padding:0 0 4px 0"><table cellpadding="0" cellspacing="0" border="0"><tr>'+
+    '<td bgcolor="#E6F5ED" style="padding:4px 12px;font-size:12px;font-weight:700;color:#12804A;border:none">&#10004; '+lpDispatched+' sent</td><td style="width:10px"></td>'+
+    '<td bgcolor="#E3F2FD" style="padding:4px 12px;font-size:12px;font-weight:700;color:#304FFE;border:none">'+lpReady+' ready</td><td style="width:10px"></td>'+
+    '<td bgcolor="#FEF3EB" style="padding:4px 12px;font-size:12px;font-weight:700;color:#C4550A;border:none">'+lpPending+' pending</td><td style="width:10px"></td>'+
+    '<td bgcolor="#F4F5F7" style="padding:4px 12px;font-size:12px;font-weight:600;color:#666;border:none">'+_fcOutTotal+' in window</td>'+
   '</tr></table></td></tr>';
-  html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" style="'+_T+'">';
   html+='<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TRUCK</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TYPE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">STATUS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">PALLETS</td></tr>';
   let _outRowIdx=0;
   for(const d of _fcAllDays){
@@ -589,10 +589,10 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   (lmLate.length===0?
     '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E6F5ED" style="padding:14px 18px;font-size:13px;color:#12804A;font-weight:600;border:none">&#10004; No late arrival risks detected. All items on track.</td></tr></table>'
   :
-    '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#FDEBED" style="padding:12px 18px;font-size:13px;color:#C62828;font-weight:600;border:none">'+
+    '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">'+
+    '<tr><td colspan="6" bgcolor="#FDEBED" style="padding:12px 18px;font-size:13px;color:#C62828;font-weight:600;border:none">'+
       lmLate.length+' items &middot; '+_lateTotalSKUs+' SKUs &middot; '+_lateTotalTrucks+' trucks &middot; max +'+_maxLateAll+'d'+
-    '</td></tr></table>'+
-    '<table width="100%" cellpadding="0" cellspacing="0" style="'+_T+'margin-top:10px">'+
+    '</td></tr>'+
     '<tr bgcolor="#FDEBED"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">PATH</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">TRUCKS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">QTY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">MAX LATE</td></tr>'+
     _lateDestKeys.map((dest,i)=>{const d=lateByDest[dest];return _trow([
       {v:'<b>'+dest+'</b>'},
