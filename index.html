@@ -12612,7 +12612,7 @@ function rConstraints(){
     ${_field('i-lt','Outbound transit (d)',lt,defLT,'number',0)}
     ${_field('i-bi','Bump-in',bi,defBI,'date')}
   </div>
-  ${(()=>{const _isCl=CLUSTERS[key]&&!vcIsCAN(key)&&!vcIsMEX(key);return _isCl?`<div class="cgrid" style="margin-top:6px${isV?';pointer-events:none':''}"><div class="cf"><label style="display:flex;justify-content:space-between;align-items:center">WH Turnaround (d)<span style="font-size:8px;color:var(--gn)">def:5</span></label><input type="number" min="0" max="30" id="i-cta" value="${LM_clusterTurnaround}" style="border-color:${LM_clusterTurnaround!==5?'var(--pu)':'var(--bd)'}${isV?';opacity:.6':''}"${isV?' disabled':''}></div></div>`:''})()}
+  ${(()=>{const _isCl=CLUSTERS[key]&&!vcIsCAN(key)&&!vcIsMEX(key);return _isCl?`<div class="cgrid" style="margin-top:6px${isV?';pointer-events:none':''}"><div class="cf"><label style="display:flex;justify-content:space-between;align-items:center">CORT processing (d)<span style="font-size:8px;color:var(--gn)">def:5</span></label><input type="number" min="0" max="30" id="i-cta" value="${LM_clusterTurnaround}" style="border-color:${LM_clusterTurnaround!==5?'var(--pu)':'var(--bd)'}${isV?';opacity:.6':''}"${isV?' disabled':''}></div></div>`:''})()}
   ${(()=>{
     const dOvr=VS[key]?.dateOverrides||{};
     const dates=Object.keys(dOvr).sort();
