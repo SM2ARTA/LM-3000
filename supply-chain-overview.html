@@ -2263,11 +2263,11 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
 <div class="S">
   <div class="hd">
     <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
-    <span class="badge badge-pri">LP ENGINE V5</span>
+    <span class="badge badge-pri">LP ENGINE V5.1</span>
   </div>
 
   <h2>Load Plan Engine — How It Works</h2>
-  <div class="sub sub-tight">The LP Engine decides what goes on each truck from Dallas. It runs in three stages.</div>
+  <div class="sub sub-tight">The LP Engine decides what goes on each truck from Dallas. It runs in three stages with stock-aware inventory management.</div>
 
   <!-- THREE STAGES -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:10px">
@@ -2317,12 +2317,16 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
         <text x="435" y="188" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" font-weight="600" fill="#4A148C">total</text>
 
         <!-- Key rules — bigger cards -->
-        <rect x="10" y="252" width="214" height="56" rx="10" fill="#F5F5FA" stroke="#E0E0EE"/>
-        <text x="117" y="274" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="800" fill="#4A148C">KEY RULE</text>
-        <text x="117" y="294" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">MEX/CAN gets stock first</text>
-        <rect x="236" y="252" width="214" height="56" rx="10" fill="#F5F5FA" stroke="#E0E0EE"/>
-        <text x="343" y="274" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="12" font-weight="800" fill="#4A148C">SHARED POOL</text>
-        <text x="343" y="294" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="10" fill="#555570">USA gets whatever remains</text>
+        <rect x="10" y="252" width="140" height="56" rx="10" fill="#F5F5FA" stroke="#E0E0EE"/>
+        <text x="80" y="274" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="800" fill="#4A148C">PRIORITY</text>
+        <text x="80" y="294" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">MEX/CAN ships first</text>
+        <rect x="158" y="252" width="150" height="56" rx="10" fill="#F5F5FA" stroke="#E0E0EE"/>
+        <text x="233" y="274" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="800" fill="#4A148C">SHARED POOL</text>
+        <text x="233" y="294" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#555570">USA gets remainder</text>
+        <rect x="316" y="252" width="134" height="56" rx="10" fill="#E6F5ED" stroke="#B8DFCA"/>
+        <text x="383" y="274" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="11" font-weight="800" fill="#12804A">V5.1 FIX</text>
+        <text x="383" y="290" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#12804A">Stock rebuilt between</text>
+        <text x="383" y="302" text-anchor="middle" font-family="'Noto Sans',sans-serif" font-size="9" fill="#12804A">buckets (no double-use)</text>
 
         <!-- Consolidation — bigger -->
         <rect x="10" y="322" width="440" height="68" rx="10" fill="#EDE7F6" stroke="#C5B3E6"/>
@@ -2703,7 +2707,199 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
 </div>
 
 <!-- ════════════════════════════════════════════════════════════════
-     SLIDE 19 — ASSEMBLY TIMELINE REPORT
+     SLIDE 19 — LATE ENGINE DETECTION
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S" style="padding:56px 80px 56px">
+  <div class="hd" style="margin-bottom:20px">
+    <div class="logo"><div class="li">FWC</div><span class="lt">SM²ARTA™</span></div>
+    <span class="badge badge-rd">LATE ENGINE</span>
+  </div>
+
+  <h2 style="font-size:30px;margin-bottom:4px">Will It Arrive on Time?</h2>
+  <div class="sub" style="font-size:15px;margin-bottom:16px">For every item on every truck, the system traces the full journey and flags anything that won't make it on time.</div>
+
+  <!-- ROW 1: KPI strip + path decision -->
+  <div style="display:flex;gap:14px;margin-bottom:14px;align-items:stretch">
+    <div style="display:flex;gap:10px;flex:1">
+      <div style="background:var(--rd-s);border:1px solid var(--rd-b);border-radius:10px;padding:10px 0;text-align:center;flex:1">
+        <div style="font-size:30px;font-weight:800;color:var(--rd);font-family:var(--fm);line-height:1">166K</div>
+        <div style="font-size:10px;color:var(--rd);font-weight:600;margin-top:3px">items checked</div>
+      </div>
+      <div style="background:var(--rd-s);border:1px solid var(--rd-b);border-radius:10px;padding:10px 0;text-align:center;flex:1">
+        <div style="font-size:30px;font-weight:800;color:var(--rd);font-family:var(--fm);line-height:1">~500</div>
+        <div style="font-size:10px;color:var(--rd);font-weight:600;margin-top:3px">trucks scanned</div>
+      </div>
+      <div style="background:var(--rd-s);border:1px solid var(--rd-b);border-radius:10px;padding:10px 0;text-align:center;flex:1">
+        <div style="font-size:30px;font-weight:800;color:var(--rd);font-family:var(--fm);line-height:1">3</div>
+        <div style="font-size:10px;color:var(--rd);font-weight:600;margin-top:3px">supply chain paths</div>
+      </div>
+    </div>
+    <div style="width:420px;background:var(--bg);border-radius:10px;padding:10px 20px;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:11px;font-weight:800;color:var(--tp);margin-bottom:6px">Which path does each item take?</div>
+      <div style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--ts)">
+        <div style="display:flex;align-items:center;gap:6px"><span style="display:inline-flex;width:16px;height:16px;border-radius:50%;background:#12804A;color:#fff;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0">3</span> Dallas Stadium / IBC? → <b>Direct</b></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="display:inline-flex;width:16px;height:16px;border-radius:50%;background:var(--pri);color:#fff;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0">1</span> Destination has LP truck? → <b>LP-Fed</b></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="display:inline-flex;width:16px;height:16px;border-radius:50%;background:var(--a3);color:#fff;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0">2</span> Everything else → <b>Via satellite WHS</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2: Three paths — full width, equal height -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;flex:1">
+
+    <!-- PATH 1 — LP-Fed -->
+    <div style="background:#fff;border:1px solid var(--pri-b);border-left:4px solid var(--pri);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column">
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--pri);text-transform:uppercase;margin-bottom:2px">Path 1 — LP-Fed</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">MEX · CAN · HOU · KC · NY</div>
+      <div style="font-size:10px;color:var(--ts);margin-bottom:10px;line-height:1.5">Item rides an LP truck from Dallas to a satellite warehouse, then an LM truck takes it to the venue.</div>
+
+      <!-- Journey strip -->
+      <div style="display:flex;align-items:center;gap:0;margin-bottom:12px">
+        <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:6px;padding:6px 8px;text-align:center;flex:1"><div style="font-size:9px;font-weight:700;color:var(--pri)">Container</div><div style="font-size:8px;color:var(--ts)">arrives Dallas</div></div>
+        <div style="color:var(--pri);font-weight:700;padding:0 3px;font-size:11px">→</div>
+        <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:6px;padding:6px 8px;text-align:center;flex:1"><div style="font-size:9px;font-weight:700;color:var(--pri)">9d proc</div><div style="font-size:8px;color:var(--ts)">ready date</div></div>
+        <div style="color:var(--pri);font-weight:700;padding:0 3px;font-size:11px">→</div>
+        <div style="background:var(--pri);border-radius:6px;padding:6px 8px;text-align:center;flex:1"><div style="font-size:9px;font-weight:700;color:#fff">LP truck</div><div style="font-size:8px;color:#fff;opacity:0.8">ships out</div></div>
+        <div style="color:var(--pri);font-weight:700;padding:0 3px;font-size:11px">→</div>
+        <div style="background:var(--pri-s);border:1px solid var(--pri-b);border-radius:6px;padding:6px 8px;text-align:center;flex:1.2"><div style="font-size:9px;font-weight:700;color:var(--pri)">Satellite WHS</div><div style="font-size:8px;color:var(--ts)">proc → LM truck</div></div>
+      </div>
+
+      <!-- What can go wrong -->
+      <div style="font-size:11px;font-weight:800;color:var(--rd);margin-bottom:6px">What can go wrong?</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;flex:1">
+        <div style="background:var(--rd-s);border:1px solid var(--rd-b);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:800;color:var(--rd)">Not ready in Dallas</div>
+          <div style="font-size:9px;color:var(--ts);margin-top:2px;line-height:1.4">"LP truck left before the item was ready to load."</div>
+        </div>
+        <div style="background:#FEF3EB;border:1px solid #F5D6B8;border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:800;color:#C4550A">Long transit</div>
+          <div style="font-size:9px;color:var(--ts);margin-top:2px;line-height:1.4">"Shipped on time but drive to WHS took too long."</div>
+        </div>
+        <div style="background:#F0EBFE;border:1px solid #D4C5FE;border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:800;color:#6E3FF3">Long processing</div>
+          <div style="font-size:9px;color:var(--ts);margin-top:2px;line-height:1.4">"Arrived at WHS fine, but 3-day processing pushed past dispatch."</div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:800;color:#555570">No LP truck found</div>
+          <div style="font-size:9px;color:var(--ts);margin-top:2px;line-height:1.4">"Venue needs LP delivery but no truck was planned for this SKU."</div>
+        </div>
+      </div>
+
+      <!-- Destinations -->
+      <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:9px;font-weight:700;color:var(--pri)">Applies to:</span>
+        <span style="background:var(--pri-s);padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;color:var(--pri);font-family:var(--fm)">TOR</span>
+        <span style="background:var(--pri-s);padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;color:var(--pri);font-family:var(--fm)">VAN</span>
+        <span style="background:var(--pri-s);padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;color:var(--pri);font-family:var(--fm)">CDMX</span>
+        <span style="background:var(--pri-s);padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;color:var(--pri);font-family:var(--fm)">GDL</span>
+        <span style="background:var(--pri-s);padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;color:var(--pri);font-family:var(--fm)">MTY</span>
+        <span style="background:var(--pri-s);padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;color:var(--pri);font-family:var(--fm)">HOU</span>
+        <span style="background:var(--pri-s);padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;color:var(--pri);font-family:var(--fm)">KC</span>
+        <span style="background:var(--pri-s);padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;color:var(--pri);font-family:var(--fm)">NY</span>
+      </div>
+    </div>
+
+    <!-- PATH 2 — USA via Satellite -->
+    <div style="background:#fff;border:1px solid var(--a3-b);border-left:4px solid var(--a3);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column">
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--a3);text-transform:uppercase;margin-bottom:2px">Path 2 — USA via Satellite</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">USA non-stadium venues</div>
+      <div style="font-size:10px;color:var(--ts);margin-bottom:10px;line-height:1.5">No LP truck — dates computed <b>backwards</b> from bump-in. "When must this item leave Dallas?"</div>
+
+      <!-- Example story -->
+      <div style="background:var(--a3-s);border:1px solid var(--a3-b);border-radius:8px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:800;color:var(--a3);margin-bottom:4px">Start from Bump-in, count backwards</div>
+        <div style="font-size:10px;color:var(--ts);line-height:1.6">
+          "Venue opens <b>Apr 16</b>. LM truck needs 0d transit.<br>
+          WHS needs 3d processing. Inbound takes 2d.<br>
+          <span style="color:var(--a3);font-weight:700">→ Item must leave Dallas by Apr 11.</span>"
+        </div>
+      </div>
+
+      <!-- Backwards chain -->
+      <div style="font-size:10px;font-weight:800;color:var(--a3);margin-bottom:6px">The backwards chain:</div>
+      <div style="display:flex;align-items:center;gap:0;margin-bottom:12px;background:var(--sf);border:1px solid var(--a3-b);border-radius:8px;padding:8px 6px">
+        <div style="background:var(--a3-s);border-radius:5px;padding:4px 7px;font-size:9px;font-weight:700;color:var(--a3);text-align:center;flex:1">Need-by</div>
+        <div style="font-size:9px;color:var(--a3);padding:0 2px">←2d←</div>
+        <div style="background:var(--a3-s);border-radius:5px;padding:4px 7px;font-size:9px;font-weight:700;color:var(--a3);text-align:center;flex:1">Arr WHS</div>
+        <div style="font-size:9px;color:var(--a3);padding:0 2px">←3d←</div>
+        <div style="background:var(--a3-s);border-radius:5px;padding:4px 7px;font-size:9px;font-weight:700;color:var(--a3);text-align:center;flex:1">Dispatch</div>
+        <div style="font-size:9px;color:var(--a3);padding:0 2px">←0d←</div>
+        <div style="background:var(--a3);border-radius:5px;padding:4px 7px;font-size:9px;font-weight:700;color:#fff;text-align:center;flex:1.2">Bump-in<br>Apr 16</div>
+      </div>
+
+      <!-- Late condition -->
+      <div style="background:var(--rd-s);border:1px solid var(--rd-b);border-radius:8px;padding:10px 14px;margin-bottom:12px;flex:1">
+        <div style="font-size:11px;font-weight:800;color:var(--rd);margin-bottom:4px">Late = item not ready by the need-by date</div>
+        <div style="font-size:10px;color:var(--ts);line-height:1.5">"Container arrives Apr 14 but item needed to leave Dallas by Apr 11 → <b style="color:var(--rd)">3 days late</b>"</div>
+      </div>
+
+      <!-- Parameters -->
+      <div style="display:flex;gap:6px">
+        <div style="flex:1;background:var(--a3-s);border:1px solid var(--a3-b);border-radius:6px;padding:6px;text-align:center;font-size:9px;font-weight:700;color:var(--a3)">Inbound<br>transit (d)</div>
+        <div style="flex:1;background:var(--a3-s);border:1px solid var(--a3-b);border-radius:6px;padding:6px;text-align:center;font-size:9px;font-weight:700;color:var(--a3)">WHS<br>processing (d)</div>
+        <div style="flex:1;background:var(--a3-s);border:1px solid var(--a3-b);border-radius:6px;padding:6px;text-align:center;font-size:9px;font-weight:700;color:var(--a3)">Outbound<br>transit (d)</div>
+      </div>
+    </div>
+
+    <!-- PATH 3 + outputs + WHS defaults -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <!-- Path 3 -->
+      <div style="background:#fff;border:1px solid #B8DFCA;border-left:4px solid #12804A;border-radius:10px;padding:16px 18px">
+        <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:#12804A;text-transform:uppercase;margin-bottom:2px">Path 3 — Dallas Direct</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">Dallas Stadium + IBC</div>
+        <div style="font-size:10px;color:var(--ts);margin-bottom:10px">Shortest path — straight from warehouse to venue next door.</div>
+        <div style="display:flex;align-items:center;gap:0;margin-bottom:8px">
+          <div style="background:#E6F5ED;border:1px solid #B8DFCA;border-radius:8px;padding:10px 12px;text-align:center;flex:1">
+            <div style="font-size:12px;font-weight:800;color:#12804A">Dallas WHS</div>
+            <div style="font-size:9px;color:var(--ts)">container → 9d proc</div>
+          </div>
+          <div style="color:#12804A;font-weight:800;padding:0 8px;font-size:22px">→</div>
+          <div style="background:#E6F5ED;border:1px solid #B8DFCA;border-radius:8px;padding:10px 12px;text-align:center;flex:1">
+            <div style="font-size:12px;font-weight:800;color:#12804A">Stadium / IBC</div>
+            <div style="font-size:9px;color:var(--ts)">LM truck direct</div>
+          </div>
+        </div>
+        <div style="font-size:10px;font-weight:700;color:var(--rd);text-align:center">Late = ready date > dispatch date</div>
+      </div>
+
+      <!-- Where it surfaces -->
+      <div style="background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:14px 18px;flex:1">
+        <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--tp);text-transform:uppercase;margin-bottom:8px">Where late items surface</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="flex:1;background:var(--sf);border:1px solid #B8DFCA;border-radius:8px;padding:10px 12px;text-align:center">
+            <div style="font-size:12px;font-weight:800;color:#12804A">Dashboard</div>
+            <div style="font-size:9px;color:var(--ts);margin-top:3px;line-height:1.4">Summary by destination<br>+ expandable detail table</div>
+          </div>
+          <div style="flex:1;background:var(--sf);border:1px solid #B8DFCA;border-radius:8px;padding:10px 12px;text-align:center">
+            <div style="font-size:12px;font-weight:800;color:#12804A">Daily Digest</div>
+            <div style="font-size:9px;color:var(--ts);margin-top:3px;line-height:1.4">Automated email<br>+ 6-sheet Excel report</div>
+          </div>
+        </div>
+        <div style="font-size:9px;color:var(--tt);text-align:center">Runs on every item · identifies root cause · shows days late</div>
+      </div>
+
+      <!-- WHS defaults -->
+      <div style="background:var(--rd-s);border:1px solid var(--rd-b);border-radius:10px;padding:12px 18px">
+        <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--rd);text-transform:uppercase;margin-bottom:6px">WHS Processing Defaults</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:11px">
+          <div><b>USA stadiums</b> <span style="color:var(--ts)">3d</span></div>
+          <div><b>IBC</b> <span style="color:var(--ts)">3d</span></div>
+          <div><b>CAN / MEX</b> <span style="color:var(--ts)">3d</span></div>
+          <div><b>Other USA</b> <span style="color:var(--ts)">0d</span></div>
+        </div>
+        <div style="font-size:9px;color:var(--tt);margin-top:4px">Configurable per venue</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
+    <div class="sn">19</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 20 — ASSEMBLY TIMELINE REPORT
      ════════════════════════════════════════════════════════════════ -->
 <div class="S">
   <div class="hd">
@@ -3004,12 +3200,12 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
 
   <div class="ft">
     <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
-    <div class="sn">19</div>
+    <div class="sn">20</div>
   </div>
 </div>
 
 <!-- ════════════════════════════════════════════════════════════════
-     SLIDE 20 — RISK REGISTER
+     SLIDE 21 — RISK REGISTER
      ════════════════════════════════════════════════════════════════ -->
 <div class="S">
   <div class="hd">
@@ -3123,7 +3319,7 @@ h3{font-size:18px;font-weight:700;margin-bottom:10px}
 
   <div class="ft">
     <span>&copy;2026 FIFA &middot; Materials Management &middot; <span style="font-weight:600">SM²ARTA™</span></span>
-    <div class="sn">20</div>
+    <div class="sn">21</div>
   </div>
 </div>
 
