@@ -3902,6 +3902,20 @@ function LP_readFile(file){
 
 function LP_reset(){systemReset()}
 
+// After LP plan changes, invalidate LM late data and refresh dashboard if active
+function _lpNotifyLM(){
+  window._lateArrivalData=null;window._lateByDestData=null;
+  window._asmTimelineData=null;
+  // NOTE: do NOT null _kitTimelineData — kits don't depend on LP data
+  // Rebuild PLAN_CACHE + re-render LM if module is active
+  if(curMod==='lm'&&typeof VN!=='undefined'&&VN.length){
+    try{LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();rMain()}catch(e){}
+  }else{
+    // Mark stale — next switchMod('lm') calls numberAll()+rMain() which rebuilds
+    window._lpLmStale=true;
+  }
+}
+
 // ── Re-generate with new settings (from Plan tab constraints) ──
 function LP_regenerate(){
   if(ROLE==="viewer")return;
@@ -3914,7 +3928,7 @@ function LP_regenerate(){
     if(!dispatchedRows.length){
       // Nothing locked — full regenerate
       LP_STATE.generatedPlan=_lpTailReconstruct(LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS);
-      LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();return;
+      LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();_lpNotifyLM();return;
     }
     // Aggregate locked consumption by dest+sku and by sku
     const consumedDemand={},consumedStock={};
@@ -3936,7 +3950,7 @@ function LP_regenerate(){
     const lastLockedDate=dispatchedRows.reduce((m,r)=>r.date>m?r.date:m,'');
     const newRows=LP_buildPlanV3(remainDemand,remainArrivals,{..._cfg,startTruckId:maxId,lastLockedDate});
     LP_STATE.generatedPlan=[...dispatchedRows,..._lpTailReconstruct(newRows,_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS)];
-    LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();
+    LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();_lpNotifyLM();
   }catch(e){alert('Re-generate error: '+e.message);console.error(e)}
 }
 
@@ -5247,14 +5261,14 @@ function LP_toggleDispatch(truckId,checked){
   if(checked)LP_dispatched.add(truckId);else LP_dispatched.delete(truckId);
   LP_recomputeStockHolds();
   LP_saveToSupabase();
-  setTimeout(()=>LP_render(),50);
+  setTimeout(()=>{LP_render();_lpNotifyLM()},50);
 }
 
 function LP_toggleOOR(truckId,checked){
   if(ROLE==="viewer")return;
   if(checked)LP_oorTrucks.add(truckId);else LP_oorTrucks.delete(truckId);
   LP_saveTruckStateDebounced();
-  setTimeout(()=>LP_render(),50);
+  setTimeout(()=>{LP_render();_lpNotifyLM()},50);
 }
 
 function LP_changeDate(truckId,newDate){
@@ -5266,7 +5280,7 @@ function LP_changeDate(truckId,newDate){
   // Auto-mark as dispatched (locks it from regeneration)
   LP_dispatched.add(truckId);
   LP_saveToSupabase();
-  LP_render();
+  LP_render();_lpNotifyLM();
 }
 
 function LP_lsrEdit(truckId){
@@ -8030,11 +8044,13 @@ function switchMod(mod){
   if(gsbV26)gsbV26.style.display=mod==='v26'?'flex':'none';
   if(mod==="v26"){
     v26El.classList.add("vis");
+    if(window._lpLmStale&&VN.length){window._lpLmStale=false;try{LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll()}catch(e){}}
     const rb=document.getElementById("roleBadgeV26");
     if(rb)rb.innerHTML=ROLE==="viewer"?'<span class="rbadge viw" onclick="logout()" style="cursor:pointer" title="Sign out">Viewer ✕</span>':'<span class="rbadge adm" onclick="logout()" style="cursor:pointer" title="Sign out">Admin ✕</span>';
     try{V26_render()}catch(e){console.error('V26_render error:',e)}checkSB();
   } else if(mod==="lm"){
     dEl.classList.add("vis");
+    if(window._lpLmStale&&VN.length){window._lpLmStale=false;try{LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll()}catch(e){}}
     if(VN.length){try{rT();rVL();rMain()}catch(e){console.error('LM render error:',e)}}
     else if(ROLE==="admin"){initLMUpload();showLMUpload();}
   } else {
@@ -8310,6 +8326,7 @@ async function syncLP(){
     await stockReportLoad().catch(()=>{});
     if(LP_STATE.planGenerated)LP_render();
     else if(had){document.getElementById('LP_US').style.display='flex'}
+    _lpNotifyLM();
   });
 }
 async function syncV26(){
@@ -11984,9 +12001,37 @@ function generateDailyDigest(){
   // Ensure LP arrival maps are fresh
   try{LM_buildLPArrivalMap()}catch(e){}
   try{LM_buildLPArrivalFifo()}catch(e){}
-  // Build PLAN_CACHE for all venues if not already built
-  if(typeof VN!=='undefined'&&typeof build==='function'){
-    for(const v of VN){if(!PLAN_CACHE[v.name])try{PLAN_CACHE[v.name]=build(v.name)}catch(e){}}
+  // ── Kitting: capture from EXISTING PLAN_CACHE BEFORE rebuild (rebuild loses kit truck assignments) ──
+  if(!window._kitTimelineData||!window._kitTimelineData.length){
+    const _kR=[];const _kS=new Set();
+    // First try: scan existing PLAN_CACHE (has correct truck assignments from app init/dashboard)
+    for(const label in PLAN_CACHE){
+      const P2=PLAN_CACHE[label];if(!P2)continue;
+      P2.allT.forEach(t=>{
+        t.items.forEach(it=>{
+          const nm=NOM[it.sku];if(!nm||!nm._kitNom)return;
+          if(!it.sku.startsWith('FNKIT')&&!it.sku.startsWith('OSKIT'))return;
+          const kit=LM_getKitById(nm._kitId);if(!kit)return;
+          const k=it.sku;if(_kS.has(k))return;_kS.add(k);
+          _kR.push({dd:t.dd||'',truckId:t.id,sku:it.sku,kitName:kit.name||it.sku,kitType:it.sku.startsWith('FNKIT')?'FF&E':'Stationery',venue:kit.venue,dest:t.destDisplay||t.destLabel||label,items:kit.items,compCount:kit.items.length,readiness:LM_kitReadiness(kit.id)});
+        });
+      });
+    }
+    // Second try: build from LM_KITS directly (if PLAN_CACHE was empty/no kits found)
+    if(_kR.length===0&&LM_KITS.length>0){
+      for(const kit of LM_KITS){
+        if(!kit.sku||!kit.items||!kit.items.length)continue;
+        // Look up cluster name for destination
+        const _clName=Object.keys(CLUSTERS||{}).find(cl=>(CLUSTERS[cl].venues||[]).includes(kit.venue))||kit.venue;
+        _kR.push({dd:'',truckId:'',sku:kit.sku,kitName:kit.name||kit.sku,kitType:kit.sku.startsWith('FNKIT')?'FF&E':'Stationery',venue:kit.venue,dest:_clName,items:kit.items,compCount:kit.items.length,readiness:LM_kitReadiness(kit.id)});
+      }
+    }
+    _kR.sort((a,b)=>a.dd.localeCompare(b.dd)||String(a.truckId).localeCompare(String(b.truckId)));
+    window._kitTimelineData=_kR;
+  }
+  // Force rebuild PLAN_CACHE so digest always uses fresh LP/LM data
+  if(typeof VN!=='undefined'&&VN.length&&typeof numberAll==='function'){
+    try{LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll()}catch(e){}
   }
   // Compute assembly timeline (All Venues)
   {
@@ -11994,7 +12039,7 @@ function generateDailyDigest(){
     for(const label in PLAN_CACHE){
       const P2=PLAN_CACHE[label];if(!P2)continue;
       P2.allT.forEach(t=>{
-        if(LM_excluded.has(t.id))return;
+        // NOTE: intentionally NO LM_excluded check — digest = full snapshot
         const dd=t.dd||'';
         const _tLabel=t.destLabel||label;
         const _tIsCluster=!!CLUSTERS[_tLabel];
@@ -12038,25 +12083,7 @@ function generateDailyDigest(){
     _aR.sort((a,b)=>a.dd.localeCompare(b.dd)||a.truckId.localeCompare(b.truckId));
     window._asmTimelineData=_aR;
   }
-  // Compute kitting timeline (All Venues)
-  {
-    const _kR=[];const _kS=new Set();
-    for(const label in PLAN_CACHE){
-      const P2=PLAN_CACHE[label];if(!P2)continue;
-      P2.allT.forEach(t=>{
-        if(LM_excluded.has(t.id))return;
-        t.items.forEach(it=>{
-          const nm=NOM[it.sku];if(!nm||!nm._kitNom)return;
-          if(!it.sku.startsWith('FNKIT')&&!it.sku.startsWith('OSKIT'))return;
-          const kit=LM_getKitById(nm._kitId);if(!kit)return;
-          const k=t.id+'|'+it.sku;if(_kS.has(k))return;_kS.add(k);
-          _kR.push({dd:t.dd||'',truckId:t.id,sku:it.sku,kitName:kit.name||it.sku,kitType:it.sku.startsWith('FNKIT')?'FF&E':'Stationery',venue:kit.venue,dest:t.destDisplay||t.destLabel||label,items:kit.items,compCount:kit.items.length,readiness:LM_kitReadiness(kit.id)});
-        });
-      });
-    }
-    _kR.sort((a,b)=>a.dd.localeCompare(b.dd)||a.truckId.localeCompare(b.truckId));
-    window._kitTimelineData=_kR;
-  }
+  // Kitting timeline already captured above (before PLAN_CACHE rebuild)
   // Compute Late Engine (ALL items, 3 paths) — same logic as dashboard
   {
     const _lI=[];const _lS=new Set();
@@ -12067,7 +12094,7 @@ function generateDailyDigest(){
       const _lpA=_isLp?LM_getLPDestAbbrs(label):[];
       const _path=_isDal?'Dallas':(_isLp?'LP':'LM');
       P2.allT.forEach(t=>{
-        if(LM_excluded.has(t.id))return;
+        // NOTE: intentionally NO LM_excluded check — digest = full snapshot
         const dd=t.dd||'';const biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
         if(!biK&&!dd)return;
         t.items.forEach(it=>{
@@ -12109,6 +12136,7 @@ function generateDailyDigest(){
     arrivals:LP_STATE?.arrivals||[],
     maxPallets:LP_STATE?.maxPallets||26,
     dispatched:_serializeSet(LP_dispatched||new Set()),
+    oorTrucks:_serializeSet(LP_oorTrucks||new Set()),
     lsrNumbers:LP_lsrNumbers||{},
     holds:_serializeSet(LP_holds||new Set()),
     stockHolds:_serializeSet(LP_stockHolds||new Set()),
@@ -12174,15 +12202,16 @@ function generateDailyDigest(){
       // Collect individual LM trucks
       for(const t of activeT){
         if(_lmTruckSeen.has(t.id))continue;_lmTruckSeen.add(t.id);
-        _lmTruckList.push({id:t.id,dd:t.dd||'',dest:label,pallets:Math.round((t.pallets||0)*10)/10,pcs:t.items?t.items.reduce((s,i)=>s+(i.loadQty||0),0):0});
+        _lmTruckList.push({id:t.id,dd:t.dd||'',dest:label,pallets:Math.round((t.pallets||0)*10)/10,pcs:t.items?t.items.reduce((s,i)=>s+(i.loadQty||0),0):0,dispatched:LM_isDispatched(t),items:t.items?t.items.map(i=>({sku:i.sku,qty:i.loadQty||0,nm:i.nm||NOM[i.sku]?.nm||i.sku})):[]});
       }
     }
   }
   _digestData.lmTrucks=_lmTruckList;
-  // LP truck display names
+  // Display names for destinations
   _digestData.destNames={};
   if(typeof clDisp==='function'){
     for(const t of _digestData.generatedPlan){if(t.destination&&!_digestData.destNames[t.destination])_digestData.destNames[t.destination]=clDisp(t.destination)}
+    for(const t of _lmTruckList){if(t.dest&&!_digestData.destNames[t.dest])_digestData.destNames[t.dest]=clDisp(t.dest)}
   }
   try{sessionStorage.setItem('_digestData',JSON.stringify(_digestData))}catch(e){console.error('Digest data too large:',e);return}
   window.open('/digest.html','_blank');
@@ -15042,7 +15071,7 @@ async function goGenerateLP(){
     document.getElementById('pov').style.display='none';
     hideLPUpload();
     LP_switchTab('plan');
-    LP_render();
+    LP_render();_lpNotifyLM();
     lpUf=[];lpRenderUpload();
   }catch(e){
     document.getElementById('pov').style.display='none';

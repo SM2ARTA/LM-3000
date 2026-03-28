@@ -797,12 +797,23 @@ Stored in `VS[venue]` (venue settings), accessed via helper functions:
 9. **Reports & Links** — Excel download, Product Catalog, Palletisation Guide
 10. **Footer** — ML3K link, Materials Management Team
 
-### Excel Report (3 sheets)
-- **Assembly Timeline** — full supply chain date chain per assembled item
-- **Kitting Timeline** — kit dispatch dates with component details
+### Excel Report (6 sheets)
+Tab order: FF&E Arrivals → LP Forecast → LM Forecast → Late Arrivals → Assembly Timeline → Kitting Timeline
+- **FF&E Arrivals** — per-SKU container/local delivery rows, arrived rows green-highlighted
+- **LP Forecast** — per-SKU LP truck plan, aggregated by truckId+sku, dispatched rows green-highlighted, with LSR/Status
+- **LM Forecast** — per-SKU LM truck plan with dispatch status, dispatched rows green-highlighted
 - **Late Arrivals** — items where LP arrival > bump-in date (>0d filter)
+- **Assembly Timeline** — full supply chain date chain per assembled item
+- **Kitting Timeline** — kit dispatch dates with all component details, all fields on every row
+- All sheets: frozen header row, autoFilter enabled, header fill limited to data columns only
 - Uploaded to Supabase Storage `digests` bucket with `upsert:true`
 - Also available via toolbar `⬇ Excel Report` button (local blob download)
+
+### Digest Timeline Computation
+- **Kitting**: captured from EXISTING PLAN_CACHE BEFORE `numberAll()` rebuild. `numberAll()` auto-excludes Step B trucks which hides kits on individual venue trucks. Kits don't depend on LP data, so pre-rebuild data is always correct. Fallback builds from `LM_KITS` directly with cluster name lookup.
+- **Assembly + Late**: computed AFTER `numberAll()` rebuild with NO `LM_excluded` filter (digest = full snapshot). These depend on LP data so fresh computation is needed.
+- **`_lpNotifyLM()`**: does NOT null `window._kitTimelineData` — kits don't depend on LP data
+- **LM trucks**: serialized with per-SKU `items` array + `dispatched` flag for Excel detail
 
 ### Supabase Storage
 - **Bucket**: `digests` (public)
@@ -880,3 +891,82 @@ Comprehensive audit of all subsystems. No critical bugs found.
 - IBC: 3d
 - CAN/MEX all venues: 3d (dynamic check via `vcIsCAN`/`vcIsMEX`)
 - Other USA: 0d (override via venue settings)
+
+## KPI Card Systems
+
+### LM Dashboard (`index.html`) — `kpi()` / `kpiRow()`
+```javascript
+kpi({label, value, color?, sub?, style?, labelColor?})
+kpiRow(items, cls?)  // wraps in .sr flex row
+```
+CSS: `.sc` (card), `.sr` (row), `.sl` (label 10px), `.sv` (value 22px bold)
+
+| Card | Label | Color | Sub | Special Style |
+|---|---|---|---|---|
+| Pallets | 📦 Pallets | `var(--ac)` | — | — |
+| Pieces | 📋 Pieces | `#A84444` | — | — |
+| LM Trucks | 🚛 LM Trucks | `var(--gn)` | — | — |
+| Dispatch Days | 📅 Dispatch Days | `var(--or)` | — | — |
+| Peak/Day | 📈 Peak/Day | `var(--rd)` | — | — |
+| CORT | 🏷 CORT | `#E31837` | `{n} pcs` | `border:#F5C6C7;bg:#FFF8F8;labelColor:#E31837` |
+| Staples | 🏪 Staples | `#EF6C00` | `{n} qty · {n} days` | `border:#FFCC80;bg:#FFF8F0;labelColor:#EF6C00` |
+
+### LP Status Tab (`index.html`) — same `kpi()` function
+| Card | Label | Color | Notes |
+|---|---|---|---|
+| SKUs | 📦 SKUs | `var(--tp)` | Static |
+| Total Demand | 📋 Total Demand | `var(--ac)` | — |
+| Shipped | 🚛 Shipped | `var(--gn)` | — |
+| Remaining | 📭 Remaining | `var(--or)` or `var(--gn)` | Green when 0 |
+| Progress | 📊 Progress | Dynamic | Red→Orange→Green by % |
+| Complete | ✅ Complete | `var(--gn)` | `{n}/{total}` format |
+
+### V26 Vision (`index.html`) — inline compact cards
+Same data fields, smaller sizing: 8px label, 18px value, 7px sub, 6px padding, min-width 70px
+
+### Digest Email (`digest.html`) — `_stat()`
+```javascript
+_stat(label, value, color, sub?)  // Outlook-safe table-based card
+```
+- 4 cards per row (`width:25%`), grey bg (`#F4F5F7`), 4px left border accent
+- Value: 20px Courier New monospace bold
+
+| Section | Cards (label → color) |
+|---|---|
+| **Overall** | items → `#00897B`, venues → `#4A148C`, trucks → `#304FFE`, dispatched → `#12804A` |
+| **Load Plan** | `{n} trucks` / pallets → `#4A148C`, dispatched% → `#12804A`, ready → `#304FFE`, pending → `#C4550A` |
+| **Last Mile** | `{n} trucks` / pallets → `#304FFE`, dispatched% → `#12804A`, CORT → `#C62828` (+pcs sub), Staples → `#C4550A` (+qty sub) |
+
+### SITREP (`sitrep.html`) — Instruments + Radial Gauges
+**Instruments** (`.I`): dark cockpit style, label (`.I-l` 7px), value (`.I-v` 22px glow), status (`.I-s` 8px)
+| Instrument | Color | Status Text |
+|---|---|---|
+| DISPATCHED | `var(--gn)` | `{n}% COMPLETE` + progress bar |
+| READY | `var(--cy)` | `FULL STOCK` |
+| PENDING | `var(--rd)` or `var(--gn)` | `AWAITING STOCK` |
+| OOR | `var(--am)` | `RESERVED` |
+
+**Radial Gauges** (`rg(pct, clr, lbl, sub, sz)`): SVG with 24 ticks, bezel ring, progress arc, center %
+| Gauge | Color | Subtitle |
+|---|---|---|
+| LP PROGRESS | green | `{n}/{total} TRUCKS` |
+| LM PROGRESS | cyan | `{n}/{total} VENUES` |
+| OVERALL | amber | `{n}% LP · {n}% LM` |
+
+### Badge/Chip Classes (`index.html`)
+| Class | Background | Color | Usage |
+|---|---|---|---|
+| `.bg .bg-bl` | `var(--as)` | `var(--ac)` | Default/accent |
+| `.bg .bg-gn` | `var(--gs)` | `var(--gn)` | Success, stock, on-time |
+| `.bg .bg-or` | `var(--os)` | `var(--or)` | Warning, pending |
+| `.bg .bg-rd` | `var(--rs)` | `var(--rd)` | Danger, late, error |
+| `.bg .bg-pu` | `var(--ps)` | `var(--pu)` | Purple, pallets, restore |
+| `.bg .bg-gy` | `#F0F1F3` | `var(--tt)` | Neutral, muted |
+
+### SITREP Badge Classes
+| Class | Color | Usage |
+|---|---|---|
+| `.B .Bg` | green rgba | SENT, ARRIVED, OK |
+| `.B .Ba` | amber rgba | LOW stock, pending |
+| `.B .Br` | red rgba | PEND, NO STK |
+| `.B .Bc` | cyan rgba | READY |
