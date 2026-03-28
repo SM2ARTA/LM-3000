@@ -1109,6 +1109,8 @@ function LP_buildPlanV3(demand,arrivals,cfg){
         let anyOpen=false;
         for(const dest of Object.keys(open)){if(destFilter(dest)&&Object.values(open[dest]||{}).some(v=>v>0)){anyOpen=true;break}}
         if(!anyOpen)break;
+        // Check if any future stock arrivals remain — if not, no point continuing
+        if(fPtr>=futDates.length){let anyStock=false;for(const s of Object.keys(stock)){if(stock[s]>0){anyStock=true;break}}if(!anyStock)break}
         continue;
       }
       scored.sort(priSort);
