@@ -819,11 +819,63 @@ Stored in `VS[venue]` (venue settings), accessed via helper functions:
 - Copy uses `navigator.clipboard.write` with raw innerHTML for best style preservation
 - MSO boilerplate in `<head>`: `PixelsPerInch`, `mso-table-lspace`, `mso-line-height-rule`
 
-### Late LP Arrivals (Dashboard)
-- Added to LM Dashboard view (after Assembly Timeline, before Kitting Timeline)
-- Works for All Venues, Region (CAN/MEX), Cluster Overview, Single venue
-- Summary table by destination: SKUs, Trucks, Qty, Max Late
-- Detail table in collapsible `<details>` toggle
-- Excel export: `LM_exportLateArrivals()` — Summary sheet + All Items sheet + per-destination sheets
-- Data stored in `window._lateArrivalData`, `window._lateByDestData`
-- Digest uses filtered version: only items with `daysLate > 0` (excludes +0d and no-LP-shipment)
+### Late Engine V1 (Dashboard + Digest)
+Checks ALL items on ALL LM trucks (not just assembled) across 3 supply chain paths:
+
+**Path 1 — LP Fed** (MEX/CAN regionals, HOU/KC/NY/TOR/VAN/GDL/CDMX/MTY stadiums):
+`Arrives Dallas → Ready Dallas → LP Ship → Satellite Arrival → WHS Processing → LM Dispatch → Bump-in`
+
+**Path 2 — USA non-LP** (USA non-stadium venues via satellite WHS):
+`Arrives Dallas → Ready Dallas → Inbound Transit → WHS Processing → Outbound Transit → LM Dispatch → Bump-in`
+
+**Path 3 — Dallas direct** (Dallas Stadium + IBC):
+`Arrives Dallas → Ready Dallas → Transit → Bump-in`
+
+**Path determination**: `_isDallasDirect()` for Path 3, `LM_isLPFed()` for Path 1, else Path 2
+
+**"Why Late" — identifies which supply chain leg caused the delay:**
+- `Not ready in Dallas` — LP ship date > LM dispatch (item left Dallas too late)
+- `Long transit` — LP shipped on time but satellite arrival > LM dispatch
+- `Long processing` — arrives at WHS ok but WHS processing pushes past dispatch
+- `No LP` — LP-fed venue but no LP shipment found
+
+**WHS Processing defaults**: USA stadiums = 3d, CAN/MEX all venues = 3d, other USA = 0d
+
+**Dashboard**: collapsible section with summary by destination + detail table
+**Excel export**: `LM_exportLateArrivals()` — Summary + All Items + per-destination sheets
+**Data**: `window._lateArrivalData`, `window._lateByDestData`
+**Digest**: computed fresh in `generateDailyDigest()`, filtered to `daysLate > 0`
+
+### LP Engine V5.1 — Stock Waterfall Fix
+- USA/RIC bucket now respects stock arrival dates (items only available when container ready)
+- After MEX/CAN bucket: snapshot total inventory, compute B1 consumption, rebuild stock for B2
+- B1 overshoot (consumed from post-RIC arrivals) deducted from delta entries chronologically
+- `fPtr` reset to first date >= `RIC_START` for Bucket 2
+- Tail reconstruction: 500K iteration limit on exhaustive search to prevent freeze
+- Safety break when no stock and no future arrivals remain
+
+### Collapsible Dashboard Sections
+- Daily Dispatch Detail, Assembly Timeline, Late Arrivals, Kitting Timeline use `<details><summary>`
+- DDD and Late Arrivals open by default; Assembly and Kitting collapsed
+- Excel buttons use `event.stopPropagation()` to prevent toggle on click
+
+## System Audit (2026-03-27)
+Comprehensive audit of all subsystems. No critical bugs found.
+
+### Systems Verified
+| System | Status | Notes |
+|---|---|---|
+| Undo (`_undoSnap`/`UNDO_restore`) | ✅ | All fields captured & restored |
+| Backup Export/Restore | ✅ | All state included |
+| Reset Functions (5) | ✅ | Hard/soft resets correct |
+| Supabase Persistence (3 save paths) | ✅ | All payloads identical |
+| LP Stock Waterfall V5.1 | ✅ | Overshoot deduction correct |
+| Late Engine (3 paths) | ✅ | All paths detect tardiness correctly |
+| Assembly Timeline | ✅ | rawArrival field propagated |
+| Digest | ✅ | Field names consistent |
+
+### WHS Processing Defaults (`gWP()`)
+- USA stadiums: 3d (hardcoded in `LM_DEFAULT_WP`)
+- IBC: 3d
+- CAN/MEX all venues: 3d (dynamic check via `vcIsCAN`/`vcIsMEX`)
+- Other USA: 0d (override via venue settings)
