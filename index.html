@@ -13352,16 +13352,16 @@ if(cv==="dashboard"){
           else{_whs='Dallas Warehouse'}
           // Compute full supply chain dates
           let _r={dd,truckId:t.id,sku:it.sku,nm:it.nm||NOM[it.sku]?.nm||it.sku,src:NOM[it.sku]?.src||'',qty:it.loadQty||0,dest:t.destDisplay||t.destLabel||label,_vt:_tVt,_cty:_tCty,whs:_whs,
-            arrivesDallas:null,inStock:false,lpDeparts:null,arrivesWhs:null,leavesWhs:null,bumpin:null,isLp:false,notInLp:false,firstTrk:null,readyTrk:null};
+            rawArrival:null,arrivesDallas:null,inStock:false,lpDeparts:null,arrivesWhs:null,leavesWhs:null,bumpin:null,isLp:false,notInLp:false,firstTrk:null,readyTrk:null};
           try{
-            // Arrives Dallas: from stock report or LP container arrivals
-            if(STOCK_SKUS.has(it.sku)){_r.arrivesDallas='in-stock';_r.inStock=true}
+            // Arrives Dallas (raw) + Ready Dallas (after processing)
+            if(STOCK_SKUS.has(it.sku)){_r.arrivesDallas='in-stock';_r.rawArrival='in-stock';_r.inStock=true}
             else if(LP_STATE&&LP_STATE.arrivals){
-              // Find earliest ready date for this SKU from container arrivals (FIFO)
-              let _needed=it.loadQty||0,_lastDate=null;
+              let _needed=it.loadQty||0,_lastReady=null,_lastRaw=null;
               const _skuArrs=LP_STATE.arrivals.filter(a=>a.sku===it.sku&&a.readyDate).sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
-              for(const a of _skuArrs){_needed-=(a.qty||0);_lastDate=a.readyDate;if(_needed<=0)break}
-              if(_lastDate)_r.arrivesDallas=_lastDate;
+              for(const a of _skuArrs){_needed-=(a.qty||0);_lastReady=a.readyDate;_lastRaw=a.arrivalDate||a.readyDate;if(_needed<=0)break}
+              if(_lastReady)_r.arrivesDallas=_lastReady;
+              if(_lastRaw)_r.rawArrival=_lastRaw;
             }
             // Bump-in = truck biK or compute from dispatch + total lead time
             const _biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
@@ -13402,7 +13402,7 @@ if(cv==="dashboard"){
       h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="event.stopPropagation();LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></summary>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
       <table class="dtb"><thead><tr>
-        <th>Arrives Dallas</th><th>Leaves Dallas</th><th>Arrives Warehouse</th><th>Assembly at WHS</th><th>Leaves Warehouse</th><th>Bump-in</th>
+        <th>Arrives Dallas</th><th>Ready Dallas</th><th>Leaves Dallas</th><th>Arrives Warehouse</th><th>Assembly at WHS</th><th>Leaves Warehouse</th><th>Bump-in</th>
         <th>Truck</th><th>Warehouse</th><th>Ship To</th>
         <th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th><th>Status</th>
       </tr></thead><tbody>`;
@@ -13411,16 +13411,15 @@ if(cv==="dashboard"){
       const _nilp='<span style="color:var(--or);font-size:9px;font-weight:600">Not in LP</span>';
       _asmRows.forEach(r=>{
         const isNewDate=r.dd!==_prevDd;_prevDd=r.dd;
-        const _adHtml=r.inStock?'<span style="color:var(--gn);font-weight:600">In stock</span>':_fmtDt(r.arrivesDallas);
+        const _rawHtml=r.inStock?'<span style="color:var(--gn);font-weight:600">In stock</span>':_fmtDt(r.rawArrival);
+        const _adHtml=r.inStock?'':_fmtDt(r.arrivesDallas);
         let _ldHtml=r.notInLp?_nilp:_fmtDt(r.lpDeparts);
         if(r.isLp&&r.lpDeparts&&r.readyTrk)_ldHtml+=` <span class="mono" style="font-size:8px;color:var(--tt)">(${r.readyTrk})</span>`;
         const _awHtml=r.notInLp?_nilp:_fmtDt(r.arrivesWhs);
-        // WHS processing: days between arrives and leaves WHS
-        let _wpHtml='<span style="color:var(--tt)">—</span>';
-        if(r.arrivesWhs&&r.leavesWhs&&!r.notInLp){
-          const wpDays=Math.round((new Date(r.leavesWhs+'T12:00:00')-new Date(r.arrivesWhs+'T12:00:00'))/864e5);
-          _wpHtml=wpDays>=0?`<span style="font-size:10px">${wpDays}d</span>`:'<span style="color:var(--tt)">—</span>';
-        }
+        // WHS processing: from venue constraints (gWP)
+        const _tLabel2=r.dest||'';
+        const _wpDays=gWP(_tLabel2);
+        const _wpHtml=_wpDays>0?`<span style="font-size:10px">${_wpDays}d</span>`:'<span style="color:var(--tt)">—</span>';
         const _lwHtml=_fmtDt(r.leavesWhs);
         const _biHtml=_fmtDt(r.bumpin);
         // Status
@@ -13437,6 +13436,7 @@ if(cv==="dashboard"){
           else{_stHtml='<span style="color:var(--tt)">—</span>'}
         }
         h+=`<tr${isNewDate?' style="border-top:2px solid var(--bd)"':''}>
+          <td style="font-size:10px;white-space:nowrap">${_rawHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_adHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_ldHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_awHtml}</td>
@@ -13452,7 +13452,7 @@ if(cv==="dashboard"){
           <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td>
           <td style="text-align:center">${_stHtml}</td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="12">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></details>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="13">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></details>`;
     }
   }
 
@@ -13516,7 +13516,8 @@ if(cv==="dashboard"){
               lateType='Dallas';
             }
           } else if(_isLp){
-            // PATH 1: LP fed — Dallas → LP ship → satellite arrival → WHS → LM dispatch → bump-in
+            // PATH 1: LP fed — Dallas → LP ship → satellite arrival → WHS processing → LM dispatch → bump-in
+            const _wpDays=gWP(_tLabel);
             if(_lpAbbrs.length&&Object.keys(LP_ARRIVAL_FIFO).length){
               const fifo=LM_skuArrivalFifo(it.sku,_lpAbbrs,it.loadQty||0);
               if(fifo){
@@ -13524,31 +13525,42 @@ if(cv==="dashboard"){
                 satArr=fifo.readyBy||fifo.firstArr;
               } else { notInLp=true }
             } else { notInLp=true }
-            // Late check 1: Dallas arrival after LP ship
-            if(!inStock&&arrDallas&&lpShip&&arrDallas>lpShip){
-              daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(lpShip+'T12:00:00'))/864e5);
-              lateType='Dallas';
-            }
-            // Late check 2: satellite arrival after LM dispatch
-            if(!daysLate&&satArr&&dd&&satArr>dd){
-              daysLate=Math.round((new Date(satArr+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);
-              lateType='WHS';
+            if(!notInLp){
+              // Check each leg to find WHERE the delay is
+              // Leg 1: Not ready in Dallas — item not ready before LP truck ships
+              if(!inStock&&arrDallas&&lpShip&&arrDallas>lpShip){
+                daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(lpShip+'T12:00:00'))/864e5);
+                lateType='Not ready in Dallas';
+              }
+              // Leg 2: Long transit — LP shipped on time but arrives at WHS too late
+              else if(satArr&&dd&&satArr>dd){
+                daysLate=Math.round((new Date(satArr+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);
+                lateType='Long transit';
+              }
+              // Leg 3: Long processing — arrives at WHS ok, but processing pushes past dispatch
+              else if(satArr&&dd&&_wpDays>0){
+                const readyAfterWhs=dk(aD(new Date(satArr+'T12:00:00'),_wpDays));
+                if(readyAfterWhs>dd){
+                  daysLate=Math.round((new Date(readyAfterWhs+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);
+                  lateType='Long processing';
+                }
+              }
             }
           } else {
-            // PATH 2: USA non-LP — Dallas → inbound transit → WHS → outbound → LM dispatch → bump-in
-            // Compute backwards from dispatch: when must it arrive in Dallas?
-            const wp=gWP(_tLabel),lt2=gLT2(_tLabel);
-            let needByDallas=dd;// latest date item must be in Dallas
-            if(dd&&(wp>0||lt2>0)){
+            // PATH 2: USA non-LP — Dallas → inbound transit → WHS processing → outbound → LM dispatch → bump-in
+            const wp=gWP(_tLabel),lt2=gLT2(_tLabel),outLt=gLT(_tLabel);
+            // Compute backwards: when must it be in Dallas to make the dispatch?
+            let needByDallas=dd;
+            if(dd&&(wp>0||lt2>0||outLt>0)){
               const dispDt=new Date(dd+'T12:00:00');
-              const arrWhs=disp(dispDt,wp);// subtract WHS processing
-              const dallasLeave=lt2>0?disp(arrWhs,lt2):arrWhs;// subtract inbound transit
-              needByDallas=dk(dallasLeave);
+              const afterOut=outLt>0?disp(dispDt,outLt):dispDt;
+              const afterWp=wp>0?disp(afterOut,wp):afterOut;
+              const afterTransit=lt2>0?disp(afterWp,lt2):afterWp;
+              needByDallas=dk(afterTransit);
             }
-            // Late if: arrDallas > needByDallas
             if(!inStock&&arrDallas&&needByDallas&&arrDallas>needByDallas){
               daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(needByDallas+'T12:00:00'))/864e5);
-              lateType='Dallas';
+              lateType='Not ready in Dallas';
             }
           }
 
@@ -13560,6 +13572,7 @@ if(cv==="dashboard"){
               dispatch:dd,bumpin:biK||dd,
               arrDallas:inStock?'In stock':(arrDallas||'—'),
               lpShip:lpShip||'—',satArr:satArr||'—',
+              whsProc:gWP(_tLabel)||0,
               dest:label,qty:it.loadQty||0,daysLate,
               src:NOM[it.sku]?.src||'—',path:_path,lateType:notInLp?'No LP':lateType,notInLp
             });
@@ -13618,15 +13631,15 @@ if(cv==="dashboard"){
       h+=`<details><summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--rd);margin-bottom:8px">Show all ${_lateItems.length} items</summary>
       <div style="overflow-x:auto"><table class="dtb" style="font-size:11px;white-space:nowrap"><thead><tr>
         <th>Destination</th><th>Path</th><th>SKU</th><th>Item</th><th>Source</th><th>Truck</th>
-        <th>Arrives Dallas</th><th>LP Ship</th><th>Arrives WHS</th>
+        <th>Arrives Dallas</th><th>LP Ship</th><th>Arrives WHS</th><th>WHS Proc</th>
         <th>LM Dispatch</th><th>Bump-in</th><th>Why Late</th><th>Days</th><th style="text-align:right">Qty</th>
       </tr></thead><tbody>`;
       const _sd2=d=>d&&d!=='—'?fS(new Date(d+'T12:00:00')):'—';
       _lateItems.forEach(l=>{
         const daysL=l.daysLate!=null?`<span style="color:var(--rd);font-weight:700">+${l.daysLate}d</span>`:'<span style="color:var(--rd)">—</span>';
         const _pClr=l.path==='LP'?'background:#F0EBFE;color:#6E3FF3':l.path==='LM'?'background:#E3F2FD;color:#1565C0':'background:#E8F5E9;color:#2E7D32';
-        const _whyClr=l.lateType==='Dallas'?'bg-or':l.lateType==='WHS'?'bg-rd':'bg-gy';
-        const _why=l.notInLp?'Not in LP plan':l.lateType==='Dallas'?'Not ready in Dallas':l.lateType==='WHS'?'Late at warehouse':'—';
+        const _whyClr=l.lateType==='Not ready in Dallas'?'bg-or':l.lateType==='Long transit'?'bg-rd':l.lateType==='Long processing'?'bg-pu':'bg-gy';
+        const _why=l.notInLp?'Not in LP plan':l.lateType||'—';
         h+=`<tr>
           <td style="font-size:10px;font-weight:600">${l.dest}</td>
           <td><span class="bg bgs" style="${_pClr};font-size:9px">${l.path}</span></td>
@@ -13637,6 +13650,7 @@ if(cv==="dashboard"){
           <td class="mono">${l.arrDallas==='In stock'?'<span style="color:var(--gn)">✓ In stock</span>':_sd2(l.arrDallas)}</td>
           <td class="mono">${l.path==='LP'?(l.notInLp?'<span style="color:var(--or)">None</span>':_sd2(l.lpShip)):'<span style="color:var(--tt)">—</span>'}</td>
           <td class="mono">${l.path==='LP'?(l.notInLp?'<span style="color:var(--or)">None</span>':_sd2(l.satArr)):'<span style="color:var(--tt)">—</span>'}</td>
+          <td style="text-align:center;font-size:10px">${l.whsProc>0?l.whsProc+'d':'—'}</td>
           <td class="mono">${_sd2(l.dispatch)}</td>
           <td class="mono">${_sd2(l.bumpin)}</td>
           <td><span class="bg bgs ${_whyClr}" style="font-size:9px">${_why}</span></td>
