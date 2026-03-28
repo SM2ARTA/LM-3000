@@ -110,7 +110,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const lmLate=(D.lmLateArrivals||[]).filter(l=>l.daysLate!=null&&l.daysLate>0);
   const lateByDest={};
   for(const it of lmLate){
-    if(!lateByDest[it.dest])lateByDest[it.dest]={dest:it.dest,skus:new Set(),trucks:new Set(),items:[],qty:0,maxDays:0};
+    if(!lateByDest[it.dest])lateByDest[it.dest]={dest:it.dest,path:it.path||'',skus:new Set(),trucks:new Set(),items:[],qty:0,maxDays:0};
     lateByDest[it.dest].items.push(it);
     lateByDest[it.dest].skus.add(it.sku);
     lateByDest[it.dest].trucks.add(it.truckId);
@@ -153,12 +153,31 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     for(const r of kitRows){(r.items||[]).forEach((item,i)=>{const n=D.nom[item.sku];ws2.addRow({dd:i===0?_fmtD(r.dd):'',truckId:i===0?r.truckId:'',dest:i===0?r.dest:'',kitType:i===0?r.kitType:'',kitName:i===0?r.kitName:'',venue:i===0?r.venue:'',compSku:item.sku,compNm:n?.nm||item.sku,compQty:item.qty,readiness:i===0?r.readiness?.pct+'%':''})})}
     ws2.getColumn('compQty').numFmt='#,##0';ws2.getColumn('compQty').alignment={horizontal:'right'};
 
-    // Sheet 3: Late LP Arrivals (from LM All Venues)
+    // Sheet 3: Late Arrivals (from LM All Venues — matching dashboard Late Engine)
     const _xlLate=(D.lmLateArrivals||[]).filter(l=>l.daysLate!=null&&l.daysLate>0);
     const ws3=wb.addWorksheet('Late Arrivals');
-    ws3.columns=[{header:'Destination',key:'dest',width:32},{header:'SKU',key:'sku',width:18},{header:'Item',key:'name',width:35},{header:'Source',key:'src',width:10},{header:'Truck',key:'truckId',width:10},{header:'LM Dispatch',key:'dispatch',width:14},{header:'Bump-in',key:'bumpin',width:14},{header:'LP Arrival',key:'lpArrival',width:14},{header:'Days Late',key:'daysLate',width:10},{header:'Qty',key:'qty',width:10}];
+    ws3.columns=[
+      {header:'Destination',key:'dest',width:32},{header:'Path',key:'path',width:8},
+      {header:'SKU',key:'sku',width:18},{header:'Item',key:'name',width:35},{header:'Source',key:'src',width:10},
+      {header:'Truck',key:'truckId',width:10},
+      {header:'Arrives Dallas',key:'rawArr',width:14},{header:'Ready Dallas',key:'arrDal',width:14},
+      {header:'LP Ship',key:'lpShip',width:14},{header:'Arrives WHS',key:'satArr',width:14},
+      {header:'WHS Processing',key:'whsProc',width:14},
+      {header:'LM Dispatch',key:'dispatch',width:14},{header:'Bump-in',key:'bumpin',width:14},
+      {header:'Why Late',key:'lateType',width:20},{header:'Days Late',key:'daysLate',width:10},
+      {header:'Qty',key:'qty',width:10}
+    ];
     _hdr(ws3);
-    for(const it of [..._xlLate].sort((a,b)=>(b.daysLate||0)-(a.daysLate||0))){ws3.addRow({dest:it.dest,sku:it.sku,name:it.name,src:it.src||'—',truckId:it.truckId,dispatch:_fmtD(it.dispatch),bumpin:_fmtD(it.bumpin),lpArrival:it.lpArrival==='None'?'No LP shipment':_fmtD(it.lpArrival),daysLate:it.daysLate,qty:it.qty})}
+    for(const r of [..._xlLate].sort((a,b)=>(b.daysLate||0)-(a.daysLate||0))){
+      ws3.addRow({dest:r.dest,path:r.path||'',sku:r.sku,name:r.name,src:r.src||'—',truckId:r.truckId,
+        rawArr:r.rawArrival==='In stock'?'In stock':_fmtD(r.rawArrival),
+        arrDal:r.arrDallas==='In stock'?'':_fmtD(r.arrDallas),
+        lpShip:r.path==='LP'?(r.notInLp?'None':_fmtD(r.lpShip)):'—',
+        satArr:r.path==='LP'?(r.notInLp?'None':_fmtD(r.satArr)):'—',
+        whsProc:r.whsProc>0?r.whsProc+'d':'—',
+        dispatch:_fmtD(r.dispatch),bumpin:_fmtD(r.bumpin),
+        lateType:r.notInLp?'Not in LP plan':r.lateType||'—',daysLate:r.daysLate,qty:r.qty})
+    }
     ws3.getColumn('daysLate').numFmt='#,##0';ws3.getColumn('daysLate').alignment={horizontal:'right'};
     ws3.getColumn('qty').numFmt='#,##0';ws3.getColumn('qty').alignment={horizontal:'right'};
     _xlLate.forEach((_,i)=>{try{ws3.getRow(i+2).getCell('daysLate').font={bold:true,color:{argb:'FFC62A2F'}}}catch(e){}});
@@ -558,7 +577,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _maxLateAll=lmLate.length>0?Math.max(...lmLate.filter(l=>l.daysLate!=null).map(l=>l.daysLate),0):0;
 
   html+=
-  _sec('&#9888;&#65039;','Risks &#8212; Late LP Arrivals','#C62828')+
+  _sec('&#9888;&#65039;','Risks &#8212; Late Arrivals','#C62828')+
   '<tr><td style="padding:0 32px 20px">'+
   (lmLate.length===0?
     '<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E6F5ED" style="padding:14px 18px;font-size:13px;color:#12804A;font-weight:600;border:1px solid #B8DFCA">&#10004; No late arrival risks detected. All items on track.</td></tr></table>'
@@ -567,15 +586,16 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
       lmLate.length+' items &middot; '+_lateTotalSKUs+' SKUs &middot; '+_lateTotalTrucks+' trucks &middot; max +'+_maxLateAll+'d'+
     '</td></tr></table>'+
     '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #F5B8BA;margin-top:10px">'+
-    '<tr bgcolor="#FDEBED"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">TRUCKS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">QTY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">MAX LATE</td></tr>'+
+    '<tr bgcolor="#FDEBED"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828">PATH</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">SKUs</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">TRUCKS</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">QTY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C62828;text-align:right">MAX LATE</td></tr>'+
     _lateDestKeys.map((dest,i)=>{const d=lateByDest[dest];return _trow([
       {v:'<b>'+dest+'</b>'},
+      {v:d.path||'—',style:'font-weight:600'},
       {v:d.skus.size,style:'text-align:right;font-weight:600'},
       {v:d.trucks.size,style:'text-align:right;font-weight:600'},
       {v:d.qty.toLocaleString(),style:'text-align:right;font-family:Courier New,monospace;font-weight:600'},
       {v:'<span style="color:#C62828;font-weight:800">+'+d.maxDays+'d</span>',style:'text-align:right'}
     ],i%2?'#FFF8F8':'#fff')}).join('')+
-    '<tr bgcolor="#F0F1F3" style="font-weight:700;border-top:2px solid #F5B8BA"><td style="padding:6px 10px;font-size:10px">Total &middot; '+_lateDestKeys.length+' destinations</td><td style="padding:6px 10px;font-size:10px;text-align:right">'+_lateTotalSKUs+'</td><td style="padding:6px 10px;font-size:10px;text-align:right">'+_lateTotalTrucks+'</td><td style="padding:6px 10px;font-size:10px;text-align:right;font-family:Courier New,monospace">'+_lateTotalQty.toLocaleString()+'</td><td style="padding:6px 10px;font-size:10px;text-align:right;color:#C62828;font-weight:800">+'+_maxLateAll+'d</td></tr>'+
+    '<tr bgcolor="#F0F1F3" style="font-weight:700;border-top:2px solid #F5B8BA"><td style="padding:6px 10px;font-size:10px">Total &middot; '+_lateDestKeys.length+' destinations</td><td style="padding:6px 10px"></td><td style="padding:6px 10px;font-size:10px;text-align:right">'+_lateTotalSKUs+'</td><td style="padding:6px 10px;font-size:10px;text-align:right">'+_lateTotalTrucks+'</td><td style="padding:6px 10px;font-size:10px;text-align:right;font-family:Courier New,monospace">'+_lateTotalQty.toLocaleString()+'</td><td style="padding:6px 10px;font-size:10px;text-align:right;color:#C62828;font-weight:800">+'+_maxLateAll+'d</td></tr>'+
     '</table>'
   )+'</td></tr>'+
   (downloadUrl?
