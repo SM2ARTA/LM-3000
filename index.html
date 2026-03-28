@@ -13845,44 +13845,7 @@ day.trucks.forEach(tr=>{const ti=LP.allT.indexOf(tr);
 const arrLabel=day.isNoBi?'':'📅 '+fS(day.dDate)+(day.biDate?' → '+fS(day.biDate):'');
 h+=renderTruckCard(tr,{tCap:P.tCap,displayName:displayName,dayLabel:arrLabel,onClickFn:`showM(${ti})`,exportFn:`exportTruck(${ti})`,showExcludeCheckbox:true,truckIdx:ti,lpFedAbbrs:_lpFedAbbrs,venueType:LM_vtMap[sel]||'',country:LM_venueCountry(selCluster||'',sel||'')})});
 h+=`</div></div>`})}
-// ── Late Arrival List (LP-fed locations only) ──
-if(_lpFedAbbrs.length&&Object.keys(LP_ARRIVAL_MAP).length){
-  const lateItems=[];
-  P.days.forEach(day=>{
-    // Use bump-in date as the deadline (consistent with LP Late analysis).
-    // Items that arrive after LM dispatch but before bump-in are NOT late —
-    // they can still reach the venue on a subsequent truck.
-    const biKey=day.biK&&day.biK!=='no-bi'?day.biK:null;
-    day.trucks.forEach(tr=>{
-      const dd=tr.dd||day.dKey;if(!dd)return;
-      const deadline=biKey||dd;// bump-in preferred; fall back to dispatch if no BI
-      tr.items.forEach(it=>{
-        const src=(NOM[it.sku]?.src||'').toUpperCase();
-        if(src.startsWith('STP')||src.startsWith('CT'))return;
-        const lpArr=LM_getSkuLPArrival(it.sku,_lpFedAbbrs);
-        if(!lpArr)lateItems.push({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',truckId:tr.id,dispatch:dd,bumpin:biKey||dd,lpArrival:'No LP shipment',qty:it.loadQty||0});
-        else if(lpArr>deadline)lateItems.push({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',truckId:tr.id,dispatch:dd,bumpin:biKey||dd,lpArrival:lpArr,qty:it.loadQty||0,daysLate:Math.round((new Date(lpArr+'T12:00:00')-new Date(deadline+'T12:00:00'))/(864e5))});
-      });
-  })});
-  if(lateItems.length){
-    lateItems.sort((a,b)=>(a.dispatch||'').localeCompare(b.dispatch||'')||(a.sku||'').localeCompare(b.sku||''));
-    h+=`<div class="lp-card fin" style="margin-top:16px;border:2px solid var(--rd);background:linear-gradient(135deg,#fff,#FEF0F0)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <h4 style="margin:0;font-size:13px;color:var(--rd)">⚠ Late LP Arrivals (${lateItems.length} SKUs)</h4>
-        <span class="bg bg-rd" style="font-size:10px">${[...new Set(lateItems.map(l=>l.truckId))].length} trucks affected</span>
-      </div>
-      <div style="font-size:10px;color:var(--ts);margin-bottom:8px">SKUs where LP truck arrival date is after the venue bump-in date</div>
-      <div style="overflow-x:auto"><table class="dtb" style="font-size:11px;white-space:nowrap"><thead><tr><th>SKU</th><th>Item</th><th>Source</th><th>Truck</th><th>LM Dispatch</th><th>Bump-in</th><th>LP Arrival</th><th>Late</th><th>Qty</th></tr></thead><tbody>`;
-    const _sd=d=>d?d.slice(5):'';// show MM-DD only
-    lateItems.forEach(l=>{
-      const arrDisp=l.lpArrival==='No LP shipment'?`<span style="color:var(--rd);font-weight:600">None</span>`:`<span class="mono">${_sd(l.lpArrival)}</span>`;
-      const daysL=l.daysLate!=null?`<span style="color:var(--rd);font-weight:700">+${l.daysLate}d</span>`:'<span style="color:var(--rd)">—</span>';
-      const _src=NOM[l.sku]?.src||'—';
-      h+=`<tr><td class="mono">${l.sku}</td><td class="tcl" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${l.name}</td><td style="font-size:10px;color:var(--ts)">${_src}</td><td class="mono">${l.truckId}</td><td class="mono">${_sd(l.dispatch)}</td><td class="mono">${_sd(l.bumpin)}</td><td>${arrDisp}</td><td>${daysL}</td><td class="mono fw6">${l.qty.toLocaleString()}</td></tr>`;
-    });
-    h+=`</tbody></table></div></div>`;
-  }
-}
+// Late Arrivals removed from Trucks tab — available in Dashboard tab only
 // ── Compute CORT + excluded freight merge (used by trucks view and timeline) ──
 const showClusterCort=!isClusterSel||vcIsCAN(selCluster)||vcIsMEX(selCluster);
 let cortWithMerge=[];
