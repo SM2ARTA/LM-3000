@@ -13495,14 +13495,15 @@ if(cv==="dashboard"){
           const src=(NOM[it.sku]?.src||'').toUpperCase();
           if(src.startsWith('STP')||src.startsWith('CT'))return;// skip Staples/CORT
 
-          // ── Step 1: When does it arrive in Dallas? ──
-          let arrDallas=null;let inStock=false;
-          if(STOCK_SKUS.has(it.sku)){arrDallas='in-stock';inStock=true}
+          // ── Step 1: When does it arrive in Dallas? (raw arrival + ready after processing) ──
+          let rawArrival=null;let arrDallas=null;let inStock=false;
+          if(STOCK_SKUS.has(it.sku)){arrDallas='in-stock';rawArrival='in-stock';inStock=true}
           else if(LP_STATE?.arrivals){
-            let need=it.loadQty||0,last=null;
+            let need=it.loadQty||0,lastReady=null,lastRaw=null;
             const sa=LP_STATE.arrivals.filter(a=>a.sku===it.sku&&a.readyDate).sort((a,b)=>a.readyDate.localeCompare(b.readyDate));
-            for(const a of sa){need-=(a.qty||0);last=a.readyDate;if(need<=0)break}
-            if(last)arrDallas=last;
+            for(const a of sa){need-=(a.qty||0);lastReady=a.readyDate;lastRaw=a.arrivalDate||a.readyDate;if(need<=0)break}
+            if(lastReady)arrDallas=lastReady;
+            if(lastRaw)rawArrival=lastRaw;
           }
 
           // ── Compute chain based on path ──
@@ -13525,20 +13526,23 @@ if(cv==="dashboard"){
                 satArr=fifo.readyBy||fifo.firstArr;
               } else { notInLp=true }
             } else { notInLp=true }
-            if(!notInLp){
-              // Check each leg to find WHERE the delay is
-              // Leg 1: Not ready in Dallas — item not ready before LP truck ships
-              if(!inStock&&arrDallas&&lpShip&&arrDallas>lpShip){
-                daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(lpShip+'T12:00:00'))/864e5);
+            if(!notInLp&&lpShip&&dd){
+              // The key question: does the item arrive at the WHS before the LM truck leaves?
+              // LP ship > LM dispatch → LP truck leaves Dallas too late → "Not ready in Dallas"
+              // LP ship <= LM dispatch but satellite arrival > LM dispatch → "Long transit"
+              // satellite arrival <= LM dispatch but arrival + WHS processing > LM dispatch → "Long processing"
+              if(lpShip>dd){
+                // LP truck departs Dallas AFTER LM truck leaves — item won't be there
+                daysLate=Math.round((new Date(lpShip+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);
                 lateType='Not ready in Dallas';
               }
-              // Leg 2: Long transit — LP shipped on time but arrives at WHS too late
-              else if(satArr&&dd&&satArr>dd){
+              else if(satArr&&satArr>dd){
+                // LP shipped on time, but transit too slow — arrives at WHS after LM dispatch
                 daysLate=Math.round((new Date(satArr+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);
                 lateType='Long transit';
               }
-              // Leg 3: Long processing — arrives at WHS ok, but processing pushes past dispatch
-              else if(satArr&&dd&&_wpDays>0){
+              else if(satArr&&_wpDays>0){
+                // Arrives at WHS ok, but WHS processing pushes past LM dispatch
                 const readyAfterWhs=dk(aD(new Date(satArr+'T12:00:00'),_wpDays));
                 if(readyAfterWhs>dd){
                   daysLate=Math.round((new Date(readyAfterWhs+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);
@@ -13570,6 +13574,7 @@ if(cv==="dashboard"){
             _lateItems.push({
               sku:it.sku,name:it.nm||NOM[it.sku]?.nm||it.sku,truckId:t.id,
               dispatch:dd,bumpin:biK||dd,
+              rawArrival:inStock?'In stock':(rawArrival||'—'),
               arrDallas:inStock?'In stock':(arrDallas||'—'),
               lpShip:lpShip||'—',satArr:satArr||'—',
               whsProc:gWP(_tLabel)||0,
@@ -13631,7 +13636,7 @@ if(cv==="dashboard"){
       h+=`<details><summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--rd);margin-bottom:8px">Show all ${_lateItems.length} items</summary>
       <div style="overflow-x:auto"><table class="dtb" style="font-size:11px;white-space:nowrap"><thead><tr>
         <th>Destination</th><th>Path</th><th>SKU</th><th>Item</th><th>Source</th><th>Truck</th>
-        <th>Arrives Dallas</th><th>LP Ship</th><th>Arrives WHS</th><th>WHS Proc</th>
+        <th>Arrives Dallas</th><th>Ready Dallas</th><th>LP Ship</th><th>Arrives WHS</th><th>WHS Proc</th>
         <th>LM Dispatch</th><th>Bump-in</th><th>Why Late</th><th>Days</th><th style="text-align:right">Qty</th>
       </tr></thead><tbody>`;
       const _sd2=d=>d&&d!=='—'?fS(new Date(d+'T12:00:00')):'—';
@@ -13647,7 +13652,8 @@ if(cv==="dashboard"){
           <td class="tcl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${l.name}</td>
           <td style="font-size:10px;color:var(--ts)">${l.src}</td>
           <td class="mono">${l.truckId}</td>
-          <td class="mono">${l.arrDallas==='In stock'?'<span style="color:var(--gn)">✓ In stock</span>':_sd2(l.arrDallas)}</td>
+          <td class="mono">${l.rawArrival==='In stock'?'<span style="color:var(--gn)">✓ In stock</span>':_sd2(l.rawArrival)}</td>
+          <td class="mono">${l.arrDallas==='In stock'?'':_sd2(l.arrDallas)}</td>
           <td class="mono">${l.path==='LP'?(l.notInLp?'<span style="color:var(--or)">None</span>':_sd2(l.lpShip)):'<span style="color:var(--tt)">—</span>'}</td>
           <td class="mono">${l.path==='LP'?(l.notInLp?'<span style="color:var(--or)">None</span>':_sd2(l.satArr)):'<span style="color:var(--tt)">—</span>'}</td>
           <td style="text-align:center;font-size:10px">${l.whsProc>0?l.whsProc+'d':'—'}</td>
