@@ -1190,15 +1190,17 @@ function LP_buildPlanV3(demand,arrivals,cfg){
     // This includes: pre-loaded stock (readyDate <= today, already deleted from delta)
     //                + delta entries with date < RIC_START
     const preRic={};
-    // Pre-loaded = totalSnap - sum of all remaining delta entries
+    // Pre-loaded = totalSnap - sum of all delta entries (single pass over delta)
+    const _allDeltaSum={};
+    for(const dt of futDates)for(const[sku,qty]of Object.entries(delta[dt]||{}))_allDeltaSum[sku]=(_allDeltaSum[sku]||0)+qty;
     for(const sku of Object.keys(_totalInvSnap)){
-      let inDelta=0;for(const dt of futDates)inDelta+=(delta[dt]?.[sku]||0);
-      const preloaded=_totalInvSnap[sku]-inDelta;
-      if(preloaded>0)preRic[sku]=(preRic[sku]||0)+preloaded;
+      const preloaded=_totalInvSnap[sku]-(_allDeltaSum[sku]||0);
+      if(preloaded>0)preRic[sku]=preloaded;
     }
+    // Add delta entries with date < RIC_START
     for(const dt of futDates){
       if(dt>=RIC_START)break;
-      for(const[sku,qty]of Object.entries(delta[dt]))preRic[sku]=(preRic[sku]||0)+qty;
+      for(const[sku,qty]of Object.entries(delta[dt]||{}))preRic[sku]=(preRic[sku]||0)+qty;
     }
     // B2 starting stock = preRic - b1Eaten (clamped to 0)
     for(const sku of Object.keys(stock))delete stock[sku];
