@@ -1461,7 +1461,9 @@ function _lpTailReconstruct(plan,maxPlt){
     });
     const target=Math.round((maxPlt-passthroughA)*100)/100;
     let bestFill=-1;let bestReady=-1;let bestAllReady=false;let bestChoices=null;
+    let _searchIter=0;const _SEARCH_LIMIT=500000;
     const _search=(idx,fill,ready,allReady,choices)=>{
+      if(++_searchIter>_SEARCH_LIMIT)return;// bail out — search space too large
       if(fill>target+0.01)return;// prune: over capacity
       if(idx===reconData.length){
         // Prefer: (1) all-ready solution ≥ 90% fill over non-ready at 100%
