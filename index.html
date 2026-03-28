@@ -13402,8 +13402,8 @@ if(cv==="dashboard"){
       h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🔧 Assembly Timeline <span class="bg bgs bg-or">${_asmRows.length} items</span> <span class="bg bgs bg-gy">${_asmSkus} SKUs · ${_asmTotalQty.toLocaleString()} qty</span><button class="rbtn" onclick="event.stopPropagation();LM_exportAsmTimeline()" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8">⬇ Excel</button></summary>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">Items requiring warehouse assembly before dispatch — grouped by dispatch date</p>
       <table class="dtb"><thead><tr>
-        <th>Arrives Dallas</th><th>Leaves Dallas</th><th>Arrives Satellite</th><th>Leaves Satellite</th><th>Bump-in</th>
-        <th>Truck</th><th>Assembly At</th><th>Ship To</th>
+        <th>Arrives Dallas</th><th>Leaves Dallas</th><th>Arrives Warehouse</th><th>Assembly at WHS</th><th>Leaves Warehouse</th><th>Bump-in</th>
+        <th>Truck</th><th>Warehouse</th><th>Ship To</th>
         <th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Qty</th><th>Status</th>
       </tr></thead><tbody>`;
       let _prevDd='';
@@ -13411,18 +13411,19 @@ if(cv==="dashboard"){
       const _nilp='<span style="color:var(--or);font-size:9px;font-weight:600">Not in LP</span>';
       _asmRows.forEach(r=>{
         const isNewDate=r.dd!==_prevDd;_prevDd=r.dd;
-        // Arrives Dallas
         const _adHtml=r.inStock?'<span style="color:var(--gn);font-weight:600">In stock</span>':_fmtDt(r.arrivesDallas);
-        // Leaves Dallas
         let _ldHtml=r.notInLp?_nilp:_fmtDt(r.lpDeparts);
         if(r.isLp&&r.lpDeparts&&r.readyTrk)_ldHtml+=` <span class="mono" style="font-size:8px;color:var(--tt)">(${r.readyTrk})</span>`;
-        // Arrives Satellite
-        let _awHtml=r.notInLp?_nilp:_fmtDt(r.arrivesWhs);
-        // Leaves Satellite
+        const _awHtml=r.notInLp?_nilp:_fmtDt(r.arrivesWhs);
+        // WHS processing: days between arrives and leaves WHS
+        let _wpHtml='<span style="color:var(--tt)">—</span>';
+        if(r.arrivesWhs&&r.leavesWhs&&!r.notInLp){
+          const wpDays=Math.round((new Date(r.leavesWhs+'T12:00:00')-new Date(r.arrivesWhs+'T12:00:00'))/864e5);
+          _wpHtml=wpDays>=0?`<span style="font-size:10px">${wpDays}d</span>`:'<span style="color:var(--tt)">—</span>';
+        }
         const _lwHtml=_fmtDt(r.leavesWhs);
-        // Bump-in
         const _biHtml=_fmtDt(r.bumpin);
-        // Status: check full chain
+        // Status
         let _stHtml='';
         if(r.notInLp){_stHtml='<span class="bg bgs bg-or">Not in LP</span>'}
         else if(r.isLp&&!r.arrivesWhs){_stHtml='<span class="bg bgs bg-or">No LP data</span>'}
@@ -13430,8 +13431,8 @@ if(cv==="dashboard"){
         else{
           const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
           const _satLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
-          if(_dalLate){const days=Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late (Dallas)</span>`}
-          else if(_satLate){const days=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/86400000);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
+          if(_dalLate){const days=Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/864e5);_stHtml=`<span class="bg bgs bg-rd">${days}d late (Dallas)</span>`}
+          else if(_satLate){const days=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/864e5);_stHtml=`<span class="bg bgs bg-rd">${days}d late</span>`}
           else if(r.arrivesWhs){_stHtml='<span class="bg bgs bg-gn">On time</span>'}
           else{_stHtml='<span style="color:var(--tt)">—</span>'}
         }
@@ -13439,6 +13440,7 @@ if(cv==="dashboard"){
           <td style="font-size:10px;white-space:nowrap">${_adHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_ldHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_awHtml}</td>
+          <td style="font-size:10px;white-space:nowrap;text-align:center">${_wpHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_lwHtml}</td>
           <td style="font-size:10px;white-space:nowrap">${_biHtml}</td>
           <td class="mono fw6">${r.truckId}</td>
@@ -13450,7 +13452,7 @@ if(cv==="dashboard"){
           <td class="mono fw6" style="text-align:right">${r.qty.toLocaleString()}</td>
           <td style="text-align:center">${_stHtml}</td></tr>`;
       });
-      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="11">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></details>`;
+      h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="12">Total</td><td class="mono" style="text-align:right">${_asmTotalQty.toLocaleString()}</td><td></td></tr></tfoot></table></details>`;
     }
   }
 
@@ -13619,7 +13621,7 @@ if(cv==="dashboard"){
         <th>Arrives Dallas</th><th>LP Ship</th><th>Arrives WHS</th>
         <th>LM Dispatch</th><th>Bump-in</th><th>Why Late</th><th>Days</th><th style="text-align:right">Qty</th>
       </tr></thead><tbody>`;
-      const _sd2=d=>d&&d!=='—'?d.slice(5):'—';
+      const _sd2=d=>d&&d!=='—'?fS(new Date(d+'T12:00:00')):'—';
       _lateItems.forEach(l=>{
         const daysL=l.daysLate!=null?`<span style="color:var(--rd);font-weight:700">+${l.daysLate}d</span>`:'<span style="color:var(--rd)">—</span>';
         const _pClr=l.path==='LP'?'background:#F0EBFE;color:#6E3FF3':l.path==='LM'?'background:#E3F2FD;color:#1565C0':'background:#E8F5E9;color:#2E7D32';
