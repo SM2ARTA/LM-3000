@@ -208,29 +208,29 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   }catch(e){console.error('Excel error:',e);statusEl.textContent='Excel error';statusEl.style.color='#C62828'}
 
   // ── Build Outlook-safe HTML email ──
-  const _stat=(label,value,color,sub)=>'<td width="25%" valign="top" style="padding:4px;border:none"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr><td bgcolor="#F4F5F7" style="padding:12px 8px;border-left:4px solid '+color+';border-top:none;border-right:none;border-bottom:none" align="center"><b style="font-size:20px;font-family:Courier New,monospace">'+value+'</b><br><span style="font-size:11px">'+label+'</span>'+(sub?'<br><span style="font-size:10px">'+sub+'</span>':'')+'</td></tr></table></td>';
+  // MUST declare _T before any helpers that reference it
+  const _T='border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;';
+  const _B='border:none;';// reset all borders on td
+  const _stat=(label,value,color,sub)=>'<td width="25%" valign="top" style="padding:4px;'+_B+'"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr><td bgcolor="#F4F5F7" style="padding:12px 8px;border-left:4px solid '+color+';border-top:none;border-right:none;border-bottom:none" align="center"><b style="font-size:20px;font-family:Courier New,monospace">'+value+'</b><br><span style="font-size:11px">'+label+'</span>'+(sub?'<br><span style="font-size:10px">'+sub+'</span>':'')+'</td></tr></table></td>';
   const _trow=(cells,bg)=>'<tr>'+cells.map(c=>'<td bgcolor="'+(bg||'#ffffff')+'" style="padding:6px 10px;font-size:12px;border-bottom:1px solid #E8E8ED;border-top:none;border-left:none;border-right:none;'+(c.style||'')+'">'+c.v+'</td>').join('')+'</tr>';
-  const _sec=(emoji,title,color)=>'<tr><td style="padding:20px 32px 8px;border:none"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr><td style="border-bottom:2px solid '+color+';border-top:none;border-left:none;border-right:none;padding-bottom:6px"><span style="font-size:14px;font-weight:700;color:'+color+'">'+emoji+' '+title+'</span></td></tr></table></td></tr>';
-
-  // Outlook-safe email wrapper with inline MSO resets on every table
-  const _T='border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;';// inline on ALL tables
+  const _sec=(emoji,title,color)=>'<tr><td style="padding:20px 32px 8px;'+_B+'"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr><td style="border-bottom:2px solid '+color+';border-top:none;border-left:none;border-right:none;padding-bottom:6px"><span style="font-size:14px;font-weight:700;color:'+color+'">'+emoji+' '+title+'</span></td></tr></table></td></tr>';
   let html='<!--[if mso]><style type="text/css">table{border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt}td{mso-line-height-rule:exactly;border:none}img{-ms-interpolation-mode:bicubic}</style><![endif]-->'+
   '<div style="display:none;font-size:1px;color:#F0F0F5;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">FF&amp;E Supply Chain Daily Digest &mdash; '+dStr+'</div>'+
   '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F0F0F5" style="'+_T+'margin:0;padding:0;width:100%;background:#F0F0F5;font-family:Segoe UI,Helvetica,Arial,sans-serif">'+
   '<tr><td align="center" valign="top" bgcolor="#F0F0F5" style="padding:20px 10px;background:#F0F0F5;border:none">'+
   '<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="800" align="center" style="'+_T+'"><tr><td style="border:none"><![endif]-->'+
   '<table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="'+_T+'margin:0 auto;max-width:800px;width:100%">'+
-  '<tr><td bgcolor="#4A148C" style="padding:28px 32px;color:#ffffff;font-family:Segoe UI,Helvetica,Arial,sans-serif">'+
+  '<tr><td bgcolor="#4A148C" style="padding:28px 32px;color:#ffffff;font-family:Segoe UI,Helvetica,Arial,sans-serif;'+_B+'">'+
     '<span style="font-size:11px;color:#C5B3E6">FIFA WORLD CUP 2026&#8482; &middot; FF&amp;E SUPPLY CHAIN</span><br>'+
     '<b style="font-size:26px;color:#ffffff">FF&amp;E Daily Digest</b><br>'+
     '<span style="font-size:14px;color:#E8D5F0">'+dStr+'</span>'+
   '</td></tr>'+
-  '<tr><td style="padding:24px 32px 16px">'+
-    '<table cellpadding="0" cellspacing="0"><tr><td style="font-size:15px;color:#333333;font-family:Segoe UI,Helvetica,Arial,sans-serif;padding-bottom:12px">'+greeting+' Team,</td></tr>'+
-    '<tr><td style="font-size:13px;color:#666666;font-family:Segoe UI,Helvetica,Arial,sans-serif">Here is today&#8217;s FF&amp;E Supply Chain update. Please share with relevant teams and stakeholders.</td></tr></table>'+
+  '<tr><td style="padding:24px 32px 16px;'+_B+'">'+
+    '<table cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr><td style="font-size:15px;color:#333333;font-family:Segoe UI,Helvetica,Arial,sans-serif;padding-bottom:12px;'+_B+'">'+greeting+' Team,</td></tr>'+
+    '<tr><td style="font-size:13px;color:#666666;font-family:Segoe UI,Helvetica,Arial,sans-serif;'+_B+'">Here is today&#8217;s FF&amp;E Supply Chain update. Please share with relevant teams and stakeholders.</td></tr></table>'+
   '</td></tr>'+
-  '<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
-    '<td bgcolor="#F0EBFE" align="center" style="padding:16px 24px;border:1px solid #C5B3E6">'+
+  '<tr><td style="padding:0 32px 20px;'+_B+'"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr>'+
+    '<td bgcolor="#F0EBFE" align="center" style="padding:16px 24px;'+_B+'">'+
       '<span style="font-size:42px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">'+daysToKickoff+'</span><br>'+
       '<span style="font-size:12px;font-weight:600;color:#751312;font-family:Segoe UI,Helvetica,Arial,sans-serif">DAYS TO KICKOFF &middot; JUN 11</span>'+
     '</td></tr></table></td></tr>';
