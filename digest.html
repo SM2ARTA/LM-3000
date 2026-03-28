@@ -128,7 +128,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     statusEl.textContent='Generating Excel...';
     const wb=new ExcelJS.Workbook();
     const _hdr=ws=>{const r=ws.getRow(1);r.font={bold:true,size:10};r.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};r.border={bottom:{style:'medium',color:{argb:'FFE2E4E9'}}};ws.views=[{state:'frozen',ySplit:1}]};
-    const _fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+    const _fmtD=d=>(d&&d!=='—'&&d!=='In stock')?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):(d==='In stock'?'In stock':'—');
 
     // Sheet 1: Assembly Timeline
     const asmRows=D.asmTimeline||[];

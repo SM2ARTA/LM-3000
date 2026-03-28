@@ -12057,6 +12057,48 @@ function generateDailyDigest(){
     _kR.sort((a,b)=>a.dd.localeCompare(b.dd)||a.truckId.localeCompare(b.truckId));
     window._kitTimelineData=_kR;
   }
+  // Compute Late Engine (ALL items, 3 paths) — same logic as dashboard
+  {
+    const _lI=[];const _lS=new Set();
+    const _isDalD=label=>{const n=(label||'');return n==='Dallas Stadium'||n==='International Broadcast Centre'||vcIsIBC(n)||(isStadium(n)&&n.includes('Dallas'))};
+    for(const label in PLAN_CACHE){
+      const P2=PLAN_CACHE[label];if(!P2)continue;
+      const _isLp=LM_isLPFed(label),_isDal=_isDalD(label);
+      const _lpA=_isLp?LM_getLPDestAbbrs(label):[];
+      const _path=_isDal?'Dallas':(_isLp?'LP':'LM');
+      P2.allT.forEach(t=>{
+        if(LM_excluded.has(t.id))return;
+        const dd=t.dd||'';const biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
+        if(!biK&&!dd)return;
+        t.items.forEach(it=>{
+          const k=label+'|'+it.sku+'|'+t.id;if(_lS.has(k))return;
+          const src=(NOM[it.sku]?.src||'').toUpperCase();
+          if(src.startsWith('STP')||src.startsWith('CT'))return;
+          let rawArrival=null,arrDallas=null,inStock=false;
+          if(STOCK_SKUS.has(it.sku)){arrDallas='in-stock';rawArrival='in-stock';inStock=true}
+          else if(LP_STATE?.arrivals){let need=it.loadQty||0,lr=null,la=null;const sa=LP_STATE.arrivals.filter(a=>a.sku===it.sku&&a.readyDate).sort((a,b)=>a.readyDate.localeCompare(b.readyDate));for(const a of sa){need-=(a.qty||0);lr=a.readyDate;la=a.arrivalDate||a.readyDate;if(need<=0)break}if(lr)arrDallas=lr;if(la)rawArrival=la}
+          let lpShip=null,satArr=null,daysLate=null,lateType='',notInLp=false;
+          if(_isDal){
+            if(!inStock&&arrDallas&&dd&&arrDallas>dd){daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);lateType='Not ready in Dallas'}
+          }else if(_isLp){
+            const _wp=gWP(label);
+            if(_lpA.length&&Object.keys(LP_ARRIVAL_FIFO).length){const fifo=LM_skuArrivalFifo(it.sku,_lpA,it.loadQty||0);if(fifo){lpShip=fifo.readyShip||fifo.firstShip;satArr=fifo.readyBy||fifo.firstArr}else{notInLp=true}}else{notInLp=true}
+            if(!notInLp&&lpShip&&dd){
+              if(lpShip>dd){daysLate=Math.round((new Date(lpShip+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);lateType='Not ready in Dallas'}
+              else if(satArr&&satArr>dd){daysLate=Math.round((new Date(satArr+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);lateType='Long transit'}
+              else if(satArr&&_wp>0){const rAW=dk(aD(new Date(satArr+'T12:00:00'),_wp));if(rAW>dd){daysLate=Math.round((new Date(rAW+'T12:00:00')-new Date(dd+'T12:00:00'))/864e5);lateType='Long processing'}}
+            }
+          }else{
+            const wp=gWP(label),lt2=gLT2(label),outLt=gLT(label);let needBy=dd;
+            if(dd&&(wp>0||lt2>0||outLt>0)){const dD=new Date(dd+'T12:00:00');const aO=outLt>0?disp(dD,outLt):dD;const aW=wp>0?disp(aO,wp):aO;const aT=lt2>0?disp(aW,lt2):aW;needBy=dk(aT)}
+            if(!inStock&&arrDallas&&needBy&&arrDallas>needBy){daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(needBy+'T12:00:00'))/864e5);lateType='Not ready in Dallas'}
+          }
+          if((daysLate!=null&&daysLate>0)||notInLp){_lS.add(k);_lI.push({sku:it.sku,name:it.nm||NOM[it.sku]?.nm||it.sku,truckId:t.id,dispatch:dd,bumpin:biK||dd,rawArrival:inStock?'In stock':(rawArrival||'—'),arrDallas:inStock?'In stock':(arrDallas||'—'),lpShip:lpShip||'—',satArr:satArr||'—',whsProc:gWP(label)||0,dest:label,qty:it.loadQty||0,daysLate,src:NOM[it.sku]?.src||'—',path:_path,lateType:notInLp?'No LP':lateType,notInLp})}
+        });
+      });
+    }
+    window._lateArrivalData=_lI;
+  }
   // Serialize current app state into sessionStorage, open digest.html
   const _serializeSet=s=>[...s];
   const _digestData={
@@ -12076,41 +12118,7 @@ function generateDailyDigest(){
     nom:NOM||{},
     // Late
     lateItems:window._LP_ALL_LATE_ITEMS||[],
-    lmLateArrivals:(()=>{
-      // Derive late items from assembly timeline — covers ALL venues (LP-fed + non-LP)
-      // Late = arrives at WHS after it needs to leave, OR arrives in Dallas after LP truck departs
-      const _asmData=window._asmTimelineData||[];
-      const _li=[];
-      for(const r of _asmData){
-        if(!r.bumpin&&!r.leavesWhs)continue;// no deadline
-        const deadline=r.bumpin||r.leavesWhs;
-        let daysLate=null;let lateType='';
-        // Check 1: Dallas late (arrives Dallas after LP truck departs)
-        const _dalLate=r.arrivesDallas&&r.arrivesDallas!=='in-stock'&&r.lpDeparts&&r.arrivesDallas>r.lpDeparts;
-        // Check 2: WHS late (arrives at satellite after needs to leave)
-        const _whsLate=r.arrivesWhs&&r.leavesWhs&&r.arrivesWhs>r.leavesWhs;
-        // Check 3: Not in LP (LP-fed but no LP shipment found)
-        if(_dalLate){
-          daysLate=Math.round((new Date(r.arrivesDallas+'T12:00:00')-new Date(r.lpDeparts+'T12:00:00'))/864e5);
-          lateType='Dallas';
-        }else if(_whsLate){
-          daysLate=Math.round((new Date(r.arrivesWhs+'T12:00:00')-new Date(r.leavesWhs+'T12:00:00'))/864e5);
-          lateType='WHS';
-        }else if(r.notInLp){
-          daysLate=null;lateType='No LP';
-        }
-        if(daysLate!==null||lateType==='No LP'){
-          _li.push({sku:r.sku,name:r.nm,truckId:r.truckId,dispatch:r.dd,bumpin:r.bumpin||r.leavesWhs,
-            arrivesDallas:r.inStock?'In stock':(r.arrivesDallas||'—'),
-            lpDeparts:r.lpDeparts||'—',
-            arrivesWhs:r.arrivesWhs||'—',
-            leavesWhs:r.leavesWhs||'—',
-            dest:r.dest,qty:r.qty,daysLate,src:r.src||'—',whs:r.whs||'',
-            lateType,isLp:r.isLp,notInLp:r.notInLp});
-        }
-      }
-      return _li;
-    })(),
+    lmLateArrivals:window._lateArrivalData||[],
     // Timelines
     asmTimeline:window._asmTimelineData||[],
     kitTimeline:window._kitTimelineData||[],
