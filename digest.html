@@ -212,7 +212,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _trow=(cells,bg)=>'<tr>'+cells.map(c=>'<td bgcolor="'+(bg||'#ffffff')+'" style="padding:6px 10px;font-size:12px;border-bottom:1px solid #E8E8ED;'+(c.style||'')+'">'+c.v+'</td>').join('')+'</tr>';
   const _sec=(emoji,title,color)=>'<tr><td style="padding:20px 32px 8px"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-bottom:2px solid '+color+';padding-bottom:6px"><span style="font-size:14px;font-weight:700;color:'+color+'">'+emoji+' '+title+'</span></td></tr></table></td></tr>';
 
-  let html='<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#F0F0F5" style="font-family:Segoe UI,Helvetica,Arial,sans-serif"><tr><td bgcolor="#F0F0F5">&nbsp;</td><td align="center" bgcolor="#F0F0F5" style="padding:20px 0" width="800">'+
+  let html='<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F0F0F5" style="font-family:Segoe UI,Helvetica,Arial,sans-serif;border:none"><tr><td bgcolor="#F0F0F5" style="font-size:1px;line-height:1px;border:none">&nbsp;</td><td align="center" bgcolor="#F0F0F5" style="padding:20px 0;border:none" width="800">'+
   '<table width="800" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="border:1px solid #D0D0DD">'+
   '<tr><td bgcolor="#4A148C" style="padding:28px 32px;color:#ffffff;font-family:Segoe UI,Helvetica,Arial,sans-serif">'+
     '<span style="font-size:11px;color:#C5B3E6">FIFA WORLD CUP 2026&#8482; &middot; FF&amp;E SUPPLY CHAIN</span><br>'+
@@ -613,7 +613,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   '<tr><td bgcolor="#F8F8FC" style="padding:20px 32px;border-top:1px solid #E0E0EE">'+
     '<table cellpadding="0" cellspacing="0"><tr><td style="font-size:11px;color:#888888;font-family:Segoe UI,Helvetica,Arial,sans-serif">Generated from <a href="https://ml3000.smmarta.com" style="color:#4A148C;font-weight:600;text-decoration:none">ML3K</a> &middot; <a href="https://ml3000.smmarta.com" style="color:#4A148C;text-decoration:none">ml3000.smmarta.com</a> &middot; view &middot; me</td></tr>'+
     '<tr><td style="font-size:11px;font-family:Segoe UI,Helvetica,Arial,sans-serif;padding-top:4px;color:#666666;font-weight:600">Materials Management Team</td></tr></table>'+
-  '</td></tr></table></td><td bgcolor="#F0F0F5">&nbsp;</td></tr></table>';
+  '</td></tr></table></td><td bgcolor="#F0F0F5" style="font-size:1px;line-height:1px;border:none">&nbsp;</td></tr></table>';
 
   // ── Render ──
   document.getElementById('emailContent').innerHTML=html;
