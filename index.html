@@ -9940,7 +9940,8 @@ function _saveWhsSnapshot(){
       lateSkus:[...new Set(_lmLate.map(l=>l.sku))].length,
       lateTrucks:[...new Set(_lmLate.map(l=>l.truckId))].length,
       lateMaxDays:_lmLate.length>0?Math.max(..._lmLate.map(l=>l.daysLate)):0,
-      lateByDest:Object.values(_lateByDest).map(d=>({dest:d.dest,path:d.path,skus:d.skus.size,trucks:d.trucks.size,qty:d.qty,maxDays:d.maxDays})).sort((a,b)=>b.maxDays-a.maxDays)
+      lateByDest:Object.values(_lateByDest).map(d=>({dest:d.dest,path:d.path,skus:d.skus.size,trucks:d.trucks.size,qty:d.qty,maxDays:d.maxDays})).sort((a,b)=>b.maxDays-a.maxDays),
+      lateBySku:(()=>{const m={};for(const it of _lmLate){if(!m[it.sku])m[it.sku]={sku:it.sku,name:it.name||it.sku,dests:new Set(),trucks:new Set(),qty:0,maxDays:0,totalImpact:0};m[it.sku].dests.add(it.dest);m[it.sku].trucks.add(it.truckId);m[it.sku].qty+=(it.qty||0);if(it.daysLate>m[it.sku].maxDays)m[it.sku].maxDays=it.daysLate;m[it.sku].totalImpact+=(it.qty||0)*(it.daysLate||0)};return Object.values(m).map(s=>({sku:s.sku,name:s.name,dests:s.dests.size,trucks:s.trucks.size,qty:s.qty,maxDays:s.maxDays,impact:s.totalImpact})).sort((a,b)=>b.impact-a.impact)})()
     };
     SB.from('shared_state').upsert({id:'whs-snapshot',value:JSON.stringify(snap),updated_at:new Date().toISOString()}).then(()=>console.log('WHS snapshot saved')).catch(e=>console.warn('WHS snap:',e));
   }catch(e){console.warn('WHS snapshot error:',e)}
