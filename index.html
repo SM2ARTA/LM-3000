@@ -7219,7 +7219,7 @@ function V26_render(){
   
   el.innerHTML=html;
   const sub=document.getElementById('v26Subtitle');
-  if(sub)sub.textContent=`${fActiveTrucks.length} trucks${fActiveCort.length>0?' + '+fActiveCort.length+' CORT':''}${fStpN>0?' + '+fStpN+' STP':''} · LM: ${fLmPlt.toLocaleString()} plt · LP: ${fLpPlt.toLocaleString()} plt · ${fDates.length} dates`;
+  if(sub)sub.textContent=`${fActiveTrucks.length-fStpN} trucks${fActiveCort.length>0?' + '+fActiveCort.length+' CORT':''}${fStpN>0?' + '+fStpN+' STP':''} · LM: ${fLmPlt.toLocaleString()} plt · LP: ${fLpPlt.toLocaleString()} plt · ${fDates.length} dates`;
 }
 
 function V26_showTruck(id){
