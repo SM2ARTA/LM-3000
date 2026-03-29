@@ -6945,7 +6945,7 @@ function V26_render(){
   if(LP_STATE.generatedPlan?.length){
     const lpByTruck={};
     for(const r of LP_STATE.generatedPlan){if(r.date===_effKey){if(!lpByTruck[r.truckId])lpByTruck[r.truckId]={id:r.truckId,dest:r.destination,items:[],qty:0,plt:0};lpByTruck[r.truckId].items.push(r);lpByTruck[r.truckId].qty+=r.qty||0;lpByTruck[r.truckId].plt+=r.pallets||0}}
-    nbLpTrucks.push(...Object.values(lpByTruck));
+    nbLpTrucks.push(...Object.values(lpByTruck).filter(t=>LP_lsrNumbers[t.id]));
   }
   const nbLmTrucks=[];
   for(const t of activeTrucks.filter(t=>t.source==='Last Mile')){if(t.date===_effKey)nbLmTrucks.push(t)}
