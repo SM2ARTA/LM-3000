@@ -6812,11 +6812,20 @@ function V26_render(){
   const fCortN=fActiveCort.length;
   const fDests=new Set(fActiveTrucks.map(t=>t.dest));
 
+  // Pieces from venue demand (VN) for accuracy — matches LM dashboard
+  const fPieces=(()=>{
+    if(curFilter==='lp')return fActiveTrucks.filter(t=>t.source==='Load Plan').reduce((s,t)=>s+t.qty,0);
+    if(curFilter==='all')return VN.reduce((s,v)=>s+v.it,0);
+    if(curFilter==='usa')return VN.filter(v=>!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).reduce((s,v)=>s+v.it,0);
+    if(curFilter==='can')return VN.filter(v=>vcIsCAN(v.cluster)).reduce((s,v)=>s+v.it,0);
+    if(curFilter==='mex')return VN.filter(v=>vcIsMEX(v.cluster)).reduce((s,v)=>s+v.it,0);
+    return fTotalQty;
+  })();
   const v26KpiItems=[
     {label:'🚛 LM Pallets',value:fLmPlt.toLocaleString(),color:'var(--gn)',sub:fLmCount+' trucks'},
     {label:'📦 LP Pallets',value:fLpPlt.toLocaleString(),color:'var(--ac)',sub:fLpCount+' trucks'},
-    {label:'📋 Pieces',value:fTotalQty.toLocaleString()},
-    {label:'🚛 Trucks',value:fTotalTrucks},
+    {label:'📋 Pieces',value:fPieces.toLocaleString()},
+    {label:'🚛 Trucks',value:(fLmCount+fLpCount),sub:'LP '+fLpCount+' · LM '+fLmCount},
   ];
   // Total distribution cost (active non-excluded trucks only, CORT excluded)
   const fLpCost=fActiveTrucks.filter(t=>t.source==='Load Plan').reduce((s,t)=>s+getEffRate(t.id,t.dest,26,false),0);
@@ -6831,13 +6840,18 @@ function V26_render(){
   const fLmLocalCost=fLmLocal.reduce((s,t)=>s+getEffRate(t.id,t.dest,LM_DEFAULT_TC[t.dest]||12,true),0);
   const fStpCost=fActiveTrucks.filter(t=>t.source==='STP Direct').reduce((s,t)=>s+(t._stpRate||0),0);
   const fDistCost=fLpCost+fLmStaCost+fLmClusterCost+fLmLocalCost+fStpCost;
-  v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:`LP $${Math.round(fLpCost).toLocaleString()} · Stadiums $${Math.round(fLmStaCost).toLocaleString()} · Clusters $${Math.round(fLmClusterCost).toLocaleString()} (${fLmCluster.length}) · Local $${Math.round(fLmLocalCost).toLocaleString()}${fStpCost>0?' · STP $'+Math.round(fStpCost).toLocaleString():''}`});
+  // Dist. Cost hidden per user request — keep computation for possible future use
+  // v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:`LP $${Math.round(fLpCost).toLocaleString()} · Stadiums $${Math.round(fLmStaCost).toLocaleString()} · Clusters $${Math.round(fLmClusterCost).toLocaleString()} (${fLmCluster.length}) · Local $${Math.round(fLmLocalCost).toLocaleString()}${fStpCost>0?' · STP $'+Math.round(fStpCost).toLocaleString():''}`});
   if(fCortN>0)v26KpiItems.push({label:'🏷 CORT',value:fCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
   const fStpN=fActiveTrucks.filter(t=>t.source==='STP Direct').length;
   const fStpPlt=fActiveTrucks.filter(t=>t.source==='STP Direct').reduce((s,t)=>s+t.pallets,0);
   const fStpPcs=fActiveTrucks.filter(t=>t.source==='STP Direct').reduce((s,t)=>s+t.qty,0);
   if(fStpN>0)v26KpiItems.push({label:'🏪 Staples',value:fStpN,color:'#EF6C00',labelColor:'#EF6C00',style:'border-color:#FFCC80;background:#FFF8F0',sub:fStpPcs.toLocaleString()+' pcs · '+fStpPlt.toFixed(1)+' plt'});
-  v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fDests.size});
+  // Destinations: LP cities + LM venue clusters (not individual truck dests)
+  const fLpDests=new Set(fActiveTrucks.filter(t=>t.source==='Load Plan').map(t=>t.dest));
+  const fLmVenues=new Set(fActiveTrucks.filter(t=>t.source==='Last Mile').map(t=>t.dest));
+  const fDestSub='LP '+fLpDests.size+' · LM '+fLmVenues.size;
+  v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fLpDests.size+fLmVenues.size,sub:fDestSub});
   // Stock arrival % — unique SKUs from material plan (excl CT/STP) vs stock report
   const _isExclSrc=sku=>{const s=(NOM[sku]?.src||'').toUpperCase().trim();return s.startsWith('CT')||s.startsWith('STP')};
   // Determine which venues match the current filter
@@ -9858,6 +9872,78 @@ function numberAll(){
       if(PLAN_CACHE[del.venue]){if(!PLAN_CACHE[del.venue]._stpTrucks)PLAN_CACHE[del.venue]._stpTrucks=[];PLAN_CACHE[del.venue]._stpTrucks.push(truck)}
     }
   }
+
+  // ── Save WHS snapshot to Supabase (lightweight, debounced) ──
+  clearTimeout(window._whsSnapTimer);
+  window._whsSnapTimer=setTimeout(_saveWhsSnapshot,3000);
+}
+
+function _saveWhsSnapshot(){
+  if(ROLE==='viewer')return;
+  try{
+    const td=new Date().toISOString().slice(0,10);
+    const seenT=new Set(),seenC=new Set();
+    let trucks=0,pallets=0,cort=0,cortPcs=0,items=0,dispatched=0;
+    for(const label in PLAN_CACHE){
+      const P=PLAN_CACHE[label];if(!P)continue;
+      (P.allT||[]).forEach(t=>{
+        if(LM_excluded.has(t.id)||seenT.has(t.id))return;
+        seenT.add(t.id);trucks++;pallets+=(t.pallets||0);
+        if(t.items)items+=t.items.reduce((s,i)=>s+(i.loadQty||0),0);
+        if(t.dd&&t.dd<=td)dispatched++;
+      });
+    }
+    if(typeof CORT_CACHE!=='undefined'){
+      for(const v in CORT_CACHE){
+        (CORT_CACHE[v]||[]).forEach(c=>{
+          if(LM_excluded.has(c.id)||seenC.has(c.id))return;
+          seenC.add(c.id);cort++;cortPcs+=(c.totalQty||c.qty||0);
+        });
+      }
+    }
+    const stpT=typeof LM_STP_TRUCKS!=='undefined'?Object.keys(LM_STP_TRUCKS).filter(k=>LM_STP_TRUCKS[k]?.items?.length>0).length:0;
+    const stpQ=typeof LM_STP_TRUCKS!=='undefined'?Object.values(LM_STP_TRUCKS).reduce((s,t)=>s+(t?.pcs||0),0):0;
+    const vc=typeof VN!=='undefined'?VN.length:0;
+    const ti=typeof VN!=='undefined'?VN.reduce((s,v)=>s+(v.it||0),0):0;
+    // Late arrivals
+    const _lmLate=(window._lateArrivalData||[]).filter(l=>l.daysLate!=null&&l.daysLate>0);
+    const _lateByDest={};
+    for(const it of _lmLate){
+      if(!_lateByDest[it.dest])_lateByDest[it.dest]={dest:it.dest,path:it.path||'',skus:new Set(),trucks:new Set(),qty:0,maxDays:0};
+      _lateByDest[it.dest].skus.add(it.sku);_lateByDest[it.dest].trucks.add(it.truckId);
+      _lateByDest[it.dest].qty+=(it.qty||0);
+      if(it.daysLate>_lateByDest[it.dest].maxDays)_lateByDest[it.dest].maxDays=it.daysLate;
+    }
+    // Collect next LM trucks for dashboard
+    const _lmNext=[];
+    const _lmSeen2=new Set();
+    for(const label in PLAN_CACHE){
+      const P=PLAN_CACHE[label];if(!P)continue;
+      (P.allT||[]).forEach(t=>{
+        if(LM_excluded.has(t.id)||_lmSeen2.has(t.id))return;
+        _lmSeen2.add(t.id);
+        if(t.dd&&t.dd>td){
+          let fnKits=0,osKits=0;
+          if(t.items){t.items.forEach(i=>{if((i.sku||'').startsWith('FNKIT'))fnKits++;if((i.sku||'').startsWith('OSKIT'))osKits++})}
+          _lmNext.push({id:t.id,dd:t.dd,dest:typeof clDisp==='function'?clDisp(label):label,plt:Math.round((t.pallets||0)*10)/10,pcs:t.items?t.items.reduce((s,i)=>s+(i.loadQty||0),0):0,fn:fnKits,os:osKits});
+        }
+      });
+    }
+    _lmNext.sort((a,b)=>a.dd.localeCompare(b.dd));
+
+    const snap={
+      ts:new Date().toISOString(),
+      lmTotals:{trucks,pallets:Math.round(pallets),cort,cortPcs,items,dispatched},
+      lmTotalItems:ti,venueCount:vc,stpTrucks:stpT,stpQty:stpQ,
+      lmNextTrucks:_lmNext.slice(0,10),
+      lateItems:_lmLate.length,
+      lateSkus:[...new Set(_lmLate.map(l=>l.sku))].length,
+      lateTrucks:[...new Set(_lmLate.map(l=>l.truckId))].length,
+      lateMaxDays:_lmLate.length>0?Math.max(..._lmLate.map(l=>l.daysLate)):0,
+      lateByDest:Object.values(_lateByDest).map(d=>({dest:d.dest,path:d.path,skus:d.skus.size,trucks:d.trucks.size,qty:d.qty,maxDays:d.maxDays})).sort((a,b)=>b.maxDays-a.maxDays)
+    };
+    SB.from('shared_state').upsert({id:'whs-snapshot',value:JSON.stringify(snap),updated_at:new Date().toISOString()}).then(()=>console.log('WHS snapshot saved')).catch(e=>console.warn('WHS snap:',e));
+  }catch(e){console.warn('WHS snapshot error:',e)}
 }
 
 /* ── RENDER ── */
@@ -12214,6 +12300,32 @@ function generateDailyDigest(){
     for(const t of _lmTruckList){if(t.dest&&!_digestData.destNames[t.dest])_digestData.destNames[t.dest]=clDisp(t.dest)}
   }
   try{sessionStorage.setItem('_digestData',JSON.stringify(_digestData))}catch(e){console.error('Digest data too large:',e);return}
+  // Save lightweight KPI snapshot to Supabase for WHS dashboard
+  try{
+    const _lmLate=(_digestData.lmLateArrivals||[]).filter(l=>l.daysLate!=null&&l.daysLate>0);
+    const _lateByDest={};
+    for(const it of _lmLate){
+      if(!_lateByDest[it.dest])_lateByDest[it.dest]={dest:it.dest,path:it.path||'',skus:new Set(),trucks:new Set(),qty:0,maxDays:0};
+      _lateByDest[it.dest].skus.add(it.sku);_lateByDest[it.dest].trucks.add(it.truckId);
+      _lateByDest[it.dest].qty+=(it.qty||0);
+      if(it.daysLate>_lateByDest[it.dest].maxDays)_lateByDest[it.dest].maxDays=it.daysLate;
+    }
+    const _lateSnapshot=Object.values(_lateByDest).map(d=>({dest:d.dest,path:d.path,skus:d.skus.size,trucks:d.trucks.size,qty:d.qty,maxDays:d.maxDays})).sort((a,b)=>b.maxDays-a.maxDays);
+    const _whsSnap={
+      ts:new Date().toISOString(),
+      lmTotals:_digestData.lmTotals,
+      lmTotalItems:_digestData.lmTotalItems,
+      venueCount:_digestData.venueCount,
+      stpTrucks:_digestData.stpTrucks,
+      stpQty:_digestData.stpQty,
+      lateItems:_lmLate.length,
+      lateSkus:[...new Set(_lmLate.map(l=>l.sku))].length,
+      lateTrucks:[...new Set(_lmLate.map(l=>l.truckId))].length,
+      lateMaxDays:_lmLate.length>0?Math.max(..._lmLate.map(l=>l.daysLate)):0,
+      lateByDest:_lateSnapshot
+    };
+    SB.from('shared_state').upsert({id:'whs-snapshot',value:JSON.stringify(_whsSnap),updated_at:new Date().toISOString()}).then(()=>console.log('WHS snapshot saved')).catch(e=>console.warn('WHS snapshot save failed:',e));
+  }catch(e){console.warn('WHS snapshot:',e)}
   window.open('/digest.html','_blank');
 }
 
@@ -13641,6 +13753,8 @@ if(cv==="dashboard"){
 
       window._lateArrivalData=_lateItems;
       window._lateByDestData=_lateByDest;
+      // Update WHS snapshot with fresh late data
+      clearTimeout(window._whsSnapTimer);window._whsSnapTimer=setTimeout(_saveWhsSnapshot,2000);
 
       h+=`<details class="csf fin" style="margin-top:16px;border:2px solid var(--rd);background:linear-gradient(135deg,#fff,#FEF0F0)" open>
         <summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">⚠ Late Arrivals
