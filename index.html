@@ -12312,6 +12312,21 @@ function generateDailyDigest(){
       if(it.daysLate>_lateByDest[it.dest].maxDays)_lateByDest[it.dest].maxDays=it.daysLate;
     }
     const _lateSnapshot=Object.values(_lateByDest).map(d=>({dest:d.dest,path:d.path,skus:d.skus.size,trucks:d.trucks.size,qty:d.qty,maxDays:d.maxDays})).sort((a,b)=>b.maxDays-a.maxDays);
+    // Per-SKU late analysis: impact = daysLate × qty
+    const _lateSkuMap={};
+    for(const it of _lmLate){
+      if(!_lateSkuMap[it.sku])_lateSkuMap[it.sku]={sku:it.sku,name:it.name||it.sku,dests:new Set(),trucks:new Set(),qty:0,maxDays:0,totalImpact:0};
+      _lateSkuMap[it.sku].dests.add(it.dest);_lateSkuMap[it.sku].trucks.add(it.truckId);
+      _lateSkuMap[it.sku].qty+=(it.qty||0);
+      if(it.daysLate>_lateSkuMap[it.sku].maxDays)_lateSkuMap[it.sku].maxDays=it.daysLate;
+      _lateSkuMap[it.sku].totalImpact+=(it.qty||0)*(it.daysLate||0);
+    }
+    const _lateSkuSnapshot=Object.values(_lateSkuMap).map(s=>({sku:s.sku,name:s.name,dests:s.dests.size,trucks:s.trucks.size,qty:s.qty,maxDays:s.maxDays,impact:s.totalImpact})).sort((a,b)=>b.impact-a.impact);
+    // LM next trucks (reuse _lmTruckList from digest)
+    const _whsNextTrucks=(_digestData.lmTrucks||[]).filter(t=>t.dd&&t.dd>new Date().toISOString().slice(0,10)).sort((a,b)=>a.dd.localeCompare(b.dd)).slice(0,10).map(t=>{
+      let fn=0,os=0;(t.items||[]).forEach(i=>{if((i.sku||'').startsWith('FNKIT'))fn++;if((i.sku||'').startsWith('OSKIT'))os++});
+      return{id:t.id,dd:t.dd,dest:t.dest,plt:t.pallets,pcs:t.pcs,fn,os};
+    });
     const _whsSnap={
       ts:new Date().toISOString(),
       lmTotals:_digestData.lmTotals,
@@ -12319,11 +12334,13 @@ function generateDailyDigest(){
       venueCount:_digestData.venueCount,
       stpTrucks:_digestData.stpTrucks,
       stpQty:_digestData.stpQty,
+      lmNextTrucks:_whsNextTrucks,
       lateItems:_lmLate.length,
       lateSkus:[...new Set(_lmLate.map(l=>l.sku))].length,
       lateTrucks:[...new Set(_lmLate.map(l=>l.truckId))].length,
       lateMaxDays:_lmLate.length>0?Math.max(..._lmLate.map(l=>l.daysLate)):0,
-      lateByDest:_lateSnapshot
+      lateByDest:_lateSnapshot,
+      lateBySku:_lateSkuSnapshot
     };
     SB.from('shared_state').upsert({id:'whs-snapshot',value:JSON.stringify(_whsSnap),updated_at:new Date().toISOString()}).then(()=>console.log('WHS snapshot saved')).catch(e=>console.warn('WHS snapshot save failed:',e));
   }catch(e){console.warn('WHS snapshot:',e)}
