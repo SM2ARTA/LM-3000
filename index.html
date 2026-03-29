@@ -4912,7 +4912,7 @@ function LP_renderPlan(el){
     {label:'📈 Peak/Day',value:lpPeakDay,color:'var(--rd)'},
     {label:'📊 Avg Util',value:lpAvgUtil+'%',color:lpAvgUtil>80?'var(--gn)':'var(--or)'}
   ];
-  lpKpis.push({label:'💰 Dist. Cost',value:'$'+Math.round(lpDistCost).toLocaleString(),color:'var(--pu)',sub:lpTotalTrucks+' trucks'});
+  // Dist. Cost hidden per user request — keep computation for possible future use
   let html=kpiRow(lpKpis,'fin');
   const totalTruckCount=truckList.length;
   const dirty=LP_settingsChanged();
