@@ -48,6 +48,75 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const hr=today.getHours();
   const greeting=hr<12?'Good morning':'Good afternoon';
 
+  // ── Football "On This Day" icebreaker (ESPN historical matches) ──
+  let footballFact='';
+  try{
+    // Try multiple years to find the most interesting match for this date
+    const _years=[2024,2023,2022,2021,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010];
+    const mm=String(today.getMonth()+1).padStart(2,'0');
+    const dd=String(today.getDate()).padStart(2,'0');
+    let bestMatch=null;
+    // Priority keywords for notable matches
+    const _priKw=/world cup|champions league|euro |copa |nations league/i;
+    const _intlKw=/international|friendly|qualifier|eliminatori/i;
+    for(const yr of _years){
+      try{
+        const espnUrl='https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates='+yr+mm+dd;
+        const r=await fetch(espnUrl);
+        if(!r.ok)continue;
+        const d=await r.json();
+        const evts=d.events||[];
+        for(const ev of evts){
+          const comp=ev.competitions?.[0];if(!comp)continue;
+          const teams=comp.competitors||[];if(teams.length<2)continue;
+          const t1=teams.find(t=>t.homeAway==='home')||teams[0];
+          const t2=teams.find(t=>t.homeAway==='away')||teams[1];
+          const s1=t1.score||'?';const s2=t2.score||'?';
+          const n1=t1.team?.displayName||t1.team?.name||'?';
+          const n2=t2.team?.displayName||t2.team?.name||'?';
+          const league=ev.league?.name||ev.name||'';
+          const status=comp.status?.type?.completed;
+          if(!status)continue;// skip unfinished
+          const entry={y:yr,home:n1,away:n2,s1,s2,league,totalGoals:parseInt(s1)+parseInt(s2)};
+          // Prioritize: World Cup/UCL > international > high-scoring
+          if(_priKw.test(league)){bestMatch=entry;break}
+          if(!bestMatch&&_intlKw.test(league))bestMatch=entry;
+          if(!bestMatch||(entry.totalGoals>bestMatch.totalGoals))bestMatch=entry;
+        }
+        if(bestMatch&&_priKw.test(bestMatch.league))break;// found a top-tier match
+      }catch(e){continue}
+    }
+    if(bestMatch){
+      const{y,home,away,s1,s2,league}=bestMatch;
+      let funFact='';
+      // Ask AI for an interesting fact about this specific match
+      try{
+        const aiProvider=localStorage.getItem('hs-ai-provider')||'';
+        const aiKey=localStorage.getItem('hs-ai-key')||'';
+        if(aiProvider&&aiKey){
+          const sys='Return ONLY a JSON object: {"fact":"one fun sentence under 80 chars"}. No markdown.';
+          const usr=home+' '+s1+'-'+s2+' '+away+' on '+today.toLocaleDateString('en-US',{month:'long'})+' '+today.getDate()+', '+y+(league?' ('+league+')':'')+'. Give one interesting or fun fact about this match — a record broken, a famous goal, a milestone, or a quirky detail. If you don\'t know anything specific, return {"fact":""}';
+          let text='';
+          if(aiProvider==='claude'){
+            const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':aiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:120,system:sys,messages:[{role:'user',content:usr}]})});
+            if(r.ok){const d=await r.json();text=d?.content?.[0]?.text||''}
+          }else if(aiProvider==='openai'){
+            const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+aiKey},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_completion_tokens:120})});
+            if(r.ok){const d=await r.json();text=d?.choices?.[0]?.message?.content||''}
+          }else if(aiProvider==='gemini'){
+            const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+aiKey,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}],generationConfig:{temperature:0.7,maxOutputTokens:120}})});
+            if(r.ok){const d=await r.json();text=d?.candidates?.[0]?.content?.parts?.[0]?.text||''}
+          }
+          if(text){
+            const j=JSON.parse(text.replace(/```json?\s*/g,'').replace(/```\s*/g,'').trim());
+            if(j.fact)funFact=' — '+j.fact;
+          }
+        }
+      }catch(e){/* AI fun fact is optional */}
+      footballFact='&#9917; <b>On This Day ('+y+')</b>: '+home+' '+s1+'&#8211;'+s2+' '+away+(league?' ('+league+')':'')+funFact;
+    }
+  }catch(e){console.warn('Football fact fetch skipped:',e)}
+
   // ── 3-day window ──
   const _d3=new Date(today);_d3.setDate(_d3.getDate()+3);
   const d3Short=_dk(_d3);
@@ -293,12 +362,14 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   '</td></tr>'+
   '<tr><td style="padding:24px 32px 16px;'+_B+'">'+
     '<table cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr><td style="font-size:15px;color:#333333;font-family:Segoe UI,Helvetica,Arial,sans-serif;padding-bottom:12px;'+_B+'">'+greeting+' Team,</td></tr>'+
-    '<tr><td style="font-size:13px;color:#666666;font-family:Segoe UI,Helvetica,Arial,sans-serif;'+_B+'">Here is today&#8217;s FF&amp;E Supply Chain update. Please share with relevant teams and stakeholders.</td></tr></table>'+
+    '<tr><td style="font-size:13px;color:#666666;font-family:Segoe UI,Helvetica,Arial,sans-serif;'+_B+'">Here is today&#8217;s FF&amp;E Supply Chain update. Please share with relevant teams and stakeholders.</td></tr>'+
+    '</table>'+
   '</td></tr>'+
   '<tr><td style="padding:0 32px 20px;'+_B+'"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr>'+
     '<td bgcolor="#F0EBFE" align="center" style="padding:16px 24px;'+_B+'">'+
       '<span style="font-size:42px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">'+daysToKickoff+'</span><br>'+
       '<span style="font-size:12px;font-weight:600;color:#751312;font-family:Segoe UI,Helvetica,Arial,sans-serif">DAYS TO KICKOFF &middot; JUN 11</span>'+
+      (footballFact?'<br><span style="font-size:11px;color:#666;font-family:Segoe UI,Helvetica,Arial,sans-serif;display:inline-block;margin-top:8px">'+footballFact+'</span>':'')+
     '</td></tr></table></td></tr>';
 
   // ── Shared values for status sections ──
