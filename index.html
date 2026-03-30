@@ -732,6 +732,7 @@ function UNDO_restore(){
     LM_saveStpDeliveries();
     LM_saveManualDemand();
     stockReportSave();
+    LP_updateStockWaterfall();
     if(typeof LP_render==='function'&&LP_STATE.planGenerated)LP_render();
     if(typeof rMain==='function')try{rMain()}catch(e){}
     if(typeof rVL==='function')try{rVL()}catch(e){}
@@ -3741,6 +3742,7 @@ async function LP_loadFromSupabase(){
       }
       if(cfg.lastGenSettings)LP_lastGenSettings=cfg.lastGenSettings;else LP_snapshotSettings();
       LP_recomputeStockHolds();
+      LP_updateStockWaterfall();
       return true;
     }
 
@@ -3784,6 +3786,7 @@ async function LP_loadFromSupabase(){
     for(const d of LP_STATE.materialPlan){if(d.effQty===undefined){const ppu=_lpPPU(d.sku);d.effQty=ppu>1?Math.ceil(d.requiredQty/ppu):d.requiredQty}}
     LP_snapshotSettings();
     LP_recomputeStockHolds();
+    LP_updateStockWaterfall();
     // Write to new split keys (migration)
     if(ROLE==='admin'){
       await LP_saveToSupabase();
@@ -3931,7 +3934,7 @@ function LP_regenerate(){
     if(!dispatchedRows.length){
       // Nothing locked — full regenerate
       LP_STATE.generatedPlan=_lpTailReconstruct(LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS);
-      LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();_lpNotifyLM();return;
+      LP_STATE.planGenerated=true;LP_snapshotSettings();LP_updateStockWaterfall();LP_render();LP_saveToSupabase();_lpNotifyLM();return;
     }
     // Aggregate locked consumption by dest+sku and by sku
     const consumedDemand={},consumedStock={};
@@ -3953,7 +3956,7 @@ function LP_regenerate(){
     const lastLockedDate=dispatchedRows.reduce((m,r)=>r.date>m?r.date:m,'');
     const newRows=LP_buildPlanV3(remainDemand,remainArrivals,{..._cfg,startTruckId:maxId,lastLockedDate});
     LP_STATE.generatedPlan=[...dispatchedRows,..._lpTailReconstruct(newRows,_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS)];
-    LP_STATE.planGenerated=true;LP_snapshotSettings();LP_render();LP_saveToSupabase();_lpNotifyLM();
+    LP_STATE.planGenerated=true;LP_snapshotSettings();LP_updateStockWaterfall();LP_render();LP_saveToSupabase();_lpNotifyLM();
   }catch(e){alert('Re-generate error: '+e.message);console.error(e)}
 }
 
@@ -4880,7 +4883,6 @@ function LP_updateStockWaterfall(){
 }
 function LP_renderPlan(el){
   LP_recomputeStockHolds();// ensure holds are fresh before plan render
-  LP_updateStockWaterfall();// ensure waterfall is fresh before render
   const plan=LP_STATE.generatedPlan;
   if(!plan.length){el.innerHTML='<div class="lp-empty">No plan generated yet. Upload files to get started.</div>';return}
 
@@ -5291,6 +5293,7 @@ function LP_toggleDispatch(truckId,checked){
 function LP_toggleOOR(truckId,checked){
   if(ROLE==="viewer")return;
   if(checked)LP_oorTrucks.add(truckId);else LP_oorTrucks.delete(truckId);
+  LP_updateStockWaterfall();
   LP_saveTruckStateDebounced();
   setTimeout(()=>{LP_render();_lpNotifyLM()},50);
 }
@@ -8031,6 +8034,8 @@ async function masterBackupRestore(file){
       }
     }catch(e){console.warn('Backup restore Supabase save error:',e)}
 
+    // Refresh waterfall before render (plan + stock + OOR all restored above)
+    LP_updateStockWaterfall();
     // Re-render current module
     if(curMod==='lm'&&VN.length){rT();rVL();rMain()}
     else if(curMod==='lp'&&LP_STATE.planGenerated){LP_render()}
@@ -14886,6 +14891,7 @@ function doSystemReset(){
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
+  LP_updateStockWaterfall();// all state cleared — waterfall should be empty
   // Restore upload screen
   document.getElementById("US").querySelector(".uc").innerHTML=`<div class="sm-logo sm-logo-lg"><img src="ml3k-favicon.svg" style="width:100%;height:100%"></div><h1 style="font-size:26px;font-weight:700">ML3K</h1><label class="dz" id="dz" for="fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files to browse</div></label><input type="file" accept=".xlsx,.xls" multiple id="fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><div class="fcs" id="fcs"></div><div id="eb" class="erbox" style="display:none"></div><button class="gbtn off" id="gb">Generate</button>`;
   document.getElementById("US").style.display="flex";
@@ -15045,6 +15051,7 @@ function doResetLM(){
     SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits','fm-lm-stp-deliveries','fm-stp-strategy','fm-dist-overrides','fm-pallet-cfg']).then(()=>{}).catch(()=>{});
   }
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
+  LP_updateStockWaterfall();// stock cleared — refresh waterfall if LP plan exists
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
   document.getElementById("mn").innerHTML='';
@@ -15111,6 +15118,7 @@ function doResetLP(){
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
   LP_lastGenSettings={};
+  LP_updateStockWaterfall();// plan cleared — waterfall should be empty
   lpUf=[];lpRenderUpload();
   // Clear rendered content so upload overlay is visible
   const lpM=document.getElementById('lpMain');if(lpM)lpM.innerHTML='';
@@ -15145,6 +15153,7 @@ function doSoftResetLP(){
     turnaround:_ta,maxPallets:_mp,maxTrucks:_mt,maxDests:_md,ricStartDate:_ric,
     planGenerated:false,generatedPlan:[]};
   LP_lastGenSettings={};
+  LP_updateStockWaterfall();// plan cleared — waterfall should be empty
   // LP_dispatched, LP_oorTrucks, LP_lsrNumbers, LP_palletOverrides, LP_customsOverrides, LP_arrivedConts,
   // LP_transitDays, LP_contDateOverrides, manual arrivals (_manual:true) — all preserved
   lpUf=[];lpRenderUpload();
@@ -15233,6 +15242,7 @@ async function goGenerateLP(){
     LP_STATE.planGenerated=true;
     LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
     LP_snapshotSettings();
+    LP_updateStockWaterfall();
     await LP_saveToSupabase();
     document.getElementById('pov').style.display='none';
     hideLPUpload();
@@ -15428,6 +15438,7 @@ function stockReportParse(file){
       window._LP_STOCK_PARSE_INFO={skuCol,qtyCol,hdrs,skuCount:skus.size,qtyCount:Object.keys(qtys).length};
       STOCK_SKUS=skus;STOCK_QTYS=qtys;
       LP_recomputeStockHolds();
+      LP_updateStockWaterfall();
       STOCK_REPORT_NAME=file.name;
       stockReportSave();
       // Regenerate LP plan — stock SKUs affect inventory timeline (readyDate=today)
@@ -15449,6 +15460,7 @@ function stockReportReset(){
   STOCK_SKUS=new Set();STOCK_QTYS={};
   STOCK_REPORT_NAME='';
   LP_recomputeStockHolds();
+  LP_updateStockWaterfall();
   stockReportSave();
   if(LP_STATE.planGenerated){LP_regenerate();LP_saveToSupabase();}
   clM();
@@ -15490,6 +15502,7 @@ async function stockReportLoad(){
         STOCK_QTYS=parsed.qtys||{};
         STOCK_REPORT_NAME=parsed.name||'';
         LP_recomputeStockHolds();
+        LP_updateStockWaterfall();
         stockUpdateBadge();
         return;
       }
