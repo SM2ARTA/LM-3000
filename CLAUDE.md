@@ -347,6 +347,7 @@ LP Engine V4.5 audit (now V5). All findings verified.
 - `LP_saveTruckStateDebounced` timer not cancelled by `LP_saveToSupabase` — causes redundant write but no data loss
 - Undo does not capture `LP_STATE.nomenclature/materialPlan/arrivals` — intentional (undo covers mutations, not file imports)
 - `hs-ai-config` excluded from backup — intentional security measure (API keys)
+- CI export uses live `LP_STATE.nomenclature` + `LP_customsOverrides`, not plan-time snapshot — intentional: customs data is a living document corrected between generation and export. Plan rows carry `name` as fallback if SKU removed from nom. `_lpCustNom()` handles missing SKUs via `||{}` defaults
 
 ### Destination Filter Quick-Select
 - `_lpDemDestGroup(region)` — selects destinations by country: `can` (Toronto, Vancouver), `mex` (Mexico City, Guadalajara, Monterrey), `usa` (Houston, Kansas City, New York)

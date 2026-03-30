@@ -96,7 +96,7 @@ Raw Input (Excel files, stock reports)
 | H6 | Missing `UNDO_capture()` in 5 save functions | Undo | `LM_saveManualDemand`, `LM_saveClusterTA`, `LM_saveStpStrategy` mutations not undoable | Add `UNDO_capture()` to all save functions |
 | H7 | PLAN_CACHE cleared atomically, old references persist | LM Engine | Backup export during rebuild reads empty cache | Replace entries individually, don't clear |
 | H8 | Step B trucks auto-excluded on every `numberAll()` | LM Engine | User's manual un-exclude overridden silently | Only auto-exclude on first build |
-| H9 | CI export uses live nomenclature for old plan | LP Export | Prices don't match what was planned | Snapshot nomenclature per plan |
+| H9 | CI export uses live nomenclature for old plan | LP Export | **Reviewed: intentional by design.** Customs data (HS codes, prices, customs names) is a living document maintained via `LP_customsOverrides`. Users correct product attributes between plan generation and export. Snapshotting at plan time would prevent corrections without regenerating. Plan rows carry `name` as fallback if SKU removed from nom. `_lpCustNom()` handles missing SKUs via `\|\|{}` defaults. | No change needed — document as accepted behavior |
 | H10 | Float rounding accumulation in pallet math | LP Engine | Aggregated pallets don't match truck totals by ±0.1 | Use integer math (×100) |
 | H11 | Late arrival detection recomputed in render | LP Rendering | UI freezes on Late tab switch | Pre-compute in `LP_regenerate()` |
 | H12 | `loadSharedData()` missing `LM_loadStpStrategy()` | LM Load | Viewers don't see STP strategy updates until page refresh | Add to load sequence |
