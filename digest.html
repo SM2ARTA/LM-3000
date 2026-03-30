@@ -432,9 +432,9 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _wkIn={};for(let i=0;i<_showDays;i++)_wkIn[_weekDays[i]]=[];
   for(const c of allInbounds){if(_wkIn[c.readyDate]!==undefined)_wkIn[c.readyDate].push(c)}
 
-  // Bucket outbounds by day (all LP trucks, not just pending)
+  // Bucket outbounds by day (only LP trucks with LSR numbers)
   const _wkOut={};for(let i=0;i<_showDays;i++)_wkOut[_weekDays[i]]=[];
-  for(const t of lpList){if(_wkOut[t.date]!==undefined)_wkOut[t.date].push(t)}
+  for(const t of lpList){if(lsrNumbers[t.id]&&_wkOut[t.date]!==undefined)_wkOut[t.date].push(t)}
 
   // Weekend helper
   const _isWeekend=i=>i>=5;
