@@ -738,6 +738,7 @@ function UNDO_restore(){
     LM_saveManualDemand();
     stockReportSave();
     LP_updateStockWaterfall();
+    LP_invalidateLate();
     if(typeof LP_render==='function'&&LP_STATE.planGenerated)LP_render();
     if(typeof rMain==='function')try{rMain()}catch(e){}
     if(typeof rVL==='function')try{rVL()}catch(e){}
@@ -3748,6 +3749,7 @@ async function LP_loadFromSupabase(){
       if(cfg.lastGenSettings)LP_lastGenSettings=cfg.lastGenSettings;else LP_snapshotSettings();
       LP_recomputeStockHolds();
       LP_updateStockWaterfall();
+      LP_invalidateLate();
       return true;
     }
 
@@ -3792,6 +3794,7 @@ async function LP_loadFromSupabase(){
     LP_snapshotSettings();
     LP_recomputeStockHolds();
     LP_updateStockWaterfall();
+    LP_invalidateLate();
     // Write to new split keys (migration)
     if(ROLE==='admin'){
       await LP_saveToSupabase();
@@ -3939,7 +3942,7 @@ function LP_regenerate(){
     if(!dispatchedRows.length){
       // Nothing locked — full regenerate
       LP_STATE.generatedPlan=_lpTailReconstruct(LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS);
-      LP_STATE.planGenerated=true;LP_snapshotSettings();LP_updateStockWaterfall();LP_render();LP_saveToSupabase();_lpNotifyLM();return;
+      LP_STATE.planGenerated=true;LP_snapshotSettings();LP_updateStockWaterfall();LP_invalidateLate();LP_render();LP_saveToSupabase();_lpNotifyLM();return;
     }
     // Aggregate locked consumption by dest+sku and by sku
     const consumedDemand={},consumedStock={};
@@ -3961,7 +3964,7 @@ function LP_regenerate(){
     const lastLockedDate=dispatchedRows.reduce((m,r)=>r.date>m?r.date:m,'');
     const newRows=LP_buildPlanV3(remainDemand,remainArrivals,{..._cfg,startTruckId:maxId,lastLockedDate});
     LP_STATE.generatedPlan=[...dispatchedRows,..._lpTailReconstruct(newRows,_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS)];
-    LP_STATE.planGenerated=true;LP_snapshotSettings();LP_updateStockWaterfall();LP_render();LP_saveToSupabase();_lpNotifyLM();
+    LP_STATE.planGenerated=true;LP_snapshotSettings();LP_updateStockWaterfall();LP_invalidateLate();LP_render();LP_saveToSupabase();_lpNotifyLM();
   }catch(e){alert('Re-generate error: '+e.message);console.error(e)}
 }
 
@@ -4967,14 +4970,14 @@ function LP_renderPlan(el){
     <details style="margin-top:10px">
       <summary style="font-size:11px;font-weight:600;color:var(--ts);cursor:pointer;user-select:none">🚚 Transit Times (days)</summary>
       <div class="lp-grid4" style="margin-top:6px">
-        ${Object.entries(LP_transitDays).map(([k,v])=>`<div class="lp-field"><label>${CITY_ABBR[k]||k}</label><input type="number" value="${v}" min="0" max="30"${isViewer?' disabled':''} onchange="LP_transitDays['${k}']=+this.value;LP_saveTruckStateDebounced();LP_render()"></div>`).join('')}
+        ${Object.entries(LP_transitDays).map(([k,v])=>`<div class="lp-field"><label>${CITY_ABBR[k]||k}</label><input type="number" value="${v}" min="0" max="30"${isViewer?' disabled':''} onchange="LP_transitDays['${k}']=+this.value;LP_invalidateLate();LP_saveTruckStateDebounced();LP_render()"></div>`).join('')}
       </div>
     </details>
     <details style="margin-top:6px">
       <summary style="font-size:11px;font-weight:600;color:var(--ts);cursor:pointer;user-select:none">🏭 Satellite WHS Processing (days)</summary>
       <div style="font-size:10px;color:var(--tt);margin:4px 0 6px">Time for destination warehouse to process inbound goods before bump-in. Used to calculate required container arrival date.</div>
       <div class="lp-grid4">
-        ${Object.entries(LP_destWhsDays).map(([k,v])=>`<div class="lp-field"><label>${CITY_ABBR[k]||k}</label><input type="number" value="${v}" min="0" max="30"${isViewer?' disabled':''} onchange="LP_destWhsDays['${k}']=+this.value;LP_saveTruckStateDebounced();LP_render()"></div>`).join('')}
+        ${Object.entries(LP_destWhsDays).map(([k,v])=>`<div class="lp-field"><label>${CITY_ABBR[k]||k}</label><input type="number" value="${v}" min="0" max="30"${isViewer?' disabled':''} onchange="LP_destWhsDays['${k}']=+this.value;LP_invalidateLate();LP_saveTruckStateDebounced();LP_render()"></div>`).join('')}
       </div>
     </details>
   </div>`;
@@ -5635,14 +5638,15 @@ function LP_computeLateArrivals(){
   window._LP_ALL_LATE_ITEMS=lateItems;
   window._LP_DEST_BI=DEST_BI;
   window._LP_fD=fD;
+  window._lpLateStale=false;// mark data as fresh
 }
 function LP_renderLate(el,opts){
   if(!LP_STATE.planGenerated||!LP_STATE.generatedPlan.length){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--tt)"><div style="font-size:32px;margin-bottom:12px">⚠</div><div style="font-size:14px;font-weight:600;margin-bottom:6px">Late Arrival Analysis</div><div style="font-size:12px">Generate a plan first to see late arrival analysis.</div></div>';return}
   // Reset exclusion set only on fresh tab open (not when refreshed by LM date changes)
   if(!opts||!opts.keepExcl)window._LP_EXCL_ABBRS=new Set();
-  // Recompute late arrivals (derived data)
-  LP_computeLateArrivals();
+  // Recompute only if inputs changed since last computation
+  if(window._lpLateStale!==false)LP_computeLateArrivals();
   const fD=window._LP_fD||(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}});
   const DEST_BI=window._LP_DEST_BI||{};
   const lateItems=window._LP_ALL_LATE_ITEMS||[];
@@ -5692,8 +5696,11 @@ function LP_toggleLateExcl(abbr,checked){
   });
 }
 // Refresh the Late tab if it's currently active (called after LM BI/date changes)
+// Mark late data as stale — next render will recompute
+function LP_invalidateLate(){window._lpLateStale=true}
 function LP_refreshLate(){
   if(LP_TAB!=='late'||!LP_STATE.planGenerated)return;
+  LP_invalidateLate();// force recompute on next render
   const el=document.getElementById('lpMain');if(!el)return;
   LP_renderLate(el,{keepExcl:true});// preserve sidebar exclusions on programmatic refresh
 }
@@ -8090,8 +8097,9 @@ async function masterBackupRestore(file){
       }
     }catch(e){console.warn('Backup restore Supabase save error:',e)}
 
-    // Refresh waterfall before render (plan + stock + OOR all restored above)
+    // Refresh derived data before render (plan + stock + OOR all restored above)
     LP_updateStockWaterfall();
+    LP_invalidateLate();
     // Re-render current module
     if(curMod==='lm'&&VN.length){rT();rVL();rMain()}
     else if(curMod==='lp'&&LP_STATE.planGenerated){LP_render()}
@@ -14950,7 +14958,7 @@ function doSystemReset(){
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
-  LP_updateStockWaterfall();// all state cleared — waterfall should be empty
+  LP_updateStockWaterfall();LP_invalidateLate();// all state cleared
   // Restore upload screen
   document.getElementById("US").querySelector(".uc").innerHTML=`<div class="sm-logo sm-logo-lg"><img src="ml3k-favicon.svg" style="width:100%;height:100%"></div><h1 style="font-size:26px;font-weight:700">ML3K</h1><label class="dz" id="dz" for="fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files to browse</div></label><input type="file" accept=".xlsx,.xls" multiple id="fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><div class="fcs" id="fcs"></div><div id="eb" class="erbox" style="display:none"></div><button class="gbtn off" id="gb">Generate</button>`;
   document.getElementById("US").style.display="flex";
@@ -15110,7 +15118,7 @@ function doResetLM(){
     SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits','fm-lm-stp-deliveries','fm-stp-strategy','fm-dist-overrides','fm-pallet-cfg']).then(()=>{}).catch(()=>{});
   }
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
-  LP_updateStockWaterfall();// stock cleared — refresh waterfall if LP plan exists
+  LP_updateStockWaterfall();LP_invalidateLate();// stock cleared
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
   document.getElementById("mn").innerHTML='';
@@ -15177,7 +15185,7 @@ function doResetLP(){
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
   LP_lastGenSettings={};
-  LP_updateStockWaterfall();// plan cleared — waterfall should be empty
+  LP_updateStockWaterfall();LP_invalidateLate();// plan cleared
   lpUf=[];lpRenderUpload();
   // Clear rendered content so upload overlay is visible
   const lpM=document.getElementById('lpMain');if(lpM)lpM.innerHTML='';
@@ -15212,7 +15220,7 @@ function doSoftResetLP(){
     turnaround:_ta,maxPallets:_mp,maxTrucks:_mt,maxDests:_md,ricStartDate:_ric,
     planGenerated:false,generatedPlan:[]};
   LP_lastGenSettings={};
-  LP_updateStockWaterfall();// plan cleared — waterfall should be empty
+  LP_updateStockWaterfall();LP_invalidateLate();// plan cleared
   // LP_dispatched, LP_oorTrucks, LP_lsrNumbers, LP_palletOverrides, LP_customsOverrides, LP_arrivedConts,
   // LP_transitDays, LP_contDateOverrides, manual arrivals (_manual:true) — all preserved
   lpUf=[];lpRenderUpload();
@@ -15302,6 +15310,7 @@ async function goGenerateLP(){
     LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
     LP_snapshotSettings();
     LP_updateStockWaterfall();
+    LP_invalidateLate();
     await LP_saveToSupabase();
     document.getElementById('pov').style.display='none';
     hideLPUpload();
