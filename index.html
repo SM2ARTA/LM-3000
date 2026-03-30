@@ -8307,24 +8307,23 @@ function saveSharedDataDebounced(){if(_lmSaveTimer)clearTimeout(_lmSaveTimer);_l
 async function saveSharedData(fullSave){
   if(ROLE==="viewer")return;// viewers cannot save
   if(!SB){console.warn('Supabase not configured');return}
+  // Cancel pending debounced save — this immediate save supersedes it
+  if(_lmSaveTimer){clearTimeout(_lmSaveTimer);_lmSaveTimer=null}
   UNDO_capture();
   const els=[document.getElementById('sbStatus'),document.getElementById('sbStatusLP'),document.getElementById('sbStatusV26')].filter(Boolean);
   try{
     const now=new Date().toISOString();
-    const u=(id,val)=>SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now});
-    // Save lightweight settings in parallel
-    const saves=[
-      u('fm-vs',VS),
-      u('fm-excl',[...LM_excluded]),
-      u('fm-excl-ovr',LM_excludeUserOvr),
-      u('fm-stock',{skus:[...STOCK_SKUS],qtys:STOCK_QTYS,name:STOCK_REPORT_NAME})
-    ];
+    const u=async(id,val)=>SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now});
+    // Save sequentially — related keys must stay consistent on partial failure
+    await u('fm-vs',VS);
+    await u('fm-excl',[...LM_excluded]);
+    await u('fm-excl-ovr',LM_excludeUserOvr);
+    await u('fm-stock',{skus:[...STOCK_SKUS],qtys:STOCK_QTYS,name:STOCK_REPORT_NAME});
     // Only save heavy data (NOM, RW) on full save (initial generation / file upload)
     if(fullSave){
-      saves.push(u('fm-nom',NOM));
-      saves.push(u('fm-rw',RW));
+      await u('fm-nom',NOM);
+      await u('fm-rw',RW);
     }
-    await Promise.all(saves);
     els.forEach(el=>{el.className='sb-status connected';el.innerHTML='<span class="dot"></span>Saved'});
     setTimeout(()=>{els.forEach(el=>{if(el.textContent==='Saved'){el.innerHTML='<span class="dot"></span>Connected'}})},2000);
   }catch(e){
