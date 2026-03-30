@@ -4852,34 +4852,36 @@ function LP_renderPlan(el){
   });
 
   // ── Sequential stock allocation waterfall ──
-  // Walk trucks in date order, deduct from available stock, mark ready/not-ready
+  // Walk trucks in date order, deduct from available stock, compute ready/not-ready
+  // Results stored in local Maps — truck objects are NOT mutated (read-only render)
+  const _stockStatus={};// truckId → {stockReady:bool, oorSubmitted:bool}
   const _stockPool={};// running available balance
   window._lpWaterfallBefore={};// truckId → {sku: availQty BEFORE this truck's deduction}
   if(STOCK_SKUS.size>0){
     for(const sku of STOCK_SKUS){const sq=STOCK_QTYS[sku];_stockPool[sku]=sq!==undefined?sq:Infinity}
   }
   for(const t of truckList){
-    if(STOCK_SKUS.size===0){t.stockReady=false;t.oorSubmitted=false;continue}
+    if(STOCK_SKUS.size===0){_stockStatus[t.id]={stockReady:false,oorSubmitted:false};continue}
     // Snapshot stock available BEFORE this truck deducts
     const _snap={};for(const sku in _stockPool)_snap[sku]=_stockPool[sku];
     window._lpWaterfallBefore[t.id]=_snap;
     const agg=LP_aggregateTruck(t.items);
-    t.oorSubmitted=LP_oorTrucks.has(t.id);
+    const oorSubmitted=LP_oorTrucks.has(t.id);
     // OOR trucks: stock already reserved by warehouse, no deduction from pool
-    if(t.oorSubmitted){
-      t.stockReady=true;// confirmed by OOR
+    if(oorSubmitted){
+      _stockStatus[t.id]={stockReady:true,oorSubmitted:true};
       continue;
     }
     // All other trucks (locked or unlocked): check and deduct from pool
     const canFill=agg.every(s=>(_stockPool[s.sku]||0)>=s.qty);
     if(canFill){
-      t.stockReady=true;
+      _stockStatus[t.id]={stockReady:true,oorSubmitted:false};
       for(const s of agg)_stockPool[s.sku]=(_stockPool[s.sku]||0)-s.qty;
     }else{
-      t.stockReady=false;
+      _stockStatus[t.id]={stockReady:false,oorSubmitted:false};
     }
   }
-  const _truckInStock=t=>t.stockReady;
+  const _truckInStock=t=>{const s=_stockStatus[t.id];return s?s.stockReady:false};
 
   // Group by date
   const byDate={};
@@ -4969,8 +4971,8 @@ function LP_renderPlan(el){
   const usTrucks=truckList.filter(t=>!_isMCDest(t.dest));
   const mcDates={};for(const t of mcTrucks){if(!mcDates[t.date])mcDates[t.date]=[];mcDates[t.date].push(t)}
   const usDates={};for(const t of usTrucks){if(!usDates[t.date])usDates[t.date]=[];usDates[t.date].push(t)}
-  const mcReady=mcTrucks.filter(t=>!LP_dispatched.has(t.id)&&t.stockReady&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
-  const usReady=usTrucks.filter(t=>!LP_dispatched.has(t.id)&&t.stockReady&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
+  const mcReady=mcTrucks.filter(t=>!LP_dispatched.has(t.id)&&_truckInStock(t)&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
+  const usReady=usTrucks.filter(t=>!LP_dispatched.has(t.id)&&_truckInStock(t)&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
 
   // ── Truck card renderer ──
   function _tc(t){
@@ -4981,7 +4983,7 @@ function LP_renderPlan(el){
     const _arrDate=LP_getArrivalDate(t.date,t.dest);
     const _arrDisp=LP_parseLocalDate(_arrDate)?LP_parseLocalDate(_arrDate).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';
     const _transitD=LP_getTransitDays(t.dest);
-    const _isReady=t.stockReady;
+    const _isReady=_truckInStock(t);
     const _lpDotColor=STOCK_SKUS.size===0?'var(--tt)':(_isReady?'var(--gn)':'var(--rd)');
     const _lpDotTitle=STOCK_SKUS.size===0?'No stock report':(_isReady?'Stock allocated':'Insufficient stock');
     const _isReadyFull=_isReady&&pct>=95;
