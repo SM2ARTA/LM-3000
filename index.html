@@ -14086,12 +14086,13 @@ if(cv==="dashboard"){
         if(g.kits.length<2)continue;// need at least 2 venues to compare
         _ppTotalGroups++;
         const total=g.kits.length;
-        // Build SKU matrix
+        // Build SKU matrix (exclude STP-sourced items)
+        const _isStp=s=>{const src=(NOM[s]?.src||'').toUpperCase();return src.startsWith('STP')};
         const allSkus=new Set();
-        for(const k of g.kits)for(const i of k.items)allSkus.add(i.sku);
+        for(const k of g.kits)for(const i of k.items){if(!_isStp(i.sku))allSkus.add(i.sku)}
         const skuData={};
         for(const sku of allSkus)skuData[sku]={venues:{},count:0};
-        for(const k of g.kits)for(const i of k.items){skuData[i.sku].venues[k.venue]=i.qty;skuData[i.sku].count++}
+        for(const k of g.kits)for(const i of k.items){if(!_isStp(i.sku)&&skuData[i.sku]){skuData[i.sku].venues[k.venue]=i.qty;skuData[i.sku].count++}}
         const core=[],variable=[],optional=[],unique=[];
         for(const[sku,d]of Object.entries(skuData)){
           const nm=NOM[sku]?.nm||sku;
@@ -14914,11 +14915,12 @@ function LM_exportPrePickPDF(){
     const g=groups[gk];
     if(g.kits.length<2)continue;
     const total=g.kits.length;
+    const _isStp=s=>{const src=(NOM[s]?.src||'').toUpperCase();return src.startsWith('STP')};
     const allSkus=new Set();
-    for(const k of g.kits)for(const i of k.items)allSkus.add(i.sku);
+    for(const k of g.kits)for(const i of k.items){if(!_isStp(i.sku))allSkus.add(i.sku)}
     const sd={};
     for(const sku of allSkus)sd[sku]={venues:{},count:0};
-    for(const k of g.kits)for(const i of k.items){sd[i.sku].venues[k.venue]=i.qty;sd[i.sku].count++}
+    for(const k of g.kits)for(const i of k.items){if(!_isStp(i.sku)&&sd[i.sku]){sd[i.sku].venues[k.venue]=i.qty;sd[i.sku].count++}}
     const core=[],variable=[],optional=[],unique=[];
     for(const[sku,d]of Object.entries(sd)){
       const nm=NOM[sku]?.nm||sku;
