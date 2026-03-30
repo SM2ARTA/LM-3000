@@ -113,6 +113,9 @@
 .sb-status.connected{background:#E6F5ED;color:#12804A}.sb-status.connected .dot{background:#12804A}
 .sb-status.disconnected{background:#FDEBED;color:#C62A2F}.sb-status.disconnected .dot{background:#C62A2F}
 .sb-status.checking{background:#FEF3EB;color:#C4550A}.sb-status.checking .dot{background:#C4550A;animation:pulse 1s infinite}
+.rt-banner{position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 16px;background:#304FFE;color:#fff;font-size:12px;font-weight:600;font-family:var(--fd);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);transition:opacity .3s}
+.rt-banner:hover{background:#1E40FF}
+.rt-banner .rt-x{margin-left:8px;opacity:.7;font-size:14px}.rt-banner .rt-x:hover{opacity:1}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
 /* ── MOBILE RESPONSIVE ── */
@@ -3587,12 +3590,13 @@ let _lpSaveTimer=null;
 function LP_saveToSupabaseDebounced(){
   // Settings-only save: just config key, not all 6 keys
   if(_lpSaveTimer)clearTimeout(_lpSaveTimer);
-  _lpSaveTimer=setTimeout(async()=>{_lpSaveTimer=null;if(ROLE==='viewer'||!SB)return;try{await SB.from('shared_state').upsert({id:LP_KEYS.config,value:JSON.stringify({turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings}),updated_at:new Date().toISOString()})}catch(e){console.warn('LP config save:',e)}},1500);
+  _lpSaveTimer=setTimeout(async()=>{_lpSaveTimer=null;if(ROLE==='viewer'||!SB)return;_rtMarkLocalSave();try{await SB.from('shared_state').upsert({id:LP_KEYS.config,value:JSON.stringify({turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings}),updated_at:new Date().toISOString()})}catch(e){console.warn('LP config save:',e)}},1500);
 }
 // Save only truck-state key (for customs/hold/pallet edits — much lighter than full save)
 let _lpSavePending=false;// true when a debounced save hasn't fired yet
 async function LP_saveTruckState(){
   if(ROLE==='viewer'||!SB)return;
+  _rtMarkLocalSave();
   _lpSavePending=false;
   try{
     const now=new Date().toISOString();
@@ -3667,6 +3671,7 @@ function _lpRehydratePlan(){
 async function LP_saveToSupabase(){
   if(ROLE==="viewer")return;
   if(!SB)return;
+  _rtMarkLocalSave();// mark as local save so Realtime ignores the echo
   // Cancel ALL pending debounced saves — this full save includes everything
   if(_lpTruckSaveTimer){clearTimeout(_lpTruckSaveTimer);_lpTruckSaveTimer=null}
   if(_lpSaveTimer){clearTimeout(_lpSaveTimer);_lpSaveTimer=null}
@@ -8185,6 +8190,62 @@ const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 let SB=null;
 try{SB=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.warn('Supabase not configured:',e)}
 
+// ── Realtime sync: detect remote changes to shared_state ──
+window._rtChannel=null;// single subscription instance
+window._rtLastLocalSave=0;// timestamp of last local save (ms)
+window._rtSyncing=false;// prevent duplicate syncs
+window._remoteDataStale=false;
+function _rtMarkLocalSave(){window._rtLastLocalSave=Date.now()}
+function _rtStartRealtime(){
+  if(!SB||window._rtChannel)return;// already subscribed or no DB
+  try{
+    window._rtChannel=SB.channel('ml3k-sync')
+      .on('postgres_changes',{event:'*',schema:'public',table:'shared_state'},payload=>{
+        // Ignore own writes: if we saved within the last 3 seconds, skip
+        if(Date.now()-window._rtLastLocalSave<3000)return;
+        console.log('[ML3K Realtime] Remote change detected:',payload.new?.id||payload.old?.id||'?');
+        if(ROLE==='viewer'){
+          // Viewer: auto-sync silently (debounced to batch rapid updates)
+          if(window._rtSyncing)return;
+          window._rtSyncing=true;
+          clearTimeout(window._rtSyncTimer);
+          window._rtSyncTimer=setTimeout(async()=>{
+            try{
+              if(curMod==='lm')await syncLM();
+              else if(curMod==='lp')await syncLP();
+              else await syncV26();
+            }catch(e){console.warn('[Realtime] Viewer sync error:',e)}
+            window._rtSyncing=false;
+          },2000);// 2s debounce to batch rapid multi-key saves
+        }else{
+          // Admin: show banner (do NOT auto-sync)
+          window._remoteDataStale=true;
+          _rtShowBanner();
+        }
+      })
+      .subscribe(status=>{
+        if(status==='SUBSCRIBED')console.log('[ML3K Realtime] Subscribed to shared_state changes');
+        else if(status==='CLOSED'||status==='CHANNEL_ERROR')console.warn('[ML3K Realtime] Channel status:',status);
+      });
+  }catch(e){console.warn('[ML3K Realtime] Subscription failed:',e)}
+}
+function _rtShowBanner(){
+  if(document.getElementById('rtBanner'))return;// already showing
+  const div=document.createElement('div');
+  div.id='rtBanner';div.className='rt-banner';
+  div.innerHTML='📡 Data updated by another user — <b>click to refresh</b><span class="rt-x" onclick="event.stopPropagation();this.parentElement.remove()">✕</span>';
+  div.onclick=async function(){
+    this.remove();window._remoteDataStale=false;
+    // Sync current module using existing sync functions
+    try{
+      if(curMod==='lm')await syncLM();
+      else if(curMod==='lp')await syncLP();
+      else await syncV26();
+    }catch(e){console.warn('[Realtime] Admin sync error:',e)}
+  };
+  document.body.prepend(div);
+}
+
 async function checkSB(){
   const els=[document.getElementById('sbStatus'),document.getElementById('sbStatusLP'),document.getElementById('sbStatusV26')].filter(Boolean);
   if(!els.length)return;
@@ -8317,13 +8378,14 @@ function enterApp(){
       checkSB();
     }
   };
-  loadBoth().then(()=>{initLPUpload();initLMUpload();});
+  loadBoth().then(()=>{initLPUpload();initLMUpload();_rtStartRealtime()});
 }
 let _lmSaveTimer=null;
 function saveSharedDataDebounced(){if(_lmSaveTimer)clearTimeout(_lmSaveTimer);_lmSaveTimer=setTimeout(()=>{_lmSaveTimer=null;saveSharedData(false)},1500)}
 async function saveSharedData(fullSave){
   if(ROLE==="viewer")return;// viewers cannot save
   if(!SB){console.warn('Supabase not configured');return}
+  _rtMarkLocalSave();// mark as local save so Realtime ignores the echo
   // Cancel pending debounced save — this immediate save supersedes it
   if(_lmSaveTimer){clearTimeout(_lmSaveTimer);_lmSaveTimer=null}
   UNDO_capture();
