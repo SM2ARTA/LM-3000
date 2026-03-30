@@ -653,7 +653,9 @@ function _undoSnap(){
     lm_palletCfg:JSON.stringify(Object.fromEntries(Object.entries(LM_palletCfg||{}).map(([k,v])=>([k,{mode:v.mode,overrides:[...v.overrides]}])))),
     lm_stockSkus:JSON.stringify([...(STOCK_SKUS||[])]),
     lm_stockQtys:JSON.stringify(STOCK_QTYS||{}),
-    lm_stockName:STOCK_REPORT_NAME||''
+    lm_stockName:STOCK_REPORT_NAME||'',
+    nom:JSON.stringify(NOM||{}),
+    rw:JSON.stringify(RW||[])
   };
 }
 function UNDO_capture(){
@@ -715,12 +717,15 @@ function UNDO_restore(){
     if(snap.lm_manualDemand)LM_MANUAL_DEMAND=JSON.parse(snap.lm_manualDemand);
     if(snap.lm_palletCfg){const pc=JSON.parse(snap.lm_palletCfg);LM_palletCfg={};for(const[k,v]of Object.entries(pc))LM_palletCfg[k]={mode:v.mode||'dis',overrides:new Set(v.overrides||[])}}
     if(snap.lm_stockSkus){STOCK_SKUS=new Set(JSON.parse(snap.lm_stockSkus));STOCK_QTYS=snap.lm_stockQtys?JSON.parse(snap.lm_stockQtys):{};STOCK_REPORT_NAME=snap.lm_stockName||''}
+    // Restore core data (NOM + RW) — backward compat: old snapshots may not have these
+    if(snap.nom)NOM=JSON.parse(snap.nom);
+    if(snap.rw){RW=JSON.parse(snap.rw);_rwEnrichEffQty()}
     _undoLastSnap=_undoSnap();
     // Rebuild LM if data present
     if(Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();numberAll()}
-    // Save restored state
+    // Save restored state (fullSave=true to persist restored NOM+RW)
     LP_saveToSupabase();
-    saveSharedData();
+    saveSharedData(true);
     LM_saveDateOverrides();
     MI_save();
     DIST_saveOverrides();
