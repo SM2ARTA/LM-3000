@@ -8201,8 +8201,8 @@ function _rtStartRealtime(){
   try{
     window._rtChannel=SB.channel('ml3k-sync')
       .on('postgres_changes',{event:'*',schema:'public',table:'shared_state'},payload=>{
-        // Ignore own writes: if we saved within the last 3 seconds, skip
-        if(Date.now()-window._rtLastLocalSave<3000)return;
+        // Ignore own writes: short window covers echo burst from sequential Supabase writes
+        if(Date.now()-window._rtLastLocalSave<1500)return;
         console.log('[ML3K Realtime] Remote change detected:',payload.new?.id||payload.old?.id||'?');
         if(ROLE==='viewer'){
           // Viewer: auto-sync silently (debounced to batch rapid updates)
