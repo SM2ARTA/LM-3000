@@ -13127,7 +13127,7 @@ function LM_renderDemand(el){
       const isMnl=s.manualIndices.length>0;
       const kitAlQty=_kitAlMap[v.name+'|'+s.sku]||0;
       const kitPct=kitAlQty>0&&s.origQty>0?Math.round(kitAlQty/s.origQty*100):0;
-      const _isStp=venueStp&&isStp(s.sku);
+      const _isStp=hasStp&&isStp(s.sku);
       html+=`<tr class="lm-dem-row" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}" style="${_isStp?'background:#FFF8F0;opacity:0.6':isMnl?'background:var(--gs)':s.isAdj?'background:var(--ps)':''}">
         <td class="mono">${s.sku}${isMnl?' <span style="color:var(--gn);font-size:8px;font-weight:700">✏</span>':''}${kitAlQty>0?' <span style="color:#43A047;font-size:8px;font-weight:700">📦</span>':''}${_isStp?' <span style="color:#EF6C00;font-size:8px;font-weight:700">🏪</span>':''}</td>
         <td class="tcl">${s.name}</td>
