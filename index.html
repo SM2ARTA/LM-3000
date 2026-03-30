@@ -4832,8 +4832,55 @@ function LP_aggregateTruck(items){
   return Object.values(map).sort((a,b)=>b.pallets-a.pallets);
 }
 
+// ── Stock Waterfall (pure computation — no side effects) ──
+// Takes plan rows + stock/OOR state, returns {stockStatus, waterfallBefore}
+// Called before render, results stored in window._lpStockStatus / window._lpWaterfallBefore
+function LP_computeStockWaterfall(plan,stockSkus,stockQtys,oorTrucks){
+  const stockStatus={};// truckId → {stockReady:bool, oorSubmitted:bool}
+  const waterfallBefore={};// truckId → {sku: availQty BEFORE deduction}
+  if(!plan||!plan.length)return{stockStatus,waterfallBefore};
+  // Group by truckId and sort by date+id (same grouping as render)
+  const trucks={};
+  for(const r of plan){
+    if(!trucks[r.truckId])trucks[r.truckId]={id:r.truckId,date:r.date,items:[]};
+    trucks[r.truckId].items.push(r);
+  }
+  const truckList=Object.values(trucks).sort((a,b)=>{
+    const dc=a.date.localeCompare(b.date);if(dc)return dc;
+    return a.id-b.id;
+  });
+  // Build stock pool
+  const pool={};
+  if(stockSkus.size>0){
+    for(const sku of stockSkus){const sq=stockQtys[sku];pool[sku]=sq!==undefined?sq:Infinity}
+  }
+  // Walk trucks in date order
+  for(const t of truckList){
+    if(stockSkus.size===0){stockStatus[t.id]={stockReady:false,oorSubmitted:false};continue}
+    const snap={};for(const sku in pool)snap[sku]=pool[sku];
+    waterfallBefore[t.id]=snap;
+    const agg=LP_aggregateTruck(t.items);
+    const oor=oorTrucks.has(t.id);
+    if(oor){stockStatus[t.id]={stockReady:true,oorSubmitted:true};continue}
+    const canFill=agg.every(s=>(pool[s.sku]||0)>=s.qty);
+    if(canFill){
+      stockStatus[t.id]={stockReady:true,oorSubmitted:false};
+      for(const s of agg)pool[s.sku]=(pool[s.sku]||0)-s.qty;
+    }else{
+      stockStatus[t.id]={stockReady:false,oorSubmitted:false};
+    }
+  }
+  return{stockStatus,waterfallBefore};
+}
+// Recompute and store waterfall results. Call whenever plan/stock/OOR changes.
+function LP_updateStockWaterfall(){
+  const r=LP_computeStockWaterfall(LP_STATE.generatedPlan,STOCK_SKUS,STOCK_QTYS,LP_oorTrucks);
+  window._lpStockStatus=r.stockStatus;
+  window._lpWaterfallBefore=r.waterfallBefore;
+}
 function LP_renderPlan(el){
   LP_recomputeStockHolds();// ensure holds are fresh before plan render
+  LP_updateStockWaterfall();// ensure waterfall is fresh before render
   const plan=LP_STATE.generatedPlan;
   if(!plan.length){el.innerHTML='<div class="lp-empty">No plan generated yet. Upload files to get started.</div>';return}
 
@@ -4851,36 +4898,8 @@ function LP_renderPlan(el){
     return a.id-b.id;
   });
 
-  // ── Sequential stock allocation waterfall ──
-  // Walk trucks in date order, deduct from available stock, compute ready/not-ready
-  // Results stored in local Maps — truck objects are NOT mutated (read-only render)
-  const _stockStatus={};// truckId → {stockReady:bool, oorSubmitted:bool}
-  const _stockPool={};// running available balance
-  window._lpWaterfallBefore={};// truckId → {sku: availQty BEFORE this truck's deduction}
-  if(STOCK_SKUS.size>0){
-    for(const sku of STOCK_SKUS){const sq=STOCK_QTYS[sku];_stockPool[sku]=sq!==undefined?sq:Infinity}
-  }
-  for(const t of truckList){
-    if(STOCK_SKUS.size===0){_stockStatus[t.id]={stockReady:false,oorSubmitted:false};continue}
-    // Snapshot stock available BEFORE this truck deducts
-    const _snap={};for(const sku in _stockPool)_snap[sku]=_stockPool[sku];
-    window._lpWaterfallBefore[t.id]=_snap;
-    const agg=LP_aggregateTruck(t.items);
-    const oorSubmitted=LP_oorTrucks.has(t.id);
-    // OOR trucks: stock already reserved by warehouse, no deduction from pool
-    if(oorSubmitted){
-      _stockStatus[t.id]={stockReady:true,oorSubmitted:true};
-      continue;
-    }
-    // All other trucks (locked or unlocked): check and deduct from pool
-    const canFill=agg.every(s=>(_stockPool[s.sku]||0)>=s.qty);
-    if(canFill){
-      _stockStatus[t.id]={stockReady:true,oorSubmitted:false};
-      for(const s of agg)_stockPool[s.sku]=(_stockPool[s.sku]||0)-s.qty;
-    }else{
-      _stockStatus[t.id]={stockReady:false,oorSubmitted:false};
-    }
-  }
+  // ── Read precomputed stock waterfall (no mutation, pure read) ──
+  const _stockStatus=window._lpStockStatus||{};
   const _truckInStock=t=>{const s=_stockStatus[t.id];return s?s.stockReady:false};
 
   // Group by date
