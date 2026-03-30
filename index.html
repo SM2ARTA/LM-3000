@@ -5023,7 +5023,7 @@ function LP_renderPlan(el){
     const _isReadyFull=_isReady&&pct>=95;
     const dispClass=isDisp?' dispatched':'';const checked=isDisp?'checked':'';
     const _cargoVal=aggSkus.reduce((s,sk)=>{const cd=_custForDest(sk.sku,t.dest);return s+(cd.unitPrice||0)*sk.qty},0);
-    let h='<div class="lp-truck'+dispClass+'" data-search="'+t.id+' '+t.dest+' '+clDisp(t.dest)+' '+lsr+' '+aggSkus.map(s=>s.sku+' '+s.name).join(' ')+'" data-ready="'+(_isReady?1:0)+'" data-full="'+(_isReadyFull?1:0)+'" onclick="LP_showTruckModal('+t.id+')">';
+    let h='<div class="lp-truck'+dispClass+'" data-search="'+t.id+' LP-'+t.id+' '+t.dest+' '+clDisp(t.dest)+' '+lsr+' '+aggSkus.map(s=>s.sku+' '+s.name).join(' ')+'" data-ready="'+(_isReady?1:0)+'" data-full="'+(_isReadyFull?1:0)+'" onclick="LP_showTruckModal('+t.id+')">';
     // Row 1: icon + ID + dest badge (wraps naturally)
     h+='<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">';
     h+='<span>'+(isDisp?'🔒':'🚛')+'</span>';
