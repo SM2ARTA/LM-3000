@@ -12918,7 +12918,7 @@ function rConstraints(){
   const defMT=LM_DEFAULT_MT[key]||2;
   const defLT=0;// outbound (within city) defaults to 0
   const defLT2=LM_DEFAULT_LT[key]!==undefined?LM_DEFAULT_LT[key]:0;// inbound (Dallas→satellite)
-  const defWP=LM_DEFAULT_WP[key]||0;
+  const defWP=LM_DEFAULT_WP[key]||(vcIsCAN(key)||vcIsMEX(key)?3:(()=>{const _vm=VN.find(v=>v.name===key);return _vm&&(vcIsCAN(_vm.cluster)||vcIsMEX(_vm.cluster))?3:0})());
   const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
   const hasOvr=VS[key]&&Object.keys(VS[key]).length>0;
   const dn=clDisp(key)||key;
@@ -13001,7 +13001,7 @@ function _onConstraintChange(){
   const wpVal=parseInt(document.getElementById('i-wp')?.value);const wp=isNaN(wpVal)?0:Math.max(0,wpVal);
   const bi=document.getElementById('i-bi')?.value||'';
   const defTC=LM_DEFAULT_TC[key]||12;const defMT=LM_DEFAULT_MT[key]||2;
-  const defLT=0;const defLT2=LM_DEFAULT_LT[key]||0;const defWP=LM_DEFAULT_WP[key]||0;const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
+  const defLT=0;const defLT2=LM_DEFAULT_LT[key]||0;const defWP=LM_DEFAULT_WP[key]||(vcIsCAN(key)||vcIsMEX(key)?3:(()=>{const _vm=VN.find(v=>v.name===key);return _vm&&(vcIsCAN(_vm.cluster)||vcIsMEX(_vm.cluster))?3:0})());const defBI=LM_DEFAULT_BI[key]||'2026-05-04';
   if(!VS[key])VS[key]={};
   if(tc!==defTC)VS[key].tc=tc;else delete VS[key].tc;
   if(mt!==defMT)VS[key].mt=mt;else delete VS[key].mt;
