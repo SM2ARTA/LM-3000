@@ -8005,22 +8005,24 @@ async function masterBackupRestore(file){
 
     // ── Validate restored data before rebuild ──
     const _vErrs=[];
-    // LP plan: truck IDs in dispatched/OOR/LSR must exist in plan
+    // LP plan: filter out malformed rows, then clean orphan references
     if(LP_STATE.generatedPlan.length){
+      const _planBefore=LP_STATE.generatedPlan.length;
+      LP_STATE.generatedPlan=LP_STATE.generatedPlan.filter(r=>r.truckId!=null&&r.date&&r.destination);
+      const _planDropped=_planBefore-LP_STATE.generatedPlan.length;
+      if(_planDropped)_vErrs.push('Removed '+_planDropped+' plan row(s) missing truckId/date/destination');
       const planTruckIds=new Set(LP_STATE.generatedPlan.map(r=>r.truckId));
       for(const id of LP_dispatched){if(!planTruckIds.has(id)){_vErrs.push('LP_dispatched references truck LP-'+id+' not in plan');LP_dispatched.delete(id)}}
       for(const id of LP_oorTrucks){if(!planTruckIds.has(id)){_vErrs.push('LP_oorTrucks references truck LP-'+id+' not in plan');LP_oorTrucks.delete(id)}}
       for(const id of Object.keys(LP_lsrNumbers)){if(!planTruckIds.has(+id)){_vErrs.push('LP_lsrNumbers references truck LP-'+id+' not in plan');delete LP_lsrNumbers[id]}}
-      // Plan rows must have required fields
-      for(const r of LP_STATE.generatedPlan){
-        if(!r.truckId&&r.truckId!==0){_vErrs.push('Plan row missing truckId');break}
-        if(!r.date){_vErrs.push('Plan row missing date (truck '+r.truckId+')');break}
-        if(!r.destination){_vErrs.push('Plan row missing destination (truck '+r.truckId+')');break}
-      }
+      if(!LP_STATE.generatedPlan.length)LP_STATE.planGenerated=false;
     }
-    // LP demand: rows must have sku and destination
-    for(const d of LP_STATE.materialPlan){
-      if(!d.sku||!d.destination){_vErrs.push('LP demand row missing sku or destination');break}
+    // LP demand: filter out rows missing required fields
+    if(LP_STATE.materialPlan.length){
+      const _demBefore=LP_STATE.materialPlan.length;
+      LP_STATE.materialPlan=LP_STATE.materialPlan.filter(d=>d.sku&&d.destination);
+      const _demDropped=_demBefore-LP_STATE.materialPlan.length;
+      if(_demDropped)_vErrs.push('Removed '+_demDropped+' demand row(s) missing sku/destination');
     }
     // LM kits: items must be arrays with sku+qty
     for(const kit of LM_KITS){
