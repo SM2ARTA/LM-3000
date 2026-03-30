@@ -14127,40 +14127,40 @@ if(cv==="dashboard"){
         // CORE
         if(core.length){
           _ppHtml+=`<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--gn);margin-bottom:4px">✅ PRE-PICK — same in all ${total} venues</div>`;
-          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th>Item</th><th style="text-align:center;width:60px">Qty</th></tr></thead><tbody>`;
-          for(const c of core)_ppHtml+=`<tr style="background:var(--gs)"><td style="font-weight:600">${c.nm}</td><td class="mono" style="text-align:center;font-weight:700">${c.qty}</td></tr>`;
+          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th style="width:120px">Code</th><th>Item</th><th style="text-align:center;width:60px">Qty</th></tr></thead><tbody>`;
+          for(const c of core)_ppHtml+=`<tr style="background:var(--gs)"><td class="mono" style="font-size:9px">${c.sku}</td><td style="font-weight:600">${c.nm}</td><td class="mono" style="text-align:center;font-weight:700">${c.qty}</td></tr>`;
           _ppHtml+=`</tbody></table></div>`;
         }
         // VARIABLE
         if(variable.length){
           _ppHtml+=`<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--pu);margin-bottom:4px">🔢 CHECK QTY — in all venues but quantity differs</div>`;
-          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th>Item</th><th style="text-align:center;width:60px">Range</th><th>Per Venue</th></tr></thead><tbody>`;
+          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th style="width:120px">Code</th><th>Item</th><th style="text-align:center;width:60px">Range</th><th>Per Venue</th></tr></thead><tbody>`;
           for(const v of variable){
             const venueQtys=Object.entries(v.venues).sort((a,b)=>a[1]-b[1]).map(([vn,q])=>`<span title="${vn}">${q}</span>`);
             const hasWideRange=(v.max-v.min)>v.min;
-            _ppHtml+=`<tr style="background:var(--ps)"><td style="font-weight:600">${v.nm}</td><td class="mono" style="text-align:center;font-weight:700">${v.min}–${v.max}</td><td style="font-size:9px;color:var(--ts)">${hasWideRange?Object.entries(v.venues).sort((a,b)=>a[1]-b[1]).map(([vn,q])=>{const short=vn.replace(/ (Accreditation|Uniform Distribution|Transport Fleet|Volunteer|International|Training|Performance|Training Facility|Centre|Depot|Airport) ?/gi,' ').trim();return short+':&nbsp;'+q}).join(' · '):venueQtys.join(' · ')}</td></tr>`;
+            _ppHtml+=`<tr style="background:var(--ps)"><td class="mono" style="font-size:9px">${v.sku}</td><td style="font-weight:600">${v.nm}</td><td class="mono" style="text-align:center;font-weight:700">${v.min}–${v.max}</td><td style="font-size:9px;color:var(--ts)">${hasWideRange?Object.entries(v.venues).sort((a,b)=>a[1]-b[1]).map(([vn,q])=>{const short=vn.replace(/ (Accreditation|Uniform Distribution|Transport Fleet|Volunteer|International|Training|Performance|Training Facility|Centre|Depot|Airport) ?/gi,' ').trim();return short+':&nbsp;'+q}).join(' · '):venueQtys.join(' · ')}</td></tr>`;
           }
           _ppHtml+=`</tbody></table></div>`;
         }
         // OPTIONAL
         if(optional.length){
           _ppHtml+=`<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--or);margin-bottom:4px">⚠️ SOME VENUES ONLY — check before picking</div>`;
-          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th>Item</th><th style="text-align:center;width:60px">In</th><th>Which Venues</th></tr></thead><tbody>`;
+          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th style="width:120px">Code</th><th>Item</th><th style="text-align:center;width:60px">In</th><th>Which Venues</th></tr></thead><tbody>`;
           for(const o of optional){
             const pct=Math.round(o.count/o.total*100);
             const bg=pct>=80?'var(--os)':'#FFF';
             const vList=Object.entries(o.venues).sort((a,b)=>a[0].localeCompare(b[0])).map(([vn,q])=>{const short=vn.replace(/ (Accreditation|Uniform Distribution|Transport Fleet|Volunteer|International|Training|Performance|Training Facility|Centre|Depot|Airport) ?/gi,' ').trim();return short+'&nbsp;('+q+')'}).join(' · ');
-            _ppHtml+=`<tr style="background:${bg}"><td style="font-weight:600">${o.nm}</td><td class="mono" style="text-align:center">${o.count}/${o.total}</td><td style="font-size:9px;color:var(--ts)">${vList}</td></tr>`;
+            _ppHtml+=`<tr style="background:${bg}"><td class="mono" style="font-size:9px">${o.sku}</td><td style="font-weight:600">${o.nm}</td><td class="mono" style="text-align:center">${o.count}/${o.total}</td><td style="font-size:9px;color:var(--ts)">${vList}</td></tr>`;
           }
           _ppHtml+=`</tbody></table></div>`;
         }
         // UNIQUE
         if(unique.length){
           _ppHtml+=`<div style="margin-bottom:4px"><div style="font-size:10px;font-weight:700;color:var(--tt);margin-bottom:4px">📌 UNIQUE — one venue only</div>`;
-          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th>Item</th><th style="text-align:center;width:60px">Qty</th><th>Venue</th></tr></thead><tbody>`;
+          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th style="width:120px">Code</th><th>Item</th><th style="text-align:center;width:60px">Qty</th><th>Venue</th></tr></thead><tbody>`;
           for(const u of unique){
             const short=u.venue.replace(/ (Accreditation|Uniform Distribution|Transport Fleet|Volunteer|International|Training|Performance|Training Facility|Centre|Depot|Airport) ?/gi,' ').trim();
-            _ppHtml+=`<tr><td>${u.nm}</td><td class="mono" style="text-align:center">${u.qty}</td><td style="font-size:9px;color:var(--ts)">${short}</td></tr>`;
+            _ppHtml+=`<tr><td class="mono" style="font-size:9px">${u.sku}</td><td>${u.nm}</td><td class="mono" style="text-align:center">${u.qty}</td><td style="font-size:9px;color:var(--ts)">${short}</td></tr>`;
           }
           _ppHtml+=`</tbody></table></div>`;
         }
@@ -14168,7 +14168,7 @@ if(cv==="dashboard"){
         _ppHtml+=`</div></div>`;
       }
       if(_ppHtml){
-        h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🧰 Pre-Pick Guide <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${_ppTotalCore} items safe to pre-pick</span> <span class="bg bgs bg-gy">${_ppTotalGroups} venue groups</span></summary>`;
+        h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🧰 Pre-Pick Guide <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${_ppTotalCore} items safe to pre-pick</span> <span class="bg bgs bg-gy">${_ppTotalGroups} venue groups</span><button class="rbtn" onclick="event.stopPropagation();LM_exportPrePickPDF()" style="margin-left:auto;background:var(--ps);color:var(--pu);border-color:#D4C5FE">⬇ PDF</button></summary>`;
         h+=`<p style="font-size:10px;color:var(--tt);margin:0 0 4px">Compares kit contents across venues of the same type. <strong style="color:var(--gn)">Green rows</strong> = pick the same for every venue. <strong style="color:var(--pu)">Purple rows</strong> = same item, check quantity. <strong style="color:var(--or)">Orange rows</strong> = not all venues need it.</p>`;
         h+=`<p style="font-size:10px;color:var(--ts);margin:0 0 10px">Groups with only 1 venue (like IBC) are skipped — nothing to compare.</p>`;
         h+=_ppHtml;
@@ -14893,6 +14893,176 @@ async function LM_exportAsmTimeline(){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='Assembly_Timeline_'+new Date().toISOString().slice(0,10)+'.xlsx';a.click();URL.revokeObjectURL(a.href);
   }catch(e){console.error('Assembly export error:',e);alert('Export failed: '+e.message)}
+}
+function LM_exportPrePickPDF(){
+  if(!LM_KITS.length)return;
+  // Recompute analysis (same logic as dashboard render)
+  const groups={};
+  for(const kit of LM_KITS){
+    if(!kit.items||!kit.items.length)continue;
+    const isFn=kit.sku.startsWith('FNKIT');
+    const kitType=isFn?'FF&E':'Stationery';
+    const vt=LM_vtMap[kit.venue]||'Other';
+    const cc=_venueCountry(kit.venue).toUpperCase();
+    const gk=kitType+'|'+vt+'|'+cc;
+    if(!groups[gk])groups[gk]={kitType,vt,cc,kits:[]};
+    groups[gk].kits.push(kit);
+  }
+  const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  let body='';
+  let totalPrePick=0;
+  const sortedKeys=Object.keys(groups).sort();
+  for(const gk of sortedKeys){
+    const g=groups[gk];
+    if(g.kits.length<2)continue;
+    const total=g.kits.length;
+    const allSkus=new Set();
+    for(const k of g.kits)for(const i of k.items)allSkus.add(i.sku);
+    const sd={};
+    for(const sku of allSkus)sd[sku]={venues:{},count:0};
+    for(const k of g.kits)for(const i of k.items){sd[i.sku].venues[k.venue]=i.qty;sd[i.sku].count++}
+    const core=[],variable=[],optional=[],unique=[];
+    for(const[sku,d]of Object.entries(sd)){
+      const nm=NOM[sku]?.nm||sku;
+      const qtys=Object.values(d.venues);
+      const allSame=qtys.every(q=>q===qtys[0]);
+      if(d.count===total&&allSame)core.push({sku,nm,qty:qtys[0]});
+      else if(d.count===total)variable.push({sku,nm,min:Math.min(...qtys),max:Math.max(...qtys),venues:d.venues});
+      else if(d.count===1){const v=Object.keys(d.venues)[0];unique.push({sku,nm,venue:v,qty:d.venues[v]})}
+      else optional.push({sku,nm,count:d.count,total,venues:d.venues});
+    }
+    totalPrePick+=core.length;
+    core.sort((a,b)=>a.sku.localeCompare(b.sku));
+    variable.sort((a,b)=>a.sku.localeCompare(b.sku));
+    optional.sort((a,b)=>b.count-a.count||a.sku.localeCompare(b.sku));
+    unique.sort((a,b)=>a.sku.localeCompare(b.sku));
+    const flag=g.cc==='CAN'?'\u{1F1E8}\u{1F1E6}':g.cc==='MEX'?'\u{1F1F2}\u{1F1FD}':'\u{1F1FA}\u{1F1F8}';
+    const shortVt=v=>{return v.replace(/ (Accreditation|Uniform Distribution|Transport Fleet|Volunteer|International|Training|Performance|Training Facility|Centre|Depot|Airport) ?/gi,' ').replace(/\s+/g,' ').trim()};
+    // Section header
+    body+=`<div class="sec">`;
+    body+=`<div class="sec-hd"><span class="sec-flag">${flag}</span> <span class="sec-type ${g.kitType==='FF&E'?'ffe':'stp'}">${g.kitType}</span> ${g.vt} <span class="sec-count">${total} venues</span></div>`;
+    body+=`<div class="sec-venues">${g.kits.map(k=>k.venue).sort().join(' &middot; ')}</div>`;
+    // CORE
+    if(core.length){
+      body+=`<div class="cat cat-green"><div class="cat-hd">\u2705 PRE-PICK &mdash; Same in all ${total} venues. Pick ${core.length} items &times; ${total} sets.</div>`;
+      body+=`<table><thead><tr><th class="col-sku">Code</th><th class="col-item">Item</th><th class="col-qty">Qty</th></tr></thead><tbody>`;
+      for(const c of core)body+=`<tr class="row-green"><td class="mono">${c.sku}</td><td>${c.nm}</td><td class="mono ctr">${c.qty}</td></tr>`;
+      body+=`</tbody></table></div>`;
+    }
+    // VARIABLE
+    if(variable.length){
+      body+=`<div class="cat cat-purple"><div class="cat-hd">\u{1F522} CHECK QUANTITY &mdash; All ${total} venues get this item, but quantity is different.</div>`;
+      body+=`<table><thead><tr><th class="col-sku">Code</th><th class="col-item">Item</th><th class="col-qty">Range</th><th>Qty per Venue</th></tr></thead><tbody>`;
+      for(const v of variable){
+        const perV=Object.entries(v.venues).sort((a,b)=>a[1]-b[1]).map(([vn,q])=>shortVt(vn)+':&nbsp;<b>'+q+'</b>').join(' &middot; ');
+        body+=`<tr class="row-purple"><td class="mono">${v.sku}</td><td>${v.nm}</td><td class="mono ctr">${v.min}&ndash;${v.max}</td><td class="small">${perV}</td></tr>`;
+      }
+      body+=`</tbody></table></div>`;
+    }
+    // OPTIONAL
+    if(optional.length){
+      body+=`<div class="cat cat-orange"><div class="cat-hd">\u26A0\uFE0F SOME VENUES ONLY &mdash; Not every venue needs these. Check the list.</div>`;
+      body+=`<table><thead><tr><th class="col-sku">Code</th><th class="col-item">Item</th><th class="col-qty">In</th><th>Which Venues (qty)</th></tr></thead><tbody>`;
+      for(const o of optional){
+        const vList=Object.entries(o.venues).sort((a,b)=>a[0].localeCompare(b[0])).map(([vn,q])=>shortVt(vn)+':&nbsp;<b>'+q+'</b>').join(' &middot; ');
+        body+=`<tr class="row-orange"><td class="mono">${o.sku}</td><td>${o.nm}</td><td class="mono ctr">${o.count}/${o.total}</td><td class="small">${vList}</td></tr>`;
+      }
+      body+=`</tbody></table></div>`;
+    }
+    // UNIQUE
+    if(unique.length){
+      body+=`<div class="cat cat-grey"><div class="cat-hd">\u{1F4CC} UNIQUE &mdash; Only one venue gets this. Custom pick.</div>`;
+      body+=`<table><thead><tr><th class="col-sku">Code</th><th class="col-item">Item</th><th class="col-qty">Qty</th><th>Venue</th></tr></thead><tbody>`;
+      for(const u of unique)body+=`<tr><td class="mono">${u.sku}</td><td>${u.nm}</td><td class="mono ctr">${u.qty}</td><td class="small">${u.venue}</td></tr>`;
+      body+=`</tbody></table></div>`;
+    }
+    body+=`</div>`;// close sec
+  }
+  // Build full HTML page
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pre-Pick Guide - ${today}</title>
+<style>
+@page{size:landscape;margin:12mm 10mm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans','Segoe UI',Arial,sans-serif;font-size:11px;color:#111;padding:16px;line-height:1.4}
+.hdr{text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #CF5D5D}
+.hdr h1{font-size:22px;font-weight:800;color:#111;margin-bottom:4px}
+.hdr .sub{font-size:12px;color:#60646C}
+.hdr .date{font-size:10px;color:#9CA0AA;margin-top:2px}
+.legend{display:flex;gap:16px;justify-content:center;margin-bottom:16px;flex-wrap:wrap}
+.legend span{font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px}
+.leg-green{background:#E6F5ED;color:#12804A}
+.leg-purple{background:#F0EBFE;color:#6E3FF3}
+.leg-orange{background:#FEF3EB;color:#C4550A}
+.leg-grey{background:#F0F1F3;color:#60646C}
+.how{background:#F4F5F7;border-radius:8px;padding:12px 16px;margin-bottom:18px;page-break-inside:avoid}
+.how h3{font-size:12px;font-weight:800;margin-bottom:6px;color:#111}
+.how ol{margin-left:18px;font-size:11px;color:#333}
+.how ol li{margin-bottom:3px}
+.how ol li b{color:#12804A}
+.sec{page-break-inside:avoid;margin-bottom:16px;border:1.5px solid #E2E4E9;border-radius:8px;overflow:hidden}
+.sec-hd{font-size:14px;font-weight:800;padding:8px 12px;background:#F4F5F7;border-bottom:1px solid #E2E4E9;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sec-flag{font-size:16px}
+.sec-type{font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px}
+.sec-type.ffe{background:#E6F5ED;color:#12804A}
+.sec-type.stp{background:#FEF3EB;color:#C4550A}
+.sec-count{font-size:10px;font-weight:400;color:#9CA0AA;margin-left:4px}
+.sec-venues{font-size:8px;color:#9CA0AA;padding:4px 12px;border-bottom:1px solid #E2E4E9;line-height:1.4}
+.cat{padding:8px 12px;border-bottom:1px solid #E2E4E9}
+.cat:last-child{border-bottom:none}
+.cat-hd{font-size:11px;font-weight:700;margin-bottom:6px;padding:4px 0}
+.cat-green .cat-hd{color:#12804A}
+.cat-purple .cat-hd{color:#6E3FF3}
+.cat-orange .cat-hd{color:#C4550A}
+.cat-grey .cat-hd{color:#60646C}
+table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:4px}
+th{text-align:left;font-size:9px;font-weight:700;color:#60646C;text-transform:uppercase;letter-spacing:0.5px;padding:4px 6px;border-bottom:2px solid #E2E4E9;background:#F9FAFB}
+td{padding:4px 6px;border-bottom:1px solid #E2E4E9;vertical-align:top}
+.col-sku{width:140px}
+.col-item{min-width:160px}
+.col-qty{width:55px;text-align:center}
+.mono{font-family:'IBM Plex Mono','Courier New',monospace;font-size:9px}
+.ctr{text-align:center;font-weight:700}
+.small{font-size:8px;color:#60646C;line-height:1.3}
+.row-green{background:#E6F5ED}
+.row-green td{font-weight:600}
+.row-purple{background:#F0EBFE}
+.row-orange{background:#FEF3EB}
+.ft{text-align:center;font-size:8px;color:#9CA0AA;margin-top:12px;padding-top:8px;border-top:1px solid #E2E4E9}
+@media print{
+  .sec{page-break-inside:avoid}
+  body{padding:0;font-size:10px}
+}
+</style></head><body>
+<div class="hdr">
+  <h1>Kit Pre-Pick Guide</h1>
+  <div class="sub">FIFA World Cup 2026 &mdash; FF&amp;E &amp; Stationery Kit Assembly</div>
+  <div class="date">${today} &middot; ${LM_KITS.length} total kits &middot; ${totalPrePick} items safe to pre-pick</div>
+</div>
+<div class="legend">
+  <span class="leg-green">\u2705 PRE-PICK = Same everywhere, just pick it</span>
+  <span class="leg-purple">\u{1F522} CHECK QTY = Same item, different quantity</span>
+  <span class="leg-orange">\u26A0\uFE0F SOME VENUES = Not all venues need it</span>
+  <span class="leg-grey">\u{1F4CC} UNIQUE = Only one venue</span>
+</div>
+<div class="how">
+  <h3>How to use this guide</h3>
+  <ol>
+    <li>Find your <b>venue type</b> below (e.g. Transport Fleet Depot, Airport, etc.)</li>
+    <li><b>Green rows</b> = pick the SAME items and quantities for EVERY venue in that group. No thinking needed.</li>
+    <li><b>Purple rows</b> = you need this item for every venue, but the <b>quantity is different</b>. Check the number for each venue.</li>
+    <li><b>Orange rows</b> = only SOME venues need this. Look at the list to see which ones.</li>
+    <li><b>Grey rows</b> = only ONE venue needs this. It\u2019s a special pick.</li>
+    <li>Use the <b>Code column</b> to find items in the warehouse. Codes match the label on the shelf/bin.</li>
+  </ol>
+</div>
+${body}
+<div class="ft">&copy;2026 SM\u00B2ARTA &middot; Generated from ML3K &middot; Print this page as PDF (Ctrl+P &rarr; Save as PDF)</div>
+</body></html>`;
+  const w=window.open('','_blank');
+  if(!w){alert('Pop-up blocked. Please allow pop-ups for this site.');return}
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>{w.print()},500);
 }
 async function LM_exportKitTimeline(){
   const rows=window._kitTimelineData;if(!rows||!rows.length)return;
