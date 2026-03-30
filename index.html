@@ -7522,7 +7522,7 @@ function V26_export(){
 }
 
 // ── Master Backup Export — full system state to Excel ──
-function masterBackupExport(){
+async function masterBackupExport(){
   const wb=XLSX.utils.book_new();
   const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
 
@@ -7632,7 +7632,15 @@ function masterBackupExport(){
     XLSX.utils.book_append_sheet(wb,ws,'LP Material Plan');
   }
 
-  // 10b. LP Demand Raw — exported separately via lp-demand-raw key (not loaded in memory)
+  // 10b. LP Demand Raw — fetch from Supabase and include for faithful restore
+  try{
+    const _rawRows=await _lpFetchRawDemand();
+    if(_rawRows&&_rawRows.length){
+      const ws=XLSX.utils.json_to_sheet(_rawRows.map(r=>({Destination:r.destination,SKU:r.sku,'Required Qty':r.requiredQty})));
+      ws['!cols']=[{wch:30},{wch:20},{wch:12}];
+      XLSX.utils.book_append_sheet(wb,ws,'LP Demand Raw');
+    }
+  }catch(e){console.warn('Raw demand export skipped:',e)}
 
   // 11. LP Arrivals
   if(LP_STATE.arrivals.length){
