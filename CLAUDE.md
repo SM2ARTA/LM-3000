@@ -876,6 +876,21 @@ Checks ALL items on ALL LM trucks (not just assembled) across 3 supply chain pat
 - DDD and Late Arrivals open by default; Assembly and Kitting collapsed
 - Excel buttons use `event.stopPropagation()` to prevent toggle on click
 
+## System Audit (2026-03-30) — Full Architecture Audit
+Comprehensive audit across init, state, persistence, engines, rendering, exports. See AUDIT.md for full report.
+
+### Quick Wins Applied
+1. **UNDO_capture() added** to `LM_saveManualDemand`, `LM_saveClusterTA`, `LM_saveStpStrategy` — all mutations now undoable
+2. **Debounce timer cleared** in `LP_saveToSupabase()` — `_lpSaveTimer` now cleared alongside `_lpTruckSaveTimer` to prevent config save race
+3. **LP_recomputeStockHolds() on load** — called after `_lpRehydratePlan()` in both new and legacy load paths
+4. **LP_lastGenSettings reset** — cleared to `{}` in both `doResetLP()` and `doSoftResetLP()` so regeneration works after reset
+
+### Known Open Issues (from AUDIT.md)
+- **C1**: Stock waterfall computed in `LP_renderPlan()` render path (state mutation in render)
+- **C2**: `_undoSnap()` does not capture NOM/RW (file data not restorable via undo)
+- **C3**: `beforeunload` only flushes truck-state + config, not plan/demand/nom/arrivals
+- **C4**: Kit rename in `numberAll()` mutates NOM in-place (non-atomic)
+
 ## System Audit (2026-03-27)
 Comprehensive audit of all subsystems. No critical bugs found.
 

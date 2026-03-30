@@ -3660,8 +3660,9 @@ function _lpRehydratePlan(){
 async function LP_saveToSupabase(){
   if(ROLE==="viewer")return;
   if(!SB)return;
-  // Cancel pending debounced saves — this full save includes truck-state
+  // Cancel ALL pending debounced saves — this full save includes everything
   if(_lpTruckSaveTimer){clearTimeout(_lpTruckSaveTimer);_lpTruckSaveTimer=null}
+  if(_lpSaveTimer){clearTimeout(_lpSaveTimer);_lpSaveTimer=null}
   _lpSavePending=false;
   UNDO_capture();// snapshot before save
   try{
@@ -3739,6 +3740,7 @@ async function LP_loadFromSupabase(){
         for(const r of LP_STATE.generatedPlan){const ppu=_nom[r.sku]?.ppu||1;if(ppu>1){r.qty=Math.ceil(r.qty/ppu);const pq=_nom[r.sku]?.palletQty||0;const ps=_nom[r.sku]?.palletSpc||0;if(pq>0&&ps>0)r.pallets=Math.round((r.qty/pq)*ps*100)/100}}
       }
       if(cfg.lastGenSettings)LP_lastGenSettings=cfg.lastGenSettings;else LP_snapshotSettings();
+      LP_recomputeStockHolds();
       return true;
     }
 
@@ -3781,6 +3783,7 @@ async function LP_loadFromSupabase(){
     // Legacy data may not have effQty — compute as fallback (ceiling on aggregate)
     for(const d of LP_STATE.materialPlan){if(d.effQty===undefined){const ppu=_lpPPU(d.sku);d.effQty=ppu>1?Math.ceil(d.requiredQty/ppu):d.requiredQty}}
     LP_snapshotSettings();
+    LP_recomputeStockHolds();
     // Write to new split keys (migration)
     if(ROLE==='admin'){
       await LP_saveToSupabase();
@@ -8382,6 +8385,7 @@ function gLT2(v){const lt2=vG(v).lt2;return lt2!==undefined&&lt2!==null?Math.max
 let LM_clusterTurnaround=5;
 async function LM_saveClusterTA(){
   if(ROLE==='viewer'||!SB)return;
+  UNDO_capture();
   try{await SB.from('shared_state').upsert({id:'fm-cluster-ta',value:JSON.stringify(LM_clusterTurnaround),updated_at:new Date().toISOString()})}catch(e){}
 }
 async function LM_loadClusterTA(){
@@ -10483,6 +10487,7 @@ function LM_injectManualDemand(){
 }
 async function LM_saveManualDemand(){
   if(ROLE==='viewer'||!SB)return;
+  UNDO_capture();
   try{await SB.from('shared_state').upsert({id:'fm-lm-manual-demand',value:JSON.stringify(LM_MANUAL_DEMAND),updated_at:new Date().toISOString()})}catch(e){}
 }
 async function LM_loadManualDemand(){
@@ -11062,6 +11067,7 @@ function _venueCountry(venue){const v=VN.find(vn=>vn.name===venue);if(!v)return'
 function _stratGet(country,vt,field){return(LM_STP_STRATEGY[country]||{})[vt]?.[field]||''}
 async function LM_saveStpStrategy(){
   if(ROLE==='viewer'||!SB)return;
+  UNDO_capture();
   try{await SB.from('shared_state').upsert({id:'fm-stp-strategy',value:JSON.stringify(LM_STP_STRATEGY),updated_at:new Date().toISOString()})}catch(e){}
 }
 async function LM_loadStpStrategy(){
@@ -15083,6 +15089,7 @@ function doResetLP(){
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
+  LP_lastGenSettings={};
   lpUf=[];lpRenderUpload();
   // Clear rendered content so upload overlay is visible
   const lpM=document.getElementById('lpMain');if(lpM)lpM.innerHTML='';
@@ -15116,6 +15123,7 @@ function doSoftResetLP(){
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:_ma,loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},
     turnaround:_ta,maxPallets:_mp,maxTrucks:_mt,maxDests:_md,ricStartDate:_ric,
     planGenerated:false,generatedPlan:[]};
+  LP_lastGenSettings={};
   // LP_dispatched, LP_oorTrucks, LP_lsrNumbers, LP_palletOverrides, LP_customsOverrides, LP_arrivedConts,
   // LP_transitDays, LP_contDateOverrides, manual arrivals (_manual:true) — all preserved
   lpUf=[];lpRenderUpload();
