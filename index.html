@@ -13006,7 +13006,7 @@ function LM_renderDemand(el){
         const effPlt=(kit.pq>0&&kit.ps>0)?((kPcs/kit.pq)*kit.ps):kPlt;
         html+=`<div onclick="LM_showKitDetail('${kit.id}')" style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;background:#fff;border:1px solid #A5D6A7;border-radius:6px;cursor:pointer;font-size:11px">
           <span style="font-size:14px">📦</span>
-          <div style="flex:1;min-width:0"><div style="font-weight:700;color:#2E7D32">${kit.name}</div><div style="font-size:9px;color:var(--tt)">${kit.sku} · ${kit.items.length} items · ${kPcs.toLocaleString()} pcs · ${effPlt.toFixed(1)} plt</div></div>
+          <div style="flex:1;min-width:0"><div style="font-weight:700;color:#2E7D32">${kit.name}</div><div style="font-size:9px;color:var(--tt)">${kit.sku} · ${kit.items.length} items · ${kPcs.toLocaleString()} pcs · ${effPlt.toFixed(1)} plt</div><div style="font-size:8px;color:var(--ts);margin-top:2px;line-height:1.4">${kit.items.map(i=>{const n=NOM[i.sku];return(n?.nm||i.sku)+' ×'+i.qty}).join(' · ')}</div></div>
           ${ROLE!=='viewer'?`<span onclick="event.stopPropagation();LM_deleteKit('${kit.id}')" style="color:var(--rd);cursor:pointer;font-size:13px" title="Delete kit">🗑</span>`:''}
         </div>`;
       }
@@ -13840,10 +13840,13 @@ if(cv==="dashboard"){
     }
   }
 
-  // ── Kitting Timeline (FF&E kits) — All Venues only ──
-  if(!isFiltered&&!isRegion&&!isClusterOv){
+  // ── Kitting Timeline (FF&E kits) — All Venues + Cluster views ──
+  if(!isFiltered&&!isRegion){
     const _kitRows=[];
     const _kitSeen=new Set();
+    // For cluster view, filter to kits in this cluster's venues
+    const _kitClFilter=isClusterOv?clusterOvName:'';
+    const _kitClVenues=_kitClFilter?new Set(VN.filter(v=>v.cluster===_kitClFilter).map(v=>v.name)):null;
     for(const label in PLAN_CACHE){
       const P2=PLAN_CACHE[label];if(!P2)continue;
       P2.allT.forEach(t=>{
@@ -13852,6 +13855,8 @@ if(cv==="dashboard"){
           const nm=NOM[it.sku];if(!nm||!nm._kitNom)return;
           if(!it.sku.startsWith('FNKIT')&&!it.sku.startsWith('OSKIT'))return;
           const kit=LM_getKitById(nm._kitId);if(!kit)return;
+          // Cluster filter: skip kits for venues outside this cluster
+          if(_kitClVenues&&!_kitClVenues.has(kit.venue))return;
           const k=t.id+'|'+it.sku;
           if(_kitSeen.has(k))return;_kitSeen.add(k);
           const dd=t.dd||'';
@@ -13865,12 +13870,12 @@ if(cv==="dashboard"){
     }
     if(_kitRows.length>0){
       _kitRows.sort((a,b)=>a.dd.localeCompare(b.dd)||a.truckId.localeCompare(b.truckId));
-      window._kitTimelineData=_kitRows;
+      if(!isClusterOv)window._kitTimelineData=_kitRows;// only set global for All Venues
       const _kitTotal=_kitRows.length;
       const _kitComps=_kitRows.reduce((s,r)=>s+r.compCount,0);
       h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">📦 Kitting Timeline <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${_kitTotal} kits</span> <span class="bg bgs bg-gy">${_kitComps} components</span><button class="rbtn" onclick="event.stopPropagation();LM_exportKitTimeline()" style="margin-left:auto;background:var(--gs);color:var(--gn);border-color:#B8DFCA">⬇ Excel</button></summary>
       <p style="font-size:10px;color:var(--tt);margin:0 0 8px">FF&amp;E and Stationery kits requiring warehouse kitting before dispatch — grouped by dispatch date</p>
-      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>Type</th><th>Kit</th><th>Venue</th><th style="text-align:center">Components</th><th style="text-align:center">Readiness</th></tr></thead><tbody>`;
+      <table class="dtb"><thead><tr><th>Dispatch</th><th>Truck</th><th>Destination</th><th>Type</th><th>Kit</th><th>Venue</th><th>Components</th><th style="text-align:center">Readiness</th></tr></thead><tbody>`;
       let _prevDd='';
       _kitRows.forEach(r=>{
         const isNewDate=r.dd!==_prevDd;_prevDd=r.dd;
@@ -13886,9 +13891,9 @@ if(cv==="dashboard"){
           <td class="mono fw6">${r.truckId}</td>
           <td style="font-size:10px">${r.dest}</td>
           <td style="font-size:10px;font-weight:600;color:${r.kitType==='FF&E'?'var(--gn)':'var(--or)'}">${r.kitType}</td>
-          <td style="font-size:10px;font-weight:600;color:var(--tp)" title="${compList}">${r.kitName}</td>
+          <td style="font-size:10px;font-weight:600;color:var(--tp)">${r.kitName}</td>
           <td style="font-size:10px;color:var(--ts)">${r.venue}</td>
-          <td class="mono" style="text-align:center">${r.compCount}</td>
+          <td style="font-size:9px;color:var(--ts);max-width:300px">${r.items.map(i=>{const n=NOM[i.sku];return'<span style="white-space:nowrap">'+(n?.nm||i.sku)+' ×'+i.qty+'</span>'}).join(', ')}</td>
           <td style="text-align:center"><span class="bg bgs" style="background:${rBg};color:${rColor}">${rPct}% (${r.readiness.inStock}/${r.readiness.total})</span></td></tr>`;
       });
       h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="6">Total</td><td class="mono" style="text-align:center">${_kitComps}</td><td></td></tr></tfoot></table></details>`;
