@@ -4995,8 +4995,10 @@ function LP_renderPlan(el){
       <span class="bg bg-gn">${fullCount} ready</span>
       <span class="bg bg-gy">${dates.length} dates</span>
     </div>
-    <button class="rbtn" id="lpReadyBtn" onclick="LP_toggleReadyFilter()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">✅ Ready (${fullCount})</button>
-    <button class="rbtn" id="lpLsrBtn" onclick="LP_toggleLsrFilter()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📋 LSR (${Object.keys(LP_lsrNumbers).length})</button>
+    <div style="display:flex;gap:6px">
+      <button class="rbtn" id="lpReadyBtn" onclick="LP_toggleReadyFilter()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">✅ Ready (${fullCount})</button>
+      <button class="rbtn" id="lpLsrBtn" onclick="LP_toggleLsrFilter()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📋 LSR (${Object.keys(LP_lsrNumbers).length})</button>
+    </div>
   </div>
   <input type="text" class="lp-search" placeholder="Search by truck, destination, SKU..." id="lpPlanSearch" oninput="LP_filterPlan()" style="margin-bottom:8px">`;
 
