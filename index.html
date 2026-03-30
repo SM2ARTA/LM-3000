@@ -14067,16 +14067,15 @@ if(cv==="dashboard"){
     }
     // ── Pre-Pick Guide (All Venues only, not cluster) ──
     if(!isClusterOv&&LM_KITS.length>0){
-      // Group kits by kitType + venueType + country
+      // Group FF&E kits by venueType + country (STP/Stationery kits excluded)
       const _ppGroups={};
       for(const kit of LM_KITS){
         if(!kit.items||!kit.items.length)continue;
-        const isFn=kit.sku.startsWith('FNKIT');
-        const kitType=isFn?'FF&E':'Stationery';
+        if(!kit.sku.startsWith('FNKIT'))continue;// FF&E only — skip STP kits
         const vt=LM_vtMap[kit.venue]||'Other';
         const cc=_venueCountry(kit.venue).toUpperCase();
-        const gk=kitType+'|'+vt+'|'+cc;
-        if(!_ppGroups[gk])_ppGroups[gk]={kitType,vt,cc,kits:[]};
+        const gk=vt+'|'+cc;
+        if(!_ppGroups[gk])_ppGroups[gk]={kitType:'FF&E',vt,cc,kits:[]};
         _ppGroups[gk].kits.push(kit);
       }
       let _ppHtml='';
@@ -14896,16 +14895,15 @@ async function LM_exportAsmTimeline(){
 }
 function LM_exportPrePickPDF(){
   if(!LM_KITS.length)return;
-  // Recompute analysis (same logic as dashboard render)
+  // Recompute analysis — FF&E kits only (STP/Stationery excluded)
   const groups={};
   for(const kit of LM_KITS){
     if(!kit.items||!kit.items.length)continue;
-    const isFn=kit.sku.startsWith('FNKIT');
-    const kitType=isFn?'FF&E':'Stationery';
+    if(!kit.sku.startsWith('FNKIT'))continue;// FF&E only — skip STP kits
     const vt=LM_vtMap[kit.venue]||'Other';
     const cc=_venueCountry(kit.venue).toUpperCase();
-    const gk=kitType+'|'+vt+'|'+cc;
-    if(!groups[gk])groups[gk]={kitType,vt,cc,kits:[]};
+    const gk=vt+'|'+cc;
+    if(!groups[gk])groups[gk]={kitType:'FF&E',vt,cc,kits:[]};
     groups[gk].kits.push(kit);
   }
   const today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
@@ -15035,7 +15033,7 @@ td{padding:4px 6px;border-bottom:1px solid #E2E4E9;vertical-align:top}
 </style></head><body>
 <div class="hdr">
   <h1>Kit Pre-Pick Guide</h1>
-  <div class="sub">FIFA World Cup 2026 &mdash; FF&amp;E &amp; Stationery Kit Assembly</div>
+  <div class="sub">FIFA World Cup 2026 &mdash; FF&amp;E Kit Assembly</div>
   <div class="date">${today} &middot; ${LM_KITS.length} total kits &middot; ${totalPrePick} items safe to pre-pick</div>
 </div>
 <div class="legend">
