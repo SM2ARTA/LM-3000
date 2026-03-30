@@ -8339,7 +8339,11 @@ function enterApp(){
     // Now build venues and trucks AFTER all config is loaded
     if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="dashboard";lmOk=true}}
     // Load LP data
-    try{lpOk=await LP_loadFromSupabase()}catch(e){}
+    try{
+      lpOk=await LP_loadFromSupabase();
+      // Rebuild LP→LM arrival FIFO (was built empty during numberAll before LP data loaded)
+      if(lpOk&&LP_STATE?.generatedPlan?.length)try{LM_buildLPArrivalFifo()}catch(e){}
+    }catch(e){}
     
     document.getElementById("pov").style.display="none";
     
@@ -13383,6 +13387,8 @@ function LM_renderAnalysis(el){
 function LM_filterAnalysis(){filterBySearch('lmAnalysisSearch','#lmAnalysisBody','tr[data-search]',{})}
 
 function rMain(){const el=document.getElementById("mn");
+// Defensive: rebuild LP FIFO if stale (LP may have loaded after numberAll built it empty)
+if((!LP_ARRIVAL_FIFO||!Object.keys(LP_ARRIVAL_FIFO).length)&&LP_STATE?.generatedPlan?.length)try{LM_buildLPArrivalFifo()}catch(e){}
 
 // ── ANALYSIS VIEW ──
 if(cv==="analysis"){LM_renderAnalysis(el);return}
@@ -14058,6 +14064,116 @@ if(cv==="dashboard"){
           <td style="text-align:center"><span class="bg bgs" style="background:${rBg};color:${rColor}">${rPct}% (${r.readiness.inStock}/${r.readiness.total})</span></td></tr>`;
       });
       h+=`</tbody><tfoot><tr style="background:#F0F1F3;font-weight:700;border-top:2px solid var(--bd)"><td colspan="6">Total</td><td class="mono" style="text-align:center">${_kitComps}</td><td></td></tr></tfoot></table></details>`;
+    }
+    // ── Pre-Pick Guide (All Venues only, not cluster) ──
+    if(!isClusterOv&&LM_KITS.length>0){
+      // Group kits by kitType + venueType + country
+      const _ppGroups={};
+      for(const kit of LM_KITS){
+        if(!kit.items||!kit.items.length)continue;
+        const isFn=kit.sku.startsWith('FNKIT');
+        const kitType=isFn?'FF&E':'Stationery';
+        const vt=LM_vtMap[kit.venue]||'Other';
+        const cc=_venueCountry(kit.venue).toUpperCase();
+        const gk=kitType+'|'+vt+'|'+cc;
+        if(!_ppGroups[gk])_ppGroups[gk]={kitType,vt,cc,kits:[]};
+        _ppGroups[gk].kits.push(kit);
+      }
+      let _ppHtml='';
+      const _ppGroupKeys=Object.keys(_ppGroups).sort();
+      let _ppTotalCore=0,_ppTotalGroups=0;
+      for(const gk of _ppGroupKeys){
+        const g=_ppGroups[gk];
+        if(g.kits.length<2)continue;// need at least 2 venues to compare
+        _ppTotalGroups++;
+        const total=g.kits.length;
+        // Build SKU matrix
+        const allSkus=new Set();
+        for(const k of g.kits)for(const i of k.items)allSkus.add(i.sku);
+        const skuData={};
+        for(const sku of allSkus)skuData[sku]={venues:{},count:0};
+        for(const k of g.kits)for(const i of k.items){skuData[i.sku].venues[k.venue]=i.qty;skuData[i.sku].count++}
+        const core=[],variable=[],optional=[],unique=[];
+        for(const[sku,d]of Object.entries(skuData)){
+          const nm=NOM[sku]?.nm||sku;
+          const qtys=Object.values(d.venues);
+          const allSame=qtys.every(q=>q===qtys[0]);
+          if(d.count===total&&allSame)core.push({sku,nm,qty:qtys[0]});
+          else if(d.count===total)variable.push({sku,nm,min:Math.min(...qtys),max:Math.max(...qtys),venues:d.venues});
+          else if(d.count===1){const v=Object.keys(d.venues)[0];unique.push({sku,nm,venue:v,qty:d.venues[v]})}
+          else optional.push({sku,nm,count:d.count,total,venues:d.venues});
+        }
+        _ppTotalCore+=core.length;
+        core.sort((a,b)=>a.nm.localeCompare(b.nm));
+        variable.sort((a,b)=>a.nm.localeCompare(b.nm));
+        optional.sort((a,b)=>b.count-a.count||a.nm.localeCompare(b.nm));
+        unique.sort((a,b)=>a.nm.localeCompare(b.nm));
+        const flag=g.cc==='CAN'?'🇨🇦':g.cc==='MEX'?'🇲🇽':'🇺🇸';
+        const typeBg=g.kitType==='FF&E'?'var(--gs)':'var(--os)';
+        const typeClr=g.kitType==='FF&E'?'var(--gn)':'var(--or)';
+        _ppHtml+=`<div style="border:1px solid var(--bd);border-radius:var(--r);margin-bottom:10px;overflow:hidden">`;
+        _ppHtml+=`<div style="padding:8px 12px;background:${core.length===allSkus.size?'var(--gs)':'#F9FAFB'};border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-wrap:wrap">`;
+        _ppHtml+=`<span style="font-weight:700;font-size:12px">${flag} ${g.vt}</span>`;
+        _ppHtml+=`<span class="bg bgs" style="background:${typeBg};color:${typeClr};font-size:9px">${g.kitType}</span>`;
+        _ppHtml+=`<span style="font-size:10px;color:var(--ts)">${total} venues</span>`;
+        if(core.length)_ppHtml+=`<span class="bg bgs" style="background:var(--gs);color:var(--gn);font-size:9px">${core.length} pre-pick</span>`;
+        if(variable.length)_ppHtml+=`<span class="bg bgs" style="background:var(--ps);color:var(--pu);font-size:9px">${variable.length} check qty</span>`;
+        if(optional.length)_ppHtml+=`<span class="bg bgs" style="background:var(--os);color:var(--or);font-size:9px">${optional.length} some venues</span>`;
+        if(unique.length)_ppHtml+=`<span class="bg bgs bg-gy" style="font-size:9px">${unique.length} unique</span>`;
+        _ppHtml+=`</div><div style="padding:8px 12px">`;
+        // Venue list (collapsed)
+        const _vNames=g.kits.map(k=>k.venue).sort();
+        _ppHtml+=`<details style="margin-bottom:6px"><summary style="font-size:9px;color:var(--tt);cursor:pointer">Show ${total} venues</summary><p style="font-size:9px;color:var(--ts);margin:4px 0 0;line-height:1.5">${_vNames.join(' · ')}</p></details>`;
+        // CORE
+        if(core.length){
+          _ppHtml+=`<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--gn);margin-bottom:4px">✅ PRE-PICK — same in all ${total} venues</div>`;
+          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th>Item</th><th style="text-align:center;width:60px">Qty</th></tr></thead><tbody>`;
+          for(const c of core)_ppHtml+=`<tr style="background:var(--gs)"><td style="font-weight:600">${c.nm}</td><td class="mono" style="text-align:center;font-weight:700">${c.qty}</td></tr>`;
+          _ppHtml+=`</tbody></table></div>`;
+        }
+        // VARIABLE
+        if(variable.length){
+          _ppHtml+=`<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--pu);margin-bottom:4px">🔢 CHECK QTY — in all venues but quantity differs</div>`;
+          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th>Item</th><th style="text-align:center;width:60px">Range</th><th>Per Venue</th></tr></thead><tbody>`;
+          for(const v of variable){
+            const venueQtys=Object.entries(v.venues).sort((a,b)=>a[1]-b[1]).map(([vn,q])=>`<span title="${vn}">${q}</span>`);
+            const hasWideRange=(v.max-v.min)>v.min;
+            _ppHtml+=`<tr style="background:var(--ps)"><td style="font-weight:600">${v.nm}</td><td class="mono" style="text-align:center;font-weight:700">${v.min}–${v.max}</td><td style="font-size:9px;color:var(--ts)">${hasWideRange?Object.entries(v.venues).sort((a,b)=>a[1]-b[1]).map(([vn,q])=>{const short=vn.replace(/ (Accreditation|Uniform Distribution|Transport Fleet|Volunteer|International|Training|Performance|Training Facility|Centre|Depot|Airport) ?/gi,' ').trim();return short+':&nbsp;'+q}).join(' · '):venueQtys.join(' · ')}</td></tr>`;
+          }
+          _ppHtml+=`</tbody></table></div>`;
+        }
+        // OPTIONAL
+        if(optional.length){
+          _ppHtml+=`<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--or);margin-bottom:4px">⚠️ SOME VENUES ONLY — check before picking</div>`;
+          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th>Item</th><th style="text-align:center;width:60px">In</th><th>Which Venues</th></tr></thead><tbody>`;
+          for(const o of optional){
+            const pct=Math.round(o.count/o.total*100);
+            const bg=pct>=80?'var(--os)':'#FFF';
+            const vList=Object.entries(o.venues).sort((a,b)=>a[0].localeCompare(b[0])).map(([vn,q])=>{const short=vn.replace(/ (Accreditation|Uniform Distribution|Transport Fleet|Volunteer|International|Training|Performance|Training Facility|Centre|Depot|Airport) ?/gi,' ').trim();return short+'&nbsp;('+q+')'}).join(' · ');
+            _ppHtml+=`<tr style="background:${bg}"><td style="font-weight:600">${o.nm}</td><td class="mono" style="text-align:center">${o.count}/${o.total}</td><td style="font-size:9px;color:var(--ts)">${vList}</td></tr>`;
+          }
+          _ppHtml+=`</tbody></table></div>`;
+        }
+        // UNIQUE
+        if(unique.length){
+          _ppHtml+=`<div style="margin-bottom:4px"><div style="font-size:10px;font-weight:700;color:var(--tt);margin-bottom:4px">📌 UNIQUE — one venue only</div>`;
+          _ppHtml+=`<table class="dtb" style="font-size:10px"><thead><tr><th>Item</th><th style="text-align:center;width:60px">Qty</th><th>Venue</th></tr></thead><tbody>`;
+          for(const u of unique){
+            const short=u.venue.replace(/ (Accreditation|Uniform Distribution|Transport Fleet|Volunteer|International|Training|Performance|Training Facility|Centre|Depot|Airport) ?/gi,' ').trim();
+            _ppHtml+=`<tr><td>${u.nm}</td><td class="mono" style="text-align:center">${u.qty}</td><td style="font-size:9px;color:var(--ts)">${short}</td></tr>`;
+          }
+          _ppHtml+=`</tbody></table></div>`;
+        }
+        if(!core.length&&!variable.length&&!optional.length&&!unique.length)_ppHtml+=`<p style="font-size:10px;color:var(--tt)">No items to compare</p>`;
+        _ppHtml+=`</div></div>`;
+      }
+      if(_ppHtml){
+        h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🧰 Pre-Pick Guide <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${_ppTotalCore} items safe to pre-pick</span> <span class="bg bgs bg-gy">${_ppTotalGroups} venue groups</span></summary>`;
+        h+=`<p style="font-size:10px;color:var(--tt);margin:0 0 4px">Compares kit contents across venues of the same type. <strong style="color:var(--gn)">Green rows</strong> = pick the same for every venue. <strong style="color:var(--pu)">Purple rows</strong> = same item, check quantity. <strong style="color:var(--or)">Orange rows</strong> = not all venues need it.</p>`;
+        h+=`<p style="font-size:10px;color:var(--ts);margin:0 0 10px">Groups with only 1 venue (like IBC) are skipped — nothing to compare.</p>`;
+        h+=_ppHtml;
+        h+=`</details>`;
+      }
     }
   }
 
