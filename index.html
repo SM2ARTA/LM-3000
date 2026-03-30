@@ -8003,7 +8003,39 @@ async function masterBackupRestore(file){
       log.push('Delivery Strategy: '+Object.keys(LM_STP_STRATEGY).length+' countries');
     }
 
-    // ── Rebuild everything ──
+    // ── Validate restored data before rebuild ──
+    const _vErrs=[];
+    // LP plan: truck IDs in dispatched/OOR/LSR must exist in plan
+    if(LP_STATE.generatedPlan.length){
+      const planTruckIds=new Set(LP_STATE.generatedPlan.map(r=>r.truckId));
+      for(const id of LP_dispatched){if(!planTruckIds.has(id)){_vErrs.push('LP_dispatched references truck LP-'+id+' not in plan');LP_dispatched.delete(id)}}
+      for(const id of LP_oorTrucks){if(!planTruckIds.has(id)){_vErrs.push('LP_oorTrucks references truck LP-'+id+' not in plan');LP_oorTrucks.delete(id)}}
+      for(const id of Object.keys(LP_lsrNumbers)){if(!planTruckIds.has(+id)){_vErrs.push('LP_lsrNumbers references truck LP-'+id+' not in plan');delete LP_lsrNumbers[id]}}
+      // Plan rows must have required fields
+      for(const r of LP_STATE.generatedPlan){
+        if(!r.truckId&&r.truckId!==0){_vErrs.push('Plan row missing truckId');break}
+        if(!r.date){_vErrs.push('Plan row missing date (truck '+r.truckId+')');break}
+        if(!r.destination){_vErrs.push('Plan row missing destination (truck '+r.truckId+')');break}
+      }
+    }
+    // LP demand: rows must have sku and destination
+    for(const d of LP_STATE.materialPlan){
+      if(!d.sku||!d.destination){_vErrs.push('LP demand row missing sku or destination');break}
+    }
+    // LM kits: items must be arrays with sku+qty
+    for(const kit of LM_KITS){
+      if(!Array.isArray(kit.items)){_vErrs.push('Kit '+kit.id+' has invalid items');kit.items=[]}
+      for(const it of kit.items){if(!it.sku){_vErrs.push('Kit '+kit.id+' has item without sku');break}}
+    }
+    // NOM must be a plain object (not array/null)
+    if(typeof NOM!=='object'||NOM===null||Array.isArray(NOM)){_vErrs.push('NOM is not a valid object');NOM={}}
+    // RW must be an array
+    if(!Array.isArray(RW)){_vErrs.push('RW is not a valid array');RW=[]}
+    if(_vErrs.length){
+      console.warn('[ML3K] Backup validation warnings (auto-fixed):',_vErrs);
+      log.push('⚠ '+_vErrs.length+' validation warning(s) — auto-fixed');
+    }
+
     console.log('[ML3K] Backup restore:',log.join(' | '));
 
     // Rebuild LM if data present
