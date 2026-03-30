@@ -5460,14 +5460,16 @@ function LP_showTruckModal(truckId){
 // ═══════════════════════════════════════════════════════════
 // LP LATE ARRIVALS — Pipeline visibility for delayed items
 // ═══════════════════════════════════════════════════════════
-function LP_renderLate(el,opts){
-  if(!LP_STATE.planGenerated||!LP_STATE.generatedPlan.length){
-    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--tt)"><div style="font-size:32px;margin-bottom:12px">⚠</div><div style="font-size:14px;font-weight:600;margin-bottom:6px">Late Arrival Analysis</div><div style="font-size:12px">Generate a plan first to see late arrival analysis.</div></div>';return}
+// ── Late Arrival computation (pure derived data — no DOM) ──
+// Computes window._LP_ALL_LATE_ITEMS, window._LP_DEST_BI, window._LP_LATE_BY_DEST
+// Called from LP_renderLate (on tab switch) and LP_refreshLate (on LM date changes)
+function LP_computeLateArrivals(){
+  window._LP_ALL_LATE_ITEMS=[];window._LP_DEST_BI={};window._LP_LATE_BY_DEST={};
+  if(!LP_STATE.planGenerated||!LP_STATE.generatedPlan.length)return;
 
   const plan=LP_STATE.generatedPlan;
   const arrivals=LP_STATE.arrivals||[];
   const nom=LP_STATE.nomenclature||{};
-  const fD=d=>{if(!d||d==='—')return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};
 
   // Pre-build PLAN_CACHE for LP-fed venues so LM dispatch dates are available
   if(typeof PLAN_CACHE!=='undefined'&&typeof build==='function'&&typeof LM_getLPDestAbbrs==='function'){
@@ -5514,9 +5516,6 @@ function LP_renderLate(el,opts){
       }
     }
   }
-  // Reset exclusion set only on fresh tab open (not when refreshed by LM date changes)
-  if(!opts||!opts.keepExcl)window._LP_EXCL_ABBRS=new Set();
-
   // ── Container → SKU map ──
   const skuContainers={};
   for(const a of arrivals){
@@ -5636,9 +5635,19 @@ function LP_renderLate(el,opts){
   window._LP_ALL_LATE_ITEMS=lateItems;
   window._LP_DEST_BI=DEST_BI;
   window._LP_fD=fD;
+}
+function LP_renderLate(el,opts){
+  if(!LP_STATE.planGenerated||!LP_STATE.generatedPlan.length){
+    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--tt)"><div style="font-size:32px;margin-bottom:12px">⚠</div><div style="font-size:14px;font-weight:600;margin-bottom:6px">Late Arrival Analysis</div><div style="font-size:12px">Generate a plan first to see late arrival analysis.</div></div>';return}
+  // Reset exclusion set only on fresh tab open (not when refreshed by LM date changes)
+  if(!opts||!opts.keepExcl)window._LP_EXCL_ABBRS=new Set();
+  // Recompute late arrivals (derived data)
+  LP_computeLateArrivals();
+  const fD=window._LP_fD||(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}});
+  const DEST_BI=window._LP_DEST_BI||{};
+  const lateItems=window._LP_ALL_LATE_ITEMS||[];
 
   // ── Deliveries panel (left) ──
-  // Build list of all LP destinations with BI dates, sorted earliest first
   const _deliveries=Object.entries(DEST_BI)
     .filter(([,bi])=>bi&&bi!=='—')
     .sort(([,a],[,b])=>a.localeCompare(b))
@@ -9949,6 +9958,10 @@ function numberAll(){
     }
   }
 
+  // ── Rebuild LP arrival derived data (used by dashboard, assembly timeline, late engine) ──
+  LM_buildLPArrivalMap();
+  try{LM_buildLPArrivalFifo()}catch(e){console.warn('FIFO build:',e)}
+
   // ── Save WHS snapshot to Supabase (lightweight, debounced) ──
   clearTimeout(window._whsSnapTimer);
   window._whsSnapTimer=setTimeout(_saveWhsSnapshot,3000);
@@ -13299,7 +13312,7 @@ function LM_renderAnalysis(el){
 }
 function LM_filterAnalysis(){filterBySearch('lmAnalysisSearch','#lmAnalysisBody','tr[data-search]',{})}
 
-function rMain(){LM_buildLPArrivalMap();try{LM_buildLPArrivalFifo()}catch(e){console.warn('FIFO build:',e)}const el=document.getElementById("mn");
+function rMain(){const el=document.getElementById("mn");
 
 // ── ANALYSIS VIEW ──
 if(cv==="analysis"){LM_renderAnalysis(el);return}
