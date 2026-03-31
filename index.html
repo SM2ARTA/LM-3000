@@ -14419,7 +14419,7 @@ if(cv==="dashboard"){
           const dacColor=r.daysAtCort!=null?(r.daysAtCort>=7?'var(--gn)':r.daysAtCort>=3?'var(--or)':'var(--rd)'):'var(--tt)';
           h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
             <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
-            <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.isCort&&r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">'+r.clusterLabel+'</span>':''}</td>
+            <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':''}</td>
             <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
             <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
             <td>${dStr}</td>
@@ -14437,6 +14437,80 @@ if(cv==="dashboard"){
       }
       h+=`</details>`;
     }
+  }
+
+  // ── CAN / MEX LM Truck Forecasts (All Venues only) ──
+  if(!isFiltered&&!isRegion&&!isClusterOv){
+    const _intlFc=(country,flag,filterFn)=>{
+      const _rows=[];const _seen=new Set();
+      VN.filter(v=>filterFn(v.cluster)).forEach(v=>{
+        const P=PLAN_CACHE[v.name];if(!P||!P.allT)return;
+        let firstBI=null;const vn=VN.find(x=>x.name===v.name);if(vn&&vn.bi)firstBI=dk(vn.bi);if(!firstBI&&P.bi)firstBI=P.bi;
+        const vt=LM_vtMap[v.name]||'';
+        for(const t of P.allT){
+          if(LM_excluded.has(t.id)||_seen.has(t.id))continue;if(!t.dd)continue;_seen.add(t.id);
+          let fnKits=0,osKits=0,plt=0,asmCount=0;
+          for(const it of t.items){plt+=(it.loadPlt||0);if(it.sku.startsWith('FNKIT'))fnKits++;else if(it.sku.startsWith('OSKIT'))osKits++;const n=NOM[it.sku];if(n&&!n._kitNom&&LM_isAssembled(it.sku,vt,country))asmCount++}
+          plt=Math.round(plt*10)/10;
+          const disp=t.dd;const transit=gLT(v.name);
+          const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
+          const daysBeforeBI=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
+          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysBeforeBI,lsr:LM_getLsr(t),asmCount,dispLoc:'LP Warehouse'});
+        }
+      });
+      if(!_rows.length)return;
+      _rows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
+      const _weekOf=d=>{const dt=new Date(d+'T12:00:00');const day=dt.getDay();const mon=new Date(dt);mon.setDate(mon.getDate()-((day+6)%7));return mon.toISOString().slice(0,10)};
+      const _weekEnd=ws=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
+      const _fmtWk=d=>{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
+      const byWeek={};for(const r of _rows){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
+      const weeks=Object.keys(byWeek).sort();
+      const tT=_rows.length,tP=_rows.reduce((s,r)=>s+r.plt,0),tFn=_rows.reduce((s,r)=>s+r.fnKits,0),tOs=_rows.reduce((s,r)=>s+r.osKits,0),tAsm=_rows.reduce((s,r)=>s+(r.asmCount||0),0);
+      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">${flag} ${country} LM Truck Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${tT} trucks</span> <span class="bg bgs bg-gy">${Math.round(tP)} plt</span> ${tFn?'<span class="bg bgs" style="background:var(--gs);color:var(--gn)">'+tFn+' FF&E kits</span>':''}${tOs?' <span class="bg bgs" style="background:var(--os);color:var(--or)">'+tOs+' STP kits</span>':''}${tAsm?' <span class="bg bgs bg-pu">🔧 '+tAsm+' asm</span>':''}</summary>
+      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">All ${country} LM trucks — grouped by dispatch week</p>`;
+      for(const wk of weeks){
+        const rows=byWeek[wk];
+        const wP=rows.reduce((s,r)=>s+r.plt,0),wFn=rows.reduce((s,r)=>s+r.fnKits,0),wOs=rows.reduce((s,r)=>s+r.osKits,0),wAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0);
+        h+=`<div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:11px;font-weight:700;color:var(--tp);border:1px solid var(--bd)">
+          <span>📅 ${_fmtWk(wk)} — ${_fmtWk(_weekEnd(wk))}</span>
+          <span class="bg bgs bg-bl" style="font-weight:600">${rows.length} trucks</span>
+          <span class="bg bgs bg-gy">${Math.round(wP*10)/10} plt</span>
+          ${wFn?'<span class="bg bgs bg-gn">'+wFn+' FF&E</span>':''}
+          ${wOs?'<span class="bg bgs bg-or">'+wOs+' STP</span>':''}
+          ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
+        </div>
+        <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th></tr></thead><tbody>`;
+        for(const r of rows){
+          const dd=new Date(r.disp+'T12:00:00'),ad=new Date(r.arrDate+'T12:00:00');
+          const dStr=dd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+          const aStr=ad.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+          const biStr=r.firstBI?new Date(r.firstBI+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'—';
+          const bufColor=r.daysBeforeBI!=null?(r.daysBeforeBI>=7?'var(--gn)':r.daysBeforeBI>=3?'var(--or)':'var(--rd)'):'var(--tt)';
+          h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
+            <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
+            <td style="font-size:11px;font-weight:600">${r.dest}</td>
+            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
+            <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
+            <td>${dStr}</td>
+            <td class="mono" style="text-align:center">${r.transit}d</td>
+            <td style="color:var(--gn);font-weight:600">${aStr}</td>
+            <td style="font-weight:600">${biStr}</td>
+            <td style="text-align:center;font-weight:700;color:${bufColor}">${r.daysBeforeBI!=null?r.daysBeforeBI+'d':'—'}</td>
+            <td class="mono" style="text-align:right">${r.plt}</td>
+            <td style="text-align:center">${r.fnKits||'—'}</td>
+            <td style="text-align:center">${r.osKits||'—'}</td>
+            <td style="text-align:center;color:var(--pu);font-weight:600">${r.asmCount>0?'🔧 '+r.asmCount:'—'}</td>
+          </tr>`;
+        }
+        h+=`</tbody></table></div>`;
+      }
+      h+=`</details>`;
+    };
+    // CAN forecast
+    _intlFc('Canada','🇨🇦',cl=>vcIsCAN(cl));
+    // MEX forecast
+    _intlFc('Mexico','🇲🇽',cl=>vcIsMEX(cl));
   }
 
   // ── Venue/Cluster summary ──
