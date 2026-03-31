@@ -10815,13 +10815,13 @@ function LM_kitAllocMap(){
 function LM_injectKits(){
   // Dedup: remove duplicate kits (same venue + same type). Keep first, remove later duplicates.
   // Type detected from items (STP-sourced = stationery, else FF&E) — not from SKU prefix which can change.
-  {const seen=new Set();LM_KITS=LM_KITS.filter(k=>{
+  {const before=LM_KITS.length;const seen=new Set();LM_KITS=LM_KITS.filter(k=>{
     const stpN=k.items.filter(i=>(NOM[i.sku]?.src||'').toUpperCase().startsWith('STP')||(NOM[i.sku]?.src||'').toUpperCase().startsWith('CT')).length;
     const type=stpN>k.items.length/2?'STP':'FFE';
     const key=k.venue+'|'+type;
     if(seen.has(key))return false;// duplicate kit for this venue+type
     seen.add(key);return true;
-  })}
+  });if(LM_KITS.length<before){console.warn('[ML3K] Deduped '+(before-LM_KITS.length)+' duplicate kits');LM_saveKits()}}
   // Remove old kit rows + NOM entries (idempotent)
   RW=RW.filter(r=>!r._kit);
   for(const sku in NOM){if(NOM[sku]._kitNom)delete NOM[sku]}
