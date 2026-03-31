@@ -14344,6 +14344,17 @@ if(cv==="dashboard"){
       // Venue type + country for assembly detection
       const _fcVt=LM_vtMap[label]||(CLUSTERS[label]?.venues?.[0]?LM_vtMap[CLUSTERS[label].venues[0]]:'');
       const _fcCountry='USA';
+      // Dispatch location (WHS name)
+      const _whsParts2=(cl,prefix)=>cl.replace(prefix,'').split(/\s*\/\s*/).filter(p=>!/^(RGS|RGN|RGE|RGW|RGC|REGION|CORT|USA|CAN|MEX)$/i.test(p.trim())).map(p=>CITY_ABBR[p.trim()]||p.trim()).filter(Boolean);
+      const _fcDispLoc=(()=>{
+        const isIbc=label==='International Broadcast Centre'||vcIsIBC(label);
+        if(isIbc)return'Dallas';
+        const isSta=isStadium(label);
+        if(isSta){const city=label.replace(/\s*Stadium\s*$/i,'').replace(/\s*Bay Area$/i,'').trim();return city==='Dallas'?'Dallas':city}
+        const cl=CLUSTERS[label]?label:(VN.find(v=>v.name===label)?.cluster||'');
+        if(cl){const c=_whsParts2(cl,/^USA\s*/i);return c.join(' / ')||cl}
+        return'Dallas';
+      })();
       for(const t of P.allT){
         if(LM_excluded.has(t.id)||_fcSeen.has(t.id))continue;
         if(!t.dd)continue;
@@ -14364,7 +14375,7 @@ if(cv==="dashboard"){
         const transit=gLT(tl)+(LM_isLPFed(tl)||_fcDalDirect?0:gLT2(tl));
         const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
         const daysAtCort=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
-        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t),isCort:_hasCort,asmCount});
+        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t),isCort:_hasCort,asmCount,dispLoc:_fcDispLoc});
       }
     };
     // 1. USA cluster trucks (Step A)
@@ -14406,7 +14417,7 @@ if(cv==="dashboard"){
           ${wkOs?'<span class="bg bgs bg-or">'+wkOs+' STP</span>':''}
           ${wkAsm?'<span class="bg bgs bg-pu">🔧 '+wkAsm+' asm</span>':''}
         </div>
-        <table class="dtb" style="margin-top:4px"><thead><tr><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Days at CORT</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th></tr></thead><tbody>`;
+        <table class="dtb" style="margin-top:4px"><thead><tr><th>Destination</th><th>Dispatch From</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Days at CORT</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th></tr></thead><tbody>`;
         for(const r of rows){
           const dd=new Date(r.disp+'T12:00:00');const ad=new Date(r.arrDate+'T12:00:00');
           const dStr=dd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
@@ -14415,6 +14426,7 @@ if(cv==="dashboard"){
           const dacColor=r.daysAtCort!=null?(r.daysAtCort>=7?'var(--gn)':r.daysAtCort>=3?'var(--or)':'var(--rd)'):'var(--tt)';
           h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
             <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:4px">CORT</span>':''}</td>
+            <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
             <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
             <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
             <td>${dStr}</td>
