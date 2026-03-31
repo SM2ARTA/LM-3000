@@ -559,6 +559,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
   <span style="font-size:9px;color:var(--tt);margin-left:8px;white-space:nowrap">©2026 Vladislav Abramov | <span style="font-weight:600">SM²ARTA™</span> · <span style="opacity:.6">538d73d</span></span>
 </div>
 <script>
+console.log('[BOOT] Script tag parsing started');
 /* ═══════════════════════════════════════════════════════════════════════════
    LOAD PLAN PRO ENGINE — Warehouse-model planning
    Ported from React version. All functions prefixed LP_ to avoid conflicts.
@@ -16461,7 +16462,7 @@ function initLMUpload(){
   document.getElementById('lm_gb').addEventListener('click',goGenerateLM);
   lmRenderUpload();
 }
-
+console.log('[BOOT] Script fully parsed, starting execution');
 </script>
 </body>
 </html>
