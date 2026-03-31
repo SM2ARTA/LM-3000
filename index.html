@@ -14419,7 +14419,7 @@ if(cv==="dashboard"){
           const dacColor=r.daysAtCort!=null?(r.daysAtCort>=7?'var(--gn)':r.daysAtCort>=3?'var(--or)':'var(--rd)'):'var(--tt)';
           h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
             <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
-            <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort&&r.clusterLabel?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span> <span style="font-size:9px;color:var(--tt)">${r.clusterLabel}</span>':r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}</td>
+            <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.isCort&&r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">'+r.clusterLabel+'</span>':''}</td>
             <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
             <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
             <td>${dStr}</td>
