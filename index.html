@@ -9043,9 +9043,15 @@ function build(venue,venueList,skipNoBi){
   const _buildVt=isCluster?(LM_vtMap[venuesToUse[0]]||''):(LM_vtMap[venue]||'');
   const tCap=gTC(venue),maxT=gMT(venue);
   const _dateOvr=VS[venue]?.dateOverrides||{};
-  let lt=gLT(venue)+gWP(venue);
-  // Non-LP destinations: add inbound transit (Dallas→WHS)
-  if(!LM_isLPFed(venue))lt+=gLT2(venue);
+  // Dispatch lead time depends on supply chain path:
+  // - LP-fed (CAN/MEX, KC/HOU/NYNJ/TOR/VAN/GDL/CDMX/MTY stadiums): dispatch from satellite AFTER WHS processing → outbound only
+  // - Dallas direct (Dallas STA, IBC): dispatch from Dallas → outbound only (no satellite)
+  // - USA general (non-LP-fed, non-Dallas-direct): dispatch FROM Dallas through satellite → outbound + WHS + inbound
+  const _isDalDirect=venue==='Dallas Stadium'||venue==='International Broadcast Centre'||vcIsIBC(venue);
+  const _skipWhsInDispatch=LM_isLPFed(venue)||_isDalDirect;
+  let lt=gLT(venue)+(_skipWhsInDispatch?0:gWP(venue));
+  // Non-LP, non-Dallas-direct: add inbound transit (Dallas→satellite WHS)
+  if(!LM_isLPFed(venue)&&!_isDalDirect)lt+=gLT2(venue);
   // USA cluster trucks: add satellite warehouse turnaround to lead time
   const _isUSACluster=isCluster&&!vcIsCAN(venue)&&!vcIsMEX(venue);
   if(_isUSACluster)lt+=LM_clusterTurnaround;
@@ -14342,7 +14348,10 @@ if(cv==="dashboard"){
         plt=Math.round(plt*10)/10;
         const disp=t.dd;
         const tl=transitLabel||label;
-        const transit=gLT(tl)+gLT2(tl);
+        // Transit from dispatch point: LP-fed/Dallas-direct dispatch from satellite/Dallas → outbound only
+        // USA non-LP: dispatch from Dallas → outbound + inbound
+        const _fcDalDirect=tl==='Dallas Stadium'||tl==='International Broadcast Centre'||vcIsIBC(tl);
+        const transit=gLT(tl)+(LM_isLPFed(tl)||_fcDalDirect?0:gLT2(tl));
         const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
         const daysAtCort=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
         _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t)});
