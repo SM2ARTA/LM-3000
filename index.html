@@ -11076,7 +11076,7 @@ function LM_showKitDetail(kitId){
   const hasPltOvr=kit.pq>0&&kit.ps>0;
   const effPcs=kit.items.reduce((s,i)=>s+i.qty,0);// already UOM
   const effPlt=hasPltOvr?((effPcs/kit.pq)*kit.ps):sumPlt;
-  document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+  document.getElementById('mr').innerHTML=`<div class="mo">
     <div class="mdi" style="max-width:500px">
       <div class="mdh" style="background:#E8F5E9;border-bottom-color:#43A047">
         <h3 style="color:#43A047">📦 ${kit.name}</h3>
@@ -11149,7 +11149,15 @@ function LM_renameKit(kitId,field,val){
   const kit=LM_getKitById(kitId);if(!kit)return;
   val=(val||'').trim();if(!val)return;
   kit[field]=val;
+  // If name changed, update locked truck snapshots that contain this kit
+  if(field==='name'){
+    for(const fp in LM_lockedSnapshots){
+      const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
+      for(const it of snap.items){if(it._kitId===kitId)it.nm=val}
+    }
+  }
   LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  LM_saveDateOverrides();// persist updated snapshots
   setTimeout(()=>{rMain();rVL()},50);
 }
 function LM_addKitItem(kitId,skuArg,qtyArg){
