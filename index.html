@@ -8222,7 +8222,7 @@ function switchMod(mod){
 const SUPABASE_URL='https://stwopndhnxcjyomkufii.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
 let SB=null;
-try{SB=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.warn('Supabase not configured:',e)}
+try{SB=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{realtime:{params:{eventsPerSecond:2}},global:{headers:{}}})}catch(e){console.warn('Supabase not configured:',e)}
 
 // ── Realtime sync: detect remote changes to shared_state ──
 window._rtChannel=null;// single subscription instance
