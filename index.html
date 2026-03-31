@@ -11087,7 +11087,7 @@ function LM_showKitDetail(kitId){
           <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit SKU</label>
             <input id="kitEditSku" value="${kit.sku.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','sku',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);font-weight:600;color:var(--ac)"></div>
           <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit Name</label>
-            <input id="kitEditName" value="${kit.name.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','name',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);font-weight:600"></div>
+            <input id="kitEditName" value="${kit.name.replace(/"/g,'&quot;')}" oninput="clearTimeout(window._kitNmT);window._kitNmT=setTimeout(()=>_kitSaveName('${kit.id}',this.value),600)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);font-weight:600"></div>
           <div style="grid-column:1/-1;display:flex;gap:6px;align-items:center">
             <span style="font-size:9px;font-weight:700;color:var(--ts)">Type:</span>
             <button class="rbtn" onclick="_kitApplyType('${kit.id}','ffe')" style="font-size:10px;padding:3px 10px">🪑 FF&E</button>
@@ -11143,6 +11143,22 @@ function _kitFilterAvail(q){
   document.querySelectorAll('.kit-avail-row').forEach(el=>{
     el.style.display=(!q||el.getAttribute('data-search').toLowerCase().includes(q))?'flex':'none';
   });
+}
+function _kitSaveName(kitId,val){
+  if(ROLE==='viewer')return;
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  val=(val||'').trim();if(!val)return;
+  kit.name=val;
+  // Update NOM entry if exists
+  if(NOM[kit.sku])NOM[kit.sku].nm=val;
+  // Update locked truck snapshots
+  for(const fp in LM_lockedSnapshots){
+    const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
+    for(const it of snap.items){if(it._kitId===kitId)it.nm=val}
+  }
+  LM_saveKits();LM_saveDateOverrides();
+  // Update modal header in-place
+  const hdr=document.querySelector('.mdh h3');if(hdr)hdr.textContent='📦 '+val;
 }
 function LM_renameKit(kitId,field,val){
   if(ROLE==='viewer')return;
