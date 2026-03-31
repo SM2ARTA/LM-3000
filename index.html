@@ -14458,9 +14458,11 @@ if(cv==="dashboard"){
       const _rows=[];const _seen=new Set();
       VN.filter(v=>filterFn(v.cluster)).forEach(v=>{
         const P=PLAN_CACHE[v.name];if(!P||!P.allT)return;
-        let firstBI=null;const vn=VN.find(x=>x.name===v.name);if(vn&&vn.bi)firstBI=dk(vn.bi);if(!firstBI&&P.bi)firstBI=P.bi;
         const vt=LM_vtMap[v.name]||'';
         const _lpA=LM_isLPFed(v.name)?LM_getLPDestAbbrs(v.name):[];
+        // Dispatch location: derive city from cluster name (e.g., "CAN Toronto" → "Toronto Warehouse")
+        const _clCity=(v.cluster||'').replace(/^(CAN|MEX)\s*/i,'').split(/\s*\/\s*/)[0].trim();
+        const _dispLoc=_clCity?_clCity+' Warehouse':country+' Warehouse';
         for(const t of P.allT){
           if(LM_excluded.has(t.id)||_seen.has(t.id))continue;if(!t.dd)continue;_seen.add(t.id);
           let fnKits=0,osKits=0,plt=0,asmCount=0,lateCount=0;
@@ -14470,8 +14472,10 @@ if(cv==="dashboard"){
           const disp=t.dd;const transit=gLT(v.name);
           if(_lpA.length&&disp&&Object.keys(LP_ARRIVAL_MAP).length){lateCount=_ns.filter(it=>!LM_kitArrivedOnTime(it.sku,_lpA,disp)).length}else if(STOCK_SKUS.size>0){lateCount=_ns.filter(it=>!LM_kitInStock(it.sku)).length}
           const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
-          const daysBeforeBI=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
-          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysBeforeBI,lsr:LM_getLsr(t),asmCount,lateCount,dispLoc:'LP Warehouse'});
+          // Per-truck bump-in (from truck data, not venue-level)
+          const tBI=t.biK||null;
+          const daysBeforeBI=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
+          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,daysBeforeBI,lsr:LM_getLsr(t),asmCount,lateCount,dispLoc:_dispLoc});
         }
       });
       if(!_rows.length)return;
@@ -14525,10 +14529,10 @@ if(cv==="dashboard"){
       }
       h+=`</details>`;
     };
-    // CAN forecast — in Canada Overview or All Venues
-    if(!isRegion||regionCat==='can')_intlFc('Canada','🇨🇦',cl=>vcIsCAN(cl));
-    // MEX forecast — in Mexico Overview or All Venues
-    if(!isRegion||regionCat==='mex')_intlFc('Mexico','🇲🇽',cl=>vcIsMEX(cl));
+    // CAN forecast — Canada Overview only
+    if(isRegion&&regionCat==='can')_intlFc('Canada','🇨🇦',cl=>vcIsCAN(cl));
+    // MEX forecast — Mexico Overview only
+    if(isRegion&&regionCat==='mex')_intlFc('Mexico','🇲🇽',cl=>vcIsMEX(cl));
   }
 
   // ── Venue/Cluster summary ──
