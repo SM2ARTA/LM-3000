@@ -10028,6 +10028,7 @@ function numberAll(){
     }
   });
 
+  window._lmBuildLockedDemand={};// clear between build phases
   // Step C: USA non-STA/IBC venues with NO cluster — build individually with CORT
   VN.filter(v=>!isStadium(v.name)&&(!v.cluster||vcIsRegion(v.cluster))&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
     const P=runBuild(v.name,v.name);
@@ -10077,7 +10078,7 @@ function numberAll(){
   // This runs on every numberAll() but only migrates FPs that still use old format.
   // Needed because kit SKU renaming below changes SKU names on every rebuild.
   {
-    const _fpObjMaps=[LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr];
+    const _fpObjMaps=[LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr,LM_lockedSnapshots];
     let _fpChanged=false;
     allTrucks.forEach(e=>{
       const trk=e.ref;
