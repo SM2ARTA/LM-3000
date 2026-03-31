@@ -10849,7 +10849,7 @@ function LM_injectKits(){
     const _kitSrc=srcs.size===1?[...srcs][0]:'KIT';
     const _safeSrc=(_kitSrc.toUpperCase().startsWith('CT'))?'KIT':_kitSrc;
     NOM[kit.sku]={
-      nm:kit.name,src:_safeSrc,uom:'kit',ppu:1,
+      nm:kit.displayName||kit.name,src:_safeSrc,uom:'kit',ppu:1,
       pq:hasPltOvr?kit.pq:Math.max(totalQty,1),
       ps:hasPltOvr?kit.ps:(sumPlt>0?Math.round(sumPlt*1000)/1000:0),
       pqA:0,psA:0,_kitNom:true,_kitId:kit.id,_kitSumPlt:sumPlt
@@ -11078,6 +11078,7 @@ function _kitCreate(){
 }
 function LM_showKitDetail(kitId){
   const kit=LM_getKitById(kitId);if(!kit)return;
+  const _kdn=kit.displayName||kit.name;
   let sumPlt=0;
   const rows=kit.items.map(item=>{
     const n=NOM[item.sku];const effQty=item.qty;// already in UOM
@@ -11091,15 +11092,15 @@ function LM_showKitDetail(kitId){
   document.getElementById('mr').innerHTML=`<div class="mo">
     <div class="mdi" style="max-width:500px">
       <div class="mdh" style="background:#E8F5E9;border-bottom-color:#43A047">
-        <h3 style="color:#43A047">📦 ${kit.name}</h3>
+        <h3 style="color:#43A047">📦 ${_kdn}</h3>
         <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
       </div>
       <div class="mdb" style="padding:16px">
         ${ROLE!=='viewer'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit SKU</label>
-            <input id="kitEditSku" value="${kit.sku.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','sku',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);font-weight:600;color:var(--ac)"></div>
-          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit Name</label>
-            <input id="kitEditName" value="${kit.name.replace(/"/g,'&quot;')}" oninput="clearTimeout(window._kitNmT);window._kitNmT=setTimeout(()=>_kitSaveName('${kit.id}',this.value),600)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);font-weight:600"></div>
+          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit SKU <span style="font-weight:400;color:var(--tt)">(auto)</span></label>
+            <input id="kitEditSku" value="${kit.sku.replace(/"/g,'&quot;')}" readonly style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);font-weight:600;color:var(--tt);background:var(--bg);cursor:default"></div>
+          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit Display Name</label>
+            <input id="kitEditName" value="${_kdn.replace(/"/g,'&quot;')}" oninput="clearTimeout(window._kitNmT);window._kitNmT=setTimeout(()=>_kitSaveName('${kit.id}',this.value),600)" style="width:100%;padding:5px 8px;border:1px solid ${kit.displayName?'var(--pu)':'var(--bd)'};border-radius:6px;font-size:11px;font-family:var(--fd);font-weight:600;${kit.displayName?'color:var(--pu)':''}"></div>
           <div style="grid-column:1/-1;display:flex;gap:6px;align-items:center">
             <span style="font-size:9px;font-weight:700;color:var(--ts)">Type:</span>
             <button class="rbtn" onclick="_kitApplyType('${kit.id}','ffe')" style="font-size:10px;padding:3px 10px">🪑 FF&E</button>
@@ -11160,8 +11161,8 @@ function _kitSaveName(kitId,val){
   if(ROLE==='viewer')return;
   const kit=LM_getKitById(kitId);if(!kit)return;
   val=(val||'').trim();if(!val)return;
-  kit.name=val;
-  // Update NOM entry if exists
+  kit.displayName=val;// save to displayName (survives strategy reapply)
+  // Update NOM entry with display name
   if(NOM[kit.sku])NOM[kit.sku].nm=val;
   // Update locked truck snapshots
   for(const fp in LM_lockedSnapshots){
@@ -11485,9 +11486,12 @@ function _stpApplyStrategy(){
   for(const vt of Object.keys(oldCC)){
     if(!newCountryStrat[vt])newCountryStrat[vt]={...oldCC[vt]};
   }
-  // Clean up ALL auto items for this country before recreating — prevents duplicates on reapply
-  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&_venueCountry(d.venue)===cc));
-  LM_KITS=LM_KITS.filter(k=>!(k._auto&&_venueCountry(k.venue)===cc));
+  // Clean up ALL kits + auto STP deliveries for this country before recreating
+  // Preserve displayName from deleted kits so user renames survive reapply
+  const _kitNames={};// venue -> displayName
+  LM_KITS.filter(k=>_venueCountry(k.venue)===cc).forEach(k=>{if(k.displayName)_kitNames[k.venue+'|'+(k.sku.startsWith('OSKIT')?'STP':'FFE')]=k.displayName});
+  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(_venueCountry(d.venue)===cc));
+  LM_KITS=LM_KITS.filter(k=>!(_venueCountry(k.venue)===cc));
   // Remove empty entries
   for(const vt of Object.keys(newCountryStrat)){if(!newCountryStrat[vt].stp&&!newCountryStrat[vt].ffe)delete newCountryStrat[vt]}
   if(!LM_STP_STRATEGY)LM_STP_STRATEGY={};
@@ -11517,7 +11521,7 @@ function _stpApplyStrategy(){
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
-      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true});
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true,displayName:_kitNames[venue+'|STP']||null});
     }}
     // Apply FF&E strategy
     if(cfg.ffe==='kit'){for(const venue of ffeVenues){
@@ -11526,7 +11530,7 @@ function _stpApplyStrategy(){
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!_isFfeItem(s))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
-      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true});
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true,displayName:_kitNames[venue+'|FFE']||null});
     }}
     // FF&E 'direct' = default (no action needed)
   }
