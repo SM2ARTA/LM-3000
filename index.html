@@ -14461,9 +14461,8 @@ if(cv==="dashboard"){
       const _weekOf=d=>{const dt=new Date(d+'T12:00:00');const day=dt.getDay();const mon=new Date(dt);mon.setDate(mon.getDate()-((day+6)%7));return mon.toISOString().slice(0,10)};
       const _weekEnd=ws=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
       const _fmtWk=d=>{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
-      const _fcFiltered=window._usaFcFilter&&window._usaFcFilter!=='all'?_cortFcRows.filter(r=>r.vtype===window._usaFcFilter):_cortFcRows;
       const byWeek={};
-      for(const r of _fcFiltered){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
+      for(const r of _cortFcRows){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
       const weeks=Object.keys(byWeek).sort();
       const totalTrucks=_cortFcRows.length;const totalPlt=_cortFcRows.reduce((s,r)=>s+r.plt,0);
       const totalFn=_cortFcRows.reduce((s,r)=>s+r.fnKits,0);const totalOs=_cortFcRows.reduce((s,r)=>s+r.osKits,0);
@@ -14473,7 +14472,7 @@ if(cv==="dashboard"){
       // Filter chips
       const _fcTypes={cluster:0,stadium:0,other:0};_cortFcRows.forEach(r=>_fcTypes[r.vtype]=((_fcTypes[r.vtype])||0)+1);
       if(!window._usaFcFilter)window._usaFcFilter='all';
-      const _fcChip=(id,label,cnt)=>`<button onclick="window._usaFcFilter='${id}';rMain()" style="padding:3px 10px;border-radius:12px;border:1px solid ${window._usaFcFilter===id?'var(--ac)':'var(--bd)'};background:${window._usaFcFilter===id?'var(--as)':'#fff'};color:${window._usaFcFilter===id?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`;
+      const _fcChip=(id,label,cnt)=>`<button onclick="event.stopPropagation();window._usaFcFilter='${id}';document.querySelectorAll('.ufc-wk').forEach(el=>{const vt=el.dataset.vtype;el.style.display=('${id}'==='all'||vt==='${id}')?'':'none'});document.querySelectorAll('.ufc-chip').forEach(b=>{b.style.borderColor='var(--bd)';b.style.background='#fff';b.style.color='var(--ts)'});this.style.borderColor='var(--ac)';this.style.background='var(--as)';this.style.color='var(--ac)'" class="ufc-chip" style="padding:3px 10px;border-radius:12px;border:1px solid ${window._usaFcFilter===id?'var(--ac)':'var(--bd)'};background:${window._usaFcFilter===id?'var(--as)':'#fff'};color:${window._usaFcFilter===id?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`;
       h+=`<div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
         ${_fcChip('all','All',_cortFcRows.length)}
         ${_fcTypes.cluster?_fcChip('cluster','Clusters',_fcTypes.cluster):''}
@@ -14500,7 +14499,8 @@ if(cv==="dashboard"){
           const aStr=ad.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
           const biStr=r.firstBI?new Date(r.firstBI+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'—';
           const dacColor=r.daysAtCort!=null?(r.daysAtCort>=7?'var(--gn)':r.daysAtCort>=3?'var(--or)':'var(--rd)'):'var(--tt)';
-          h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
+          const _fcHide=window._usaFcFilter&&window._usaFcFilter!=='all'&&r.vtype!==window._usaFcFilter;
+          h+=`<tr class="ufc-wk" data-vtype="${r.vtype}"${_fcHide?' style="display:none"':r.dispatched?' style="background:var(--gs)"':''}>
             <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
             <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':''}</td>
             <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
