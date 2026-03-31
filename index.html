@@ -14422,7 +14422,7 @@ if(cv==="dashboard"){
           ${wkAsm?'<span class="bg bgs bg-pu">🔧 '+wkAsm+' asm</span>':''}
           ${wkLate?'<span class="bg bgs bg-rd">⚠ '+wkLate+' late</span>':''}
         </div>
-        <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Days at CORT</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:center">Late</th></tr></thead><tbody>`;
+        <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:center">Late</th></tr></thead><tbody>`;
         for(const r of rows){
           const dd=new Date(r.disp+'T12:00:00');const ad=new Date(r.arrDate+'T12:00:00');
           const dStr=dd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
