@@ -10008,6 +10008,38 @@ function numberAll(){
   // Sort and number LM trucks globally
   allTrucks.sort((a,b)=>a.dateK<b.dateK?-1:a.dateK>b.dateK?1:0);
   let tn=1;allTrucks.forEach(e=>{e.ref.id=`LM-${tn++}`;e.ref.destLabel=e.label;e.ref.destDisplay=e.dispLabel});
+
+  // ── Migrate old-style fingerprints (raw kit SKU names) → new stable format (KIT:{kitId}) ──
+  // This runs on every numberAll() but only migrates FPs that still use old format.
+  // Needed because kit SKU renaming below changes SKU names on every rebuild.
+  {
+    const _fpObjMaps=[LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr];
+    let _fpChanged=false;
+    allTrucks.forEach(e=>{
+      const trk=e.ref;
+      // Old-style FP uses raw SKU names (what's currently stored in Supabase/undo)
+      const oldFP=_lmFpRaw(trk);
+      // New-style FP substitutes kit IDs for kit SKUs
+      const newFP=LM_fp(trk);
+      if(oldFP===newFP)return;// No kit items on this truck — nothing to migrate
+      // Migrate LM_dispatched (Set)
+      if(LM_dispatched.has(oldFP)){LM_dispatched.delete(oldFP);LM_dispatched.add(newFP);_fpChanged=true}
+      // Migrate object-keyed maps
+      for(const map of _fpObjMaps){
+        if(map[oldFP]!==undefined){map[newFP]=map[oldFP];delete map[oldFP];_fpChanged=true}
+      }
+      // Migrate MANUAL_ITEMS (LM keys use 'LM-' prefix + fingerprint)
+      const oldMI='LM-'+oldFP,newMI='LM-'+newFP;
+      if(MANUAL_ITEMS[oldMI]){MANUAL_ITEMS[newMI]=MANUAL_ITEMS[oldMI];delete MANUAL_ITEMS[oldMI];_fpChanged=true}
+    });
+    // Persist migrated fingerprints so future loads use new format
+    if(_fpChanged&&ROLE!=='viewer'){
+      LM_saveDateOverrides();// saves LM_dispatched, LM_dateOverrides, LM_lsrNumbers
+      saveSharedData();// saves LM_excludeUserOvr (fm-excl-ovr)
+      MI_save();// saves MANUAL_ITEMS (fm-manual-items)
+    }
+  }
+
   // Auto-exclude Step B (individual cluster venue) trucks by default on every re-number
   // First clear ALL LM-N IDs (they change on re-number), then re-add Step B ones fresh
   for(const id of [...LM_excluded])if(id.startsWith('LM-'))LM_excluded.delete(id);
@@ -10603,8 +10635,11 @@ let LM_demandAdj={};// venue|sku -> adjusted total qty (overrides RW "Required" 
 let LM_nomOverrides={};// sku -> {pq?,ps?,pqA?,psA?} — pallet dimension overrides on NOM
 let _dashCalMap={};// stored from rMain dashboard for day-detail popup
 let _dashFilter=null;// {type:'all'|'region'|'clusterOv'|'filtered', labels:Set, regionCat:'', clusterName:'', venueLabel:''}
-// Stable truck fingerprint — survives renumbering since it's based on content not ID
-function LM_fp(t){const dest=t.destLabel||t.dest||'';const skus=t.items?t.items.map(i=>i.sku).sort().join(','):'';return dest+'|'+skus}
+// Stable truck fingerprint — survives renumbering AND kit SKU renaming
+// Kit items use stable kit ID (KIT:{kitId}) instead of volatile renamed SKU
+function LM_fp(t){const dest=t.destLabel||t.dest||'';const skus=t.items?t.items.map(i=>{const n=NOM[i.sku];return(n&&n._kitId)?('KIT:'+n._kitId):i.sku}).sort().join(','):'';return dest+'|'+skus}
+// Raw fingerprint (old-style, with actual SKU names — used only for migration)
+function _lmFpRaw(t){const dest=t.destLabel||t.dest||'';const skus=t.items?t.items.map(i=>i.sku).sort().join(','):'';return dest+'|'+skus}
 function LM_countActive(P){return P.allT.filter(t=>!LM_excluded.has(t.id)).length}
 function LM_toggleExclude(truckId,checked){
   if(ROLE==="viewer")return;

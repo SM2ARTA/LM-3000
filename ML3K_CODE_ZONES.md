@@ -154,6 +154,8 @@ Logical zone map for `index.html` (~15,700 lines). All code lives in one file. T
 - `numberAll()` is the central rebuild — all LM-affecting changes must flow through it
 - Kit SKU renaming happens in `numberAll()` and mutates `NOM` in-place (known risk — see AUDIT.md C4)
 - `LM_buildLPArrivalMap/Fifo` now called from `numberAll()`, not from render
+- Fingerprint migration runs in `numberAll()` after truck numbering — converts old-style FPs (raw kit SKUs) to stable format (kit IDs). Any new FP-keyed map must be added to the migration block
+- Locked truck data (`LM_dispatched`, `LM_dateOverrides`, `LM_lsrNumbers`) must survive `numberAll()` rebuilds via stable fingerprints
 
 **Allowed / Forbidden / Anti-patterns:** Same rules as Zone 4 (LP Compute).
 

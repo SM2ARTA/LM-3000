@@ -532,6 +532,17 @@ Post-build: `_lpTailReconstruct` optimizes last 2 unlocked trucks per (dest,date
 - **Cluster demand view**: Add/Kit/STP buttons hidden when multiple venues selected (only show for single-venue view via `prefillV`)
 - **Validation on demand change**: `_stpValidateVenues()` checks kit venue names still exist after file upload/sync, warns orphaned venues, removes components referencing missing SKUs from kit items
 
+### LM Locked Truck Protection (Fingerprint System)
+- **Fingerprint**: `LM_fp(t)` = `dest|sku1,sku2,...` (sorted SKUs). Used as key for `LM_dispatched`, `LM_dateOverrides`, `LM_lsrNumbers`, `LM_excludeUserOvr`, `MANUAL_ITEMS`
+- **Kit-stable fingerprints**: Kit items use `KIT:{kitId}` (e.g., `KIT:KIT-1`) instead of volatile kit SKU names in the fingerprint. This makes FPs immune to kit renaming in `numberAll()`
+- **Raw fingerprint**: `_lmFpRaw(t)` uses actual SKU names — only used for migration from old-format FPs
+- **Automatic migration**: On every `numberAll()`, old-style FPs (with raw kit SKU names) are detected and migrated to new-style FPs (with kit IDs) across all FP-keyed maps
+- **What survives rebuild**: Locked status, manual dispatch dates, LSR numbers, exclude overrides, manual items — all keyed by stable fingerprint
+- **What changes on rebuild**: Truck ID (`LM-N`), kit SKU names, truck composition order — none of these affect the fingerprint
+- **Supabase key**: `fm-lm-dispatch` stores `{dispatched:[], dateOverrides:{}, lsrNumbers:{}}`
+- **CRITICAL**: Never modify `LM_fp()` to use truck IDs or other volatile fields. The fingerprint must be content-based and stable across `numberAll()` rebuilds
+- **CRITICAL**: Any new FP-keyed map must be added to the migration block in `numberAll()` (search for "Migrate old-style fingerprints")
+
 ### LP Supabase Keys
 `lp-config`, `lp-nom`, `lp-demand`, `lp-demand-raw`, `lp-arrivals`, `lp-plan`, `lp-truck-state`
 
