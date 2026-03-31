@@ -9940,6 +9940,8 @@ function numberAll(){
   // ── Locked truck protection: compute demand deductions from snapshots ──
   // Locked trucks are NOT rebuilt — their snapshot data is injected after build.
   // build() deducts locked demand from pool so unlocked trucks get remaining demand only.
+  // Clean up orphaned snapshots (not in LM_dispatched)
+  for(const fp in LM_lockedSnapshots){if(!LM_dispatched.has(fp))delete LM_lockedSnapshots[fp]}
   const _lockedByLabel={};// label -> [{fp, snap}]
   const _lockedDemandByLabel={};// label -> {sku: qty}
   for(const fp in LM_lockedSnapshots){
