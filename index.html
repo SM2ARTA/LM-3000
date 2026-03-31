@@ -11551,6 +11551,14 @@ function _stpApplyStrategy(){
     }}
     // FF&E 'direct' = default (no action needed)
   }
+  // Auto-create remainder deliveries for venues with only explicit-item STP deliveries
+  // This ensures unallocated STP demand gets a truck
+  {const _stpVenuesWithExplicit=new Set();const _stpVenuesWithRemainder=new Set();
+  for(const d of LM_STP_DELIVERIES){if(_venueCountry(d.venue)!==cc)continue;if(d.items)_stpVenuesWithExplicit.add(d.venue);else _stpVenuesWithRemainder.add(d.venue)}
+  for(const v of _stpVenuesWithExplicit){
+    if(_stpVenuesWithRemainder.has(v))continue;// already has auto-remainder
+    LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue:v,date:'',rate:0,_auto:true});
+  }}
   LM_saveStpStrategy();LM_saveStpDeliveries();LM_saveKits();
   LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
   document.querySelector('.mo')?.remove();
