@@ -8232,6 +8232,7 @@ window._rtSyncing=false;// prevent duplicate syncs
 window._remoteDataStale=false;
 function _rtMarkLocalSave(){window._rtLastLocalSave=Date.now()}
 function _rtStartRealtime(){
+  return;// TEMP DISABLED — investigating crash
   if(!SB||window._rtChannel)return;// already subscribed or no DB
   try{
     window._rtChannel=SB.channel('ml3k-sync')
