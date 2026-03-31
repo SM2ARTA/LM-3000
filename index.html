@@ -8333,7 +8333,7 @@ function logout(){
   const m=document.cookie.match(/ml3k_role=(admin|viewer)/);
   if(m){ROLE=m[1];enterApp()}
 })();
-function enterApp(){
+function enterApp(){console.log('[BOOT] enterApp called');document.getElementById('loginScreen').style.display='none';applyRole();switchMod('lm');initLMUpload();showLMUpload();console.log('[BOOT] enterApp DONE (network skipped)');return;/*TEMP BYPASS*/
   document.getElementById("LS").style.display="none";
   document.getElementById("pov").style.display="flex";
   
