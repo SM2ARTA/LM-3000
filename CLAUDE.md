@@ -532,16 +532,49 @@ Post-build: `_lpTailReconstruct` optimizes last 2 unlocked trucks per (dest,date
 - **Cluster demand view**: Add/Kit/STP buttons hidden when multiple venues selected (only show for single-venue view via `prefillV`)
 - **Validation on demand change**: `_stpValidateVenues()` checks kit venue names still exist after file upload/sync, warns orphaned venues, removes components referencing missing SKUs from kit items
 
-### LM Locked Truck Protection (Fingerprint System)
-- **Fingerprint**: `LM_fp(t)` = `dest|sku1,sku2,...` (sorted SKUs). Used as key for `LM_dispatched`, `LM_dateOverrides`, `LM_lsrNumbers`, `LM_excludeUserOvr`, `MANUAL_ITEMS`
-- **Kit-stable fingerprints**: Kit items use `KIT:{kitId}` (e.g., `KIT:KIT-1`) instead of volatile kit SKU names in the fingerprint. This makes FPs immune to kit renaming in `numberAll()`
-- **Raw fingerprint**: `_lmFpRaw(t)` uses actual SKU names — only used for migration from old-format FPs
-- **Automatic migration**: On every `numberAll()`, old-style FPs (with raw kit SKU names) are detected and migrated to new-style FPs (with kit IDs) across all FP-keyed maps
-- **What survives rebuild**: Locked status, manual dispatch dates, LSR numbers, exclude overrides, manual items — all keyed by stable fingerprint
-- **What changes on rebuild**: Truck ID (`LM-N`), kit SKU names, truck composition order — none of these affect the fingerprint
-- **Supabase key**: `fm-lm-dispatch` stores `{dispatched:[], dateOverrides:{}, lsrNumbers:{}}`
-- **CRITICAL**: Never modify `LM_fp()` to use truck IDs or other volatile fields. The fingerprint must be content-based and stable across `numberAll()` rebuilds
-- **CRITICAL**: Any new FP-keyed map must be added to the migration block in `numberAll()` (search for "Migrate old-style fingerprints")
+### LM Locked Truck Protection (Snapshot System)
+Locked LM trucks are fully immutable — same as LP locked trucks. They are never rebuilt by `build()`.
+
+**Architecture** (same pattern as LP):
+1. **On lock**: `LM_toggleDispatchTruck()` deep-copies the truck into `LM_lockedSnapshots[fp]`
+2. **On rebuild**: `numberAll()` deducts locked demand from pool before `build()`, then injects locked snapshots into PLAN_CACHE after build
+3. **Kit rename**: Skips locked trucks (`if(trk._locked)return`) — their kit SKUs are frozen at lock time
+4. **On unlock**: Snapshot deleted, demand returns to pool on next rebuild
+
+**Data structures**:
+- `LM_lockedSnapshots` — `{fingerprint: {items, dd, dKey, destLabel, destDisplay, pallets, pcs, _isStepB, _locked}}`
+- Items include `_kitId` and `_kitNom` for NOM reconstruction
+- Supabase key: `fm-lm-dispatch` stores `{dispatched:[], dateOverrides:{}, lsrNumbers:{}, lockedSnapshots:{}}`
+
+**Fingerprint stability**:
+- `LM_fp(t)` uses `KIT:{kitId}` for kit items instead of volatile kit SKU names
+- `_lmFpRaw(t)` uses actual SKU names — only for migration from old-format FPs
+- Automatic migration in `numberAll()` converts old-style FPs on first load
+
+**What is protected** (NEVER changes after lock):
+- Truck items (SKUs, quantities, pallets)
+- Kit SKU names (frozen, not renamed)
+- Dispatch date (via snapshot + LM_dateOverrides)
+- LSR number, exclude override, manual items
+
+**What still changes** (cosmetic only):
+- Truck ID (`LM-N`) — renumbered globally by date, but FP is content-based
+- `destDisplay` — display label, not used in FP
+
+**Demand deduction in `build()`**:
+- `window._lmBuildLockedDemand` set by `numberAll()` before each `build()` call
+- `build()` deducts from pool after initialization: `pool[sku].remaining -= lockedQty`
+- Unlocked trucks get remaining demand only — no double-counting
+
+**NOM reconstruction**:
+- Locked kit items may reference old kit SKUs not in current NOM
+- `numberAll()` creates compat NOM entries for locked kit items: `NOM[oldSku] = {_kitNom:true, _kitId, ...}`
+
+**CRITICAL rules**:
+- Never modify `LM_fp()` to use truck IDs or other volatile fields
+- Never rebuild or modify locked truck items in any code path
+- Any new FP-keyed map must be added to the migration block in `numberAll()`
+- `LM_lockedSnapshots` must be included in: undo, reset, backup, save/load (same as `LM_dispatched`)
 
 ### LP Supabase Keys
 `lp-config`, `lp-nom`, `lp-demand`, `lp-demand-raw`, `lp-arrivals`, `lp-plan`, `lp-truck-state`

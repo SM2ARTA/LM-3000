@@ -643,6 +643,7 @@ function _undoSnap(){
     lm_dispatched:JSON.stringify([...(LM_dispatched||[])]),
     lm_dateOvr:JSON.stringify(LM_dateOverrides||{}),
     lm_lsr:JSON.stringify(LM_lsrNumbers||{}),
+    lm_lockedSnaps:JSON.stringify(LM_lockedSnapshots||{}),
     lm_manual:JSON.stringify(MANUAL_ITEMS||{}),
     lm_distOvr:JSON.stringify(DIST_OVERRIDES||{}),
     lm_demandAdj:JSON.stringify(LM_demandAdj||{}),
@@ -710,6 +711,7 @@ function UNDO_restore(){
     LM_dispatched=new Set(JSON.parse(snap.lm_dispatched));
     LM_dateOverrides=JSON.parse(snap.lm_dateOvr);
     if(snap.lm_lsr)LM_lsrNumbers=JSON.parse(snap.lm_lsr);
+    if(snap.lm_lockedSnaps)LM_lockedSnapshots=JSON.parse(snap.lm_lockedSnaps);
     MANUAL_ITEMS=JSON.parse(snap.lm_manual);
     DIST_OVERRIDES=JSON.parse(snap.lm_distOvr);
     LM_demandAdj=JSON.parse(snap.lm_demandAdj||'{}');
@@ -7636,9 +7638,9 @@ async function masterBackupExport(){
   // 5. LM Dispatch & Date Overrides
   {
     const rows=[];
-    LM_dispatched.forEach(fp=>rows.push({Fingerprint:fp,Type:'Locked',Value:LM_dateOverrides[fp]||''}));
-    Object.entries(LM_dateOverrides).forEach(([fp,d])=>{if(!LM_dispatched.has(fp))rows.push({Fingerprint:fp,Type:'Date Override',Value:d})});
-    Object.entries(LM_lsrNumbers).forEach(([fp,lsr])=>{if(lsr)rows.push({Fingerprint:fp,Type:'LSR',Value:lsr})});
+    LM_dispatched.forEach(fp=>rows.push({Fingerprint:fp,Type:'Locked',Value:LM_dateOverrides[fp]||'',Snapshot:LM_lockedSnapshots[fp]?JSON.stringify(LM_lockedSnapshots[fp]):''}));
+    Object.entries(LM_dateOverrides).forEach(([fp,d])=>{if(!LM_dispatched.has(fp))rows.push({Fingerprint:fp,Type:'Date Override',Value:d,Snapshot:''})});
+    Object.entries(LM_lsrNumbers).forEach(([fp,lsr])=>{if(lsr)rows.push({Fingerprint:fp,Type:'LSR',Value:lsr,Snapshot:''})});
     if(rows.length){const ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'LM Dispatch State')}
   }
 
@@ -7878,9 +7880,9 @@ async function masterBackupRestore(file){
     // ── 5. LM Dispatch State → LM_dispatched + LM_dateOverrides ──
     const dispRows=getSheet('LM Dispatch State');
     if(dispRows){
-      LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};
+      LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};
       for(const r of dispRows){
-        if(r.Type==='Locked'&&r.Fingerprint){LM_dispatched.add(r.Fingerprint);if(r.Value)LM_dateOverrides[r.Fingerprint]=r.Value}
+        if(r.Type==='Locked'&&r.Fingerprint){LM_dispatched.add(r.Fingerprint);if(r.Value)LM_dateOverrides[r.Fingerprint]=r.Value;if(r.Snapshot)try{LM_lockedSnapshots[r.Fingerprint]=JSON.parse(r.Snapshot)}catch(e){}}
         else if(r.Type==='Date Override'&&r.Fingerprint&&r.Value){LM_dateOverrides[r.Fingerprint]=r.Value}
         else if(r.Type==='LSR'&&r.Fingerprint&&r.Value){LM_lsrNumbers[r.Fingerprint]=r.Value}
       }
@@ -9156,6 +9158,11 @@ function build(venue,venueList,skipNoBi){
     });
   }
 
+  // ── Deduct locked truck demand from pool ──
+  // Locked trucks are injected separately in numberAll() — don't double-count their items
+  const _ld=window._lmBuildLockedDemand||{};
+  for(const sku in _ld){if(pool[sku])pool[sku].remaining=Math.max(0,pool[sku].remaining-_ld[sku])}
+
   // Group requests by bump-in date
   const byDate={};
   pAll.forEach(x=>{if(!byDate[x.biK])byDate[x.biK]=[];byDate[x.biK].push(x)});
@@ -9924,8 +9931,25 @@ function numberAll(){
   const allCort=[];
   const builtCl=new Set();
 
+  // ── Locked truck protection: compute demand deductions from snapshots ──
+  // Locked trucks are NOT rebuilt — their snapshot data is injected after build.
+  // build() deducts locked demand from pool so unlocked trucks get remaining demand only.
+  const _lockedByLabel={};// label -> [{fp, snap}]
+  const _lockedDemandByLabel={};// label -> {sku: qty}
+  for(const fp in LM_lockedSnapshots){
+    const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
+    const label=snap.destLabel||'';
+    if(!_lockedByLabel[label])_lockedByLabel[label]=[];
+    _lockedByLabel[label].push({fp,snap});
+    if(!_lockedDemandByLabel[label])_lockedDemandByLabel[label]={};
+    for(const it of snap.items){
+      _lockedDemandByLabel[label][it.sku]=(_lockedDemandByLabel[label][it.sku]||0)+(it.loadQty||0);
+    }
+  }
+
   const runBuild=(name,label,vl,skipNoBi)=>{
     try{
+      window._lmBuildLockedDemand=_lockedDemandByLabel[label]||{};
       const P=vl?build(name,vl,false):build(name,null,skipNoBi);
       PLAN_CACHE[label]=P;
       const dispLabel=clDisp(label);
@@ -10005,6 +10029,38 @@ function numberAll(){
     }
   });
 
+  // ── Inject locked truck snapshots into PLAN_CACHE and allTrucks ──
+  // Locked trucks were NOT built by build() — inject their frozen data now.
+  for(const label in _lockedByLabel){
+    for(const {fp,snap} of _lockedByLabel[label]){
+      const trk=JSON.parse(JSON.stringify(snap));
+      trk._locked=true;
+      trk.id='';// will be numbered below
+      // Ensure NOM entries exist for locked kit items (kit SKUs may have been renamed since lock)
+      for(const it of trk.items){
+        if(it._kitNom&&it._kitId&&!NOM[it.sku]){
+          NOM[it.sku]={_kitNom:true,_kitId:it._kitId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
+        }
+      }
+      // Apply date override if exists
+      const dateOvr=LM_dateOverrides[fp];
+      if(dateOvr){trk.dd=dateOvr;trk.dKey=dateOvr}
+      const dk=trk.dd||trk.dKey||'9999-12-31';
+      allTrucks.push({dateK:dk,ref:trk,label:label,dispLabel:clDisp(label),_isStepB:!!trk._isStepB});
+      // Add to PLAN_CACHE
+      if(!PLAN_CACHE[label])PLAN_CACHE[label]={days:[],allT:[],pallets:0,pcs:0,totalPlt:0,totalPcs:0};
+      const P=PLAN_CACHE[label];
+      P.allT.push(trk);
+      let day=P.days.find(d=>d.dKey===dk);
+      if(!day){day={dKey:dk,biDate:null,dDate:null,trucks:[],pallets:0,pcs:0};P.days.push(day);P.days.sort((a,b)=>a.dKey<b.dKey?-1:a.dKey>b.dKey?1:0)}
+      day.trucks.push(trk);
+      day.pallets=(day.pallets||0)+(trk.pallets||0);
+      day.pcs=(day.pcs||0)+(trk.pcs||0);
+      P.totalPlt=(P.totalPlt||0)+(trk.pallets||0);
+      P.totalPcs=(P.totalPcs||0)+(trk.pcs||0);
+    }
+  }
+
   // Sort and number LM trucks globally
   allTrucks.sort((a,b)=>a.dateK<b.dateK?-1:a.dateK>b.dateK?1:0);
   let tn=1;allTrucks.forEach(e=>{e.ref.id=`LM-${tn++}`;e.ref.destLabel=e.label;e.ref.destDisplay=e.dispLabel});
@@ -10059,9 +10115,11 @@ function numberAll(){
     }
   });
   // ── Rename kit SKUs: FNKIT-002-NNN / OSKIT-002-NNN (globally numbered by truck order) ──
+  // SKIP locked trucks — their kit SKUs are frozen at lock time
   let _fnN=1,_osN=1;
   allTrucks.forEach(e=>{
     const trk=e.ref;
+    if(trk._locked)return;// locked trucks are immutable
     for(const it of trk.items){
       const oldSku=it.sku;
       const nom=NOM[oldSku];if(!nom||!nom._kitNom)continue;
@@ -10630,6 +10688,7 @@ let LM_excludeUserOvr={};// fingerprint -> true/false (user explicit override of
 let LM_dispatched=new Set();// truck fingerprints marked as dispatched
 let LM_dateOverrides={};// {fingerprint: newDate} — manual date changes
 let LM_lsrNumbers={};// {fingerprint: lsrString} — LSR numbers for LM trucks
+let LM_lockedSnapshots={};// {fingerprint: truckSnapshot} — frozen truck data for locked trucks
 let LM_hideStaples=false;// hide STP-sourced items in truck modals
 let LM_demandAdj={};// venue|sku -> adjusted total qty (overrides RW "Required" for that combo)
 let LM_nomOverrides={};// sku -> {pq?,ps?,pqA?,psA?} — pallet dimension overrides on NOM
@@ -10657,6 +10716,8 @@ function LM_changeDate(truckIdx,newDate){
   t.dd=newDate;
   LM_dateOverrides[fp]=newDate;
   LM_dispatched.add(fp);
+  // Update snapshot date if locked
+  if(LM_lockedSnapshots[fp]){LM_lockedSnapshots[fp].dd=newDate;LM_lockedSnapshots[fp].dKey=newDate}
   LM_applyDateOverrides();// update all PLAN_CACHE entries
   LM_saveDateOverrides();
   rMain();LP_refreshLate();
@@ -10665,7 +10726,14 @@ function LM_toggleDispatchTruck(truckIdx,checked){
   if(ROLE==="viewer"||!LP)return;
   const t=LP.allT[truckIdx];if(!t)return;
   const fp=LM_fp(t);
-  if(checked){LM_dispatched.add(fp)}else{LM_dispatched.delete(fp);delete LM_dateOverrides[fp]}
+  if(checked){
+    LM_dispatched.add(fp);
+    // Snapshot truck data — frozen across all future rebuilds
+    const snapItems=t.items.map(it=>{const n=NOM[it.sku];return{...it,_kitId:n?._kitId||null,_kitNom:!!n?._kitNom}});
+    LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:t.dd,dKey:t.dKey||t.dd,destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true};
+  }else{
+    LM_dispatched.delete(fp);delete LM_dateOverrides[fp];delete LM_lockedSnapshots[fp];delete LM_lsrNumbers[fp];
+  }
   LM_saveDateOverrides();
   rMain();LP_refreshLate();
 }
@@ -10678,7 +10746,7 @@ async function LM_saveDateOverrides(){
   UNDO_capture();
   try{
     const now=new Date().toISOString();
-    await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides,lsrNumbers:LM_lsrNumbers}),updated_at:now});
+    await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides,lsrNumbers:LM_lsrNumbers,lockedSnapshots:LM_lockedSnapshots}),updated_at:now});
   }catch(e){console.warn('LM dispatch save error:',e)}
 }
 async function LM_loadDateOverrides(){
@@ -10690,6 +10758,7 @@ async function LM_loadDateOverrides(){
       LM_dispatched=new Set(p.dispatched||[]);
       LM_dateOverrides=p.dateOverrides||{};
       LM_lsrNumbers=p.lsrNumbers||{};
+      LM_lockedSnapshots=p.lockedSnapshots||{};
     }
   }catch(e){/* no data yet */}
 }
@@ -15455,7 +15524,7 @@ function doSystemReset(){
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};
-  STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
+  STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
@@ -15618,7 +15687,7 @@ function doResetLM(){
   if(SB){
     SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits','fm-lm-stp-deliveries','fm-stp-strategy','fm-dist-overrides','fm-pallet-cfg']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_updateStockWaterfall();LP_invalidateLate();// stock cleared
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
