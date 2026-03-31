@@ -9164,6 +9164,9 @@ function build(venue,venueList,skipNoBi){
     });
   }
 
+  // ── Debug: log kit items in pool ──
+  for(const sku in pool){if(NOM[sku]?._kitNom)console.log('[KIT-POOL]',venue,sku,NOM[sku].nm,'qty='+pool[sku].remaining,'pq='+pool[sku].pq,'ps='+pool[sku].ps)}
+
   // ── Deduct locked truck demand from pool ──
   // Locked trucks are injected separately in numberAll() — don't double-count their items
   const _ld=window._lmBuildLockedDemand||{};
@@ -10865,7 +10868,7 @@ function LM_injectKits(){
     };
     // Add RW row for kit — qty=1 (one indivisible kit unit)
     RW.push({
-      Venue:kit.venue,Nomenclature:kit.sku,Required:1,
+      Venue:kit.venue,Nomenclature:kit.sku,Required:1,_effQty:1,
       'Estimated bump-in date':earliestBI?dk(earliestBI):'',
       'Venue cluster':refRow?.['Venue cluster']||'','Venue code':refRow?.['Venue code']||'',
       'Venue type':refRow?.['Venue type']||'',_kit:true
