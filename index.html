@@ -10813,6 +10813,13 @@ function LM_kitAllocMap(){
   return m;
 }
 function LM_injectKits(){
+  // Dedup: remove duplicate auto kits (same venue + same type). Keep first, remove later duplicates.
+  {const seen=new Set();LM_KITS=LM_KITS.filter(k=>{
+    const prefix=k.sku.startsWith('FNKIT')?'FN':k.sku.startsWith('OSKIT')?'OS':'??';
+    const key=k.venue+'|'+prefix;
+    if(k._auto&&seen.has(key))return false;// duplicate auto kit
+    seen.add(key);return true;
+  })}
   // Remove old kit rows + NOM entries (idempotent)
   RW=RW.filter(r=>!r._kit);
   for(const sku in NOM){if(NOM[sku]._kitNom)delete NOM[sku]}
