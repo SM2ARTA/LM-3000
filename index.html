@@ -10813,13 +10813,19 @@ function LM_kitAllocMap(){
   return m;
 }
 function LM_injectKits(){
-  // Dedup: remove duplicate kits (same venue + same type). Keep first, remove later duplicates.
-  // Type detected from items (STP-sourced = stationery, else FF&E) — not from SKU prefix which can change.
-  {const before=LM_KITS.length;const seen=new Set();LM_KITS=LM_KITS.filter(k=>{
+  // Dedup: if same venue+type has both manual and auto kit, remove auto. If multiple auto, keep first.
+  {const before=LM_KITS.length;const seen=new Set();
+  // First pass: register manual kits (priority)
+  LM_KITS.filter(k=>!k._auto).forEach(k=>{
     const stpN=k.items.filter(i=>(NOM[i.sku]?.src||'').toUpperCase().startsWith('STP')||(NOM[i.sku]?.src||'').toUpperCase().startsWith('CT')).length;
-    const type=stpN>k.items.length/2?'STP':'FFE';
-    const key=k.venue+'|'+type;
-    if(seen.has(key))return false;// duplicate kit for this venue+type
+    seen.add(k.venue+'|'+(stpN>k.items.length/2?'STP':'FFE'));
+  });
+  // Second pass: filter out auto duplicates
+  LM_KITS=LM_KITS.filter(k=>{
+    if(!k._auto)return true;// always keep manual
+    const stpN=k.items.filter(i=>(NOM[i.sku]?.src||'').toUpperCase().startsWith('STP')||(NOM[i.sku]?.src||'').toUpperCase().startsWith('CT')).length;
+    const key=k.venue+'|'+(stpN>k.items.length/2?'STP':'FFE');
+    if(seen.has(key))return false;// manual or earlier auto already exists
     seen.add(key);return true;
   });if(LM_KITS.length<before){console.warn('[ML3K] Deduped '+(before-LM_KITS.length)+' duplicate kits');LM_saveKits()}}
   // Remove old kit rows + NOM entries (idempotent)
@@ -11486,12 +11492,13 @@ function _stpApplyStrategy(){
   for(const vt of Object.keys(oldCC)){
     if(!newCountryStrat[vt])newCountryStrat[vt]={...oldCC[vt]};
   }
-  // Clean up ALL kits + auto STP deliveries for this country before recreating
-  // Preserve displayName from deleted kits so user renames survive reapply
-  const _kitNames={};// venue -> displayName
-  LM_KITS.filter(k=>_venueCountry(k.venue)===cc).forEach(k=>{if(k.displayName)_kitNames[k.venue+'|'+(k.sku.startsWith('OSKIT')?'STP':'FFE')]=k.displayName});
-  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(_venueCountry(d.venue)===cc));
-  LM_KITS=LM_KITS.filter(k=>!(_venueCountry(k.venue)===cc));
+  // Clean up AUTO kits + AUTO STP deliveries for this country before recreating
+  // Manual kits and deliveries (no _auto flag) are preserved
+  // Preserve displayName from deleted auto kits so user renames survive reapply
+  const _kitNames={};// venue|type -> displayName
+  LM_KITS.filter(k=>k._auto&&_venueCountry(k.venue)===cc).forEach(k=>{if(k.displayName)_kitNames[k.venue+'|'+(k.sku.startsWith('OSKIT')?'STP':'FFE')]=k.displayName});
+  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&_venueCountry(d.venue)===cc));
+  LM_KITS=LM_KITS.filter(k=>!(k._auto&&_venueCountry(k.venue)===cc));
   // Remove empty entries
   for(const vt of Object.keys(newCountryStrat)){if(!newCountryStrat[vt].stp&&!newCountryStrat[vt].ffe)delete newCountryStrat[vt]}
   if(!LM_STP_STRATEGY)LM_STP_STRATEGY={};
@@ -11515,8 +11522,10 @@ function _stpApplyStrategy(){
       LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date:'',rate:0,_auto:true});
     }}
     if(cfg.stp==='kit'){for(const venue of stpVenues){
-      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&!k._auto))continue;
-      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&k._auto))continue;
+      // Skip if manual STP kit exists for this venue (any kit with STP items, not auto)
+      if(LM_KITS.find(k=>k.venue===venue&&!k._auto&&k.items.some(i=>(NOM[i.sku]?.src||'').toUpperCase().startsWith('STP'))))continue;
+      // Skip if auto STP kit already exists (shouldn't happen after cleanup, defensive)
+      if(LM_KITS.find(k=>k.venue===venue&&k._auto&&k.sku.startsWith('OSKIT')))continue;
       LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&d.venue===venue));
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
@@ -11525,8 +11534,10 @@ function _stpApplyStrategy(){
     }}
     // Apply FF&E strategy
     if(cfg.ffe==='kit'){for(const venue of ffeVenues){
-      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('FNKIT')&&!k._auto))continue;
-      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('FNKIT')&&k._auto))continue;
+      // Skip if manual FF&E kit exists for this venue (any kit with non-STP/CT items, not auto)
+      if(LM_KITS.find(k=>k.venue===venue&&!k._auto&&k.items.some(i=>{const s=(NOM[i.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')})))continue;
+      // Skip if auto FF&E kit already exists (shouldn't happen after cleanup, defensive)
+      if(LM_KITS.find(k=>k.venue===venue&&k._auto&&k.sku.startsWith('FNKIT')))continue;
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!_isFfeItem(s))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
