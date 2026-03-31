@@ -10813,11 +10813,13 @@ function LM_kitAllocMap(){
   return m;
 }
 function LM_injectKits(){
-  // Dedup: remove duplicate auto kits (same venue + same type). Keep first, remove later duplicates.
+  // Dedup: remove duplicate kits (same venue + same type). Keep first, remove later duplicates.
+  // Type detected from items (STP-sourced = stationery, else FF&E) — not from SKU prefix which can change.
   {const seen=new Set();LM_KITS=LM_KITS.filter(k=>{
-    const prefix=k.sku.startsWith('FNKIT')?'FN':k.sku.startsWith('OSKIT')?'OS':'??';
-    const key=k.venue+'|'+prefix;
-    if(k._auto&&seen.has(key))return false;// duplicate auto kit
+    const stpN=k.items.filter(i=>(NOM[i.sku]?.src||'').toUpperCase().startsWith('STP')||(NOM[i.sku]?.src||'').toUpperCase().startsWith('CT')).length;
+    const type=stpN>k.items.length/2?'STP':'FFE';
+    const key=k.venue+'|'+type;
+    if(seen.has(key))return false;// duplicate kit for this venue+type
     seen.add(key);return true;
   })}
   // Remove old kit rows + NOM entries (idempotent)
