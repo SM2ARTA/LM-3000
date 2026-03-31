@@ -14224,10 +14224,8 @@ if(cv==="dashboard"){
     for(const cl in CLUSTERS){
       if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
       const P=PLAN_CACHE[cl];if(!P||!P.allT)continue;
-      // Find first bump-in date across all venues in this cluster
-      const clVenues=CLUSTERS[cl]?.venues||[];
-      let firstBI=null;
-      for(const vn of clVenues){const bi=gBI(vn);if(bi&&(!firstBI||bi<firstBI))firstBI=bi}
+      // First bump-in date from actual demand data (not constraint defaults)
+      const firstBI=CLUSTERS[cl]?.earlyBI?dk(CLUSTERS[cl].earlyBI):null;
       for(const t of P.allT){
         if(LM_excluded.has(t.id))continue;
         if(!t.dd)continue;
