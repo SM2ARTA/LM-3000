@@ -8371,7 +8371,7 @@ function enterApp(){
       _hsLoadAIConfig().catch(()=>{})
     ]);
     // Now build venues and trucks AFTER all config is loaded
-    if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="dashboard";lmOk=true}}
+    if(hasLmData&&Object.keys(NOM).length&&RW.length){console.log('[PERF] LM rebuild START — NOM:'+Object.keys(NOM).length+' RW:'+RW.length+' KITS:'+LM_KITS.length+' STP:'+LM_STP_DELIVERIES.length+' LOCKED:'+Object.keys(LM_lockedSnapshots).length);const _lmT0=performance.now();LM_injectAll();console.log('[PERF] injectAll: '+(performance.now()-_lmT0).toFixed(0)+'ms');LM_applyNomOverrides();bV();console.log('[PERF] bV: '+(performance.now()-_lmT0).toFixed(0)+'ms VN:'+VN.length);if(VN.length){_stpValidateVenues();numberAll();console.log('[PERF] LM rebuild TOTAL: '+(performance.now()-_lmT0).toFixed(0)+'ms');sel="";cv="dashboard";lmOk=true}}
     // Load LP data
     try{
       lpOk=await LP_loadFromSupabase();
@@ -9036,7 +9036,7 @@ function renderCalendarGrid(dates,cellFn,opts){
       e. Schedule trucks across days: max N trucks/day,
          starting from earliest dispatch date, overflow to next working day
    ════════════════════════════════════════════════════════════ */
-function build(venue,venueList,skipNoBi){
+function build(venue,venueList,skipNoBi){const _bT0=performance.now();
   const venuesToUse=venueList||[venue];
   const isCluster=!!venueList;
   // Determine venue type for pallet resolution (individual: venue's type; cluster: first venue's type)
@@ -9832,6 +9832,7 @@ function build(venue,venueList,skipNoBi){
   const noBiCort=noBiItems.filter(x=>x.isCort);
   noBiRows.forEach(r=>{r.cortTotal=cortTotalQty[r.sku]||0});
 
+  const _bElapsed=performance.now()-_bT0;if(_bElapsed>100)console.warn('[PERF] build('+venue+') SLOW: '+_bElapsed.toFixed(0)+'ms trucks='+allT.length);
   return{days,allT,tCap,maxT,lt,
     noPN:noPCount,noPQ:noPQty,noPItems,
     noBiN:skipNoBi?0:noBiPal.length,noBiQ:skipNoBi?0:noBiPal.reduce((s,x)=>s+x.qty,0),noBiRows:skipNoBi?[]:noBiRows,
@@ -9931,6 +9932,7 @@ function vcIsRegion(cl){return cl&&/\b(RGS|RGN|RGE|RGW|RGC)\b/i.test(cl);}
 let PLAN_CACHE={};// venue/cluster name -> build result
 let CORT_CACHE={};// venue name -> cortDeliveries (with global C-N IDs)
 function numberAll(){
+  const _naT0=performance.now();console.log('[PERF] numberAll START');
   PLAN_CACHE={};
   CORT_CACHE={};
   const allTrucks=[];
@@ -10175,6 +10177,7 @@ function numberAll(){
   // ── Save WHS snapshot to Supabase (lightweight, debounced) ──
   clearTimeout(window._whsSnapTimer);
   window._whsSnapTimer=setTimeout(_saveWhsSnapshot,3000);
+  console.log('[PERF] numberAll DONE in '+(performance.now()-_naT0).toFixed(0)+'ms — trucks:'+allTrucks.length+' cort:'+allCort.length);
 }
 
 function _saveWhsSnapshot(){
@@ -13592,7 +13595,7 @@ function LM_renderAnalysis(el){
 }
 function LM_filterAnalysis(){filterBySearch('lmAnalysisSearch','#lmAnalysisBody','tr[data-search]',{})}
 
-function rMain(){const el=document.getElementById("mn");
+function rMain(){const _rmT0=performance.now();const el=document.getElementById("mn");
 // Defensive: rebuild LP FIFO if stale (LP may have loaded after numberAll built it empty)
 if((!LP_ARRIVAL_FIFO||!Object.keys(LP_ARRIVAL_FIFO).length)&&LP_STATE?.generatedPlan?.length)try{LM_buildLPArrivalFifo()}catch(e){}
 
@@ -14625,7 +14628,7 @@ if(cv==="dashboard"){
   } else {
     _dashFilter={type:'all',labels:null};
   }
-  rConstraints();el.innerHTML=h;rTotals();return;
+  rConstraints();el.innerHTML=h;rTotals();console.log('[PERF] rMain DONE in '+(performance.now()-_rmT0).toFixed(0)+'ms');return;
 
   }catch(e){console.error('[ML3K] Dashboard render error:',e);el.innerHTML='<div class="emp fin" style="padding:32px;text-align:center"><div style="font-size:18px;margin-bottom:8px">⚠ Dashboard Error</div><div style="font-size:12px;color:var(--tt)">'+e.message+'</div><button class="rbtn" style="margin-top:12px" onclick="cv=\'trucks\';rT();rMain()">Switch to Trucks View</button></div>';rTotals();return}
 }
