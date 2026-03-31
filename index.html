@@ -9164,9 +9164,6 @@ function build(venue,venueList,skipNoBi){
     });
   }
 
-  // ── Debug: log kit items in pool ──
-  for(const sku in pool){if(NOM[sku]?._kitNom)console.log('[KIT-POOL]',venue,sku,NOM[sku].nm,'qty='+pool[sku].remaining,'pq='+pool[sku].pq,'ps='+pool[sku].ps)}
-
   // ── Deduct locked truck demand from pool ──
   // Locked trucks are injected separately in numberAll() — don't double-count their items
   const _ld=window._lmBuildLockedDemand||{};
@@ -11536,7 +11533,7 @@ function _stpApplyStrategy(){
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
-      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true,displayName:_kitNames[venue+'|STP']||null});
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-002-'+_kitNextId,name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true,displayName:_kitNames[venue+'|STP']||null});
     }}
     // Apply FF&E strategy
     if(cfg.ffe==='kit'){for(const venue of ffeVenues){
@@ -11547,7 +11544,7 @@ function _stpApplyStrategy(){
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!_isFfeItem(s))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
-      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true,displayName:_kitNames[venue+'|FFE']||null});
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-002-'+_kitNextId,name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true,displayName:_kitNames[venue+'|FFE']||null});
     }}
     // FF&E 'direct' = default (no action needed)
   }
