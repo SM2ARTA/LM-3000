@@ -9951,7 +9951,10 @@ function numberAll(){
     _lockedByLabel[label].push({fp,snap});
     if(!_lockedDemandByLabel[label])_lockedDemandByLabel[label]={};
     for(const it of snap.items){
-      _lockedDemandByLabel[label][it.sku]=(_lockedDemandByLabel[label][it.sku]||0)+(it.loadQty||0);
+      // For kit items, resolve CURRENT kit SKU (snapshot may have old renamed SKU)
+      let deductSku=it.sku;
+      if(it._kitId){const curKit=LM_KITS.find(k=>k.id===it._kitId);if(curKit)deductSku=curKit.sku}
+      _lockedDemandByLabel[label][deductSku]=(_lockedDemandByLabel[label][deductSku]||0)+(it.loadQty||0);
     }
   }
 
