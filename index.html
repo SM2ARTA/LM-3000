@@ -11476,18 +11476,9 @@ function _stpApplyStrategy(){
   for(const vt of Object.keys(oldCC)){
     if(!newCountryStrat[vt])newCountryStrat[vt]={...oldCC[vt]};
   }
-  // Clean up auto items for changed strategies
-  for(const vt of Object.keys(oldCC)){
-    const oldStp=oldCC[vt]?.stp||'';const newStp=newCountryStrat[vt]?.stp||'';
-    const oldFfe=oldCC[vt]?.ffe||'';const newFfe=newCountryStrat[vt]?.ffe||'';
-    if(oldStp!==newStp){
-      if(oldStp==='direct')LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&LM_vtMap[d.venue]===vt&&_venueCountry(d.venue)===cc));
-      if(oldStp==='kit')LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&LM_vtMap[k.venue]===vt&&_venueCountry(k.venue)===cc));
-    }
-    if(oldFfe!==newFfe){
-      if(oldFfe==='kit')LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('FNKIT')&&LM_vtMap[k.venue]===vt&&_venueCountry(k.venue)===cc));
-    }
-  }
+  // Clean up ALL auto items for this country before recreating — prevents duplicates on reapply
+  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&_venueCountry(d.venue)===cc));
+  LM_KITS=LM_KITS.filter(k=>!(k._auto&&_venueCountry(k.venue)===cc));
   // Remove empty entries
   for(const vt of Object.keys(newCountryStrat)){if(!newCountryStrat[vt].stp&&!newCountryStrat[vt].ffe)delete newCountryStrat[vt]}
   if(!LM_STP_STRATEGY)LM_STP_STRATEGY={};
