@@ -14321,33 +14321,46 @@ if(cv==="dashboard"){
     }
   }
 
-  // ── CORT Cluster Truck Forecast (All Venues only) ──
+  // ── USA LM Truck Forecast (All Venues only) ──
   if(!isFiltered&&!isRegion&&!isClusterOv){
-    // Gather all USA cluster trucks (Step A) with their kit breakdown
+    // Gather ALL USA LM trucks: clusters, stadiums, and individual venues
     const _cortFcRows=[];
-    for(const cl in CLUSTERS){
-      if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
-      const P=PLAN_CACHE[cl];if(!P||!P.allT)continue;
-      // First bump-in date from actual demand data (not constraint defaults)
-      const firstBI=CLUSTERS[cl]?.earlyBI?dk(CLUSTERS[cl].earlyBI):null;
+    const _fcSeen=new Set();// track truck IDs to avoid duplicates
+    // Helper: add trucks from a PLAN_CACHE entry
+    const _fcAddTrucks=(label,P,transitLabel)=>{
+      if(!P||!P.allT)return;
+      // First bump-in: from CLUSTERS if cluster, else from VN or PLAN_CACHE
+      let firstBI=CLUSTERS[label]?.earlyBI?dk(CLUSTERS[label].earlyBI):null;
+      if(!firstBI){const vn=VN.find(v=>v.name===label);if(vn&&vn.bi)firstBI=dk(vn.bi)}
+      if(!firstBI&&P.bi)firstBI=P.bi;
       for(const t of P.allT){
-        if(LM_excluded.has(t.id))continue;
+        if(LM_excluded.has(t.id)||_fcSeen.has(t.id))continue;
         if(!t.dd)continue;
+        _fcSeen.add(t.id);
         let fnKits=0,osKits=0,plt=0;
-        for(const it of t.items){
-          plt+=(it.loadPlt||0);
-          if(it.sku.startsWith('FNKIT'))fnKits++;
-          else if(it.sku.startsWith('OSKIT'))osKits++;
-        }
+        for(const it of t.items){plt+=(it.loadPlt||0);if(it.sku.startsWith('FNKIT'))fnKits++;else if(it.sku.startsWith('OSKIT'))osKits++}
         plt=Math.round(plt*10)/10;
         const disp=t.dd;
-        const transit=gLT(cl)+gLT2(cl);
+        const tl=transitLabel||label;
+        const transit=gLT(tl)+gLT2(tl);
         const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
-        // Days at CORT = first bump-in - arrival (calendar days including weekends)
         const daysAtCort=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
-        _cortFcRows.push({dest:clDisp(cl),cluster:cl,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t)});
+        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t)});
       }
+    };
+    // 1. USA cluster trucks (Step A)
+    for(const cl in CLUSTERS){
+      if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
+      _fcAddTrucks(cl,PLAN_CACHE[cl]);
     }
+    // 2. USA stadium/IBC trucks
+    VN.filter(v=>isStadium(v.name)&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
+      _fcAddTrucks(v.name,PLAN_CACHE[v.name]);
+    });
+    // 3. USA individual non-stadium venues (Step C — no cluster or region cluster)
+    VN.filter(v=>!isStadium(v.name)&&(!v.cluster||vcIsRegion(v.cluster))&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
+      _fcAddTrucks(v.name,PLAN_CACHE[v.name]);
+    });
     if(_cortFcRows.length>0){
       _cortFcRows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
       // Group by ISO week
@@ -14359,8 +14372,8 @@ if(cv==="dashboard"){
       const weeks=Object.keys(byWeek).sort();
       const totalTrucks=_cortFcRows.length;const totalPlt=_cortFcRows.reduce((s,r)=>s+r.plt,0);
       const totalFn=_cortFcRows.reduce((s,r)=>s+r.fnKits,0);const totalOs=_cortFcRows.reduce((s,r)=>s+r.osKits,0);
-      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🚛 CORT Cluster Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${totalTrucks} trucks</span> <span class="bg bgs bg-gy">${Math.round(totalPlt)} plt</span> <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${totalFn} FF&E kits</span> <span class="bg bgs" style="background:var(--os);color:var(--or)">${totalOs} STP kits</span></summary>
-      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">USA cluster trucks delivering to CORT cross-dock facilities — grouped by dispatch week</p>`;
+      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🚛 USA LM Truck Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${totalTrucks} trucks</span> <span class="bg bgs bg-gy">${Math.round(totalPlt)} plt</span> <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${totalFn} FF&E kits</span> <span class="bg bgs" style="background:var(--os);color:var(--or)">${totalOs} STP kits</span></summary>
+      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">All USA LM trucks (clusters, stadiums, individual venues) — grouped by dispatch week</p>`;
       for(const wk of weeks){
         const rows=byWeek[wk];
         const wkPlt=rows.reduce((s,r)=>s+r.plt,0);const wkFn=rows.reduce((s,r)=>s+r.fnKits,0);const wkOs=rows.reduce((s,r)=>s+r.osKits,0);
