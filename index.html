@@ -10854,15 +10854,18 @@ function LM_injectKits(){
     const hasPltOvr=kit.pq>0&&kit.ps>0;
     const _kitSrc=srcs.size===1?[...srcs][0]:'KIT';
     const _safeSrc=(_kitSrc.toUpperCase().startsWith('CT'))?'KIT':_kitSrc;
+    // Kit = 1 indivisible unit. pq=1 means 1 kit per pallet, ps=sumPlt pallets.
+    // Engine loads qty=1 (whole kit) on one truck — never splits across trucks.
+    const _kitPltOvr=hasPltOvr?kit.ps:(sumPlt>0?Math.round(sumPlt*1000)/1000:0);
     NOM[kit.sku]={
       nm:kit.displayName||kit.name,src:_safeSrc,uom:'kit',ppu:1,
-      pq:hasPltOvr?kit.pq:Math.max(totalQty,1),
-      ps:hasPltOvr?kit.ps:(sumPlt>0?Math.round(sumPlt*1000)/1000:0),
-      pqA:0,psA:0,_kitNom:true,_kitId:kit.id,_kitSumPlt:sumPlt
+      pq:hasPltOvr?kit.pq:1,
+      ps:hasPltOvr?kit.ps:_kitPltOvr,
+      pqA:0,psA:0,_kitNom:true,_kitId:kit.id,_kitSumPlt:sumPlt,_kitTotalQty:totalQty
     };
-    // Add RW row for kit
+    // Add RW row for kit — qty=1 (one indivisible kit unit)
     RW.push({
-      Venue:kit.venue,Nomenclature:kit.sku,Required:totalQty,
+      Venue:kit.venue,Nomenclature:kit.sku,Required:1,
       'Estimated bump-in date':earliestBI?dk(earliestBI):'',
       'Venue cluster':refRow?.['Venue cluster']||'','Venue code':refRow?.['Venue code']||'',
       'Venue type':refRow?.['Venue type']||'',_kit:true
