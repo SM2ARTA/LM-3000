@@ -14435,36 +14435,51 @@ if(cv==="dashboard"){
         const transit=gLT(tl)+(LM_isLPFed(tl)||_fcDalDirect?0:gLT2(tl));
         const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
         const daysAtCort=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
-        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t),isCort:_hasCort,asmCount,dispLoc:_fcDispLoc,clusterLabel:_fcClusterLabel,lateCount});
+        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t),isCort:_hasCort,asmCount,dispLoc:_fcDispLoc,clusterLabel:_fcClusterLabel,lateCount,vtype:window._fcVtype||'other'});
       }
     };
     // 1. USA cluster trucks (Step A)
+    window._fcVtype='cluster';
     for(const cl in CLUSTERS){
       if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
       _fcAddTrucks(cl,PLAN_CACHE[cl]);
     }
     // 2. USA stadium/IBC trucks
+    window._fcVtype='stadium';
     VN.filter(v=>isStadium(v.name)&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
       _fcAddTrucks(v.name,PLAN_CACHE[v.name]);
     });
     // 3. USA individual non-stadium venues (Step C — no cluster or region cluster)
+    window._fcVtype='other';
     VN.filter(v=>!isStadium(v.name)&&(!v.cluster||vcIsRegion(v.cluster))&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
       _fcAddTrucks(v.name,PLAN_CACHE[v.name]);
     });
+    window._fcVtype=null;
     if(_cortFcRows.length>0){
       _cortFcRows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
       // Group by ISO week
       const _weekOf=d=>{const dt=new Date(d+'T12:00:00');const day=dt.getDay();const mon=new Date(dt);mon.setDate(mon.getDate()-((day+6)%7));return mon.toISOString().slice(0,10)};
       const _weekEnd=ws=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
       const _fmtWk=d=>{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
+      const _fcFiltered=window._usaFcFilter&&window._usaFcFilter!=='all'?_cortFcRows.filter(r=>r.vtype===window._usaFcFilter):_cortFcRows;
       const byWeek={};
-      for(const r of _cortFcRows){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
+      for(const r of _fcFiltered){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
       const weeks=Object.keys(byWeek).sort();
       const totalTrucks=_cortFcRows.length;const totalPlt=_cortFcRows.reduce((s,r)=>s+r.plt,0);
       const totalFn=_cortFcRows.reduce((s,r)=>s+r.fnKits,0);const totalOs=_cortFcRows.reduce((s,r)=>s+r.osKits,0);
       const totalAsm=_cortFcRows.reduce((s,r)=>s+(r.asmCount||0),0);const totalLate=_cortFcRows.reduce((s,r)=>s+(r.lateCount||0),0);
       h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🚛 USA LM Truck Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${totalTrucks} trucks</span> <span class="bg bgs bg-gy">${Math.round(totalPlt)} plt</span> <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${totalFn} FF&E kits</span> <span class="bg bgs" style="background:var(--os);color:var(--or)">${totalOs} STP kits</span>${totalAsm?` <span class="bg bgs" style="background:var(--ps);color:var(--pu)">🔧 ${totalAsm} asm</span>`:''}${totalLate?` <span class="bg bgs bg-rd">⚠ ${totalLate} late</span>`:''}</summary>
-      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">All USA LM trucks (clusters, stadiums, individual venues) — grouped by dispatch week</p>`;
+      <p style="font-size:10px;color:var(--tt);margin:0 0 4px">All USA LM trucks (clusters, stadiums, individual venues) — grouped by dispatch week</p>`;
+      // Filter chips
+      const _fcTypes={cluster:0,stadium:0,other:0};_cortFcRows.forEach(r=>_fcTypes[r.vtype]=((_fcTypes[r.vtype])||0)+1);
+      if(!window._usaFcFilter)window._usaFcFilter='all';
+      const _fcChip=(id,label,cnt)=>`<button onclick="window._usaFcFilter='${id}';rMain()" style="padding:3px 10px;border-radius:12px;border:1px solid ${window._usaFcFilter===id?'var(--ac)':'var(--bd)'};background:${window._usaFcFilter===id?'var(--as)':'#fff'};color:${window._usaFcFilter===id?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`;
+      h+=`<div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
+        ${_fcChip('all','All',_cortFcRows.length)}
+        ${_fcTypes.cluster?_fcChip('cluster','Clusters',_fcTypes.cluster):''}
+        ${_fcTypes.stadium?_fcChip('stadium','Stadiums',_fcTypes.stadium):''}
+        ${_fcTypes.other?_fcChip('other','Other',_fcTypes.other):''}
+      </div>`;
       for(const wk of weeks){
         const rows=byWeek[wk];
         const wkPlt=rows.reduce((s,r)=>s+r.plt,0);const wkFn=rows.reduce((s,r)=>s+r.fnKits,0);const wkOs=rows.reduce((s,r)=>s+r.osKits,0);const wkAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0);const wkLate=rows.reduce((s,r)=>s+(r.lateCount||0),0);
