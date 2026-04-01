@@ -9102,7 +9102,7 @@ function build(venue,venueList,skipNoBi){
     // Skip STP items at venues with STP delivery — they go to STP truck
     if(_stpVenues.has(r["Venue"])&&isStp(s))continue;
     // Skip held items — excluded from planning (same layer as STP exclusion)
-    if(LM_holds.size>0&&LM_holds.has(r["Venue"]+'|'+s))continue;
+    if(LM_holds.size>0&&(LM_holds.has(r["Venue"]+'|'+s)||LM_holds.has('*|'+s)))continue;
     // Apply demand adjustment scaling
     const _adjK=r["Venue"]+'|'+s;
     if(_adjScale[_adjK]!==undefined)q=Math.round(q*_adjScale[_adjK]);
@@ -10730,7 +10730,7 @@ function LM_toggleHold(venue,sku){
 }
 function LM_holdRelease(venue,sku){if(ROLE==='viewer')return;LM_holds.delete(venue+'|'+sku);LM_saveDateOverrides()}
 function LM_holdSet(venue,sku){if(ROLE==='viewer')return;LM_holds.add(venue+'|'+sku);LM_saveDateOverrides()}
-function LM_isHeld(venue,sku){return LM_holds.has(venue+'|'+sku)}
+function LM_isHeld(venue,sku){return LM_holds.has(venue+'|'+sku)||LM_holds.has('*|'+sku)}
 let LM_hideStaples=false;// hide STP-sourced items in truck modals
 let LM_demandAdj={};// venue|sku -> adjusted total qty (overrides RW "Required" for that combo)
 let LM_nomOverrides={};// sku -> {pq?,ps?,pqA?,psA?} — pallet dimension overrides on NOM
@@ -11706,7 +11706,7 @@ function _stpBuildTruck(del){
   if(del.items){
     // Explicit item allocation — validate against current NOM + demand
     const _demandMap={};
-    for(const r of RW){if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s]||!isStp(s)||r._kit)continue;if(LM_holds.size>0&&LM_holds.has(del.venue+'|'+s))continue;let q=r._effQty||0;if(q>0)_demandMap[s]=(_demandMap[s]||0)+q}
+    for(const r of RW){if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s]||!isStp(s)||r._kit)continue;if(LM_holds.size>0&&(LM_holds.has(del.venue+'|'+s)||LM_holds.has('*|'+s)))continue;let q=r._effQty||0;if(q>0)_demandMap[s]=(_demandMap[s]||0)+q}
     for(const it of del.items){
       if(it.qty<=0)continue;
       if(!NOM[it.sku]){continue}// SKU removed from NOM — skip silently
@@ -11728,7 +11728,7 @@ function _stpBuildTruck(del){
     for(const r of RW){
       if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;
       if(!isStp(s))continue;if(r._kit)continue;
-      if(LM_holds.size>0&&LM_holds.has(del.venue+'|'+s))continue;
+      if(LM_holds.size>0&&(LM_holds.has(del.venue+'|'+s)||LM_holds.has('*|'+s)))continue;
       let q=r._effQty||0;if(q<=0)continue;
       const ak=r.Venue+'|'+s;if(_adjScale[ak]!==undefined)q=Math.round(q*_adjScale[ak]);
       if(!r._kit&&_kitAl[ak])q=Math.max(0,q-_kitAl[ak]);
@@ -13471,7 +13471,7 @@ function LM_renderDemand(el){
         <td class="mono">${s.origQty.toLocaleString()}${kitAlQty>0?'<div style="font-size:8px;color:#43A047">-'+kitAlQty+' in kit'+(kitPct>=100?' (all)':'')+'</div>':''}</td>
         <td>${ROLE!=='viewer'?`<input type="number" value="${s.adjQty}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setDemand('${vEsc}','${s.sku}',+this.value,${s.origQty})" style="width:65px;padding:2px 4px;border:1px solid ${s.isAdj?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fd);${s.isAdj?'background:var(--ps);font-weight:700':''}">`:s.adjQty.toLocaleString()}</td>
         <td style="color:${deltaColor};font-weight:${delta!==0?'700':'400'};font-size:10px">${deltaStr}</td>
-        ${ROLE!=='viewer'?`<td style="white-space:nowrap">${isMnl?s.manualIndices.map(mi=>`<span onclick="event.stopPropagation();LM_removeManualDemand(${mi})" style="color:var(--rd);cursor:pointer;font-size:11px" title="Remove manual item">✕</span>`).join(''):''}<span onclick="event.stopPropagation();LM_toggleHold('${vEsc}','${s.sku}')" style="cursor:pointer;font-size:10px;margin-left:2px;color:${_isHeld?'var(--or)':'var(--tt)'}" title="${_isHeld?'Release hold — item returns to planning':'Hold — exclude from planning'}">${_isHeld?'▶':'⏸'}</span></td>`:''}
+        ${ROLE!=='viewer'?`<td style="white-space:nowrap">${isMnl?s.manualIndices.map(mi=>`<span onclick="event.stopPropagation();LM_removeManualDemand(${mi})" style="color:var(--rd);cursor:pointer;font-size:11px" title="Remove manual item">✕</span>`).join(''):''}<span onclick="event.stopPropagation();LM_toggleHold('${vEsc}','${s.sku}')" style="cursor:pointer;font-size:10px;margin-left:2px;color:${_isHeld?'var(--or)':'var(--tt)'}" title="${_isHeld?'Release hold — item returns to planning':'Hold this venue — exclude from planning'}">${_isHeld?'▶':'⏸'}</span>${LM_holds.has('*|'+s.sku)?`<span onclick="event.stopPropagation();LM_toggleHold('*','${s.sku}')" style="cursor:pointer;font-size:9px;margin-left:1px;color:var(--or)" title="Release global hold">🌐</span>`:`<span onclick="event.stopPropagation();LM_toggleHold('*','${s.sku}')" style="cursor:pointer;font-size:9px;margin-left:1px;color:var(--tt)" title="Hold in ALL venues">🌐</span>`}</td>`:''}
       </tr>`;
     }
     html+=`</tbody></table>
