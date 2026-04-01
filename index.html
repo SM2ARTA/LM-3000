@@ -9300,7 +9300,13 @@ function build(venue,venueList,skipNoBi){
     // Per-date constraint overrides (inherit cap/noTopUp from overflow source if no local rule)
     const _dovr=_dateOvr[dateK]||{};
     const dayTCap=_dovr.tc||(carryOver.length>0&&_inheritedCap?_inheritedCap:tCap);
-    const dayMaxT=_dovr.mt||maxT;
+    const _rawMaxT=_dovr.mt||maxT;
+    // Subtract locked trucks already occupying this date (injected after build, but counted here)
+    // Check both venue-level and cluster-level locked trucks
+    const _ltbd=window._lmLockedTrucksByDate||{};
+    const _ltDirect=(_ltbd[venue]&&_ltbd[venue][dateK])||0;
+    const _ltCluster=(()=>{const cl=VN.find(v=>v.name===venue)?.cluster;return(cl&&cl!==venue&&_ltbd[cl]&&_ltbd[cl][dateK])||0})();
+    const dayMaxT=Math.max(1,_rawMaxT-_ltDirect-_ltCluster);
     const noTopUp=!!_dovr.noTopUp||(carryOver.length>0&&_inheritedNoTopUp);
 
     // Collect items for today: requested items + carry-over from previous day
@@ -9683,7 +9689,7 @@ function build(venue,venueList,skipNoBi){
   // INDIVIDUAL build → dated no-pallet onto matching-date truck (create if needed);
   //                    no-BI no-pallet all into ONE truck on the last day (or new day).
 
-  // Aggregate dated no-pallet by SKU
+  // Aggregate dated no-pallet by SKU, deducting locked demand
   const noPDatedRaw=noP.filter(x=>!isCort(x.sku));
   const noPBySku={};
   noPDatedRaw.forEach(np=>{
@@ -9691,7 +9697,9 @@ function build(venue,venueList,skipNoBi){
     noPBySku[np.sku].qty+=np.qty;
     if(np.biK<noPBySku[np.sku].biK)noPBySku[np.sku].biK=np.biK;
   });
-  const noPDated=Object.values(noPBySku);
+  // Deduct locked demand from no-pallet items (same as pool deduction for pallet items)
+  for(const sku in noPBySku){if(_ld[sku])noPBySku[sku].qty=Math.max(0,noPBySku[sku].qty-_ld[sku])}
+  const noPDated=Object.values(noPBySku).filter(x=>x.qty>0);
 
   // Aggregate undated no-BI no-pallet by SKU (always include - skipNoBi only blocks pool/pallet mop-up trucks)
   const noPUndated=noBiNoP.filter(x=>!isCort(x.sku));
@@ -9700,7 +9708,9 @@ function build(venue,venueList,skipNoBi){
     if(!noPUBySku[np.sku]){noPUBySku[np.sku]={sku:np.sku,nm:np.nm,qty:0}}
     noPUBySku[np.sku].qty+=np.qty;
   });
-  const noPUAgg=Object.values(noPUBySku);
+  // Deduct locked demand from undated no-pallet items
+  for(const sku in noPUBySku){if(_ld[sku])noPUBySku[sku].qty=Math.max(0,noPUBySku[sku].qty-_ld[sku])}
+  const noPUAgg=Object.values(noPUBySku).filter(x=>x.qty>0);
 
   // Get or create the anchor truck for a given biK
   const getAnchorTruck=(biK)=>{
@@ -9835,6 +9845,10 @@ function build(venue,venueList,skipNoBi){
     });
   }
 
+  // Deduct locked CORT demand (CORT items bypass pool, need separate deduction)
+  // Use a separate tracker to avoid mutating _ld (shared with pool deduction)
+  const _ldCort={};for(const sk in _ld)_ldCort[sk]=_ld[sk];
+  for(const bk in cortDated){cortDated[bk]=cortDated[bk].filter(it=>{if(_ldCort[it.sku]){const d=Math.min(it.qty,_ldCort[it.sku]);it.qty-=d;_ldCort[it.sku]-=d}return it.qty>0})}
   const cortDeliveries=cortDates.map(bk=>{
     const items=cortDated[bk];
     const byS={};const venues=new Set();
@@ -9983,14 +9997,21 @@ function numberAll(){
   // build() deducts locked demand from pool so unlocked trucks get remaining demand only.
   // Clean up orphaned snapshots (not in LM_dispatched)
   for(const fp in LM_lockedSnapshots){if(!LM_dispatched.has(fp)){console.warn('[numberAll] Removing orphaned snapshot:',fp);delete LM_lockedSnapshots[fp]}}
+  // Backfill _kitVenue on legacy snapshots that lack it
+  for(const fp in LM_lockedSnapshots){const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;for(const it of snap.items){if(it._kitId&&!it._kitVenue){const kit=LM_KITS.find(k=>k.id===it._kitId);if(kit)it._kitVenue=kit.venue}}}
   const _lockedByLabel={};// label -> [{fp, snap}]
   const _lockedDemandByLabel={};// label -> {sku: qty}
+  const _lockedTrucksByDate={};// label -> {dateKey: count} — locked truck count per date for capacity check
   window._lmLockedDemandByLabel=_lockedDemandByLabel;// expose for lazy build fallbacks
+  window._lmLockedTrucksByDate=_lockedTrucksByDate;// expose for capacity check in build()
   for(const fp in LM_lockedSnapshots){
     const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
     const label=snap.destLabel||'';
     if(!_lockedByLabel[label])_lockedByLabel[label]=[];
     _lockedByLabel[label].push({fp,snap});
+    // Track locked truck count per date for capacity check
+    const _ldk=snap.dd||snap.dKey||'';
+    if(_ldk){if(!_lockedTrucksByDate[label])_lockedTrucksByDate[label]={};_lockedTrucksByDate[label][_ldk]=(_lockedTrucksByDate[label][_ldk]||0)+1}
     if(!_lockedDemandByLabel[label])_lockedDemandByLabel[label]={};
     for(const it of snap.items){
       // For kit items, resolve CURRENT kit SKU (snapshot may have old renamed SKU)
@@ -10000,9 +10021,15 @@ function numberAll(){
         // Fallback: kit ID may have changed after strategy reapply — find by venue + type
         if(!curKit&&it._kitNom){
           const isFn=it.sku.startsWith('FNKIT');
-          // Try matching by venue name (label for individual venues, or check cluster venues)
-          const clVenues=CLUSTERS[label]?CLUSTERS[label].venues:[label];
-          curKit=LM_KITS.find(k=>clVenues.includes(k.venue)&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
+          // Use stored venue for exact match (fixes cluster builds with multiple kits per type)
+          if(it._kitVenue){
+            curKit=LM_KITS.find(k=>k.venue===it._kitVenue&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
+          }
+          // Legacy fallback for snapshots without _kitVenue
+          if(!curKit){
+            const clVenues=CLUSTERS[label]?CLUSTERS[label].venues:[label];
+            curKit=LM_KITS.find(k=>clVenues.includes(k.venue)&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
+          }
         }
         if(curKit)deductSku=curKit.sku;
       }
@@ -10012,7 +10039,14 @@ function numberAll(){
 
   const runBuild=(name,label,vl,skipNoBi)=>{
     try{
-      window._lmBuildLockedDemand=_lockedDemandByLabel[label]||{};
+      // Merge locked demand: venue-level + parent cluster-level (cluster trucks deduct to cluster key)
+      const _vld=_lockedDemandByLabel[label]||{};
+      const _clName=VN.find(v=>v.name===label)?.cluster||'';
+      const _cld=(_clName&&_clName!==label)?_lockedDemandByLabel[_clName]||{}:{};
+      const _merged={};
+      for(const sk in _vld)_merged[sk]=_vld[sk];
+      for(const sk in _cld)_merged[sk]=(_merged[sk]||0)+_cld[sk];
+      window._lmBuildLockedDemand=_merged;
       const P=vl?build(name,vl,false):build(name,null,skipNoBi);
       PLAN_CACHE[label]=P;
       const dispLabel=clDisp(label);
@@ -10103,11 +10137,38 @@ function numberAll(){
       // Ensure NOM entries exist for locked kit items (kit SKUs may have been renamed since lock)
       for(const it of trk.items){
         if(it._kitNom&&it._kitId&&!NOM[it.sku]){
-          NOM[it.sku]={_kitNom:true,_kitId:it._kitId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
+          // Resolve to current kit ID (old ID may be gone after strategy reapply)
+          let _ckId=it._kitId;
+          if(!LM_getKitById(_ckId)){
+            const isFn=it.sku.startsWith('FNKIT');
+            const _ckVenue=it._kitVenue;
+            const _ck=_ckVenue?LM_KITS.find(k=>k.venue===_ckVenue&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT'))):null;
+            if(_ck)_ckId=_ck.id;
+          }
+          NOM[it.sku]={_kitNom:true,_kitId:_ckId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
         }
       }
+      // ── Migrate FP if kit IDs changed (strategy reapply creates new kit IDs) ──
+      // fp = old FP from LM_lockedSnapshots key (may use stale kit IDs)
+      // After compat NOM entries are created with resolved new kit IDs, LM_fp(trk) may differ.
+      const newFP=LM_fp(trk);
+      let activeFP=fp;
+      if(newFP!==fp){
+        // Kit IDs changed — migrate all FP-keyed maps from old → new
+        const _fpMaps=[LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr];
+        if(LM_dispatched.has(fp)){LM_dispatched.delete(fp);LM_dispatched.add(newFP)}
+        for(const m of _fpMaps){if(m[fp]!==undefined){m[newFP]=m[fp];delete m[fp]}}
+        if(LM_lockedSnapshots[fp]){LM_lockedSnapshots[newFP]=LM_lockedSnapshots[fp];delete LM_lockedSnapshots[fp]}
+        const oldMI='LM-'+fp,newMI='LM-'+newFP;
+        if(MANUAL_ITEMS[oldMI]){MANUAL_ITEMS[newMI]=MANUAL_ITEMS[oldMI];delete MANUAL_ITEMS[oldMI]}
+        // Also update snapshot items' _kitId to current values
+        const realSnap=LM_lockedSnapshots[newFP];
+        if(realSnap){for(const it of realSnap.items){if(it._kitNom&&it._kitId&&NOM[it.sku]){it._kitId=NOM[it.sku]._kitId}}}
+        activeFP=newFP;
+        if(ROLE!=='viewer'){LM_saveDateOverrides();saveSharedData();MI_save()}
+      }
       // Apply date override if exists
-      const dateOvr=LM_dateOverrides[fp];
+      const dateOvr=LM_dateOverrides[activeFP];
       if(dateOvr){trk.dd=dateOvr;trk.dKey=dateOvr}
       const dk=trk.dd||trk.dKey||'9999-12-31';
       allTrucks.push({dateK:dk,ref:trk,label:label,dispLabel:clDisp(label),_isStepB:!!trk._isStepB});
@@ -10814,7 +10875,7 @@ function LM_toggleDispatchTruck(truckIdx,checked){
   if(checked){
     LM_dispatched.add(fp);
     // Snapshot truck data — frozen across all future rebuilds
-    const snapItems=t.items.map(it=>{const n=NOM[it.sku];return{...it,_kitId:n?._kitId||null,_kitNom:!!n?._kitNom}});
+    const snapItems=t.items.map(it=>{const n=NOM[it.sku];const _kv=n?._kitId?LM_getKitById(n._kitId)?.venue||null:null;return{...it,_kitId:n?._kitId||null,_kitNom:!!n?._kitNom,_kitVenue:_kv}});
     LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:t.dd,dKey:t.dKey||t.dd,destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true};
   }else{
     LM_dispatched.delete(fp);delete LM_dateOverrides[fp];delete LM_lockedSnapshots[fp];delete LM_lsrNumbers[fp];
