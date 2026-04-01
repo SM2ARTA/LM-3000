@@ -644,6 +644,7 @@ function _undoSnap(){
     lm_dateOvr:JSON.stringify(LM_dateOverrides||{}),
     lm_lsr:JSON.stringify(LM_lsrNumbers||{}),
     lm_lockedSnaps:JSON.stringify(LM_lockedSnapshots||{}),
+    lm_holds:JSON.stringify([...(LM_holds||[])]),
     lm_manual:JSON.stringify(MANUAL_ITEMS||{}),
     lm_distOvr:JSON.stringify(DIST_OVERRIDES||{}),
     lm_demandAdj:JSON.stringify(LM_demandAdj||{}),
@@ -712,6 +713,7 @@ function UNDO_restore(){
     LM_dateOverrides=JSON.parse(snap.lm_dateOvr);
     if(snap.lm_lsr)LM_lsrNumbers=JSON.parse(snap.lm_lsr);
     if(snap.lm_lockedSnaps)LM_lockedSnapshots=JSON.parse(snap.lm_lockedSnaps);
+    if(snap.lm_holds)LM_holds=new Set(JSON.parse(snap.lm_holds));
     MANUAL_ITEMS=JSON.parse(snap.lm_manual);
     DIST_OVERRIDES=JSON.parse(snap.lm_distOvr);
     LM_demandAdj=JSON.parse(snap.lm_demandAdj||'{}');
@@ -5515,7 +5517,7 @@ function LP_computeLateArrivals(){
   if(typeof PLAN_CACHE!=='undefined'&&typeof build==='function'&&typeof LM_getLPDestAbbrs==='function'){
     for(const v of (VN||[])){
       if(!LM_getLPDestAbbrs(v.name).length)continue;
-      if(!PLAN_CACHE[v.name])try{PLAN_CACHE[v.name]=build(v.name)}catch(e){}
+      if(!PLAN_CACHE[v.name])try{window._lmBuildLockedDemand=(window._lmLockedDemandByLabel||{})[v.name]||{};PLAN_CACHE[v.name]=build(v.name)}catch(e){}
     }
     LM_applyDateOverrides();// apply any manual LM date overrides to freshly built cache
   }
@@ -7641,6 +7643,7 @@ async function masterBackupExport(){
     LM_dispatched.forEach(fp=>rows.push({Fingerprint:fp,Type:'Locked',Value:LM_dateOverrides[fp]||'',Snapshot:LM_lockedSnapshots[fp]?JSON.stringify(LM_lockedSnapshots[fp]):''}));
     Object.entries(LM_dateOverrides).forEach(([fp,d])=>{if(!LM_dispatched.has(fp))rows.push({Fingerprint:fp,Type:'Date Override',Value:d,Snapshot:''})});
     Object.entries(LM_lsrNumbers).forEach(([fp,lsr])=>{if(lsr)rows.push({Fingerprint:fp,Type:'LSR',Value:lsr,Snapshot:''})});
+    LM_holds.forEach(k=>rows.push({Fingerprint:k,Type:'Hold',Value:'',Snapshot:''}));
     if(rows.length){const ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'LM Dispatch State')}
   }
 
@@ -7880,11 +7883,12 @@ async function masterBackupRestore(file){
     // ── 5. LM Dispatch State → LM_dispatched + LM_dateOverrides ──
     const dispRows=getSheet('LM Dispatch State');
     if(dispRows){
-      LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};
+      LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};LM_holds=new Set();
       for(const r of dispRows){
         if(r.Type==='Locked'&&r.Fingerprint){LM_dispatched.add(r.Fingerprint);if(r.Value)LM_dateOverrides[r.Fingerprint]=r.Value;if(r.Snapshot)try{LM_lockedSnapshots[r.Fingerprint]=JSON.parse(r.Snapshot)}catch(e){}}
         else if(r.Type==='Date Override'&&r.Fingerprint&&r.Value){LM_dateOverrides[r.Fingerprint]=r.Value}
         else if(r.Type==='LSR'&&r.Fingerprint&&r.Value){LM_lsrNumbers[r.Fingerprint]=r.Value}
+        else if(r.Type==='Hold'&&r.Fingerprint){LM_holds.add(r.Fingerprint)}
       }
       log.push('Dispatch: '+LM_dispatched.size+' locked, '+Object.keys(LM_dateOverrides).length+' overrides');
     }
@@ -9097,6 +9101,8 @@ function build(venue,venueList,skipNoBi){
     const s=r["Nomenclature"]||"?";if(!NOM[s])continue;// skip items with no NOM entry (e.g. golf carts)
     // Skip STP items at venues with STP delivery — they go to STP truck
     if(_stpVenues.has(r["Venue"])&&isStp(s))continue;
+    // Skip held items — excluded from planning (same layer as STP exclusion)
+    if(LM_holds.size>0&&LM_holds.has(r["Venue"]+'|'+s))continue;
     // Apply demand adjustment scaling
     const _adjK=r["Venue"]+'|'+s;
     if(_adjScale[_adjK]!==undefined)q=Math.round(q*_adjScale[_adjK]);
@@ -9166,6 +9172,10 @@ function build(venue,venueList,skipNoBi){
 
   // ── Deduct locked truck demand from pool ──
   // Locked trucks are injected separately in numberAll() — don't double-count their items
+  // INVARIANT: every build() caller MUST set _lmBuildLockedDemand before calling.
+  // If LM_dispatched has entries but _lmBuildLockedDemand is empty, demand will be double-counted.
+  if(typeof LM_dispatched!=='undefined'&&LM_dispatched.size>0&&(!window._lmBuildLockedDemand||!Object.keys(window._lmBuildLockedDemand).length)){
+    console.warn('[build] WARNING: locked trucks exist but _lmBuildLockedDemand is empty for',venue,'— demand may be double-counted')}
   const _ld=window._lmBuildLockedDemand||{};
   for(const sku in _ld){if(pool[sku])pool[sku].remaining=Math.max(0,pool[sku].remaining-_ld[sku])}
 
@@ -9948,9 +9958,10 @@ function numberAll(){
   // Locked trucks are NOT rebuilt — their snapshot data is injected after build.
   // build() deducts locked demand from pool so unlocked trucks get remaining demand only.
   // Clean up orphaned snapshots (not in LM_dispatched)
-  for(const fp in LM_lockedSnapshots){if(!LM_dispatched.has(fp))delete LM_lockedSnapshots[fp]}
+  for(const fp in LM_lockedSnapshots){if(!LM_dispatched.has(fp)){console.warn('[numberAll] Removing orphaned snapshot:',fp);delete LM_lockedSnapshots[fp]}}
   const _lockedByLabel={};// label -> [{fp, snap}]
   const _lockedDemandByLabel={};// label -> {sku: qty}
+  window._lmLockedDemandByLabel=_lockedDemandByLabel;// expose for lazy build fallbacks
   for(const fp in LM_lockedSnapshots){
     const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
     const label=snap.destLabel||'';
@@ -10708,6 +10719,16 @@ let LM_dispatched=new Set();// truck fingerprints marked as dispatched
 let LM_dateOverrides={};// {fingerprint: newDate} — manual date changes
 let LM_lsrNumbers={};// {fingerprint: lsrString} — LSR numbers for LM trucks
 let LM_lockedSnapshots={};// {fingerprint: truckSnapshot} — frozen truck data for locked trucks
+let LM_holds=new Set();// "venue|sku" pairs on hold — excluded from build() demand aggregation
+function LM_toggleHold(venue,sku){
+  if(ROLE==='viewer')return;
+  const k=venue+'|'+sku;
+  if(LM_holds.has(k))LM_holds.delete(k);else LM_holds.add(k);
+  LM_saveDateOverrides();
+}
+function LM_holdRelease(venue,sku){if(ROLE==='viewer')return;LM_holds.delete(venue+'|'+sku);LM_saveDateOverrides()}
+function LM_holdSet(venue,sku){if(ROLE==='viewer')return;LM_holds.add(venue+'|'+sku);LM_saveDateOverrides()}
+function LM_isHeld(venue,sku){return LM_holds.has(venue+'|'+sku)}
 let LM_hideStaples=false;// hide STP-sourced items in truck modals
 let LM_demandAdj={};// venue|sku -> adjusted total qty (overrides RW "Required" for that combo)
 let LM_nomOverrides={};// sku -> {pq?,ps?,pqA?,psA?} — pallet dimension overrides on NOM
@@ -10765,7 +10786,7 @@ async function LM_saveDateOverrides(){
   UNDO_capture();
   try{
     const now=new Date().toISOString();
-    await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides,lsrNumbers:LM_lsrNumbers,lockedSnapshots:LM_lockedSnapshots}),updated_at:now});
+    await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides,lsrNumbers:LM_lsrNumbers,lockedSnapshots:LM_lockedSnapshots,holds:[...LM_holds]}),updated_at:now});
   }catch(e){console.warn('LM dispatch save error:',e)}
 }
 async function LM_loadDateOverrides(){
@@ -10778,6 +10799,7 @@ async function LM_loadDateOverrides(){
       LM_dateOverrides=p.dateOverrides||{};
       LM_lsrNumbers=p.lsrNumbers||{};
       LM_lockedSnapshots=p.lockedSnapshots||{};
+      LM_holds=new Set(p.holds||[]);
     }
   }catch(e){/* no data yet */}
 }
@@ -11682,7 +11704,7 @@ function _stpBuildTruck(del){
   if(del.items){
     // Explicit item allocation — validate against current NOM + demand
     const _demandMap={};
-    for(const r of RW){if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s]||!isStp(s)||r._kit)continue;let q=r._effQty||0;if(q>0)_demandMap[s]=(_demandMap[s]||0)+q}
+    for(const r of RW){if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s]||!isStp(s)||r._kit)continue;if(LM_holds.size>0&&LM_holds.has(del.venue+'|'+s))continue;let q=r._effQty||0;if(q>0)_demandMap[s]=(_demandMap[s]||0)+q}
     for(const it of del.items){
       if(it.qty<=0)continue;
       if(!NOM[it.sku]){continue}// SKU removed from NOM — skip silently
@@ -11704,6 +11726,7 @@ function _stpBuildTruck(del){
     for(const r of RW){
       if(r.Venue!==del.venue)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;
       if(!isStp(s))continue;if(r._kit)continue;
+      if(LM_holds.size>0&&LM_holds.has(del.venue+'|'+s))continue;
       let q=r._effQty||0;if(q<=0)continue;
       const ak=r.Venue+'|'+s;if(_adjScale[ak]!==undefined)q=Math.round(q*_adjScale[ak]);
       if(!r._kit&&_kitAl[ak])q=Math.max(0,q-_kitAl[ak]);
@@ -13369,6 +13392,8 @@ function LM_renderDemand(el){
       ${ROLE!=='viewer'&&prefillV?`<button class="rbtn" onclick="LM_showAddDemand('${prefillV.replace(/'/g,"\\'")}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:10px;padding:4px 10px">+ Add</button><button class="rbtn" onclick="LM_showCreateKit('${prefillV.replace(/'/g,"\\'")}')" style="background:#E8F5E9;color:#43A047;border-color:#A5D6A7;font-size:10px;padding:4px 10px">📦 Kit</button>${`<button class="rbtn" onclick="LM_showCreateStp('${prefillV.replace(/'/g,"\\'")}')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:10px;padding:4px 10px">🏪 STP${LM_getStpForVenue(prefillV).length>0?' ('+LM_getStpForVenue(prefillV).length+')':''}</button>`}`:''}
       ${_filteredKits.length>0?`<span class="bg" style="background:#E8F5E9;color:#43A047;cursor:pointer" onclick="LM_showKitList()">📦 ${_filteredKits.length} kit${_filteredKits.length>1?'s':''}</span>`:''}
       ${_filteredStp.length>0?`<span class="bg" style="background:#FFF3E0;color:#EF6C00">🏪 ${_filteredStp.length} STP</span>`:''}
+      ${LM_holds.size>0?`<span class="bg" style="background:#F3F4F6;color:#6B7280;border:1px solid #D1D5DB">⏸ ${LM_holds.size} hold${LM_holds.size>1?'s':''}</span>${ROLE!=='viewer'?`<button class="rbtn" onclick="LM_holds=new Set();LM_saveDateOverrides();PLAN_CACHE={};numberAll();rMain()" style="font-size:9px;padding:2px 6px" title="Clear all holds">↻</button>`:''}`:''}
+
     </div>
   </div>`;
 
@@ -13389,7 +13414,7 @@ function LM_renderDemand(el){
     html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')+' '+venueKits.map(k=>k.sku+' '+k.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${hasStp?'#EF6C00':hasKit?'#43A047':hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="this.parentElement.querySelector('.lm-dem-body').classList.toggle('lm-dem-open')">
         <div style="min-width:0;flex:1">
-          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${(VN.find(vn=>vn.name===v.name)||{}).hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;vertical-align:middle">CORT</span>':''}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}${hasStp?' <span class="bg bgs" style="background:#FFF3E0;color:#EF6C00;font-size:8px;vertical-align:middle">🏪 STP'+(venueStpArr.length>1?' '+venueStpArr.length:'')+'</span>':''}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${(VN.find(vn=>vn.name===v.name)||{}).hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;vertical-align:middle">CORT</span>':''}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}${hasStp?' <span class="bg bgs" style="background:#FFF3E0;color:#EF6C00;font-size:8px;vertical-align:middle">🏪 STP'+(venueStpArr.length>1?' '+venueStpArr.length:'')+'</span>':''}${_vHoldCount>0?' <span class="bg bgs" style="background:#F3F4F6;color:#6B7280;font-size:8px;vertical-align:middle">⏸'+_vHoldCount+'</span>':''}</div>
           <div style="font-size:10px;color:var(--tt)">${v.skuList.length} SKUs · ${v.totalOrig.toLocaleString()} pcs${v.totalAdj!==v.totalOrig?' → <strong style="color:var(--pu)">'+v.totalAdj.toLocaleString()+'</strong>':''}</div>
         </div>
         <span style="font-size:10px;color:var(--tt)">▼</span>
@@ -13427,6 +13452,7 @@ function LM_renderDemand(el){
     html+=`<table class="dtb"><thead><tr>
           <th>SKU</th><th>Item</th><th>Src</th><th>Orig</th><th>Adj Qty</th><th>Δ</th>${ROLE!=='viewer'?'<th></th>':''}
         </tr></thead><tbody>`;
+    const _vHoldCount=v.skuList.filter(s=>LM_isHeld(v.name,s.sku)).length;
     for(const s of v.skuList){
       const delta=s.adjQty-s.origQty;
       const deltaStr=delta>0?'+'+delta.toLocaleString():delta<0?delta.toLocaleString():'—';
@@ -13435,14 +13461,15 @@ function LM_renderDemand(el){
       const kitAlQty=_kitAlMap[v.name+'|'+s.sku]||0;
       const kitPct=kitAlQty>0&&s.origQty>0?Math.round(kitAlQty/s.origQty*100):0;
       const _isStp=hasStp&&isStp(s.sku);
-      html+=`<tr class="lm-dem-row" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}" style="${_isStp?'background:#FFF8F0;opacity:0.6':isMnl?'background:var(--gs)':s.isAdj?'background:var(--ps)':''}">
-        <td class="mono">${s.sku}${isMnl?' <span style="color:var(--gn);font-size:8px;font-weight:700">✏</span>':''}${kitAlQty>0?' <span style="color:#43A047;font-size:8px;font-weight:700">📦</span>':''}${_isStp?' <span style="color:#EF6C00;font-size:8px;font-weight:700">🏪</span>':''}</td>
+      const _isHeld=LM_isHeld(v.name,s.sku);
+      html+=`<tr class="lm-dem-row" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}" style="${_isHeld?'opacity:0.5;background:#F3F4F6':_isStp?'background:#FFF8F0;opacity:0.6':isMnl?'background:var(--gs)':s.isAdj?'background:var(--ps)':''}">
+        <td class="mono">${s.sku}${_isHeld?' <span style="color:var(--or);font-size:8px;font-weight:700" title="On hold — excluded from planning">⏸</span>':''}${isMnl?' <span style="color:var(--gn);font-size:8px;font-weight:700">✏</span>':''}${kitAlQty>0?' <span style="color:#43A047;font-size:8px;font-weight:700">📦</span>':''}${_isStp?' <span style="color:#EF6C00;font-size:8px;font-weight:700">🏪</span>':''}</td>
         <td class="tcl">${s.name}</td>
         <td style="font-size:10px;color:var(--tt)">${s.src}</td>
         <td class="mono">${s.origQty.toLocaleString()}${kitAlQty>0?'<div style="font-size:8px;color:#43A047">-'+kitAlQty+' in kit'+(kitPct>=100?' (all)':'')+'</div>':''}</td>
         <td>${ROLE!=='viewer'?`<input type="number" value="${s.adjQty}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setDemand('${vEsc}','${s.sku}',+this.value,${s.origQty})" style="width:65px;padding:2px 4px;border:1px solid ${s.isAdj?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fd);${s.isAdj?'background:var(--ps);font-weight:700':''}">`:s.adjQty.toLocaleString()}</td>
         <td style="color:${deltaColor};font-weight:${delta!==0?'700':'400'};font-size:10px">${deltaStr}</td>
-        ${ROLE!=='viewer'?`<td>${isMnl?s.manualIndices.map(mi=>`<span onclick="event.stopPropagation();LM_removeManualDemand(${mi})" style="color:var(--rd);cursor:pointer;font-size:11px" title="Remove manual item">✕</span>`).join(''):''}${!isMnl?'':''}</td>`:''} 
+        ${ROLE!=='viewer'?`<td style="white-space:nowrap">${isMnl?s.manualIndices.map(mi=>`<span onclick="event.stopPropagation();LM_removeManualDemand(${mi})" style="color:var(--rd);cursor:pointer;font-size:11px" title="Remove manual item">✕</span>`).join(''):''}<span onclick="event.stopPropagation();LM_toggleHold('${vEsc}','${s.sku}');rMain()" style="cursor:pointer;font-size:10px;margin-left:2px;color:${_isHeld?'var(--or)':'var(--tt)'}" title="${_isHeld?'Release hold — item returns to planning':'Hold — exclude from planning'}">${_isHeld?'▶':'⏸'}</span></td>`:''}
       </tr>`;
     }
     html+=`</tbody></table>
@@ -14676,7 +14703,7 @@ const displayName=isClusterSel?clDisp(selCluster):sel;
 rConstraints();
 const cacheKey=isClusterSel?selCluster:sel;
 const _lpFedAbbrs=LM_isLPFed(cacheKey)?LM_getLPDestAbbrs(cacheKey):[];
-const P=PLAN_CACHE[cacheKey]||(()=>{const _p=isClusterSel?build(sel,clusterVenues):build(sel);PLAN_CACHE[cacheKey]=_p;return _p})();
+const P=PLAN_CACHE[cacheKey]||(()=>{window._lmBuildLockedDemand=(window._lmLockedDemandByLabel||{})[cacheKey]||{};const _p=isClusterSel?build(sel,clusterVenues):build(sel);PLAN_CACHE[cacheKey]=_p;return _p})();
 LP=P;
 // Use globally-numbered CORT from CORT_CACHE (set by numberAll)
 const venueName=isClusterSel?null:sel;
@@ -15759,7 +15786,7 @@ function doSystemReset(){
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};
-  STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
+  STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};LM_holds=new Set();MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
@@ -15922,7 +15949,7 @@ function doResetLM(){
   if(SB){
     SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits','fm-lm-stp-deliveries','fm-stp-strategy','fm-dist-overrides','fm-pallet-cfg']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};LM_holds=new Set();MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_updateStockWaterfall();LP_invalidateLate();// stock cleared
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
@@ -15944,7 +15971,7 @@ function doSoftResetLM(){
   // Clear file data + computed state, keep all manual settings
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];CLUSTERS={};PLAN_CACHE={};CORT_CACHE={};LM_vtSkuMap={};
   // VS, LM_excluded, LM_excludeUserOvr, LM_dispatched, LM_dateOverrides,
-  // MANUAL_ITEMS, DIST_OVERRIDES, LM_demandAdj, LM_nomOverrides,
+  // LM_holds, MANUAL_ITEMS, DIST_OVERRIDES, LM_demandAdj, LM_nomOverrides,
   // LM_palletCfg, LM_clusterTurnaround, STOCK_SKUS, STOCK_REPORT_NAME,
   // LM_MANUAL_DEMAND, LM_KITS, LM_STP_DELIVERIES — all preserved
   // Clear rendered content so upload overlay is visible
