@@ -13841,23 +13841,20 @@ function LM_renderPalletCmp(el){
   let h='<div style="padding:16px 20px">';
   h+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
   h+='<h2 style="margin:0;font-size:18px">📦 Pallet Comparison — LP vs LM</h2>';
-  h+=kpi({label:'LP Out',value:Math.round(totLP*10)/10+' plt',color:'var(--pu)'});
-  h+=kpi({label:'LM In',value:Math.round(totLM*10)/10+' plt',color:'var(--ac)'});
+  h+=kpi({label:'LP Pallets',value:Math.round(totLP*10)/10+' plt',color:'var(--pu)'});
+  h+=kpi({label:'LM Pallets',value:Math.round(totLM*10)/10+' plt',color:'var(--ac)'});
   h+=kpi({label:'Delta',value:dSign+Math.round(delta*10)/10+' plt',color:dClr});
-  h+=kpi({label:'Assembly',value:Math.round(totAsmPlt*10)/10+' plt',color:'var(--or)'});
   h+=kpi({label:'LP Trucks',value:totTrk.size,color:'var(--gn)'});
   h+='</div>';
-  h+='<p style="font-size:11px;color:var(--ts);margin:0 0 16px"><b>LP Out</b> = pallets leaving Dallas (disassembled). <b>LM In</b> = pallets needed at destination (assembled where applicable). <b>Delta</b> = LM − LP. Positive delta means more pallets after assembly.</p>';
+  h+='<p style="font-size:11px;color:var(--ts);margin:0 0 16px"><b>LP Pallets</b> = pallets leaving Dallas (disassembled). <b>LM Pallets</b> = pallets needed at destination (assembled where applicable). <b>Delta</b> = LM − LP.</p>';
 
   // Summary table
   h+='<table class="dtb" style="width:100%;font-size:12px"><thead><tr>';
   h+='<th style="text-align:left;padding:8px 12px">Destination</th>';
   h+='<th style="text-align:right;padding:8px 12px">LP Trucks</th>';
-  h+='<th style="text-align:right;padding:8px 12px;color:var(--pu)">LP Pallets Out</th>';
-  h+='<th style="text-align:right;padding:8px 12px;color:var(--ac)">LM Pallets In</th>';
+  h+='<th style="text-align:right;padding:8px 12px;color:var(--pu)">LP Pallets</th>';
+  h+='<th style="text-align:right;padding:8px 12px;color:var(--ac)">LM Pallets</th>';
   h+='<th style="text-align:right;padding:8px 12px">Delta</th>';
-  h+='<th style="text-align:right;padding:8px 12px;color:var(--or)">Assembly Items</th>';
-  h+='<th style="text-align:right;padding:8px 12px;color:var(--or)">Assembly Pallets</th>';
   h+='<th style="text-align:right;padding:8px 12px">SKUs</th>';
   h+='</tr></thead><tbody>';
 
@@ -13869,8 +13866,6 @@ function LM_renderPalletCmp(el){
     h+='<td style="text-align:right;padding:8px 12px;color:var(--pu);font-family:var(--fm)">'+g.lp.toFixed(1)+'</td>';
     h+='<td style="text-align:right;padding:8px 12px;color:var(--ac);font-family:var(--fm)">'+g.lm.toFixed(1)+'</td>';
     h+='<td style="text-align:right;padding:8px 12px;color:'+gdC+';font-family:var(--fm);font-weight:700">'+gdS+gd.toFixed(1)+'</td>';
-    h+='<td style="text-align:right;padding:8px 12px;color:var(--or)">'+g.asmSkus+'</td>';
-    h+='<td style="text-align:right;padding:8px 12px;color:var(--or);font-family:var(--fm)">'+g.asmPlt.toFixed(1)+'</td>';
     h+='<td style="text-align:right;padding:8px 12px">'+g.skus+'</td>';
     h+='</tr>';
     // Sub-rows for multi-abbr groups (MEX, CAN)
@@ -13882,8 +13877,6 @@ function LM_renderPalletCmp(el){
       h+='<td style="text-align:right;padding:4px 12px;font-family:var(--fm)">'+sr.lp.toFixed(1)+'</td>';
       h+='<td style="text-align:right;padding:4px 12px;font-family:var(--fm)">'+sr.lm.toFixed(1)+'</td>';
       h+='<td style="text-align:right;padding:4px 12px;color:'+sdC+';font-family:var(--fm)">'+sdS+sd.toFixed(1)+'</td>';
-      h+='<td style="text-align:right;padding:4px 12px">'+sr.asmN+'</td>';
-      h+='<td style="text-align:right;padding:4px 12px;font-family:var(--fm)">'+sr.asm.toFixed(1)+'</td>';
       h+='<td></td></tr>';
     }
   }
@@ -13894,8 +13887,6 @@ function LM_renderPalletCmp(el){
   h+='<td style="text-align:right;padding:8px 12px;color:var(--pu);font-family:var(--fm)">'+totLP.toFixed(1)+'</td>';
   h+='<td style="text-align:right;padding:8px 12px;color:var(--ac);font-family:var(--fm)">'+totLM.toFixed(1)+'</td>';
   const tds=delta>0?'+':'';h+='<td style="text-align:right;padding:8px 12px;color:'+dClr+';font-family:var(--fm);font-weight:700">'+tds+delta.toFixed(1)+'</td>';
-  h+='<td style="text-align:right;padding:8px 12px;color:var(--or)">—</td>';
-  h+='<td style="text-align:right;padding:8px 12px;color:var(--or);font-family:var(--fm)">'+totAsmPlt.toFixed(1)+'</td>';
   h+='<td></td></tr>';
   h+='</tbody></table>';
 
