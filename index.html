@@ -10042,14 +10042,11 @@ function numberAll(){
 
   const runBuild=(name,label,vl,skipNoBi)=>{
     try{
-      // Merge locked demand: venue-level + parent cluster-level (cluster trucks deduct to cluster key)
-      const _vld=_lockedDemandByLabel[label]||{};
-      const _clName=VN.find(v=>v.name===label)?.cluster||'';
-      const _cld=(_clName&&_clName!==label)?_lockedDemandByLabel[_clName]||{}:{};
-      const _merged={};
-      for(const sk in _vld)_merged[sk]=_vld[sk];
-      for(const sk in _cld)_merged[sk]=(_merged[sk]||0)+_cld[sk];
-      window._lmBuildLockedDemand=_merged;
+      // Locked demand deduction: use venue-level only for individual venue builds.
+      // Cluster-level deduction only applies to cluster builds (vl is set) — NOT to Step B
+      // individual venue builds, because cluster demand is aggregated across all venues
+      // and would over-deduct each venue's share.
+      window._lmBuildLockedDemand=_lockedDemandByLabel[label]||{};
       const P=vl?build(name,vl,false):build(name,null,skipNoBi);
       PLAN_CACHE[label]=P;
       const dispLabel=clDisp(label);
