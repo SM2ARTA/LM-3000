@@ -10177,8 +10177,18 @@ function numberAll(){
       const P=PLAN_CACHE[label];
       P.allT.push(trk);
       let day=P.days.find(d=>d.dKey===dk);
-      if(!day){day={dKey:dk,biDate:null,dDate:null,trucks:[],pallets:0,pcs:0};P.days.push(day);P.days.sort((a,b)=>a.dKey<b.dKey?-1:a.dKey>b.dKey?1:0)}
+      if(!day){
+        // Compute dates for locked-truck-only days (build() would set these for unlocked trucks)
+        const _dDate=new Date(dk+'T12:00:00');
+        // biDate = earliest bump-in from truck items, fallback to dispatch date
+        const _biK=trk.items?trk.items.reduce((m,it)=>{const k=it.origBiK||it.biK;return(k&&(!m||k<m))?k:m},null):null;
+        const _biDate=_biK?new Date(_biK+'T12:00:00'):_dDate;
+        day={dKey:dk,biDate:_biDate,dDate:_dDate,trucks:[],pallets:0,pcs:0};P.days.push(day);P.days.sort((a,b)=>a.dKey<b.dKey?-1:a.dKey>b.dKey?1:0)
+      }
       day.trucks.push(trk);
+      // Fill in missing dates on existing day (may have been null from earlier locked truck injection)
+      if(!day.dDate)day.dDate=new Date(dk+'T12:00:00');
+      if(!day.biDate){const _biK2=trk.items?trk.items.reduce((m,it)=>{const k=it.origBiK||it.biK;return(k&&(!m||k<m))?k:m},null):null;day.biDate=_biK2?new Date(_biK2+'T12:00:00'):day.dDate}
       day.pallets=(day.pallets||0)+(trk.pallets||0);
       day.pcs=(day.pcs||0)+(trk.pcs||0);
       P.totalPlt=(P.totalPlt||0)+(trk.pallets||0);
