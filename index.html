@@ -12676,7 +12676,6 @@ function generateDailyDigest(){
           for(const r of RW){
             if(r._kit||r.Nomenclature!==hSku||!NOM[hSku])continue;
             const v=r.Venue;const lk=v+'|'+hSku+'|HELD';if(_lS.has(lk))continue;
-            const src=(NOM[hSku]?.src||'').toUpperCase();if(src.startsWith('STP')||src.startsWith('CT'))continue;
             let inStock=STOCK_SKUS.has(hSku),arrDallas=inStock?'in-stock':null;
             if(!inStock&&LP_STATE?.arrivals){let need=r._effQty||0,lr=null;const sa=LP_STATE.arrivals.filter(a=>a.sku===hSku&&a.readyDate).sort((a,b)=>a.readyDate.localeCompare(b.readyDate));for(const a of sa){need-=(a.qty||0);lr=a.readyDate;if(need<=0)break}if(lr)arrDallas=lr}
             _lS.add(lk);_lI.push({sku:hSku,name:NOM[hSku]?.nm||hSku,truckId:'HELD',dispatch:'—',bumpin:'—',rawArrival:inStock?'In stock':(arrDallas||'—'),arrDallas:inStock?'In stock':(arrDallas||'—'),lpShip:'—',satArr:'—',whsProc:0,dest:v,qty:r._effQty||0,daysLate:null,src:NOM[hSku]?.src||'—',path:'Held',lateType:'On hold',notInLp:false,_held:true});
@@ -12685,7 +12684,6 @@ function generateDailyDigest(){
           // Per-venue hold
           if(!NOM[hSku])continue;
           const lk=hVenue+'|'+hSku+'|HELD';if(_lS.has(lk))continue;
-          const src=(NOM[hSku]?.src||'').toUpperCase();if(src.startsWith('STP')||src.startsWith('CT'))continue;
           let totalQty=0;for(const r of RW){if(r.Venue===hVenue&&r.Nomenclature===hSku&&!r._kit)totalQty+=(r._effQty||0)}
           if(totalQty<=0)continue;
           let inStock=STOCK_SKUS.has(hSku),arrDallas=inStock?'in-stock':null;
