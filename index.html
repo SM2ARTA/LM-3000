@@ -10016,11 +10016,17 @@ function numberAll(){
     if(_ldk){if(!_lockedTrucksByDate[label])_lockedTrucksByDate[label]={};_lockedTrucksByDate[label][_ldk]=(_lockedTrucksByDate[label][_ldk]||0)+1}
     if(!_lockedDemandByLabel[label])_lockedDemandByLabel[label]={};
     for(const it of snap.items){
-      if(it._kitNom&&it._kitVenue){
+      if(it._kitNom){
         // Kit item: resolve CURRENT kit SKU using frozen venue+type (pool has current SKU, not snapshot SKU)
         // Snapshot stays immutable — this is a deduction MAPPING at orchestration level only
         const isFn=it.sku.startsWith('FNKIT');
-        const curKit=LM_KITS.find(k=>k.venue===it._kitVenue&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
+        let curKit=null;
+        // Primary: match by frozen venue + type prefix
+        if(it._kitVenue)curKit=LM_KITS.find(k=>k.venue===it._kitVenue&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
+        // Fallback for legacy snapshots: match by frozen _kitId
+        if(!curKit&&it._kitId)curKit=LM_KITS.find(k=>k.id===it._kitId);
+        // Last resort: match by any venue in cluster + type
+        if(!curKit){const clVenues=CLUSTERS[label]?CLUSTERS[label].venues:[label];curKit=LM_KITS.find(k=>clVenues.includes(k.venue)&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')))}
         const deductSku=curKit?curKit.sku:it.sku;
         _lockedDemandByLabel[label][deductSku]=(_lockedDemandByLabel[label][deductSku]||0)+(it.loadQty||0);
       } else {
