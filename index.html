@@ -10132,10 +10132,17 @@ function numberAll(){
       trk.id='';// will be numbered below
       // Ensure NOM entries exist for locked kit items — use FROZEN snapshot data only
       // No live LM_KITS lookup: locked kits must be self-sufficient
+      // Also detect legacy snapshots where _kitNom was not set (check SKU prefix)
       for(const it of trk.items){
-        if(it._kitNom&&!NOM[it.sku]){
-          NOM[it.sku]={_kitNom:true,_kitId:it._kitId||'_locked',nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
+        const isKit=it._kitNom||(it.sku.startsWith('FNKIT')||it.sku.startsWith('OSKIT'));
+        if(isKit&&!NOM[it.sku]){
+          // Use frozen _kitId if available; for legacy snapshots use SKU as stable ID
+          const _stableId=it._kitId||('_lock:'+it.sku);
+          NOM[it.sku]={_kitNom:true,_kitId:_stableId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
+          if(!it._kitId)it._kitId=_stableId;// backfill so LM_fp uses consistent ID
         }
+        // Backfill _kitNom on legacy items that have kit SKU prefix but missing flag
+        if(isKit&&!it._kitNom){it._kitNom=true}
       }
       // Reconcile FP: snapshot key may have been stored under a different FP format
       // (e.g., before LM_fp() was updated to use i._kitId instead of live NOM._kitId)
