@@ -10725,6 +10725,8 @@ function LM_toggleHold(venue,sku){
   const k=venue+'|'+sku;
   if(LM_holds.has(k))LM_holds.delete(k);else LM_holds.add(k);
   LM_saveDateOverrides();
+  PLAN_CACHE={};numberAll();
+  rMain();rVL();
 }
 function LM_holdRelease(venue,sku){if(ROLE==='viewer')return;LM_holds.delete(venue+'|'+sku);LM_saveDateOverrides()}
 function LM_holdSet(venue,sku){if(ROLE==='viewer')return;LM_holds.add(venue+'|'+sku);LM_saveDateOverrides()}
@@ -13469,7 +13471,7 @@ function LM_renderDemand(el){
         <td class="mono">${s.origQty.toLocaleString()}${kitAlQty>0?'<div style="font-size:8px;color:#43A047">-'+kitAlQty+' in kit'+(kitPct>=100?' (all)':'')+'</div>':''}</td>
         <td>${ROLE!=='viewer'?`<input type="number" value="${s.adjQty}" min="0" onkeydown="if(event.key==='Enter'){this.blur()}" onblur="LM_setDemand('${vEsc}','${s.sku}',+this.value,${s.origQty})" style="width:65px;padding:2px 4px;border:1px solid ${s.isAdj?'var(--pu)':'var(--bd)'};border-radius:4px;font-size:11px;font-family:var(--fd);${s.isAdj?'background:var(--ps);font-weight:700':''}">`:s.adjQty.toLocaleString()}</td>
         <td style="color:${deltaColor};font-weight:${delta!==0?'700':'400'};font-size:10px">${deltaStr}</td>
-        ${ROLE!=='viewer'?`<td style="white-space:nowrap">${isMnl?s.manualIndices.map(mi=>`<span onclick="event.stopPropagation();LM_removeManualDemand(${mi})" style="color:var(--rd);cursor:pointer;font-size:11px" title="Remove manual item">✕</span>`).join(''):''}<span onclick="event.stopPropagation();LM_toggleHold('${vEsc}','${s.sku}');rMain()" style="cursor:pointer;font-size:10px;margin-left:2px;color:${_isHeld?'var(--or)':'var(--tt)'}" title="${_isHeld?'Release hold — item returns to planning':'Hold — exclude from planning'}">${_isHeld?'▶':'⏸'}</span></td>`:''}
+        ${ROLE!=='viewer'?`<td style="white-space:nowrap">${isMnl?s.manualIndices.map(mi=>`<span onclick="event.stopPropagation();LM_removeManualDemand(${mi})" style="color:var(--rd);cursor:pointer;font-size:11px" title="Remove manual item">✕</span>`).join(''):''}<span onclick="event.stopPropagation();LM_toggleHold('${vEsc}','${s.sku}')" style="cursor:pointer;font-size:10px;margin-left:2px;color:${_isHeld?'var(--or)':'var(--tt)'}" title="${_isHeld?'Release hold — item returns to planning':'Hold — exclude from planning'}">${_isHeld?'▶':'⏸'}</span></td>`:''}
       </tr>`;
     }
     html+=`</tbody></table>
