@@ -34,7 +34,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 <div class="preview" id="emailContent"><div class="loading">Generating digest...</div></div>
 
 <script>
-(async function(){
+(async function(){try{
   // ── Load data from sessionStorage ──
   const raw=sessionStorage.getItem('_digestData');
   if(!raw){document.getElementById('emailContent').innerHTML='<div class="loading" style="color:#C62828">No digest data found. Please generate from ML3K.</div>';return}
@@ -560,6 +560,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const lmTruckData=D.lmTrucks||[];
 
   // ── Next Week — LSR-assigned trucks only ──
+  try{
   const _nwStart=new Date(today);_nwStart.setDate(_nwStart.getDate()+(7-_nwStart.getDay()+1));// next Monday
   const _nwEnd=new Date(_nwStart);_nwEnd.setDate(_nwEnd.getDate()+6);// next Sunday
   const _nwStartK=_dk(_nwStart),_nwEndK=_dk(_nwEnd);
@@ -606,6 +607,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     }
     html+='</table></td></tr>';
   }
+  }catch(e){console.error('Next week section error:',e)}
 
   // ── Combined outbounds: LP + LM trucks ──
   const _allOutbound=[];
@@ -852,6 +854,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     setTimeout(function(){st.style.display='none'},3000);
   };
   btnMail.onclick=function(){window.location.href='mailto:?subject='+mailSubj};
+}catch(e){console.error('Digest error:',e);document.getElementById('emailContent').innerHTML='<div class="loading" style="color:#C62828">Digest generation failed: '+e.message+'</div>'}
 })();
 </script>
 </body>
