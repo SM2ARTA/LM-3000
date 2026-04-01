@@ -14912,7 +14912,7 @@ P.days.forEach(day=>{
     const actualDate=tr.dd||day.dKey;
     const hasOverride=LM_getDateOverride(tr);
     // Recalculate arrival: dispatch + lead time (working days forward)
-    let arrDate=day.biDate;
+    let arrDate=day.biDate||new Date(actualDate+'T12:00:00');
     if(hasOverride&&!day.isNoBi){
       let d=new Date(actualDate+'T12:00:00');let c=0;
       while(c<_lt){d=aD(d,1);if(!isWE(d))c++}
@@ -14931,7 +14931,7 @@ _rebDays.forEach(d=>{d.dayP=_totPlt>0?Math.round(d.exactPlt/_totPlt*100):0;_cumP
 
 _rebDays.forEach(day=>{
 const isWknd=day.dDate.getDay()===0||day.dDate.getDay()===6;
-const arrWknd=day.biDate&&!day.isNoBi?(day.biDate.getDay()===0||day.biDate.getDay()===6):false;
+const arrWknd=day.biDate&&!day.isNoBi&&typeof day.biDate.getDay==='function'?(day.biDate.getDay()===0||day.biDate.getDay()===6):false;
 const dhCls=day.isEarly?'ey':day.hasOverflow?'ov':'';
 h+=`<div class="dg fin"><div class="dh ${dhCls}" ${isWknd?'style="border:2px solid var(--rd);background:linear-gradient(90deg,#FEF0F0,var(--sf))"':''}>
 <div><div class="dtt">${isWknd?'⚠ ':''}📅 Dispatch: ${fF(day.dDate)} → ${day.isNoBi?'No arrival date':`<span style="${arrWknd?'color:var(--rd);font-weight:700':'color:var(--gn)'}">Arrival: ${fS(day.biDate)}${arrWknd?' ⚠':''}</span>`}</div><div class="dss">${day.isNoBi?'No bump-in date · pool fill':'lead '+P.lt+'d'}</div></div>
