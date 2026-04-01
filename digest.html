@@ -244,7 +244,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
     // Sheet 3: LM Forecast (per-SKU)
     const wsLM=wb.addWorksheet('LM Forecast');
-    wsLM.columns=[{header:'Date',key:'date',width:14},{header:'Truck',key:'truckId',width:10},{header:'Destination',key:'dest',width:30},{header:'SKU',key:'sku',width:18},{header:'Item',key:'itemName',width:35},{header:'Qty',key:'qty',width:10},{header:'LSR',key:'lsr',width:14},{header:'Status',key:'status',width:14}];
+    wsLM.columns=[{header:'Date',key:'date',width:14},{header:'Truck',key:'truckId',width:10},{header:'Destination',key:'dest',width:30},{header:'Cluster',key:'cluster',width:28},{header:'SKU',key:'sku',width:18},{header:'Item',key:'itemName',width:35},{header:'Qty',key:'qty',width:10},{header:'LSR',key:'lsr',width:14},{header:'Status',key:'status',width:14}];
     _hdr(wsLM);
     const _xlLmTrucks=D.lmTrucks||[];
     const _lmSorted=[..._xlLmTrucks].sort((a,b)=>(a.dd||'').localeCompare(b.dd||'')||String(a.id).localeCompare(String(b.id)));
@@ -254,11 +254,11 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
       const isLocked=t.dispatched&&!t.lsr;
       const status=isSent?'Dispatched':isReady?'Ready':isLocked?'Locked':'Pending';
       for(const it of (t.items||[])){
-        wsLM.addRow({date:_fmtD(t.dd),truckId:t.id,dest:clDisp(t.dest),sku:it.sku,itemName:it.nm||it.sku,qty:it.qty,lsr:t.lsr||'',status});
+        wsLM.addRow({date:_fmtD(t.dd),truckId:t.id,dest:clDisp(t.dest),cluster:t.cluster||'',sku:it.sku,itemName:it.nm||it.sku,qty:it.qty,lsr:t.lsr||'',status});
         if(isSent){const row=wsLM.lastRow;row.eachCell(cell=>{cell.fill=_greenFill;cell.font=_greenFont})}
       }
       if(!t.items||!t.items.length){
-        wsLM.addRow({date:_fmtD(t.dd),truckId:t.id,dest:clDisp(t.dest),sku:'',itemName:'',qty:t.pcs,lsr:t.lsr||'',status});
+        wsLM.addRow({date:_fmtD(t.dd),truckId:t.id,dest:clDisp(t.dest),cluster:t.cluster||'',sku:'',itemName:'',qty:t.pcs,lsr:t.lsr||'',status});
         if(isSent){const row=wsLM.lastRow;row.eachCell(cell=>{cell.fill=_greenFill;cell.font=_greenFont})}
       }
     }
