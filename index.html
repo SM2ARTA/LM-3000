@@ -9194,8 +9194,9 @@ function build(venue,venueList,skipNoBi){
   // Locked trucks are injected separately in numberAll() — don't double-count their items
   // INVARIANT: every build() caller MUST set _lmBuildLockedDemand before calling.
   // If LM_dispatched has entries but _lmBuildLockedDemand is empty, demand will be double-counted.
-  if(typeof LM_dispatched!=='undefined'&&LM_dispatched.size>0&&(!window._lmBuildLockedDemand||!Object.keys(window._lmBuildLockedDemand).length)){
-    console.warn('[build] WARNING: locked trucks exist but _lmBuildLockedDemand is empty for',venue,'— demand may be double-counted')}
+  // Guard: warn if this specific venue has locked trucks but no deduction context
+  if(typeof LM_dispatched!=='undefined'&&LM_dispatched.size>0&&window._lmLockedDemandByLabel&&window._lmLockedDemandByLabel[venue]&&(!window._lmBuildLockedDemand||!Object.keys(window._lmBuildLockedDemand).length)){
+    console.warn('[build] WARNING: locked trucks exist for',venue,'but _lmBuildLockedDemand is empty — demand may be double-counted')}
   const _ld=window._lmBuildLockedDemand||{};
   for(const sku in _ld){if(pool[sku])pool[sku].remaining=Math.max(0,pool[sku].remaining-_ld[sku])}
 
