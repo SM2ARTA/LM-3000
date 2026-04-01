@@ -7620,7 +7620,7 @@ async function masterBackupExport(){
         nonCort.forEach(it=>{
           const row={
             'Truck ID':t.id,'Destination':t.destLabel||label,
-            'Dispatch Date':t.dd||'','Bump-in':t.biK||'',
+            'Dispatch Date':t.dd||'','Bump-in':t.origBiK||t.biK||'',
             SKU:it.sku,Name:it.nm||'',Qty:it.loadQty||0,Pallets:+(it.loadPlt||0).toFixed(2),
             Locked:LM_dispatched.has(fp)?'Yes':'',
             Excluded:LM_excluded.has(t.id)?'Yes':''
@@ -9096,6 +9096,7 @@ function build(venue,venueList,skipNoBi){
   const _stpVenues=LM_stpVenueSet();
 
   // Aggregate by (bumpIn, sku) across all venues in list
+  const _bToday=new Date().toISOString().slice(0,10);// cached for eligibility floor
   const agg={};
   const noBiAgg={};// SKUs with no bump-in date
   const noBiRows=[];// raw plan rows with no BI
@@ -9148,9 +9149,12 @@ function build(venue,venueList,skipNoBi){
     const origBiK=dk(bi);
     const _relK=r["Venue"]+'|'+s;
     const _relDate=LM_holdReleased[_relK]||LM_holdReleased['*|'+s]||'';
-    const planBiK=(_relDate&&origBiK<_relDate)?_relDate:origBiK;
+    const _floor=_relDate?(_relDate>_bToday?_relDate:_bToday):'';
+    const planBiK=(_floor&&origBiK<_floor)?_floor:origBiK;
     const k=planBiK+"|"+s;
-    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:planBiK,origBiK,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0};agg[k].qty+=q}
+    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:planBiK,origBiK,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0};
+    if(origBiK<(agg[k].origBiK||origBiK))agg[k].origBiK=origBiK;// keep earliest original need date
+    agg[k].qty+=q}
 
   // qty already accumulated as per-row ceil — no further conversion needed
   const all=Object.values(agg),noP=all.filter(x=>!x.ok),pAll=all.filter(x=>x.ok);
@@ -9306,7 +9310,7 @@ function build(venue,venueList,skipNoBi){
     for(const it of dateItems){
       const avail=pool[it.sku]?.remaining||0;
       if(avail<=0)continue;
-      todayRequests.push({sku:it.sku,nm:it.nm,qty:Math.min(it.qty,avail),pq:it.pq,ps:it.ps,biK:it.biK,sched:it.qty,origReq:it.qty});
+      todayRequests.push({sku:it.sku,nm:it.nm,qty:Math.min(it.qty,avail),pq:it.pq,ps:it.ps,biK:it.biK,origBiK:it.origBiK||it.biK,sched:it.qty,origReq:it.qty});
     }
 
     // Sort by SKU code (human reads the list alphabetically)
@@ -9540,7 +9544,7 @@ function build(venue,venueList,skipNoBi){
     const isOverflow=!allDates.includes(dateK);
 
     realTrucks.forEach(t=>{
-      t.biK=dateK;t.dd=dk(dispDate);t.idealDisp=dk(dispDate);t.isOverflow=isOverflow;t.isEarly=false;t.tCap=dayTCap;
+      t.biK=dateK;t.origBiK=t.items.reduce((m,it)=>it.origBiK&&it.origBiK<m?it.origBiK:m,dateK);t.dd=dk(dispDate);t.idealDisp=dk(dispDate);t.isOverflow=isOverflow;t.isEarly=false;t.tCap=dayTCap;
       // Stamp pool remaining after this truck's loads
       t.items.forEach(it=>{it.poolAfter=pool[it.sku]?.remaining||0});
     });
@@ -12597,7 +12601,7 @@ function generateDailyDigest(){
           try{
             if(STOCK_SKUS.has(it.sku)){_r.arrivesDallas='in-stock';_r.inStock=true}
             else if(LP_STATE?.arrivals){let _n=it.loadQty||0,_ld=null;const _sa=LP_STATE.arrivals.filter(a=>a.sku===it.sku&&a.readyDate).sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));for(const a of _sa){_n-=(a.qty||0);_ld=a.readyDate;if(_n<=0)break}if(_ld)_r.arrivesDallas=_ld}
-            const _biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;_r.bumpin=_biK;
+            const _biK=(t.origBiK||t.biK)&&(t.origBiK||t.biK)!=='no-bi'&&(t.origBiK||t.biK)!=='sweep'?(t.origBiK||t.biK):null;_r.bumpin=_biK;
             const _outLt=gLT(_tLabel);
             if(_biK){const _lwDt=disp(new Date(_biK+'T12:00:00'),_outLt);_r.leavesWhs=dk(_lwDt)}else if(dd){_r.leavesWhs=dd}
             const _isLpFed=LM_isLPFed(_tLabel);
@@ -14050,7 +14054,7 @@ if(cv==="dashboard"){
               if(_lastRaw)_r.rawArrival=_lastRaw;
             }
             // Bump-in = truck biK or compute from dispatch + total lead time
-            const _biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
+            const _biK=(t.origBiK||t.biK)&&(t.origBiK||t.biK)!=='no-bi'&&(t.origBiK||t.biK)!=='sweep'?(t.origBiK||t.biK):null;
             _r.bumpin=_biK;
             // Leaves Satellite = bump-in − outbound transit
             const _outLt=gLT(_tLabel);
