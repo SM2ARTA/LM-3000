@@ -488,6 +488,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
   <button id="lmbn-dashboard" onclick="lmNavTab('dashboard')"><span class="ni">📊</span>Dashboard</button>
   <button id="lmbn-trucks" onclick="lmNavTab('trucks')"><span class="ni">🚛</span>Trucks</button>
   <button id="lmbn-analysis" onclick="lmNavTab('analysis')"><span class="ni">🔍</span>Analysis</button>
+  <button id="lmbn-pallets" onclick="lmNavTab('pallets')"><span class="ni">📦</span>Pallets</button>
 </nav>
 <div id="LM_US" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:10;align-items:center;justify-content:center;flex-direction:column">
   <div class="uc" style="max-width:480px;width:100%">
@@ -10813,7 +10814,7 @@ function rTotals(){
   const bar=document.getElementById("totbar");
   if(bar)bar.style.display="flex";
 }
-function rT(){const icons={dashboard:'📊',demand:'📋',trucks:'🚛',holds:'⏸',analysis:'🔍'};document.getElementById("tabs").innerHTML=["dashboard","demand","trucks","holds","analysis"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
+function rT(){const icons={dashboard:'📊',demand:'📋',trucks:'🚛',holds:'⏸',analysis:'🔍',pallets:'📦'};document.getElementById("tabs").innerHTML=["dashboard","demand","trucks","holds","analysis","pallets"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t==='pallets'?'Pallets':t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
 function B(t,c,s){return`<span class="bg ${s?'bgs':''} bg-${c}">${t}</span>`}
 function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95?"var(--rd)":p>80?"var(--or)":"var(--ac)";return`<div class="bw"><div class="btr"><div class="bfl" style="width:${p}%;background:${c}"></div></div><span class="blb" style="color:${c}">${p}%</span></div>`}
 
@@ -13752,6 +13753,198 @@ function LM_setDemand(venue,sku,newEffQty,origEffQty){
   setTimeout(()=>{rMain();rVL();if(typeof V26_render==='function')try{V26_render()}catch(e){}},50);
 }
 
+// ── LM Pallets Tab: LP pallets OUT (disassembled) vs LM pallets IN (assembled) ──
+function LM_renderPalletCmp(el){
+  if(!LP_STATE.generatedPlan?.length&&!RW.length){el.innerHTML='<div class="lp-empty">No LP plan or LM data loaded.</div>';return}
+  // Destination groups
+  const GROUPS=[
+    {label:'Mexico',abbrs:['CDMX','GDL','MTY'],flag:'🇲🇽'},
+    {label:'Canada',abbrs:['TOR','VAN'],flag:'🇨🇦'},
+    {label:'Houston Stadium',abbrs:['HOU'],flag:'🏟'},
+    {label:'New York / NJ Stadium',abbrs:['NY'],flag:'🏟'},
+    {label:'Kansas City Stadium',abbrs:['KC'],flag:'🏟'},
+  ];
+  const ALL_ABBRS=GROUPS.flatMap(g=>g.abbrs);
+
+  // ── LP pallets OUT: aggregate from generatedPlan (disassembled pallets) ──
+  const lpByAbbr={};// abbr -> {pallets, qty, skus:Set, trucks:Set}
+  const lpBySku={};// abbr|sku -> {pallets, qty}
+  for(const r of LP_STATE.generatedPlan||[]){
+    const abbr=LP_matchTransitAbbr(r.destination);
+    if(!abbr||!ALL_ABBRS.includes(abbr))continue;
+    if(!lpByAbbr[abbr])lpByAbbr[abbr]={pallets:0,qty:0,skus:new Set(),trucks:new Set()};
+    lpByAbbr[abbr].pallets+=(r.pallets||0);
+    lpByAbbr[abbr].qty+=(r.qty||0);
+    lpByAbbr[abbr].skus.add(r.sku);
+    lpByAbbr[abbr].trucks.add(r.truckId);
+    const sk=abbr+'|'+r.sku;
+    if(!lpBySku[sk])lpBySku[sk]={pallets:0,qty:0};
+    lpBySku[sk].pallets+=(r.pallets||0);
+    lpBySku[sk].qty+=(r.qty||0);
+  }
+
+  // ── LM pallets IN: compute from RW using effective pallet dims (assembled where applicable) ──
+  const _clToAbbr=cl=>{if(!cl)return null;const u=cl.toUpperCase();for(const a of ALL_ABBRS){if(u.includes(a))return a;const full=(CITY_ABBR[a]||'').toUpperCase();if(full&&u.includes(full))return a}return null};
+  const lmByAbbr={};// abbr -> {pallets, qty, skus:Set, asmSkus:Set, asmPlt:0}
+  const lmBySku={};// abbr|sku -> {pallets, qty, isAsm}
+  for(const r of RW){
+    const v=r.Venue||'';if(!v)continue;
+    const sku=r.Nomenclature||'';if(!sku||!NOM[sku])continue;
+    if(NOM[sku]._kitNom)continue;// skip kit SKUs (components already counted)
+    const qty=r._effQty||0;if(qty<=0)continue;
+    // Skip held items
+    if(LM_holds.size>0&&(LM_holds.has(v+'|'+sku)||LM_holds.has('*|'+sku)))continue;
+    // Skip STP items at venues with STP delivery
+    if(LM_stpVenueSet().has(v)&&isStp(sku))continue;
+    // Map venue to LP abbr
+    const cluster=r['Venue cluster']||'';
+    let abbr=LM_LPFED_STADIUM_KEYS[v]||_clToAbbr(cluster);
+    if(!abbr||!ALL_ABBRS.includes(abbr))continue;
+    const vt=LM_vtMap[v]||String(r['Venue type']||'').trim();
+    const country=LM_venueCountry(cluster,v);
+    const eff=LM_getEffPallet(sku,vt,country);
+    const plt=(eff.pq>0&&eff.ps>0)?(qty/eff.pq)*eff.ps:0;
+    const isAsm=LM_isAssembled(sku,vt,country);
+    if(!lmByAbbr[abbr])lmByAbbr[abbr]={pallets:0,qty:0,skus:new Set(),asmSkus:new Set(),asmPlt:0};
+    lmByAbbr[abbr].pallets+=plt;
+    lmByAbbr[abbr].qty+=qty;
+    lmByAbbr[abbr].skus.add(sku);
+    if(isAsm){lmByAbbr[abbr].asmSkus.add(sku);lmByAbbr[abbr].asmPlt+=plt}
+    const sk=abbr+'|'+sku;
+    if(!lmBySku[sk])lmBySku[sk]={pallets:0,qty:0,isAsm:false};
+    lmBySku[sk].pallets+=plt;lmBySku[sk].qty+=qty;
+    if(isAsm)lmBySku[sk].isAsm=true;
+  }
+
+  // ── Build group summaries ──
+  let totLP=0,totLM=0,totAsmPlt=0,totTrk=new Set();
+  const groupRows=GROUPS.map(g=>{
+    let gLP=0,gLM=0,gAsmPlt=0,gSkus=new Set(),gTrk=new Set(),gAsmSkus=new Set();
+    const subRows=[];
+    for(const abbr of g.abbrs){
+      const lp=lpByAbbr[abbr]||{pallets:0,qty:0,skus:new Set(),trucks:new Set()};
+      const lm=lmByAbbr[abbr]||{pallets:0,qty:0,skus:new Set(),asmSkus:new Set(),asmPlt:0};
+      gLP+=lp.pallets;gLM+=lm.pallets;gAsmPlt+=lm.asmPlt;
+      lp.skus.forEach(s=>gSkus.add(s));lm.skus.forEach(s=>gSkus.add(s));
+      lp.trucks.forEach(t=>gTrk.add(t));
+      lm.asmSkus.forEach(s=>gAsmSkus.add(s));
+      if(g.abbrs.length>1)subRows.push({abbr,lp:lp.pallets,lm:lm.pallets,asm:lm.asmPlt,asmN:lm.asmSkus.size,trucks:lp.trucks.size});
+    }
+    totLP+=gLP;totLM+=gLM;totAsmPlt+=gAsmPlt;gTrk.forEach(t=>totTrk.add(t));
+    return{...g,lp:gLP,lm:gLM,asmPlt:gAsmPlt,skus:gSkus.size,trucks:gTrk.size,asmSkus:gAsmSkus.size,subRows};
+  });
+
+  // ── Render ──
+  const delta=totLM-totLP;
+  const dSign=delta>0?'+':'';
+  const dClr=Math.abs(delta)<1?'var(--tt)':delta>0?'var(--or)':'var(--gn)';
+  let h='<div style="padding:16px 20px">';
+  h+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
+  h+='<h2 style="margin:0;font-size:18px">📦 Pallet Comparison — LP vs LM</h2>';
+  h+=kpi({label:'LP Out',value:Math.round(totLP*10)/10+' plt',color:'var(--pu)'});
+  h+=kpi({label:'LM In',value:Math.round(totLM*10)/10+' plt',color:'var(--ac)'});
+  h+=kpi({label:'Delta',value:dSign+Math.round(delta*10)/10+' plt',color:dClr});
+  h+=kpi({label:'Assembly',value:Math.round(totAsmPlt*10)/10+' plt',color:'var(--or)'});
+  h+=kpi({label:'LP Trucks',value:totTrk.size,color:'var(--gn)'});
+  h+='</div>';
+  h+='<p style="font-size:11px;color:var(--ts);margin:0 0 16px"><b>LP Out</b> = pallets leaving Dallas (disassembled). <b>LM In</b> = pallets needed at destination (assembled where applicable). <b>Delta</b> = LM − LP. Positive delta means more pallets after assembly.</p>';
+
+  // Summary table
+  h+='<table class="dtb" style="width:100%;font-size:12px"><thead><tr>';
+  h+='<th style="text-align:left;padding:8px 12px">Destination</th>';
+  h+='<th style="text-align:right;padding:8px 12px">LP Trucks</th>';
+  h+='<th style="text-align:right;padding:8px 12px;color:var(--pu)">LP Pallets Out</th>';
+  h+='<th style="text-align:right;padding:8px 12px;color:var(--ac)">LM Pallets In</th>';
+  h+='<th style="text-align:right;padding:8px 12px">Delta</th>';
+  h+='<th style="text-align:right;padding:8px 12px;color:var(--or)">Assembly Items</th>';
+  h+='<th style="text-align:right;padding:8px 12px;color:var(--or)">Assembly Pallets</th>';
+  h+='<th style="text-align:right;padding:8px 12px">SKUs</th>';
+  h+='</tr></thead><tbody>';
+
+  for(const g of groupRows){
+    const gd=g.lm-g.lp;const gdS=gd>0?'+':'';const gdC=Math.abs(gd)<0.5?'var(--tt)':gd>0?'var(--or)':'var(--gn)';
+    h+='<tr style="font-weight:600;background:var(--bg)">';
+    h+='<td style="padding:8px 12px">'+(g.flag||'')+' '+g.label+'</td>';
+    h+='<td style="text-align:right;padding:8px 12px">'+g.trucks+'</td>';
+    h+='<td style="text-align:right;padding:8px 12px;color:var(--pu);font-family:var(--fm)">'+g.lp.toFixed(1)+'</td>';
+    h+='<td style="text-align:right;padding:8px 12px;color:var(--ac);font-family:var(--fm)">'+g.lm.toFixed(1)+'</td>';
+    h+='<td style="text-align:right;padding:8px 12px;color:'+gdC+';font-family:var(--fm);font-weight:700">'+gdS+gd.toFixed(1)+'</td>';
+    h+='<td style="text-align:right;padding:8px 12px;color:var(--or)">'+g.asmSkus+'</td>';
+    h+='<td style="text-align:right;padding:8px 12px;color:var(--or);font-family:var(--fm)">'+g.asmPlt.toFixed(1)+'</td>';
+    h+='<td style="text-align:right;padding:8px 12px">'+g.skus+'</td>';
+    h+='</tr>';
+    // Sub-rows for multi-abbr groups (MEX, CAN)
+    for(const sr of g.subRows){
+      const sd=sr.lm-sr.lp;const sdS=sd>0?'+':'';const sdC=Math.abs(sd)<0.5?'var(--tt)':sd>0?'var(--or)':'var(--gn)';
+      h+='<tr style="font-size:11px;color:var(--ts)">';
+      h+='<td style="padding:4px 12px 4px 32px">'+CITY_ABBR[sr.abbr]+' ('+sr.abbr+')</td>';
+      h+='<td style="text-align:right;padding:4px 12px">'+sr.trucks+'</td>';
+      h+='<td style="text-align:right;padding:4px 12px;font-family:var(--fm)">'+sr.lp.toFixed(1)+'</td>';
+      h+='<td style="text-align:right;padding:4px 12px;font-family:var(--fm)">'+sr.lm.toFixed(1)+'</td>';
+      h+='<td style="text-align:right;padding:4px 12px;color:'+sdC+';font-family:var(--fm)">'+sdS+sd.toFixed(1)+'</td>';
+      h+='<td style="text-align:right;padding:4px 12px">'+sr.asmN+'</td>';
+      h+='<td style="text-align:right;padding:4px 12px;font-family:var(--fm)">'+sr.asm.toFixed(1)+'</td>';
+      h+='<td></td></tr>';
+    }
+  }
+  // Totals
+  h+='<tr style="font-weight:700;border-top:2px solid var(--bd)">';
+  h+='<td style="padding:8px 12px">TOTAL</td>';
+  h+='<td style="text-align:right;padding:8px 12px">'+totTrk.size+'</td>';
+  h+='<td style="text-align:right;padding:8px 12px;color:var(--pu);font-family:var(--fm)">'+totLP.toFixed(1)+'</td>';
+  h+='<td style="text-align:right;padding:8px 12px;color:var(--ac);font-family:var(--fm)">'+totLM.toFixed(1)+'</td>';
+  const tds=delta>0?'+':'';h+='<td style="text-align:right;padding:8px 12px;color:'+dClr+';font-family:var(--fm);font-weight:700">'+tds+delta.toFixed(1)+'</td>';
+  h+='<td style="text-align:right;padding:8px 12px;color:var(--or)">—</td>';
+  h+='<td style="text-align:right;padding:8px 12px;color:var(--or);font-family:var(--fm)">'+totAsmPlt.toFixed(1)+'</td>';
+  h+='<td></td></tr>';
+  h+='</tbody></table>';
+
+  // ── Per-SKU detail: items where assembly changes pallet count ──
+  const asmDetails=[];
+  for(const sk in lmBySku){
+    const d=lmBySku[sk];if(!d.isAsm)continue;
+    const[abbr,sku]=sk.split('|');
+    const nm=NOM[sku];if(!nm)continue;
+    const lpD=lpBySku[sk]||{pallets:0,qty:0};
+    asmDetails.push({abbr,sku,name:nm.nm||sku,disPq:nm.pq,disPs:nm.ps,asmPq:nm.pqA,asmPs:nm.psA,qty:d.qty,lpPlt:lpD.pallets,lmPlt:d.pallets});
+  }
+  asmDetails.sort((a,b)=>(b.lmPlt-b.lpPlt)-(a.lmPlt-a.lpPlt));
+
+  if(asmDetails.length>0){
+    h+='<h3 style="margin:24px 0 8px;font-size:14px">🔧 Assembly Transformation Detail</h3>';
+    h+='<p style="font-size:11px;color:var(--ts);margin:0 0 8px">Items where warehouse assembly changes pallet dimensions (disassembled → assembled).</p>';
+    h+='<table class="dtb" style="width:100%;font-size:11px"><thead><tr>';
+    h+='<th style="text-align:left;padding:6px 8px">Dest</th>';
+    h+='<th style="text-align:left;padding:6px 8px">SKU</th>';
+    h+='<th style="text-align:left;padding:6px 8px">Item</th>';
+    h+='<th style="text-align:right;padding:6px 8px">Qty</th>';
+    h+='<th style="text-align:right;padding:6px 8px">Dis pq/ps</th>';
+    h+='<th style="text-align:right;padding:6px 8px">Asm pq/ps</th>';
+    h+='<th style="text-align:right;padding:6px 8px;color:var(--pu)">LP Plt</th>';
+    h+='<th style="text-align:right;padding:6px 8px;color:var(--ac)">LM Plt</th>';
+    h+='<th style="text-align:right;padding:6px 8px">Delta</th>';
+    h+='</tr></thead><tbody>';
+    for(const r of asmDetails){
+      const rd=r.lmPlt-r.lpPlt;const rds=rd>0?'+':'';const rdc=Math.abs(rd)<0.1?'var(--tt)':rd>0?'var(--or)':'var(--gn)';
+      h+='<tr>';
+      h+='<td style="padding:4px 8px;font-family:var(--fm)">'+r.abbr+'</td>';
+      h+='<td style="padding:4px 8px;font-family:var(--fm)">'+r.sku+'</td>';
+      h+='<td style="padding:4px 8px">'+r.name.substring(0,30)+'</td>';
+      h+='<td style="text-align:right;padding:4px 8px;font-family:var(--fm)">'+r.qty+'</td>';
+      h+='<td style="text-align:right;padding:4px 8px;font-family:var(--fm);color:var(--ts)">'+r.disPq+'/'+r.disPs+'</td>';
+      h+='<td style="text-align:right;padding:4px 8px;font-family:var(--fm);color:var(--or)">'+r.asmPq+'/'+r.asmPs+'</td>';
+      h+='<td style="text-align:right;padding:4px 8px;font-family:var(--fm);color:var(--pu)">'+r.lpPlt.toFixed(1)+'</td>';
+      h+='<td style="text-align:right;padding:4px 8px;font-family:var(--fm);color:var(--ac)">'+r.lmPlt.toFixed(1)+'</td>';
+      h+='<td style="text-align:right;padding:4px 8px;font-family:var(--fm);color:'+rdc+';font-weight:600">'+rds+rd.toFixed(1)+'</td>';
+      h+='</tr>';
+    }
+    h+='</tbody></table>';
+  }
+
+  h+='</div>';
+  el.innerHTML=h;
+}
+
 // ── LM Analysis Tab: LP vs LM demand comparison by LP destination ──
 let _lmAnalysisSrc='',_lmAnalysisDest='';
 function LM_renderAnalysis(el){
@@ -13891,6 +14084,9 @@ if((!LP_ARRIVAL_FIFO||!Object.keys(LP_ARRIVAL_FIFO).length)&&LP_STATE?.generated
 
 // ── ANALYSIS VIEW ──
 if(cv==="analysis"){LM_renderAnalysis(el);return}
+
+// ── PALLETS VIEW ──
+if(cv==="pallets"){LM_renderPalletCmp(el);return}
 
 // ── HOLDS VIEW ──
 if(cv==="holds"){LM_renderHolds(el);return}
@@ -16139,9 +16335,11 @@ function lmNavSync(){
   const t=document.getElementById('lmbn-trucks');
   const v=document.getElementById('lmbn-venues');
   const a=document.getElementById('lmbn-analysis');
+  const pl=document.getElementById('lmbn-pallets');
   if(d)d.classList.toggle('on',!isOpen&&cv==='dashboard');
   if(t)t.classList.toggle('on',!isOpen&&cv==='trucks');
   if(a)a.classList.toggle('on',!isOpen&&cv==='analysis');
+  if(pl)pl.classList.toggle('on',!isOpen&&cv==='pallets');
   if(v)v.classList.toggle('on',!!isOpen);
 }
 function lmNavVenues(){
