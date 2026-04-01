@@ -8899,7 +8899,7 @@ function renderTruckCard(t,opts){
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">🔒 Locked</span>'+(LM_getLsr(t)?` <span class="mono" style="color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px;font-size:9px">${LM_getLsr(t)}</span>`:'')+'</div>':''}
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
-      ${(()=>{if(!t.items)return'';const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom);if(!kitItems.length)return'';const badges=kitItems.map(it=>{const r=LM_kitReadiness(NOM[it.sku]._kitId);if(!r.total)return'';const sc=STOCK_SKUS.size===0?'var(--tt)':(r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)');const bg=STOCK_SKUS.size===0?'var(--bg)':(r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)');return`<span class="bg bgs" style="background:${bg};color:${sc};border:1px solid ${sc}40">📦 Kit ${STOCK_SKUS.size===0?'—':r.pct+'%'} (${r.inStock}/${r.total})</span>`}).filter(Boolean).join(' ');return badges?`<div style="font-size:9px;margin-top:2px">${badges}</div>`:''})()}
+      ${(()=>{if(!t.items)return'';const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom||it._kitNom);if(!kitItems.length)return'';const badges=kitItems.map(it=>{const frozen=it._kitItems||null;const r=LM_kitReadiness(NOM[it.sku]?._kitId||it._kitId,frozen);if(!r.total)return'';const sc=STOCK_SKUS.size===0?'var(--tt)':(r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)');const bg=STOCK_SKUS.size===0?'var(--bg)':(r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)');return`<span class="bg bgs" style="background:${bg};color:${sc};border:1px solid ${sc}40">📦 Kit ${STOCK_SKUS.size===0?'—':r.pct+'%'} (${r.inStock}/${r.total})</span>`}).filter(Boolean).join(' ');return badges?`<div style="font-size:9px;margin-top:2px">${badges}</div>`:''})()}
       ${(()=>{if(!t.items||!opts.venueType)return'';const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,opts.venueType,opts.country)).length;return ac>0?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:var(--os);color:var(--or);border:1px solid var(--or)40">🔧 ${ac} assembly</span></div>`:''})()}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
@@ -10001,8 +10001,6 @@ function numberAll(){
   // build() deducts locked demand from pool so unlocked trucks get remaining demand only.
   // Clean up orphaned snapshots (not in LM_dispatched)
   for(const fp in LM_lockedSnapshots){if(!LM_dispatched.has(fp)){console.warn('[numberAll] Removing orphaned snapshot:',fp);delete LM_lockedSnapshots[fp]}}
-  // Backfill _kitVenue on legacy snapshots that lack it
-  for(const fp in LM_lockedSnapshots){const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;for(const it of snap.items){if(it._kitId&&!it._kitVenue){const kit=LM_KITS.find(k=>k.id===it._kitId);if(kit)it._kitVenue=kit.venue}}}
   const _lockedByLabel={};// label -> [{fp, snap}]
   const _lockedDemandByLabel={};// label -> {sku: qty}
   const _lockedTrucksByDate={};// label -> {dateKey: count} — locked truck count per date for capacity check
@@ -10018,26 +10016,27 @@ function numberAll(){
     if(_ldk){if(!_lockedTrucksByDate[label])_lockedTrucksByDate[label]={};_lockedTrucksByDate[label][_ldk]=(_lockedTrucksByDate[label][_ldk]||0)+1}
     if(!_lockedDemandByLabel[label])_lockedDemandByLabel[label]={};
     for(const it of snap.items){
-      // For kit items, resolve CURRENT kit SKU (snapshot may have old renamed SKU)
-      let deductSku=it.sku;
-      if(it._kitId){
+      if(it._kitNom&&it._kitItems){
+        // Kit item with frozen composition: deduct EXPLODED component SKUs
+        // This severs locked kits from live LM_KITS entirely
+        for(const ci of it._kitItems){
+          _lockedDemandByLabel[label][ci.sku]=(_lockedDemandByLabel[label][ci.sku]||0)+(ci.qty||0);
+        }
+      } else if(it._kitNom&&it._kitId){
+        // Legacy snapshot without frozen _kitItems: resolve from live kits (fallback)
+        let deductSku=it.sku;
         let curKit=LM_KITS.find(k=>k.id===it._kitId);
-        // Fallback: kit ID may have changed after strategy reapply — find by venue + type
-        if(!curKit&&it._kitNom){
+        if(!curKit){
           const isFn=it.sku.startsWith('FNKIT');
-          // Use stored venue for exact match (fixes cluster builds with multiple kits per type)
-          if(it._kitVenue){
-            curKit=LM_KITS.find(k=>k.venue===it._kitVenue&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
-          }
-          // Legacy fallback for snapshots without _kitVenue
-          if(!curKit){
-            const clVenues=CLUSTERS[label]?CLUSTERS[label].venues:[label];
-            curKit=LM_KITS.find(k=>clVenues.includes(k.venue)&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
-          }
+          if(it._kitVenue)curKit=LM_KITS.find(k=>k.venue===it._kitVenue&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
+          if(!curKit){const clVenues=CLUSTERS[label]?CLUSTERS[label].venues:[label];curKit=LM_KITS.find(k=>clVenues.includes(k.venue)&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')))}
         }
         if(curKit)deductSku=curKit.sku;
+        _lockedDemandByLabel[label][deductSku]=(_lockedDemandByLabel[label][deductSku]||0)+(it.loadQty||0);
+      } else {
+        // Regular (non-kit) item: deduct by SKU directly
+        _lockedDemandByLabel[label][it.sku]=(_lockedDemandByLabel[label][it.sku]||0)+(it.loadQty||0);
       }
-      _lockedDemandByLabel[label][deductSku]=(_lockedDemandByLabel[label][deductSku]||0)+(it.loadQty||0);
     }
   }
 
@@ -10135,41 +10134,15 @@ function numberAll(){
       const trk=JSON.parse(JSON.stringify(snap));
       trk._locked=true;
       trk.id='';// will be numbered below
-      // Ensure NOM entries exist for locked kit items (kit SKUs may have been renamed since lock)
+      // Ensure NOM entries exist for locked kit items — use FROZEN snapshot data only
+      // No live LM_KITS lookup: locked kits must be self-sufficient
       for(const it of trk.items){
-        if(it._kitNom&&it._kitId&&!NOM[it.sku]){
-          // Resolve to current kit ID (old ID may be gone after strategy reapply)
-          let _ckId=it._kitId;
-          if(!LM_getKitById(_ckId)){
-            const isFn=it.sku.startsWith('FNKIT');
-            const _ckVenue=it._kitVenue;
-            const _ck=_ckVenue?LM_KITS.find(k=>k.venue===_ckVenue&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT'))):null;
-            if(_ck)_ckId=_ck.id;
-          }
-          NOM[it.sku]={_kitNom:true,_kitId:_ckId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
+        if(it._kitNom&&!NOM[it.sku]){
+          NOM[it.sku]={_kitNom:true,_kitId:it._kitId||'_locked',nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
         }
       }
-      // ── Migrate FP if kit IDs changed (strategy reapply creates new kit IDs) ──
-      // fp = old FP from LM_lockedSnapshots key (may use stale kit IDs)
-      // After compat NOM entries are created with resolved new kit IDs, LM_fp(trk) may differ.
-      const newFP=LM_fp(trk);
-      let activeFP=fp;
-      if(newFP!==fp){
-        // Kit IDs changed — migrate all FP-keyed maps from old → new
-        const _fpMaps=[LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr];
-        if(LM_dispatched.has(fp)){LM_dispatched.delete(fp);LM_dispatched.add(newFP)}
-        for(const m of _fpMaps){if(m[fp]!==undefined){m[newFP]=m[fp];delete m[fp]}}
-        if(LM_lockedSnapshots[fp]){LM_lockedSnapshots[newFP]=LM_lockedSnapshots[fp];delete LM_lockedSnapshots[fp]}
-        const oldMI='LM-'+fp,newMI='LM-'+newFP;
-        if(MANUAL_ITEMS[oldMI]){MANUAL_ITEMS[newMI]=MANUAL_ITEMS[oldMI];delete MANUAL_ITEMS[oldMI]}
-        // Also update snapshot items' _kitId to current values
-        const realSnap=LM_lockedSnapshots[newFP];
-        if(realSnap){for(const it of realSnap.items){if(it._kitNom&&it._kitId&&NOM[it.sku]){it._kitId=NOM[it.sku]._kitId}}}
-        activeFP=newFP;
-        if(ROLE!=='viewer'){LM_saveDateOverrides();saveSharedData();MI_save()}
-      }
-      // Apply date override if exists
-      const dateOvr=LM_dateOverrides[activeFP];
+      // Apply date override if exists (FP is stable — uses snapshot _kitId via compat NOM)
+      const dateOvr=LM_dateOverrides[fp];
       if(dateOvr){trk.dd=dateOvr;trk.dKey=dateOvr}
       const dk=trk.dd||trk.dKey||'9999-12-31';
       allTrucks.push({dateK:dk,ref:trk,label:label,dispLabel:clDisp(label),_isStepB:!!trk._isStepB});
@@ -10886,7 +10859,7 @@ function LM_toggleDispatchTruck(truckIdx,checked){
   if(checked){
     LM_dispatched.add(fp);
     // Snapshot truck data — frozen across all future rebuilds
-    const snapItems=t.items.map(it=>{const n=NOM[it.sku];const _kv=n?._kitId?LM_getKitById(n._kitId)?.venue||null:null;return{...it,_kitId:n?._kitId||null,_kitNom:!!n?._kitNom,_kitVenue:_kv}});
+    const snapItems=t.items.map(it=>{const n=NOM[it.sku];const _kit=n?._kitId?LM_getKitById(n._kitId):null;return{...it,_kitId:n?._kitId||null,_kitNom:!!n?._kitNom,_kitVenue:_kit?.venue||null,_kitItems:_kit?JSON.parse(JSON.stringify(_kit.items)):null}});
     LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:t.dd,dKey:t.dKey||t.dd,destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true};
   }else{
     LM_dispatched.delete(fp);delete LM_dateOverrides[fp];delete LM_lockedSnapshots[fp];delete LM_lsrNumbers[fp];
@@ -11064,9 +11037,11 @@ function LM_kitArrivedOnTime(sku,lpAbbrs,dispDate){
   if(!kit||!kit.items.length)return false;
   return kit.items.every(i=>LM_skuArrivedOnTime(i.sku,lpAbbrs,dispDate));
 }
-function LM_kitReadiness(kitId){
-  const kit=LM_getKitById(kitId);if(!kit||!kit.items.length)return{total:0,inStock:0,pct:0,items:[]};
-  const items=kit.items.filter(i=>{const s=(NOM[i.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')}).map(i=>{
+function LM_kitReadiness(kitId,frozenItems){
+  // frozenItems: optional array of {sku,qty} from locked snapshot — bypasses live LM_KITS
+  const srcItems=frozenItems||(()=>{const kit=LM_getKitById(kitId);return kit?.items||[]})();
+  if(!srcItems.length)return{total:0,inStock:0,pct:0,items:[]};
+  const items=srcItems.filter(i=>{const s=(NOM[i.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')}).map(i=>{
     const inStock=STOCK_SKUS.has(i.sku);
     const stockQty=STOCK_QTYS[i.sku]||0;
     return{sku:i.sku,name:NOM[i.sku]?.nm||i.sku,needed:i.qty,stockQty,inStock,fulfilled:inStock&&stockQty>=i.qty};
