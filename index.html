@@ -8128,7 +8128,7 @@ async function masterBackupRestore(file){
       await LM_savePalletCfg();
       await LM_saveClusterTA();
       if(LM_MANUAL_DEMAND.length)await LM_saveManualDemand();
-      if(LM_KITS.length)await LM_saveKits();
+      await LM_saveKits();
       if(LM_STP_DELIVERIES.length)await LM_saveStpDeliveries();
       if(Object.keys(LM_STP_STRATEGY).length)await LM_saveStpStrategy();
       if(STOCK_SKUS.size>0){
@@ -8561,7 +8561,7 @@ function gMT(v){return Math.max(1,vG(v).mt||LM_DEFAULT_MT[v]||2)}
 // Default lead times (transit days from Dallas, single 53ft, rounded up)
 // Default lead times (days) from Dallas warehouse — 53ft single transit, rounded up
 // From Transit_times_MAT.xlsx: address-to-city mapped, ceiling of fractional days
-const LM_DEFAULT_LT={"Atlanta / CORT":2,"Austin / CORT":0,"Boston / CORT":4,"Charlotte / CORT":3,"Columbus / CORT":3,"Dallas / CORT":0,"Houston / CORT":0,"Houston / RIC":0,"Kansas City / CORT":2,"Kansas City / RIC":2,"Knoxville / CORT":3,"Los Angeles / CORT":3,"Nashville / CORT":2,"New York / CORT":4,"New York New Jersey / RIC":4,"Philadelphia / CORT":4,"Phoenix / CORT":3,"Portland / CORT":4,"Roanoke / CORT":3,"Salt Lake City / CORT":3,"San Diego / CORT":3,"San Francisco / CORT":4,"Seattle / CORT":4,"South Florida / CORT":3,"Tampa / CORT":3,"TSE Atlanta / CORT":2,"TSE Boston / CORT":4,"TSE Los Angeles / CORT":3,"TSE Orlando / CORT":3,"TSE San Francisco / CORT":4,"TSE Seattle / CORT":4,"TSE Washington / CORT":3,"USA / CORT":0,"USA / RGS":0,"USA CENT / CORT":2,"USA EAST / CORT":4,"Washington DC / CORT":3,"Atlanta Stadium":2,"Boston Stadium":4,"Dallas Stadium":0,"Houston Stadium":0,"Kansas City Stadium":0,"Los Angeles Stadium":3,"Los Angeles - Rose Bowl Stadium":3,"Miami Stadium":3,"New York / New Jersey Stadium":0,"Philadelphia Stadium":4,"San Francisco Bay Area Stadium":4,"Seattle Stadium":4,"International Broadcast Centre":0,"International Broadcast Coordination Centre":0};
+const LM_DEFAULT_LT={"Atlanta / CORT":2,"Austin / CORT":0,"Boston / CORT":3,"Charlotte / CORT":3,"Columbus / CORT":3,"Dallas / CORT":0,"Houston / CORT":0,"Houston / RIC":0,"Kansas City / CORT":1,"Kansas City / RIC":1,"Knoxville / CORT":3,"Los Angeles / CORT":3,"Nashville / CORT":2,"New York / CORT":3,"New York New Jersey / RIC":3,"Philadelphia / CORT":3,"Phoenix / CORT":3,"Portland / CORT":4,"Roanoke / CORT":3,"Salt Lake City / CORT":3,"San Diego / CORT":3,"San Francisco / CORT":4,"Seattle / CORT":3,"South Florida / CORT":2,"Tampa / CORT":3,"TSE Atlanta / CORT":2,"TSE Boston / CORT":3,"TSE Los Angeles / CORT":3,"TSE Orlando / CORT":3,"TSE San Francisco / CORT":4,"TSE Seattle / CORT":3,"TSE Washington / CORT":3,"USA / CORT":0,"USA / RGS":0,"USA CENT / CORT":2,"USA EAST / CORT":3,"Washington DC / CORT":3,"Atlanta Stadium":2,"Boston Stadium":3,"Dallas Stadium":0,"Houston Stadium":0,"Kansas City Stadium":1,"Los Angeles Stadium":3,"Los Angeles - Rose Bowl Stadium":3,"Miami Stadium":2,"New York / New Jersey Stadium":3,"Philadelphia Stadium":3,"San Francisco Bay Area Stadium":4,"Seattle Stadium":3,"International Broadcast Centre":0,"International Broadcast Coordination Centre":0};
 function gLT(v){const lt=vG(v).lt;return lt!==undefined&&lt!==null?Math.max(0,lt):0}// Outbound transit (within city, default 0)
 // Default bump-in dates per stadium (from Stadium Bump-in Schedule)
 const LM_DEFAULT_BI={"Atlanta Stadium":"2026-05-16","Boston Stadium":"2026-04-20","Dallas Stadium":"2026-05-08","Guadalajara Stadium":"2026-04-21","Houston Stadium":"2026-05-14","International Broadcast Centre":"2026-04-27","International Broadcast Coordination Centre":"2026-04-27","Kansas City Stadium":"2026-04-24","Los Angeles Stadium":"2026-04-20","Los Angeles - Rose Bowl Stadium":"2026-05-13","Mexico City Stadium":"2026-05-12","Miami Stadium":"2026-05-11","Monterrey Stadium":"2026-05-15","New York / New Jersey Stadium":"2026-04-27","Philadelphia Stadium":"2026-05-01","San Francisco Bay Area Stadium":"2026-04-22","Seattle Stadium":"2026-04-22","Toronto Stadium":"2026-04-01","Vancouver Stadium":"2026-05-14"};
@@ -9043,9 +9043,15 @@ function build(venue,venueList,skipNoBi){
   const _buildVt=isCluster?(LM_vtMap[venuesToUse[0]]||''):(LM_vtMap[venue]||'');
   const tCap=gTC(venue),maxT=gMT(venue);
   const _dateOvr=VS[venue]?.dateOverrides||{};
-  let lt=gLT(venue)+gWP(venue);
-  // Non-LP destinations: add inbound transit (Dallas→WHS)
-  if(!LM_isLPFed(venue))lt+=gLT2(venue);
+  // Dispatch lead time depends on supply chain path:
+  // - LP-fed (CAN/MEX, KC/HOU/NYNJ/TOR/VAN/GDL/CDMX/MTY stadiums): dispatch from satellite AFTER WHS processing → outbound only
+  // - Dallas direct (Dallas STA, IBC): dispatch from Dallas → outbound only (no satellite)
+  // - USA general (non-LP-fed, non-Dallas-direct): dispatch FROM Dallas through satellite → outbound + WHS + inbound
+  const _isDalDirect=venue==='Dallas Stadium'||venue==='International Broadcast Centre'||vcIsIBC(venue);
+  const _skipWhsInDispatch=LM_isLPFed(venue)||_isDalDirect;
+  let lt=gLT(venue)+(_skipWhsInDispatch?0:gWP(venue));
+  // Non-LP, non-Dallas-direct: add inbound transit (Dallas→satellite WHS)
+  if(!LM_isLPFed(venue)&&!_isDalDirect)lt+=gLT2(venue);
   // USA cluster trucks: add satellite warehouse turnaround to lead time
   const _isUSACluster=isCluster&&!vcIsCAN(venue)&&!vcIsMEX(venue);
   if(_isUSACluster)lt+=LM_clusterTurnaround;
@@ -9353,7 +9359,7 @@ function build(venue,venueList,skipNoBi){
           remaining.loadQty=0;
         } else {
           // Partial fit: load full pallets that fit
-          const fitPallets=Math.floor(space/remaining.ps);
+          const fitPallets=remaining.ps>0?Math.floor(space/remaining.ps):0;
           if(fitPallets>0){
             const fitQty=fitPallets*remaining.pq;
             const fitPlt=fitPallets*remaining.ps;
@@ -9365,6 +9371,13 @@ function build(venue,venueList,skipNoBi){
             pool[remaining.sku].remaining-=fitQty;
             remaining.loadQty-=fitQty;
             remaining.sched=0;// only first chunk gets sched
+          } else if(remaining.ps>dayTCap&&curTruck.items.length===0){
+            // Oversized item: single "pallet unit" exceeds truck capacity (e.g., kit with ps>26)
+            const itPltOver=(remaining.loadQty/remaining.pq)*remaining.ps;
+            curTruck.items.push({...remaining,loadPlt:Math.round(itPltOver*100)/100});
+            curTruck.pallets+=itPltOver;curTruck.pcs+=remaining.loadQty;
+            pool[remaining.sku].remaining-=remaining.loadQty;
+            remaining.loadQty=0;
           }
 
           // Start new truck if allowed
@@ -9934,6 +9947,8 @@ function numberAll(){
   // ── Locked truck protection: compute demand deductions from snapshots ──
   // Locked trucks are NOT rebuilt — their snapshot data is injected after build.
   // build() deducts locked demand from pool so unlocked trucks get remaining demand only.
+  // Clean up orphaned snapshots (not in LM_dispatched)
+  for(const fp in LM_lockedSnapshots){if(!LM_dispatched.has(fp))delete LM_lockedSnapshots[fp]}
   const _lockedByLabel={};// label -> [{fp, snap}]
   const _lockedDemandByLabel={};// label -> {sku: qty}
   for(const fp in LM_lockedSnapshots){
@@ -9943,7 +9958,10 @@ function numberAll(){
     _lockedByLabel[label].push({fp,snap});
     if(!_lockedDemandByLabel[label])_lockedDemandByLabel[label]={};
     for(const it of snap.items){
-      _lockedDemandByLabel[label][it.sku]=(_lockedDemandByLabel[label][it.sku]||0)+(it.loadQty||0);
+      // For kit items, resolve CURRENT kit SKU (snapshot may have old renamed SKU)
+      let deductSku=it.sku;
+      if(it._kitId){const curKit=LM_KITS.find(k=>k.id===it._kitId);if(curKit)deductSku=curKit.sku}
+      _lockedDemandByLabel[label][deductSku]=(_lockedDemandByLabel[label][deductSku]||0)+(it.loadQty||0);
     }
   }
 
@@ -10020,6 +10038,7 @@ function numberAll(){
     }
   });
 
+  window._lmBuildLockedDemand={};// clear between build phases
   // Step C: USA non-STA/IBC venues with NO cluster — build individually with CORT
   VN.filter(v=>!isStadium(v.name)&&(!v.cluster||vcIsRegion(v.cluster))&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
     const P=runBuild(v.name,v.name);
@@ -10069,7 +10088,7 @@ function numberAll(){
   // This runs on every numberAll() but only migrates FPs that still use old format.
   // Needed because kit SKU renaming below changes SKU names on every rebuild.
   {
-    const _fpObjMaps=[LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr];
+    const _fpObjMaps=[LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr,LM_lockedSnapshots];
     let _fpChanged=false;
     allTrucks.forEach(e=>{
       const trk=e.ref;
@@ -10804,17 +10823,40 @@ function LM_kitAllocMap(){
   return m;
 }
 function LM_injectKits(){
+  // Dedup: if same venue+type has both manual and auto kit, remove auto. If multiple auto, keep first.
+  {const before=LM_KITS.length;const seen=new Set();
+  // First pass: register manual kits (priority)
+  LM_KITS.filter(k=>!k._auto).forEach(k=>{
+    const stpN=k.items.filter(i=>(NOM[i.sku]?.src||'').toUpperCase().startsWith('STP')||(NOM[i.sku]?.src||'').toUpperCase().startsWith('CT')).length;
+    seen.add(k.venue+'|'+(stpN>k.items.length/2?'STP':'FFE'));
+  });
+  // Second pass: filter out auto duplicates
+  LM_KITS=LM_KITS.filter(k=>{
+    if(!k._auto)return true;// always keep manual
+    const stpN=k.items.filter(i=>(NOM[i.sku]?.src||'').toUpperCase().startsWith('STP')||(NOM[i.sku]?.src||'').toUpperCase().startsWith('CT')).length;
+    const key=k.venue+'|'+(stpN>k.items.length/2?'STP':'FFE');
+    if(seen.has(key))return false;// manual or earlier auto already exists
+    seen.add(key);return true;
+  });if(LM_KITS.length<before){console.warn('[ML3K] Deduped '+(before-LM_KITS.length)+' duplicate kits');LM_saveKits()}}
   // Remove old kit rows + NOM entries (idempotent)
   RW=RW.filter(r=>!r._kit);
   for(const sku in NOM){if(NOM[sku]._kitNom)delete NOM[sku]}
+  if(!LM_KITS.length)return;
+  // Pre-build O(1) lookup maps to avoid O(n³) nested loops
+  const _biMap={};// "venue|sku" → earliest bump-in Date
+  const _refMap={};// venue → first non-kit, non-manual RW row
+  for(const r of RW){
+    if(r._kit)continue;
+    const v=r.Venue,s=r.Nomenclature;
+    if(v&&!r._manual&&!_refMap[v])_refMap[v]=r;
+    if(v&&s){const k=v+'|'+s;const bi=pD(r['Estimated bump-in date']);if(bi&&(!_biMap[k]||bi<_biMap[k]))_biMap[k]=bi}
+  }
   for(const kit of LM_KITS){
     const totalQty=kit.items.reduce((s,i)=>s+i.qty,0);
     if(totalQty<=0)continue;
-    // Resolve venue type + country for effective pallet calc
-    const refRow=RW.find(r=>r.Venue===kit.venue&&!r._kit&&!r._manual);
+    const refRow=_refMap[kit.venue];
     const _kitVt=LM_vtMap[kit.venue]||LM_VENUE_TYPE_MAP?.[kit.venue]||String(refRow?.['Venue type']||'').trim();
     const _kitCountry=LM_venueCountry(refRow?.['Venue cluster']||'', kit.venue);
-    // Compute sum of component pallets using effective pallet dims (asm/dis aware)
     let sumPlt=0,earliestBI=null;const srcs=new Set();
     for(const item of kit.items){
       const n=NOM[item.sku];
@@ -10824,21 +10866,25 @@ function LM_injectKits(){
         if(_kPqU>0&&_eff.ps>0)sumPlt+=(item.qty/_kPqU)*_eff.ps;
         srcs.add(n.src||'');
       }
-      // Get earliest BI from venue demand
-      for(const r of RW){if(r.Venue===kit.venue&&r.Nomenclature===item.sku&&!r._kit){const bi=pD(r['Estimated bump-in date']);if(bi&&(!earliestBI||bi<earliestBI))earliestBI=bi;break}}
+      // O(1) lookup instead of full RW scan
+      const bi=_biMap[kit.venue+'|'+item.sku];
+      if(bi&&(!earliestBI||bi<earliestBI))earliestBI=bi;
     }
     const hasPltOvr=kit.pq>0&&kit.ps>0;
     const _kitSrc=srcs.size===1?[...srcs][0]:'KIT';
     const _safeSrc=(_kitSrc.toUpperCase().startsWith('CT'))?'KIT':_kitSrc;
+    // Kit = 1 indivisible unit. pq=1 means 1 kit per pallet, ps=sumPlt pallets.
+    // Engine loads qty=1 (whole kit) on one truck — never splits across trucks.
+    const _kitPltOvr=hasPltOvr?kit.ps:(sumPlt>0?Math.round(sumPlt*1000)/1000:0);
     NOM[kit.sku]={
-      nm:kit.name,src:_safeSrc,uom:'kit',ppu:1,
-      pq:hasPltOvr?kit.pq:Math.max(totalQty,1),
-      ps:hasPltOvr?kit.ps:(sumPlt>0?Math.round(sumPlt*1000)/1000:0),
-      pqA:0,psA:0,_kitNom:true,_kitId:kit.id,_kitSumPlt:sumPlt
+      nm:kit.displayName||kit.name,src:_safeSrc,uom:'kit',ppu:1,
+      pq:hasPltOvr?kit.pq:1,
+      ps:hasPltOvr?kit.ps:_kitPltOvr,
+      pqA:0,psA:0,_kitNom:true,_kitId:kit.id,_kitSumPlt:sumPlt,_kitTotalQty:totalQty
     };
-    // Add RW row for kit
+    // Add RW row for kit — qty=1 (one indivisible kit unit)
     RW.push({
-      Venue:kit.venue,Nomenclature:kit.sku,Required:totalQty,
+      Venue:kit.venue,Nomenclature:kit.sku,Required:1,_effQty:1,
       'Estimated bump-in date':earliestBI?dk(earliestBI):'',
       'Venue cluster':refRow?.['Venue cluster']||'','Venue code':refRow?.['Venue code']||'',
       'Venue type':refRow?.['Venue type']||'',_kit:true
@@ -10853,7 +10899,11 @@ async function LM_saveKits(){
 }
 async function LM_loadKits(){
   if(!SB)return;
-  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-lm-kits').single();if(data){LM_KITS=JSON.parse(data.value)||[];_kitNextId=LM_KITS.reduce((mx,k)=>Math.max(mx,(parseInt(String(k.id).replace(/\D/g,''))||0)+1),1)}}catch(e){}
+  try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-lm-kits').single();if(data){
+    const raw=data.value;const arr=JSON.parse(raw)||[];
+    if(arr.length>1000){console.error('[KITS] SAFETY: >1000 kits, skipping');LM_KITS=[];return}
+    LM_KITS=arr;_kitNextId=LM_KITS.reduce((mx,k)=>Math.max(mx,(parseInt(String(k.id).replace(/\D/g,''))||0)+1),1)
+  }}catch(e){console.warn('LM_loadKits error:',e)}
 }
 function LM_getKitById(id){return LM_KITS.find(k=>k.id===id)}
 function LM_getKitsForVenue(venue){return LM_KITS.filter(k=>k.venue===venue)}
@@ -11060,6 +11110,7 @@ function _kitCreate(){
 }
 function LM_showKitDetail(kitId){
   const kit=LM_getKitById(kitId);if(!kit)return;
+  const _kdn=kit.displayName||kit.name;
   let sumPlt=0;
   const rows=kit.items.map(item=>{
     const n=NOM[item.sku];const effQty=item.qty;// already in UOM
@@ -11070,18 +11121,18 @@ function LM_showKitDetail(kitId){
   const hasPltOvr=kit.pq>0&&kit.ps>0;
   const effPcs=kit.items.reduce((s,i)=>s+i.qty,0);// already UOM
   const effPlt=hasPltOvr?((effPcs/kit.pq)*kit.ps):sumPlt;
-  document.getElementById('mr').innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+  document.getElementById('mr').innerHTML=`<div class="mo">
     <div class="mdi" style="max-width:500px">
       <div class="mdh" style="background:#E8F5E9;border-bottom-color:#43A047">
-        <h3 style="color:#43A047">📦 ${kit.name}</h3>
+        <h3 style="color:#43A047">📦 ${_kdn}</h3>
         <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
       </div>
       <div class="mdb" style="padding:16px">
         ${ROLE!=='viewer'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit SKU</label>
-            <input id="kitEditSku" value="${kit.sku.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','sku',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);font-weight:600;color:var(--ac)"></div>
-          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit Name</label>
-            <input id="kitEditName" value="${kit.name.replace(/"/g,'&quot;')}" onchange="LM_renameKit('${kit.id}','name',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd);font-weight:600"></div>
+          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit SKU <span style="font-weight:400;color:var(--tt)">(auto)</span></label>
+            <input id="kitEditSku" value="${kit.sku.replace(/"/g,'&quot;')}" readonly style="width:100%;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);font-weight:600;color:var(--tt);background:var(--bg);cursor:default"></div>
+          <div><label style="font-size:9px;font-weight:700;color:var(--ts)">Kit Display Name</label>
+            <input id="kitEditName" value="${_kdn.replace(/"/g,'&quot;')}" oninput="clearTimeout(window._kitNmT);window._kitNmT=setTimeout(()=>_kitSaveName('${kit.id}',this.value),600)" style="width:100%;padding:5px 8px;border:1px solid ${kit.displayName?'var(--pu)':'var(--bd)'};border-radius:6px;font-size:11px;font-family:var(--fd);font-weight:600;${kit.displayName?'color:var(--pu)':''}"></div>
           <div style="grid-column:1/-1;display:flex;gap:6px;align-items:center">
             <span style="font-size:9px;font-weight:700;color:var(--ts)">Type:</span>
             <button class="rbtn" onclick="_kitApplyType('${kit.id}','ffe')" style="font-size:10px;padding:3px 10px">🪑 FF&E</button>
@@ -11138,12 +11189,36 @@ function _kitFilterAvail(q){
     el.style.display=(!q||el.getAttribute('data-search').toLowerCase().includes(q))?'flex':'none';
   });
 }
+function _kitSaveName(kitId,val){
+  if(ROLE==='viewer')return;
+  const kit=LM_getKitById(kitId);if(!kit)return;
+  val=(val||'').trim();if(!val)return;
+  kit.displayName=val;// save to displayName (survives strategy reapply)
+  // Update NOM entry with display name
+  if(NOM[kit.sku])NOM[kit.sku].nm=val;
+  // Update locked truck snapshots
+  for(const fp in LM_lockedSnapshots){
+    const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
+    for(const it of snap.items){if(it._kitId===kitId)it.nm=val}
+  }
+  LM_saveKits();LM_saveDateOverrides();
+  // Update modal header in-place
+  const hdr=document.querySelector('.mdh h3');if(hdr)hdr.textContent='📦 '+val;
+}
 function LM_renameKit(kitId,field,val){
   if(ROLE==='viewer')return;
   const kit=LM_getKitById(kitId);if(!kit)return;
   val=(val||'').trim();if(!val)return;
   kit[field]=val;
+  // If name changed, update locked truck snapshots that contain this kit
+  if(field==='name'){
+    for(const fp in LM_lockedSnapshots){
+      const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
+      for(const it of snap.items){if(it._kitId===kitId)it.nm=val}
+    }
+  }
   LM_saveKits();LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  LM_saveDateOverrides();// persist updated snapshots
   setTimeout(()=>{rMain();rVL()},50);
 }
 function LM_addKitItem(kitId,skuArg,qtyArg){
@@ -11427,7 +11502,7 @@ function _stratRenderModal(){
     </div>
   </div>`;
 }
-function _stpApplyStrategy(){
+async function _stpApplyStrategy(){
   if(ROLE==='viewer')return;
   UNDO_capture();
   const cc=_stratCountry;
@@ -11443,18 +11518,13 @@ function _stpApplyStrategy(){
   for(const vt of Object.keys(oldCC)){
     if(!newCountryStrat[vt])newCountryStrat[vt]={...oldCC[vt]};
   }
-  // Clean up auto items for changed strategies
-  for(const vt of Object.keys(oldCC)){
-    const oldStp=oldCC[vt]?.stp||'';const newStp=newCountryStrat[vt]?.stp||'';
-    const oldFfe=oldCC[vt]?.ffe||'';const newFfe=newCountryStrat[vt]?.ffe||'';
-    if(oldStp!==newStp){
-      if(oldStp==='direct')LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&LM_vtMap[d.venue]===vt&&_venueCountry(d.venue)===cc));
-      if(oldStp==='kit')LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('OSKIT')&&LM_vtMap[k.venue]===vt&&_venueCountry(k.venue)===cc));
-    }
-    if(oldFfe!==newFfe){
-      if(oldFfe==='kit')LM_KITS=LM_KITS.filter(k=>!(k._auto&&k.sku.startsWith('FNKIT')&&LM_vtMap[k.venue]===vt&&_venueCountry(k.venue)===cc));
-    }
-  }
+  // Clean up AUTO kits + AUTO STP deliveries for this country before recreating
+  // Manual kits and deliveries (no _auto flag) are preserved
+  // Preserve displayName from deleted auto kits so user renames survive reapply
+  const _kitNames={};// venue|type -> displayName
+  LM_KITS.filter(k=>k._auto&&_venueCountry(k.venue)===cc).forEach(k=>{if(k.displayName)_kitNames[k.venue+'|'+(k.sku.startsWith('OSKIT')?'STP':'FFE')]=k.displayName});
+  LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&_venueCountry(d.venue)===cc));
+  LM_KITS=LM_KITS.filter(k=>!(k._auto&&_venueCountry(k.venue)===cc));
   // Remove empty entries
   for(const vt of Object.keys(newCountryStrat)){if(!newCountryStrat[vt].stp&&!newCountryStrat[vt].ffe)delete newCountryStrat[vt]}
   if(!LM_STP_STRATEGY)LM_STP_STRATEGY={};
@@ -11478,28 +11548,47 @@ function _stpApplyStrategy(){
       LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue,date:'',rate:0,_auto:true});
     }}
     if(cfg.stp==='kit'){for(const venue of stpVenues){
-      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&!k._auto))continue;
-      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('OSKIT')&&k._auto))continue;
+      // Skip if manual STP kit exists for this venue (any kit with STP items, not auto)
+      if(LM_KITS.find(k=>k.venue===venue&&!k._auto&&k.items.some(i=>(NOM[i.sku]?.src||'').toUpperCase().startsWith('STP'))))continue;
+      // Skip if auto STP kit already exists (shouldn't happen after cleanup, defensive)
+      if(LM_KITS.find(k=>k.venue===venue&&k._auto&&k.sku.startsWith('OSKIT')))continue;
       LM_STP_DELIVERIES=LM_STP_DELIVERIES.filter(d=>!(d._auto&&d.venue===venue));
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!(NOM[s].src||'').toUpperCase().startsWith('STP'))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
-      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true});
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'OSKIT-002-'+_kitNextId,name:venue+' Stationery Kit',venue,items,pq:null,ps:null,_auto:true,displayName:_kitNames[venue+'|STP']||null});
     }}
     // Apply FF&E strategy
     if(cfg.ffe==='kit'){for(const venue of ffeVenues){
-      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('FNKIT')&&!k._auto))continue;
-      if(LM_KITS.find(k=>k.venue===venue&&k.sku.startsWith('FNKIT')&&k._auto))continue;
+      // Skip if manual FF&E kit exists for this venue (any kit with non-STP/CT items, not auto)
+      if(LM_KITS.find(k=>k.venue===venue&&!k._auto&&k.items.some(i=>{const s=(NOM[i.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')})))continue;
+      // Skip if auto FF&E kit already exists (shouldn't happen after cleanup, defensive)
+      if(LM_KITS.find(k=>k.venue===venue&&k._auto&&k.sku.startsWith('FNKIT')))continue;
       const bySkuMap={};for(const r of RW){if(r.Venue!==venue||r._kit)continue;const s=r.Nomenclature;if(!s||!NOM[s])continue;if(!_isFfeItem(s))continue;bySkuMap[s]=(bySkuMap[s]||0)+(r._effQty||0)}
       const items=Object.entries(bySkuMap).filter(([,q])=>q>0).map(([sku,qty])=>({sku,qty}));
       if(!items.length)continue;
-      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-002-'+String(Math.floor(Math.random()*900)+100),name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true});
+      LM_KITS.push({id:'KIT-'+(_kitNextId++),sku:'FNKIT-002-'+_kitNextId,name:venue+' FF&E Kit',venue,items,pq:null,ps:null,_auto:true,displayName:_kitNames[venue+'|FFE']||null});
     }}
     // FF&E 'direct' = default (no action needed)
   }
-  LM_saveStpStrategy();LM_saveStpDeliveries();LM_saveKits();
-  LM_injectAll();LM_applyNomOverrides();bV();PLAN_CACHE={};numberAll();
+  // Auto-create remainder deliveries for venues with only explicit-item STP deliveries
+  // This ensures unallocated STP demand gets a truck
+  {const _stpVenuesWithExplicit=new Set();const _stpVenuesWithRemainder=new Set();
+  for(const d of LM_STP_DELIVERIES){if(_venueCountry(d.venue)!==cc)continue;if(d.items)_stpVenuesWithExplicit.add(d.venue);else _stpVenuesWithRemainder.add(d.venue)}
+  for(const v of _stpVenuesWithExplicit){
+    if(_stpVenuesWithRemainder.has(v))continue;// already has auto-remainder
+    LM_STP_DELIVERIES.push({id:'STP-'+(_stpNextId++),venue:v,date:'',rate:0,_auto:true});
+  }}
   document.querySelector('.mo')?.remove();
+  document.getElementById('pov').style.display='flex';
+  LM_saveStpStrategy();LM_saveStpDeliveries();LM_saveKits();
+  await new Promise(r=>setTimeout(r,0));
+  LM_injectAll();LM_applyNomOverrides();
+  await new Promise(r=>setTimeout(r,0));
+  bV();PLAN_CACHE={};
+  await new Promise(r=>setTimeout(r,0));
+  numberAll();
+  document.getElementById('pov').style.display='none';
   setTimeout(()=>{rMain();rVL();try{V26_render()}catch(e){}},50);
 }
 // ── LM Staples Direct Deliveries ──────────────────────────────
@@ -14321,33 +14410,78 @@ if(cv==="dashboard"){
     }
   }
 
-  // ── CORT Cluster Truck Forecast (All Venues only) ──
+  // ── USA LM Truck Forecast (All Venues only) ──
   if(!isFiltered&&!isRegion&&!isClusterOv){
-    // Gather all USA cluster trucks (Step A) with their kit breakdown
+    // Gather ALL USA LM trucks: clusters, stadiums, and individual venues
     const _cortFcRows=[];
-    for(const cl in CLUSTERS){
-      if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
-      const P=PLAN_CACHE[cl];if(!P||!P.allT)continue;
-      // First bump-in date from actual demand data (not constraint defaults)
-      const firstBI=CLUSTERS[cl]?.earlyBI?dk(CLUSTERS[cl].earlyBI):null;
+    const _fcSeen=new Set();// track truck IDs to avoid duplicates
+    // Helper: add trucks from a PLAN_CACHE entry
+    const _fcAddTrucks=(label,P,transitLabel)=>{
+      if(!P||!P.allT)return;
+      // First bump-in: from CLUSTERS if cluster, else from VN or PLAN_CACHE
+      let firstBI=CLUSTERS[label]?.earlyBI?dk(CLUSTERS[label].earlyBI):null;
+      if(!firstBI){const vn=VN.find(v=>v.name===label);if(vn&&vn.bi)firstBI=dk(vn.bi)}
+      if(!firstBI&&P.bi)firstBI=P.bi;
+      // CORT detection: cluster has CORT if any member venue has CORT deliveries
+      const _hasCort=(()=>{if(CORT_CACHE[label])return true;const clV=CLUSTERS[label]?.venues;if(clV)for(const v of clV){if(CORT_CACHE[v])return true}return false})();
+      // Venue type + country for assembly detection
+      const _fcVt=LM_vtMap[label]||(CLUSTERS[label]?.venues?.[0]?LM_vtMap[CLUSTERS[label].venues[0]]:'');
+      const _fcCountry='USA';
+      // Dispatch location: LP-fed → "LP Warehouse", everything else → "Dallas"
+      const _fcDispLoc=LM_isLPFed(label)?'LP Warehouse':'Dallas';
+      // Cluster label for CORT destinations
+      const _fcClusterLabel=CLUSTERS[label]?clDisp(label):'';
+      // LP abbreviations for arrival checking
+      const _fcLpAbbrs=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
       for(const t of P.allT){
-        if(LM_excluded.has(t.id))continue;
+        if(LM_excluded.has(t.id)||_fcSeen.has(t.id))continue;
         if(!t.dd)continue;
-        let fnKits=0,osKits=0,plt=0;
+        _fcSeen.add(t.id);
+        let fnKits=0,osKits=0,plt=0,asmCount=0,lateCount=0;
+        const _nonStp=[];
         for(const it of t.items){
           plt+=(it.loadPlt||0);
           if(it.sku.startsWith('FNKIT'))fnKits++;
           else if(it.sku.startsWith('OSKIT'))osKits++;
+          const n=NOM[it.sku];
+          if(n&&!n._kitNom&&LM_isAssembled(it.sku,_fcVt,_fcCountry))asmCount++;
+          // Track non-STP items for late check
+          const src=(n?.src||'').toUpperCase();
+          if(!src.startsWith('STP')&&!src.startsWith('CT'))_nonStp.push(it);
         }
         plt=Math.round(plt*10)/10;
         const disp=t.dd;
-        const transit=gLT(cl)+gLT2(cl);
+        // Late count: items not arrived by dispatch date
+        if(_fcLpAbbrs.length&&disp&&Object.keys(LP_ARRIVAL_MAP).length){
+          lateCount=_nonStp.filter(it=>!LM_kitArrivedOnTime(it.sku,_fcLpAbbrs,disp)).length;
+        }else if(STOCK_SKUS.size>0){
+          lateCount=_nonStp.filter(it=>!LM_kitInStock(it.sku)).length;
+        }
+        const tl=transitLabel||label;
+        const _fcDalDirect=tl==='Dallas Stadium'||tl==='International Broadcast Centre'||vcIsIBC(tl);
+        const transit=gLT(tl)+(LM_isLPFed(tl)||_fcDalDirect?0:gLT2(tl));
         const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
-        // Days at CORT = first bump-in - arrival (calendar days including weekends)
         const daysAtCort=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
-        _cortFcRows.push({dest:clDisp(cl),cluster:cl,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t)});
+        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:LM_getLsr(t),isCort:_hasCort,asmCount,dispLoc:_fcDispLoc,clusterLabel:_fcClusterLabel,lateCount,vtype:window._fcVtype||'other'});
       }
+    };
+    // 1. USA cluster trucks (Step A)
+    window._fcVtype='cluster';
+    for(const cl in CLUSTERS){
+      if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
+      _fcAddTrucks(cl,PLAN_CACHE[cl]);
     }
+    // 2. USA stadium/IBC trucks
+    window._fcVtype='stadium';
+    VN.filter(v=>isStadium(v.name)&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
+      _fcAddTrucks(v.name,PLAN_CACHE[v.name]);
+    });
+    // 3. USA individual non-stadium venues (Step C — no cluster or region cluster)
+    window._fcVtype='other';
+    VN.filter(v=>!isStadium(v.name)&&(!v.cluster||vcIsRegion(v.cluster))&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
+      _fcAddTrucks(v.name,PLAN_CACHE[v.name]);
+    });
+    window._fcVtype=null;
     if(_cortFcRows.length>0){
       _cortFcRows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
       // Group by ISO week
@@ -14359,11 +14493,23 @@ if(cv==="dashboard"){
       const weeks=Object.keys(byWeek).sort();
       const totalTrucks=_cortFcRows.length;const totalPlt=_cortFcRows.reduce((s,r)=>s+r.plt,0);
       const totalFn=_cortFcRows.reduce((s,r)=>s+r.fnKits,0);const totalOs=_cortFcRows.reduce((s,r)=>s+r.osKits,0);
-      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🚛 CORT Cluster Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${totalTrucks} trucks</span> <span class="bg bgs bg-gy">${Math.round(totalPlt)} plt</span> <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${totalFn} FF&E kits</span> <span class="bg bgs" style="background:var(--os);color:var(--or)">${totalOs} STP kits</span></summary>
-      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">USA cluster trucks delivering to CORT cross-dock facilities — grouped by dispatch week</p>`;
+      const totalAsm=_cortFcRows.reduce((s,r)=>s+(r.asmCount||0),0);const totalLate=_cortFcRows.reduce((s,r)=>s+(r.lateCount||0),0);
+      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🚛 USA LM Truck Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${totalTrucks} trucks</span> <span class="bg bgs bg-gy">${Math.round(totalPlt)} plt</span> <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${totalFn} FF&E kits</span> <span class="bg bgs" style="background:var(--os);color:var(--or)">${totalOs} STP kits</span>${totalAsm?` <span class="bg bgs" style="background:var(--ps);color:var(--pu)">🔧 ${totalAsm} asm</span>`:''}${totalLate?` <span class="bg bgs bg-rd">⚠ ${totalLate} late</span>`:''}</summary>
+      <p style="font-size:10px;color:var(--tt);margin:0 0 4px">All USA LM trucks (clusters, stadiums, individual venues) — grouped by dispatch week</p>`;
+      // Filter chips
+      const _fcTypes={cluster:0,stadium:0,other:0};_cortFcRows.forEach(r=>_fcTypes[r.vtype]=((_fcTypes[r.vtype])||0)+1);
+      if(!window._usaFcFilter)window._usaFcFilter='all';
+      if(!window._usaFcApply)window._usaFcApply=function(id,btn){window._usaFcFilter=id;document.querySelectorAll('.ufc-wk').forEach(el=>{el.style.display=(id==='all'||el.dataset.vtype===id)?'':'none'});document.querySelectorAll('.ufc-chip').forEach(b=>{b.style.borderColor='var(--bd)';b.style.background='#fff';b.style.color='var(--ts)'});btn.style.borderColor='var(--ac)';btn.style.background='var(--as)';btn.style.color='var(--ac)'};
+      const _fcChip=(id,label,cnt)=>`<button onclick="event.stopPropagation();_usaFcApply('${id}',this)" class="ufc-chip" style="padding:3px 10px;border-radius:12px;border:1px solid ${window._usaFcFilter===id?'var(--ac)':'var(--bd)'};background:${window._usaFcFilter===id?'var(--as)':'#fff'};color:${window._usaFcFilter===id?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`;
+      h+=`<div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
+        ${_fcChip('all','All',_cortFcRows.length)}
+        ${_fcTypes.cluster?_fcChip('cluster','Clusters',_fcTypes.cluster):''}
+        ${_fcTypes.stadium?_fcChip('stadium','Stadiums',_fcTypes.stadium):''}
+        ${_fcTypes.other?_fcChip('other','Other',_fcTypes.other):''}
+      </div>`;
       for(const wk of weeks){
         const rows=byWeek[wk];
-        const wkPlt=rows.reduce((s,r)=>s+r.plt,0);const wkFn=rows.reduce((s,r)=>s+r.fnKits,0);const wkOs=rows.reduce((s,r)=>s+r.osKits,0);
+        const wkPlt=rows.reduce((s,r)=>s+r.plt,0);const wkFn=rows.reduce((s,r)=>s+r.fnKits,0);const wkOs=rows.reduce((s,r)=>s+r.osKits,0);const wkAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0);const wkLate=rows.reduce((s,r)=>s+(r.lateCount||0),0);
         h+=`<div style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:11px;font-weight:700;color:var(--tp);border:1px solid var(--bd)">
           <span>📅 ${_fmtWk(wk)} — ${_fmtWk(_weekEnd(wk))}</span>
@@ -14371,16 +14517,20 @@ if(cv==="dashboard"){
           <span class="bg bgs bg-gy">${Math.round(wkPlt*10)/10} plt</span>
           ${wkFn?'<span class="bg bgs bg-gn">'+wkFn+' FF&E</span>':''}
           ${wkOs?'<span class="bg bgs bg-or">'+wkOs+' STP</span>':''}
+          ${wkAsm?'<span class="bg bgs bg-pu">🔧 '+wkAsm+' asm</span>':''}
+          ${wkLate?'<span class="bg bgs bg-rd">⚠ '+wkLate+' late</span>':''}
         </div>
-        <table class="dtb" style="margin-top:4px"><thead><tr><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Days at CORT</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th></tr></thead><tbody>`;
+        <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:center">Late</th></tr></thead><tbody>`;
         for(const r of rows){
           const dd=new Date(r.disp+'T12:00:00');const ad=new Date(r.arrDate+'T12:00:00');
           const dStr=dd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
           const aStr=ad.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
           const biStr=r.firstBI?new Date(r.firstBI+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'—';
           const dacColor=r.daysAtCort!=null?(r.daysAtCort>=7?'var(--gn)':r.daysAtCort>=3?'var(--or)':'var(--rd)'):'var(--tt)';
-          h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
-            <td style="font-size:11px;font-weight:600">${r.dest}</td>
+          const _fcHide=window._usaFcFilter&&window._usaFcFilter!=='all'&&r.vtype!==window._usaFcFilter;
+          h+=`<tr class="ufc-wk" data-vtype="${r.vtype}"${_fcHide?' style="display:none"':r.dispatched?' style="background:var(--gs)"':''}>
+            <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
+            <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':''}</td>
             <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
             <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
             <td>${dStr}</td>
@@ -14391,12 +14541,97 @@ if(cv==="dashboard"){
             <td class="mono" style="text-align:right">${r.plt}</td>
             <td style="text-align:center">${r.fnKits||'—'}</td>
             <td style="text-align:center">${r.osKits||'—'}</td>
+            <td style="text-align:center;color:var(--pu);font-weight:600">${r.asmCount>0?'🔧 '+r.asmCount:'—'}</td>
+            <td style="text-align:center;font-weight:600;color:${r.lateCount>0?'var(--rd)':'var(--tt)'}">${r.lateCount>0?'⚠ '+r.lateCount:'—'}</td>
           </tr>`;
         }
         h+=`</tbody></table></div>`;
       }
       h+=`</details>`;
     }
+  }
+
+  // ── CAN / MEX LM Truck Forecasts (region overview OR All Venues) ──
+  if(!isFiltered&&!isClusterOv){
+    const _intlFc=(country,flag,filterFn)=>{
+      const _rows=[];const _seen=new Set();
+      VN.filter(v=>filterFn(v.cluster)).forEach(v=>{
+        const P=PLAN_CACHE[v.name];if(!P||!P.allT)return;
+        const vt=LM_vtMap[v.name]||'';
+        const _lpA=LM_isLPFed(v.name)?LM_getLPDestAbbrs(v.name):[];
+        // Dispatch location: derive city from cluster name (e.g., "CAN Toronto" → "Toronto Warehouse")
+        const _clCity=(v.cluster||'').replace(/^(CAN|MEX)\s*/i,'').split(/\s*\/\s*/)[0].trim();
+        const _dispLoc=_clCity?_clCity+' Warehouse':country+' Warehouse';
+        for(const t of P.allT){
+          if(LM_excluded.has(t.id)||_seen.has(t.id))continue;if(!t.dd)continue;_seen.add(t.id);
+          let fnKits=0,osKits=0,plt=0,asmCount=0,lateCount=0;
+          const _ns=[];
+          for(const it of t.items){plt+=(it.loadPlt||0);if(it.sku.startsWith('FNKIT'))fnKits++;else if(it.sku.startsWith('OSKIT'))osKits++;const n=NOM[it.sku];if(n&&!n._kitNom&&LM_isAssembled(it.sku,vt,country))asmCount++;const src=(n?.src||'').toUpperCase();if(!src.startsWith('STP')&&!src.startsWith('CT'))_ns.push(it)}
+          plt=Math.round(plt*10)/10;
+          const disp=t.dd;const transit=gLT(v.name);
+          if(_lpA.length&&disp&&Object.keys(LP_ARRIVAL_MAP).length){lateCount=_ns.filter(it=>!LM_kitArrivedOnTime(it.sku,_lpA,disp)).length}else if(STOCK_SKUS.size>0){lateCount=_ns.filter(it=>!LM_kitInStock(it.sku)).length}
+          const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
+          // Per-truck bump-in (from truck data, not venue-level)
+          const tBI=t.biK||null;
+          const daysBeforeBI=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
+          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,daysBeforeBI,lsr:LM_getLsr(t),asmCount,lateCount,dispLoc:_dispLoc});
+        }
+      });
+      if(!_rows.length)return;
+      _rows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
+      const _weekOf=d=>{const dt=new Date(d+'T12:00:00');const day=dt.getDay();const mon=new Date(dt);mon.setDate(mon.getDate()-((day+6)%7));return mon.toISOString().slice(0,10)};
+      const _weekEnd=ws=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
+      const _fmtWk=d=>{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
+      const byWeek={};for(const r of _rows){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
+      const weeks=Object.keys(byWeek).sort();
+      const tT=_rows.length,tP=_rows.reduce((s,r)=>s+r.plt,0),tFn=_rows.reduce((s,r)=>s+r.fnKits,0),tOs=_rows.reduce((s,r)=>s+r.osKits,0),tAsm=_rows.reduce((s,r)=>s+(r.asmCount||0),0),tLate=_rows.reduce((s,r)=>s+(r.lateCount||0),0);
+      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">${flag} ${country} LM Truck Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${tT} trucks</span> <span class="bg bgs bg-gy">${Math.round(tP)} plt</span> ${tFn?'<span class="bg bgs" style="background:var(--gs);color:var(--gn)">'+tFn+' FF&E kits</span>':''}${tOs?' <span class="bg bgs" style="background:var(--os);color:var(--or)">'+tOs+' STP kits</span>':''}${tAsm?' <span class="bg bgs bg-pu">🔧 '+tAsm+' asm</span>':''}${tLate?' <span class="bg bgs bg-rd">⚠ '+tLate+' late</span>':''}</summary>
+      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">All ${country} LM trucks — grouped by dispatch week</p>`;
+      for(const wk of weeks){
+        const rows=byWeek[wk];
+        const wP=rows.reduce((s,r)=>s+r.plt,0),wFn=rows.reduce((s,r)=>s+r.fnKits,0),wOs=rows.reduce((s,r)=>s+r.osKits,0),wAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0),wLate=rows.reduce((s,r)=>s+(r.lateCount||0),0);
+        h+=`<div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:11px;font-weight:700;color:var(--tp);border:1px solid var(--bd)">
+          <span>📅 ${_fmtWk(wk)} — ${_fmtWk(_weekEnd(wk))}</span>
+          <span class="bg bgs bg-bl" style="font-weight:600">${rows.length} trucks</span>
+          <span class="bg bgs bg-gy">${Math.round(wP*10)/10} plt</span>
+          ${wFn?'<span class="bg bgs bg-gn">'+wFn+' FF&E</span>':''}
+          ${wOs?'<span class="bg bgs bg-or">'+wOs+' STP</span>':''}
+          ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
+          ${wLate?'<span class="bg bgs bg-rd">⚠ '+wLate+' late</span>':''}
+        </div>
+        <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:center">Late</th></tr></thead><tbody>`;
+        for(const r of rows){
+          const dd=new Date(r.disp+'T12:00:00'),ad=new Date(r.arrDate+'T12:00:00');
+          const dStr=dd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+          const aStr=ad.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+          const biStr=r.firstBI?new Date(r.firstBI+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'—';
+          const bufColor=r.daysBeforeBI!=null?(r.daysBeforeBI>=7?'var(--gn)':r.daysBeforeBI>=3?'var(--or)':'var(--rd)'):'var(--tt)';
+          h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
+            <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
+            <td style="font-size:11px;font-weight:600">${r.dest}</td>
+            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
+            <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
+            <td>${dStr}</td>
+            <td class="mono" style="text-align:center">${r.transit}d</td>
+            <td style="color:var(--gn);font-weight:600">${aStr}</td>
+            <td style="font-weight:600">${biStr}</td>
+            <td style="text-align:center;font-weight:700;color:${bufColor}">${r.daysBeforeBI!=null?r.daysBeforeBI+'d':'—'}</td>
+            <td class="mono" style="text-align:right">${r.plt}</td>
+            <td style="text-align:center">${r.fnKits||'—'}</td>
+            <td style="text-align:center">${r.osKits||'—'}</td>
+            <td style="text-align:center;color:var(--pu);font-weight:600">${r.asmCount>0?'🔧 '+r.asmCount:'—'}</td>
+            <td style="text-align:center;font-weight:600;color:${r.lateCount>0?'var(--rd)':'var(--tt)'}">${r.lateCount>0?'⚠ '+r.lateCount:'—'}</td>
+          </tr>`;
+        }
+        h+=`</tbody></table></div>`;
+      }
+      h+=`</details>`;
+    };
+    // CAN forecast — Canada Overview only
+    if(isRegion&&regionCat==='can')_intlFc('Canada','🇨🇦',cl=>vcIsCAN(cl));
+    // MEX forecast — Mexico Overview only
+    if(isRegion&&regionCat==='mex')_intlFc('Mexico','🇲🇽',cl=>vcIsMEX(cl));
   }
 
   // ── Venue/Cluster summary ──
