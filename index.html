@@ -12745,7 +12745,7 @@ function generateDailyDigest(){
       // Collect individual LM trucks
       for(const t of activeT){
         if(_lmTruckSeen.has(t.id))continue;_lmTruckSeen.add(t.id);
-        _lmTruckList.push({id:t.id,dd:t.dd||'',dest:label,pallets:Math.round((t.pallets||0)*10)/10,pcs:t.items?t.items.reduce((s,i)=>s+(i.loadQty||0),0):0,dispatched:LM_isDispatched(t),items:t.items?t.items.map(i=>({sku:i.sku,qty:i.loadQty||0,nm:i.nm||NOM[i.sku]?.nm||i.sku})):[]});
+        _lmTruckList.push({id:t.id,dd:t.dd||'',dest:label,pallets:Math.round((t.pallets||0)*10)/10,pcs:t.items?t.items.reduce((s,i)=>s+(i.loadQty||0),0):0,dispatched:LM_isDispatched(t),lsr:LM_getLsr(t)||'',items:t.items?t.items.map(i=>({sku:i.sku,qty:i.loadQty||0,nm:i.nm||NOM[i.sku]?.nm||i.sku})):[]});
       }
     }
   }
