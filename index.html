@@ -8894,7 +8894,7 @@ function renderTruckCard(t,opts){
     <div class="tto"><div class="tin"><span style="font-size:18px">${isLmDisp?'🔒':(isExcl?'🚫':'🚛')}</span><div>
       <div class="tid">${t.id} ${t.isOverflow?'<span class="bg bgs bg-or">OV</span>':''} ${isExcl?'<span class="bg bgs bg-gy">Excluded</span>':''} ${t.isNoBi?'<span class="bg bgs bg-gy" style="background:#888;font-size:8px">UNPLANNED</span>':''}</div>
       <div class="tsu">${skus} SKUs · ${pcs.toLocaleString()} qty${(()=>{if(!t.items||!t.items.length)return'';const schedPlt=t.items.reduce((s,it)=>{if(!it.sched||!it.pq||it.pq===0)return s;return s+(it.sched/it.pq)*(it.ps||1)},0);const roundSched=Math.round(schedPlt*10)/10;if(roundSched>0&&Math.abs(roundSched-(t.pallets||0))>0.2)return' · <span style="color:var(--or);font-weight:600" title="Pallets originally requested for this date (before top-up)">req '+roundSched+'</span>';return''})()}</div>
-      ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const _lpA=opts.lpFedAbbrs;const _dd=t.dd||'';if(_lpA&&_lpA.length&&_dd&&Object.keys(LP_ARRIVAL_MAP).length){const onTime=nonStp.filter(it=>LM_kitArrivedOnTime(it.sku,_lpA,_dd)).length;const late=nonStp.length-onTime;const pct=Math.round(onTime/nonStp.length*100);const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">🚚 ${pct}% arrived (${onTime}/${nonStp.length})</span>${late>0?`<span class="bg bgs" style="background:var(--rs);color:var(--rd);margin-left:3px">⚠ ${late} late</span>`:''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>LM_kitInStock(it.sku)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
+      ${(()=>{if(!t.items||!t.items.length)return'';const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(!nonStp.length)return'';const _lpA=opts.lpFedAbbrs;const _dd=t.dd||'';if(_lpA&&_lpA.length&&_dd&&Object.keys(LP_ARRIVAL_MAP).length){const onTime=nonStp.filter(it=>LM_kitArrivedOnTime(it.sku,_lpA,_dd,it._kitItems)).length;const late=nonStp.length-onTime;const pct=Math.round(onTime/nonStp.length*100);const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">🚚 ${pct}% arrived (${onTime}/${nonStp.length})</span>${late>0?`<span class="bg bgs" style="background:var(--rs);color:var(--rd);margin-left:3px">⚠ ${late} late</span>`:''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>LM_kitInStock(it.sku,it._kitItems)).length:0;const pct=Math.round(inSt/nonStp.length*100);const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:${pct>=90?'var(--gs)':pct>=50?'var(--os)':'var(--rs)'};color:${sc}">📦 ${STOCK_SKUS.size===0?'—':pct+'%'} in stock (${inSt}/${nonStp.length})</span></div>`})()}
       <div style="font-size:10px;color:var(--pu);margin-top:1px">📍 ${dest}${isExcl?'':rateInputHtml(t.id,t.destLabel||t.dest||opts.displayName||'',tCap,true,'rMain()')}</div>
       ${LM_getDateOverride(t)?`<div class="tc-arr" style="font-size:10px;color:var(--gn);margin-top:2px;font-weight:600">📅 Dispatch: ${fF(new Date(LM_getDateOverride(t)+'T12:00:00'))}</div>`:(opts.dayLabel?`<div class="tc-arr" style="font-size:10px;color:var(--ts);margin-top:2px">${opts.dayLabel}</div>`:'')}
       ${isLmDisp?'<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-gn">🔒 Locked</span>'+(LM_getLsr(t)?` <span class="mono" style="color:var(--pu);background:var(--ps);padding:1px 5px;border-radius:3px;font-size:9px">${LM_getLsr(t)}</span>`:'')+'</div>':''}
@@ -10022,18 +10022,9 @@ function numberAll(){
         for(const ci of it._kitItems){
           _lockedDemandByLabel[label][ci.sku]=(_lockedDemandByLabel[label][ci.sku]||0)+(ci.qty||0);
         }
-      } else if(it._kitNom&&it._kitId){
-        // Legacy snapshot without frozen _kitItems: resolve from live kits (fallback)
-        let deductSku=it.sku;
-        let curKit=LM_KITS.find(k=>k.id===it._kitId);
-        if(!curKit){
-          const isFn=it.sku.startsWith('FNKIT');
-          if(it._kitVenue)curKit=LM_KITS.find(k=>k.venue===it._kitVenue&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
-          if(!curKit){const clVenues=CLUSTERS[label]?CLUSTERS[label].venues:[label];curKit=LM_KITS.find(k=>clVenues.includes(k.venue)&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')))}
-        }
-        if(curKit)deductSku=curKit.sku;
-        _lockedDemandByLabel[label][deductSku]=(_lockedDemandByLabel[label][deductSku]||0)+(it.loadQty||0);
       } else {
+        // Regular item or legacy kit snapshot without _kitItems: deduct by snapshot SKU directly
+        // No live LM_KITS lookup — locked trucks must be self-sufficient
         // Regular (non-kit) item: deduct by SKU directly
         _lockedDemandByLabel[label][it.sku]=(_lockedDemandByLabel[label][it.sku]||0)+(it.loadQty||0);
       }
@@ -10826,7 +10817,7 @@ let _dashCalMap={};// stored from rMain dashboard for day-detail popup
 let _dashFilter=null;// {type:'all'|'region'|'clusterOv'|'filtered', labels:Set, regionCat:'', clusterName:'', venueLabel:''}
 // Stable truck fingerprint — survives renumbering AND kit SKU renaming
 // Kit items use stable kit ID (KIT:{kitId}) instead of volatile renamed SKU
-function LM_fp(t){const dest=t.destLabel||t.dest||'';const skus=t.items?t.items.map(i=>{const n=NOM[i.sku];return(n&&n._kitId)?('KIT:'+n._kitId):i.sku}).sort().join(','):'';return dest+'|'+skus}
+function LM_fp(t){const dest=t.destLabel||t.dest||'';const skus=t.items?t.items.map(i=>{const kid=i._kitId||(NOM[i.sku]?._kitId);return kid?('KIT:'+kid):i.sku}).sort().join(','):'';return dest+'|'+skus}
 // Raw fingerprint (old-style, with actual SKU names — used only for migration)
 function _lmFpRaw(t){const dest=t.destLabel||t.dest||'';const skus=t.items?t.items.map(i=>i.sku).sort().join(','):'';return dest+'|'+skus}
 function LM_countActive(P){return P.allT.filter(t=>!LM_excluded.has(t.id)).length}
@@ -11022,20 +11013,20 @@ function LM_getKitById(id){return LM_KITS.find(k=>k.id===id)}
 function LM_getKitsForVenue(venue){return LM_KITS.filter(k=>k.venue===venue)}
 function LM_getKitForSku(sku){return LM_KITS.find(k=>k.sku===sku)}
 // Kit-aware stock check: for kit SKUs, check ALL components
-function LM_kitInStock(sku){
+function LM_kitInStock(sku,frozenItems){
   const n=NOM[sku];
   if(!n?._kitNom)return STOCK_SKUS.has(sku);
-  const kit=LM_getKitById(n._kitId);
-  if(!kit||!kit.items.length)return false;
-  return kit.items.every(i=>STOCK_SKUS.has(i.sku));
+  const items=frozenItems||(()=>{const kit=LM_getKitById(n._kitId);return kit?.items||[]})();
+  if(!items.length)return false;
+  return items.every(i=>STOCK_SKUS.has(i.sku));
 }
 // Kit-aware LP arrival check: for kit SKUs, check ALL components arrived on time
-function LM_kitArrivedOnTime(sku,lpAbbrs,dispDate){
+function LM_kitArrivedOnTime(sku,lpAbbrs,dispDate,frozenItems){
   const n=NOM[sku];
   if(!n?._kitNom)return LM_skuArrivedOnTime(sku,lpAbbrs,dispDate);
-  const kit=LM_getKitById(n._kitId);
-  if(!kit||!kit.items.length)return false;
-  return kit.items.every(i=>LM_skuArrivedOnTime(i.sku,lpAbbrs,dispDate));
+  const items=frozenItems||(()=>{const kit=LM_getKitById(n._kitId);return kit?.items||[]})();
+  if(!items.length)return false;
+  return items.every(i=>LM_skuArrivedOnTime(i.sku,lpAbbrs,dispDate));
 }
 function LM_kitReadiness(kitId,frozenItems){
   // frozenItems: optional array of {sku,qty} from locked snapshot — bypasses live LM_KITS
@@ -12338,8 +12329,8 @@ ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10
   <span style="color:var(--bd)">|</span>
   <label style="color:var(--ts)">LSR</label><input type="text" value="${LM_getLsr(t)}" placeholder="LSR#" style="font-size:11px;font-family:var(--fm);padding:4px 6px;border:1px solid ${LM_getLsr(t)?'var(--pu)':'var(--bd)'};border-radius:6px;color:var(--pu);width:110px" onchange="LM_setLsr(${i},this.value.trim())">
 </div>`:''}
-${(()=>{const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(_mIsLpFed&&t.dd){const onTime=nonStp.filter(it=>LM_kitArrivedOnTime(it.sku,_mLpAbbrs,t.dd)).length;const late=nonStp.length-onTime;const pct=nonStp.length>0?Math.round(onTime/nonStp.length*100):0;const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">🚚 LP Arrived: ${pct}% (${onTime}/${nonStp.length} SKUs excl. STP/CT)${late>0?' · <span style="color:var(--rd)">⚠ '+late+' late</span>':''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>LM_kitInStock(it.sku)).length:0;const pct=nonStp.length>0?Math.round(inSt/nonStp.length*100):0;const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">📦 In Stock: ${STOCK_SKUS.size===0?'— (no report)':pct+'% ('+inSt+'/'+nonStp.length+' SKUs excl. STP/CT)'}</div>`})()}
-${(()=>{const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom);if(!kitItems.length||STOCK_SKUS.size===0)return'';return kitItems.map(it=>{const kit=LM_getKitById(NOM[it.sku]._kitId);if(!kit)return'';const r=LM_kitReadiness(kit.id);const sc=r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)';const bg=r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)';let h=`<div style="margin:8px 0;padding:8px 10px;border:1px solid ${sc}40;border-radius:8px;background:${bg}"><div style="font-size:11px;font-weight:700;color:${sc};margin-bottom:4px">📦 ${kit.name} — ${r.pct}% ready (${r.inStock}/${r.total} components)</div><div style="display:flex;flex-wrap:wrap;gap:3px">`;r.items.forEach(c=>{const ic=c.fulfilled?'var(--gn)':'var(--rd)';const ibg=c.fulfilled?'var(--gs)':'var(--rs)';h+=`<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:${ibg};color:${ic};font-family:var(--fm)"><span style="font-size:7px">${c.fulfilled?'●':'●'}</span> ${c.sku} <span style="font-family:var(--fd);font-weight:400">${c.name}</span> ${c.stockQty}/${c.needed}</span>`});return h+'</div></div>'}).join('')})()}
+${(()=>{const nonStp=t.items.filter(it=>{const s=(NOM[it.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')});if(_mIsLpFed&&t.dd){const onTime=nonStp.filter(it=>LM_kitArrivedOnTime(it.sku,_mLpAbbrs,t.dd,it._kitItems)).length;const late=nonStp.length-onTime;const pct=nonStp.length>0?Math.round(onTime/nonStp.length*100):0;const sc=pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)';return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">🚚 LP Arrived: ${pct}% (${onTime}/${nonStp.length} SKUs excl. STP/CT)${late>0?' · <span style="color:var(--rd)">⚠ '+late+' late</span>':''}</div>`}const inSt=STOCK_SKUS.size>0?nonStp.filter(it=>LM_kitInStock(it.sku,it._kitItems)).length:0;const pct=nonStp.length>0?Math.round(inSt/nonStp.length*100):0;const sc=STOCK_SKUS.size===0?'var(--tt)':(pct>=90?'var(--gn)':pct>=50?'var(--or)':'var(--rd)');return`<div style="font-size:11px;margin:6px 0;color:${sc};font-weight:600">📦 In Stock: ${STOCK_SKUS.size===0?'— (no report)':pct+'% ('+inSt+'/'+nonStp.length+' SKUs excl. STP/CT)'}</div>`})()}
+${(()=>{const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom||it._kitNom);if(!kitItems.length||STOCK_SKUS.size===0)return'';return kitItems.map(it=>{const frozen=it._kitItems||null;const kitId=it._kitId||NOM[it.sku]?._kitId;const kit=frozen?{name:it.nm||it.sku}:LM_getKitById(kitId);if(!kit)return'';const r=LM_kitReadiness(kitId,frozen);const sc=r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)';const bg=r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)';let h=`<div style="margin:8px 0;padding:8px 10px;border:1px solid ${sc}40;border-radius:8px;background:${bg}"><div style="font-size:11px;font-weight:700;color:${sc};margin-bottom:4px">📦 ${kit.name||it.sku} — ${r.pct}% ready (${r.inStock}/${r.total} components)</div><div style="display:flex;flex-wrap:wrap;gap:3px">`;r.items.forEach(c=>{const ic=c.fulfilled?'var(--gn)':'var(--rd)';const ibg=c.fulfilled?'var(--gs)':'var(--rs)';h+=`<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:${ibg};color:${ic};font-family:var(--fm)"><span style="font-size:7px">${c.fulfilled?'●':'●'}</span> ${c.sku} <span style="font-family:var(--fd);font-weight:400">${c.name}</span> ${c.stockQty}/${c.needed}</span>`});return h+'</div></div>'}).join('')})()}
 <table class="dtb" style="margin-top:14px"><thead><tr>
 <th colspan="4" style="border-right:2px solid var(--bd)"></th>
 <th colspan="2" style="text-align:center;border-right:2px solid var(--bl);color:var(--ts)">${isClusterTruck?'CLUSTER TOTAL':'VENUE TOTAL'}</th>
@@ -12352,9 +12343,9 @@ t.items.forEach(it=>{
 const lmSrc=(NOM[it.sku]?.src)||'';
 if(LM_hideStaples&&(lmSrc.toUpperCase().startsWith('STP')))return;
 const _isStp=lmSrc.toUpperCase().startsWith('STP')||lmSrc.toUpperCase().startsWith('CT');
-const _skuOnTime=_mIsLpFed&&!_isStp&&t.dd?LM_kitArrivedOnTime(it.sku,_mLpAbbrs,t.dd):null;
+const _skuOnTime=_mIsLpFed&&!_isStp&&t.dd?LM_kitArrivedOnTime(it.sku,_mLpAbbrs,t.dd,it._kitItems):null;
 const _skuLpArr=_mIsLpFed&&!_isStp?LM_getSkuLPArrival(it.sku,_mLpAbbrs):null;
-const lmInStock=_skuOnTime!==null?_skuOnTime:LM_kitInStock(it.sku);
+const lmInStock=_skuOnTime!==null?_skuOnTime:LM_kitInStock(it.sku,it._kitItems);
 const _dotTitle=_skuOnTime!==null?(_skuOnTime?'LP arrives '+((_skuLpArr)||'on time'):'Late — LP arrives '+(_skuLpArr||'after dispatch')):(lmInStock?'In stock':'Not in stock');
 const lmDot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lmInStock?'var(--gn)':'var(--rd)'}" title="${_dotTitle}"></span>`;
 const totalForSku=it.noPallet?LP.all.filter(x=>x.sku===it.sku).reduce((s,x)=>s+x.qty,0):LP.all.filter(x=>x.sku===it.sku&&x.ok).reduce((s,x)=>s+x.qty,0);
@@ -12610,11 +12601,14 @@ function generateDailyDigest(){
       const P2=PLAN_CACHE[label];if(!P2)continue;
       P2.allT.forEach(t=>{
         t.items.forEach(it=>{
-          const nm=NOM[it.sku];if(!nm||!nm._kitNom)return;
+          const nm=NOM[it.sku];if(!(nm?._kitNom||it._kitNom))return;
           if(!it.sku.startsWith('FNKIT')&&!it.sku.startsWith('OSKIT'))return;
-          const kit=LM_getKitById(nm._kitId);if(!kit)return;
+          const frozen=it._kitItems||null;
+          const kit=frozen?null:LM_getKitById(nm?._kitId||it._kitId);
+          const kitItems=frozen||(kit?.items||[]);
+          if(!kitItems.length)return;
           const k=it.sku;if(_kS.has(k))return;_kS.add(k);
-          _kR.push({dd:t.dd||'',truckId:t.id,sku:it.sku,kitName:kit.name||it.sku,kitType:it.sku.startsWith('FNKIT')?'FF&E':'Stationery',venue:kit.venue,dest:t.destDisplay||t.destLabel||label,items:kit.items,compCount:kit.items.length,readiness:LM_kitReadiness(kit.id)});
+          _kR.push({dd:t.dd||'',truckId:t.id,sku:it.sku,kitName:(kit?.name||it.nm||it.sku),kitType:it.sku.startsWith('FNKIT')?'FF&E':'Stationery',venue:it._kitVenue||(kit?.venue)||'',dest:t.destDisplay||t.destLabel||label,items:kitItems,compCount:kitItems.length,readiness:LM_kitReadiness(it._kitId||nm?._kitId,frozen)});
         });
       });
     }
@@ -14683,19 +14677,23 @@ if(cv==="dashboard"){
       P2.allT.forEach(t=>{
         if(LM_excluded.has(t.id))return;
         t.items.forEach(it=>{
-          const nm=NOM[it.sku];if(!nm||!nm._kitNom)return;
+          const nm=NOM[it.sku];if(!(nm?._kitNom||it._kitNom))return;
           if(!it.sku.startsWith('FNKIT')&&!it.sku.startsWith('OSKIT'))return;
-          const kit=LM_getKitById(nm._kitId);if(!kit)return;
+          const frozen=it._kitItems||null;
+          const kit=frozen?null:LM_getKitById(nm?._kitId||it._kitId);
+          const kitItems=frozen||(kit?.items||[]);
+          const kitVenue=it._kitVenue||(kit?.venue)||'';
+          if(!kitItems.length)return;
           // Cluster filter: skip kits for venues outside this cluster
-          if(_kitClVenues&&!_kitClVenues.has(kit.venue))return;
+          if(_kitClVenues&&!_kitClVenues.has(kitVenue))return;
           const k=t.id+'|'+it.sku;
           if(_kitSeen.has(k))return;_kitSeen.add(k);
           const dd=t.dd||'';
           const dest=t.destDisplay||t.destLabel||label;
-          const readiness=LM_kitReadiness(kit.id);
+          const readiness=LM_kitReadiness(it._kitId||nm?._kitId,frozen);
           const kitType=it.sku.startsWith('FNKIT')?'FF&E':'Stationery';
-          _kitRows.push({dd,truckId:t.id,sku:it.sku,kitName:kit.name||it.sku,kitType,venue:kit.venue,dest,
-            items:kit.items,compCount:kit.items.length,readiness});
+          _kitRows.push({dd,truckId:t.id,sku:it.sku,kitName:(kit?.name||it.nm||it.sku),kitType,venue:kitVenue,dest,
+            items:kitItems,compCount:kitItems.length,readiness});
         });
       });
     }
@@ -15506,7 +15504,7 @@ function exportXL(){
           'Note':_nom._kitNom?'KIT':(it.noPallet?'No pallet data':(it.pulledFrom==='no-bi'?'No bump-in':(it.topUp>0?'Top-up':(it.sched===0?'From pool':''))))
         });
         // Expand kit contents
-        if(_nom._kitNom&&_nom._kitId){const kit=LM_getKitById(_nom._kitId);if(kit){kit.items.forEach(ci=>{truckRows.push({'Venue/Cluster':label,'Truck':tr.id,'Dispatch Date':'','Bump-In Date':'','SKU':'  ↳ '+ci.sku,'Item':NOM[ci.sku]?.nm||ci.sku,'Qty':ci.qty,'Pallets':'','Note':'in kit'})})}}
+        {const _fki=it._kitItems;const _kitSrc=_fki||(()=>{const k=(_nom._kitNom&&_nom._kitId)?LM_getKitById(_nom._kitId):null;return k?.items})();if(_kitSrc){_kitSrc.forEach(ci=>{truckRows.push({'Venue/Cluster':label,'Truck':tr.id,'Dispatch Date':'','Bump-In Date':'','SKU':'  ↳ '+ci.sku,'Item':NOM[ci.sku]?.nm||ci.sku,'Qty':ci.qty,'Pallets':'','Note':'in kit'})})}}
       });
       // Append manual items for this truck
       for(const mi of MI_get(MI_lmKey(tr))){
@@ -16141,9 +16139,9 @@ async function exportTruck(truckIdx){
   const allMap={};
   t.items.filter(it=>(it.loadQty||0)>0).forEach(it=>{
     const n=NOM[it.sku]||{};
-    if(n._kitNom&&n._kitId){
-      const kit=LM_getKitById(n._kitId);
-      if(kit){kit.items.forEach(ci=>{const cn=NOM[ci.sku]||{};const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,src:cn.src||'',uom:cn.uom||'Each',qty:0};allMap[k].qty+=ci.qty});return}// kit items already in UOM
+    if(n._kitNom||it._kitNom){
+      const _fki=it._kitItems;const kitSrc=_fki||(n._kitId?LM_getKitById(n._kitId)?.items:null);
+      if(kitSrc){kitSrc.forEach(ci=>{const cn=NOM[ci.sku]||{};const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,src:cn.src||'',uom:cn.uom||'Each',qty:0};allMap[k].qty+=ci.qty});return}// kit items already in UOM
     }
     const k=it.sku;if(!allMap[k])allMap[k]={sku:k,name:it.nm||n.nm||it.sku,src:n.src||'',uom:n.uom||'Each',qty:0};
     allMap[k].qty+=it.loadQty;
