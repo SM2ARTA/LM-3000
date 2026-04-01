@@ -556,8 +556,56 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
   html+='</td></tr>';
 
-  // ── LM trucks for outbounds ──
+  // ── LM trucks for outbounds + next week ──
   const lmTruckData=D.lmTrucks||[];
+
+  // ── Next Week — LSR-assigned trucks only ──
+  const _nwStart=new Date(today);_nwStart.setDate(_nwStart.getDate()+(7-_nwStart.getDay()+1));// next Monday
+  const _nwEnd=new Date(_nwStart);_nwEnd.setDate(_nwEnd.getDate()+6);// next Sunday
+  const _nwStartK=_dk(_nwStart),_nwEndK=_dk(_nwEnd);
+  const _nwLabel=fD(_nwStartK)+' – '+fD(_nwEndK);
+  // Collect LP trucks with LSR in next week
+  const _nwTrucks=[];
+  for(const t of D.generatedPlan||[]){
+    if(!t.date||t.date<_nwStartK||t.date>_nwEndK)continue;
+    if(!lsrNumbers[t.truckId])continue;
+    const k='LP-'+t.truckId;
+    if(_nwTrucks.find(x=>x.id===k))continue;// dedup (plan has per-SKU rows)
+    const dest=clDisp(t.destination);const dc=_destClr(t.destination);
+    const isOOR=(D.oorTrucks||[]).includes(t.truckId);
+    const plt=D.generatedPlan.filter(r=>r.truckId===t.truckId).reduce((s,r)=>s+(r.pallets||0),0);
+    _nwTrucks.push({id:k,date:t.date,dest,plt:Math.round(plt*10)/10,lsr:lsrNumbers[t.truckId],type:'LP',typeClr:'#4A148C',typeBg:'#F0EBFE',oor:isOOR});
+  }
+  // Collect LM trucks with LSR in next week
+  for(const t of lmTruckData){
+    if(!t.dd||t.dd<_nwStartK||t.dd>_nwEndK)continue;
+    if(!t.lsr)continue;
+    _nwTrucks.push({id:t.id,date:t.dd,dest:clDisp(t.dest),plt:t.pallets||0,lsr:t.lsr,type:'LM',typeClr:'#304FFE',typeBg:'#E3F2FD',oor:false});
+  }
+  _nwTrucks.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+
+  if(_nwTrucks.length>0){
+    html+=_sec('&#128666;','Next Week Shipments ('+_nwLabel+')','#304FFE');
+    html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
+    html+='<tr><td colspan="6" style="padding:0 0 4px 0"><table cellpadding="0" cellspacing="0" border="0"><tr>'+
+      '<td bgcolor="#E3F2FD" style="padding:4px 12px;font-size:12px;font-weight:700;color:#304FFE;border:none">&#128230; '+_nwTrucks.length+' truck'+(_nwTrucks.length>1?'s':'')+' with LSR</td>'+
+    '</tr></table></td></tr>';
+    html+='<tr bgcolor="#F0F1F3"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DATE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TRUCK</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">TYPE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666">LSR</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#666;text-align:right">PALLETS</td></tr>';
+    let _nwPrev='';
+    for(let i=0;i<_nwTrucks.length;i++){
+      const t=_nwTrucks[i];const bg=i%2?'#FAFBFC':'#ffffff';
+      const showDate=t.date!==_nwPrev;_nwPrev=t.date;
+      html+=_trow([
+        {v:showDate?'<span style="font-weight:700">'+fD(t.date)+'</span>':''},
+        {v:'<span style="font-family:Courier New,monospace;font-weight:700">'+t.id+'</span>'},
+        {v:'<span style="font-size:10px;font-weight:700;color:'+t.typeClr+';background:'+t.typeBg+';padding:2px 6px">'+t.type+'</span>'},
+        {v:t.dest},
+        {v:'<span style="font-family:Courier New,monospace;font-size:11px;color:#12804A;font-weight:600">'+t.lsr+'</span>'},
+        {v:t.plt,style:'text-align:right;font-family:Courier New,monospace;font-weight:600'}
+      ],bg);
+    }
+    html+='</table></td></tr>';
+  }
 
   // ── Combined outbounds: LP + LM trucks ──
   const _allOutbound=[];
