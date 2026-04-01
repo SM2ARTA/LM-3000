@@ -567,6 +567,11 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _nwDays=[];for(let i=0;i<7;i++){const d=new Date(_nwMon);d.setDate(d.getDate()+i);_nwDays.push(_dk(d))}
   const _nwLabel=fD(_nwDays[0])+' &#8211; '+fD(_nwDays[6]);
 
+  // Collect inbounds in next week
+  const _nwIn={};for(const d of _nwDays)_nwIn[d]=[];
+  for(const c of allInbounds){if(_nwIn[c.readyDate]!==undefined)_nwIn[c.readyDate].push(c)}
+  let _nwTotalIn=0;for(const d of _nwDays)_nwTotalIn+=_nwIn[d].length;
+
   // Collect LP trucks with LSR in next week, grouped by date
   const _nwOut={};for(const d of _nwDays)_nwOut[d]=[];
   const _nwSeen=new Set();
@@ -584,13 +589,14 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   }
 
   let _nwTotal=0;for(const d of _nwDays)_nwTotal+=_nwOut[d].length;
-  if(_nwTotal>0){
+  if(_nwTotal>0||_nwTotalIn>0){
     html+=_sec('&#128666;','Next Week &#8212; '+_nwLabel,'#304FFE');
     html+='<tr><td style="padding:0 32px 20px">';
     html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
     // Chips
     html+='<tr><td colspan="8" style="padding:0 0 4px 0"><table cellpadding="0" cellspacing="0" border="0"><tr>';
-    html+='<td bgcolor="#E3F2FD" style="padding:5px 14px;font-size:11px;font-weight:700;color:#304FFE;border:none">&#128230; '+_nwTotal+' truck'+(_nwTotal>1?'s':'')+' with LSR</td>';
+    if(_nwTotalIn>0)html+='<td bgcolor="#E6F5ED" style="padding:5px 14px;font-size:11px;font-weight:700;color:#12804A;border:none">&#128229; '+_nwTotalIn+' inbound</td><td style="width:8px"></td>';
+    if(_nwTotal>0)html+='<td bgcolor="#E3F2FD" style="padding:5px 14px;font-size:11px;font-weight:700;color:#304FFE;border:none">&#128228; '+_nwTotal+' truck'+(_nwTotal>1?'s':'')+' with LSR</td>';
     html+='</tr></table></td></tr>';
     // Header
     html+='<tr><td bgcolor="#F4F5F7" style="padding:10px 10px;width:52px;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9"></td>';
@@ -601,6 +607,32 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
       html+='<span style="font-size:11px;font-weight:700;color:#444">'+dn+'</span><br><span style="font-size:10px;color:#999">'+dl+'</span></td>';
     }
     html+='</tr>';
+    // Inbound row
+    html+='<tr>';
+    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#12804A;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9;border-bottom:2px solid #E2E4E9">&#128229; IN<br><span style="font-size:14px;font-weight:800">'+_nwTotalIn+'</span></td>';
+    for(let i=0;i<7;i++){
+      const items=_nwIn[_nwDays[i]];const wknd=i>=5;
+      const cellBg=wknd?'#FAFAFA':'#ffffff';
+      html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED;border-bottom:2px solid #E2E4E9">';
+      if(items.length===0){
+        if(wknd)html+='';
+        else html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>';
+      } else {
+        for(const c of items){
+          const cardBg=c.isLocal?'#FFF3E0':'#E8F5E9';
+          const cardBorder=c.isLocal?'#E65100':'#2E7D32';
+          const cardTxt=c.isLocal?'#BF360C':'#1B5E20';
+          html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px"><tr>';
+          html+='<td bgcolor="'+cardBg+'" style="padding:5px 7px;border-left:4px solid '+cardBorder+'">';
+          html+='<span style="font-size:10px;font-weight:700;color:'+cardTxt+';font-family:Courier New,monospace">'+c.name.replace(/^(RGS|Container)\s*/i,'').substring(0,14)+'</span>';
+          html+='<br><span style="font-size:9px;color:#666;font-weight:600">'+(c.isLocal?'Local':'Container')+' &middot; '+c.skuCount+' SKUs &middot; '+c.qty.toLocaleString()+'</span>';
+          html+='</td></tr></table>';
+        }
+      }
+      html+='</td>';
+    }
+    html+='</tr>';
+
     // Outbound row
     html+='<tr>';
     html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#304FFE;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9">&#128228; OUT<br><span style="font-size:14px;font-weight:800">'+_nwTotal+'</span></td>';
