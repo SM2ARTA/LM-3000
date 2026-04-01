@@ -176,7 +176,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const nextToShipDisplay=nextToShip.length>0?nextToShip:pendingShips.slice(0,4);
 
   // ── Late Arrivals (from LM All Venues dashboard) — exclude +0d items ──
-  const lmLate=(D.lmLateArrivals||[]).filter(l=>l.daysLate!=null&&l.daysLate>0);
+  const lmLate=(D.lmLateArrivals||[]).filter(l=>(l.daysLate!=null&&l.daysLate>0)||l._held);
   const lateByDest={};
   for(const it of lmLate){
     if(!lateByDest[it.dest])lateByDest[it.dest]={dest:it.dest,path:it.path||'',skus:new Set(),trucks:new Set(),items:[],qty:0,maxDays:0};
@@ -264,7 +264,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     _autoFilter(wsLM);
 
     // Sheet 4: Late Arrivals
-    const _xlLate=(D.lmLateArrivals||[]).filter(l=>l.daysLate!=null&&l.daysLate>0);
+    const _xlLate=(D.lmLateArrivals||[]).filter(l=>(l.daysLate!=null&&l.daysLate>0)||l._held);
     const wsLate=wb.addWorksheet('Late Arrivals');
     wsLate.columns=[
       {header:'Destination',key:'dest',width:32},{header:'Path',key:'path',width:8},
