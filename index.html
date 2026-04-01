@@ -9213,7 +9213,7 @@ function build(venue,venueList,skipNoBi){
       if(qty<=0)continue;
       const exact=(qty/it.pq)*it.ps;
       ep+=exact;
-      loaded.push({sku:it.sku,nm:it.nm,sched:it.qty,loadQty:qty,loadPlt:Math.round(exact*100)/100,pq:it.pq,ps:it.ps,biK:it.biK,topUp:0,pulled:false,pulledFrom:""});
+      loaded.push({sku:it.sku,nm:it.nm,sched:it.qty,loadQty:qty,loadPlt:Math.round(exact*100)/100,pq:it.pq,ps:it.ps,biK:it.biK,origBiK:it.origBiK||it.biK,topUp:0,pulled:false,pulledFrom:""});
       pool[it.sku].remaining-=qty;
     }
     if(loaded.length>0){
@@ -9253,7 +9253,7 @@ function build(venue,venueList,skipNoBi){
       trucks.forEach(t=>{t.pallets=Math.round(t.pallets*100)/100});
       const dDate=disp(new Date(biK+"T12:00:00"),lt);
       // Stamp dispatch date on individual truck objects (same as main trucks)
-      trucks.forEach(t=>{t.biK=biK;t.dd=dk(dDate);t.idealDisp=dk(dDate);t.isOverflow=false;t.isEarly=true});
+      trucks.forEach(t=>{t.biK=biK;t.origBiK=t.items.reduce((m,it)=>it.origBiK&&it.origBiK<m?it.origBiK:m,biK);t.dd=dk(dDate);t.idealDisp=dk(dDate);t.isOverflow=false;t.isEarly=true});
       days.push({biK,biDate:new Date(biK+"T12:00:00"),dDate,dKey:dk(dDate),
         trucks:trucks.filter(t=>t.items.length>0),isEarly:true,hasOverflow:false,
         dayPlt:Math.round(ep*10)/10,exactPlt:ep,totalQty:loaded.reduce((s,x)=>s+x.loadQty,0)});
@@ -12628,7 +12628,7 @@ function generateDailyDigest(){
       const _path=_isDal?'Dallas':(_isLp?'LP':'LM');
       P2.allT.forEach(t=>{
         // NOTE: intentionally NO LM_excluded check — digest = full snapshot
-        const dd=t.dd||'';const biK=t.biK&&t.biK!=='no-bi'&&t.biK!=='sweep'?t.biK:null;
+        const dd=t.dd||'';const biK=(t.origBiK||t.biK)&&(t.origBiK||t.biK)!=='no-bi'&&(t.origBiK||t.biK)!=='sweep'?(t.origBiK||t.biK):null;
         if(!biK&&!dd)return;
         t.items.forEach(it=>{
           const k=label+'|'+it.sku+'|'+t.id;if(_lS.has(k))return;
@@ -14695,7 +14695,7 @@ if(cv==="dashboard"){
           if(_lpA.length&&disp&&Object.keys(LP_ARRIVAL_MAP).length){lateCount=_ns.filter(it=>!LM_kitArrivedOnTime(it.sku,_lpA,disp)).length}else if(STOCK_SKUS.size>0){lateCount=_ns.filter(it=>!LM_kitInStock(it.sku)).length}
           const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
           // Per-truck bump-in (from truck data, not venue-level)
-          const tBI=t.biK||null;
+          const tBI=t.origBiK||t.biK||null;
           const daysBeforeBI=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
           _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,daysBeforeBI,lsr:LM_getLsr(t),asmCount,lateCount,dispLoc:_dispLoc});
         }
