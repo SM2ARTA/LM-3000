@@ -249,15 +249,17 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const _xlLmTrucks=D.lmTrucks||[];
     const _lmSorted=[..._xlLmTrucks].sort((a,b)=>(a.dd||'').localeCompare(b.dd||'')||String(a.id).localeCompare(String(b.id)));
     for(const t of _lmSorted){
-      const isDisp=t.dispatched;
-      const status=isDisp?'Dispatched':'Pending';
+      const isSent=t.dispatched&&t.lsr&&t.dd<=dShort;
+      const isReady=t.dispatched&&t.lsr&&t.dd>dShort;
+      const isLocked=t.dispatched&&!t.lsr;
+      const status=isSent?'Dispatched':isReady?'Ready':isLocked?'Locked':'Pending';
       for(const it of (t.items||[])){
         wsLM.addRow({date:_fmtD(t.dd),truckId:t.id,dest:clDisp(t.dest),sku:it.sku,itemName:it.nm||it.sku,qty:it.qty,lsr:t.lsr||'',status});
-        if(isDisp){const row=wsLM.lastRow;row.eachCell(cell=>{cell.fill=_greenFill;cell.font=_greenFont})}
+        if(isSent){const row=wsLM.lastRow;row.eachCell(cell=>{cell.fill=_greenFill;cell.font=_greenFont})}
       }
       if(!t.items||!t.items.length){
         wsLM.addRow({date:_fmtD(t.dd),truckId:t.id,dest:clDisp(t.dest),sku:'',itemName:'',qty:t.pcs,lsr:t.lsr||'',status});
-        if(isDisp){const row=wsLM.lastRow;row.eachCell(cell=>{cell.fill=_greenFill;cell.font=_greenFont})}
+        if(isSent){const row=wsLM.lastRow;row.eachCell(cell=>{cell.fill=_greenFill;cell.font=_greenFont})}
       }
     }
     wsLM.getColumn('qty').numFmt='#,##0';wsLM.getColumn('qty').alignment={horizontal:'right'};
@@ -636,7 +638,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const isReady=dispatched.has(t.id)&&lsrNumbers[t.id];
     _allOutbound.push({id:'LP-'+t.id,dest:clDisp(t.dest),date:t.date,pallets:t.plt.toFixed(1),type:'LP',status:isReady?'ready':'pending',lsr:lsrNumbers[t.id]||''})
   }
-  for(const t of lmTruckData){if(t.dd&&t.dd>dShort){_allOutbound.push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM'})}}
+  for(const t of lmTruckData){if(t.dd&&t.dd>dShort){_allOutbound.push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM',status:t.dispatched&&t.lsr?'ready':'pending',lsr:t.lsr||''})}}
   _allOutbound.sort((a,b)=>a.date.localeCompare(b.date));
 
   // ── Tomorrow baseline ──
