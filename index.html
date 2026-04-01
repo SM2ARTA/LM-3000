@@ -9370,6 +9370,9 @@ function build(venue,venueList,skipNoBi){
         pulled:topUp>0,pulledFrom:topUp>0?'pool':'',remainder:0,origReq:it.origReq||0});
     }
 
+    // Skip truck creation entirely if no items to load (locked truck covered all demand for this date)
+    if(loadList.length===0){continue}
+
     // Pack into trucks, respecting dayTCap and dayMaxT
     const dayTrucks=[];
     let curTruck={items:[],pallets:0,pcs:0};
