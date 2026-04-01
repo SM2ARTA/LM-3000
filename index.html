@@ -12718,7 +12718,7 @@ function generateDailyDigest(){
           if(!inStock&&arrDallas&&needBy&&arrDallas>needBy){daysLate=Math.round((new Date(arrDallas+'T12:00:00')-new Date(needBy+'T12:00:00'))/864e5);lateType='On hold · Not ready'}
         }
         if(notInLp)lateType='On hold · No LP';
-        _lS.add(lk);_lI.push({sku:h.sku,name:NOM[h.sku]?.nm||h.sku,truckId:'HELD',dispatch:dd||'—',bumpin:h.biK||'—',rawArrival:inStock?'In stock':(rawArrival||'—'),arrDallas:inStock?'In stock':(arrDallas||'—'),lpShip:lpShip||'—',satArr:satArr||'—',whsProc:gWP(label)||0,dest:label,qty:h.qty,daysLate:daysLate||(notInLp?null:0),src:NOM[h.sku]?.src||'—',path:'Held',lateType,notInLp,_held:true});
+        _lS.add(lk);_lI.push({sku:h.sku,name:NOM[h.sku]?.nm||h.sku,truckId:'HELD',dispatch:dd||'—',bumpin:h.biK||'—',rawArrival:inStock?'In stock':(rawArrival||'—'),arrDallas:inStock?'In stock':(arrDallas||'—'),lpShip:lpShip||'—',satArr:satArr||'—',whsProc:gWP(label)||0,dest:h.venue,qty:h.qty,daysLate:daysLate||(notInLp?null:0),src:NOM[h.sku]?.src||'—',path:'Held',lateType,notInLp,_held:true});
       }
     }
     window._lateArrivalData=_lI;
