@@ -13410,6 +13410,7 @@ function LM_renderDemand(el){
     const hasKit=venueKits.length>0;
     const venueStpArr=LM_getStpForVenue(v.name);
     const hasStp=venueStpArr.length>0;
+    const _vHoldCount=v.skuList.filter(s=>LM_isHeld(v.name,s.sku)).length;
     const vEsc=v.name.replace(/'/g,"\\'");
     html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')+' '+venueKits.map(k=>k.sku+' '+k.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${hasStp?'#EF6C00':hasKit?'#43A047':hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="this.parentElement.querySelector('.lm-dem-body').classList.toggle('lm-dem-open')">
@@ -13452,7 +13453,6 @@ function LM_renderDemand(el){
     html+=`<table class="dtb"><thead><tr>
           <th>SKU</th><th>Item</th><th>Src</th><th>Orig</th><th>Adj Qty</th><th>Δ</th>${ROLE!=='viewer'?'<th></th>':''}
         </tr></thead><tbody>`;
-    const _vHoldCount=v.skuList.filter(s=>LM_isHeld(v.name,s.sku)).length;
     for(const s of v.skuList){
       const delta=s.adjQty-s.origQty;
       const deltaStr=delta>0?'+'+delta.toLocaleString():delta<0?delta.toLocaleString():'—';
