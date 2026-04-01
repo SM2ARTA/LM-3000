@@ -9994,7 +9994,17 @@ function numberAll(){
     for(const it of snap.items){
       // For kit items, resolve CURRENT kit SKU (snapshot may have old renamed SKU)
       let deductSku=it.sku;
-      if(it._kitId){const curKit=LM_KITS.find(k=>k.id===it._kitId);if(curKit)deductSku=curKit.sku}
+      if(it._kitId){
+        let curKit=LM_KITS.find(k=>k.id===it._kitId);
+        // Fallback: kit ID may have changed after strategy reapply — find by venue + type
+        if(!curKit&&it._kitNom){
+          const isFn=it.sku.startsWith('FNKIT');
+          // Try matching by venue name (label for individual venues, or check cluster venues)
+          const clVenues=CLUSTERS[label]?CLUSTERS[label].venues:[label];
+          curKit=LM_KITS.find(k=>clVenues.includes(k.venue)&&(isFn?k.sku.startsWith('FNKIT'):k.sku.startsWith('OSKIT')));
+        }
+        if(curKit)deductSku=curKit.sku;
+      }
       _lockedDemandByLabel[label][deductSku]=(_lockedDemandByLabel[label][deductSku]||0)+(it.loadQty||0);
     }
   }
