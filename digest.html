@@ -571,7 +571,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     if(!lsrNumbers[t.truckId])continue;
     const k='LP-'+t.truckId;
     if(_nwTrucks.find(x=>x.id===k))continue;// dedup (plan has per-SKU rows)
-    const dest=clDisp(t.destination);const dc=_destClr(t.destination);
+    const dest=clDisp(t.destination);
     const isOOR=(D.oorTrucks||[]).includes(t.truckId);
     const plt=D.generatedPlan.filter(r=>r.truckId===t.truckId).reduce((s,r)=>s+(r.pallets||0),0);
     _nwTrucks.push({id:k,date:t.date,dest,plt:Math.round(plt*10)/10,lsr:lsrNumbers[t.truckId],type:'LP',typeClr:'#4A148C',typeBg:'#F0EBFE',oor:isOOR});
