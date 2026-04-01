@@ -9096,6 +9096,12 @@ function build(venue,venueList,skipNoBi){
   const _stpVenues=LM_stpVenueSet();
 
   // Aggregate by (bumpIn, sku) across all venues in list
+  // DATE RULE: two dates flow through the engine:
+  //   planBiK  = scheduling date (may be clamped to release date for released holds)
+  //   origBiK  = original venue need date (never clamped — used for late reporting and display)
+  // Scheduling (byDate, truck.biK, dispatch calc) uses planBiK.
+  // Display (assembly timeline bumpin, export Bump-in, forecast daysBeforeBI) uses truck.origBiK.
+  // DO NOT use truck.biK for reporting. DO NOT use truck.origBiK for scheduling.
   const _bToday=new Date().toISOString().slice(0,10);// cached for eligibility floor
   const agg={};
   const noBiAgg={};// SKUs with no bump-in date
@@ -9145,7 +9151,8 @@ function build(venue,venueList,skipNoBi){
       cortDated[bk].push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||''});
       continue;
     }
-    // Eligibility floor: released holds plan from release date, not original bump-in
+    // Eligibility floor: planBiK = max(origBiK, releaseDate, today). Never schedules into the past.
+    // origBiK preserved for late reporting. See DATE RULE comment above.
     const origBiK=dk(bi);
     const _relK=r["Venue"]+'|'+s;
     const _relDate=LM_holdReleased[_relK]||LM_holdReleased['*|'+s]||'';
@@ -9253,7 +9260,8 @@ function build(venue,venueList,skipNoBi){
       trucks.forEach(t=>{t.pallets=Math.round(t.pallets*100)/100});
       const dDate=disp(new Date(biK+"T12:00:00"),lt);
       // Stamp dispatch date on individual truck objects (same as main trucks)
-      trucks.forEach(t=>{t.biK=biK;t.origBiK=t.items.reduce((m,it)=>it.origBiK&&it.origBiK<m?it.origBiK:m,biK);t.dd=dk(dDate);t.idealDisp=dk(dDate);t.isOverflow=false;t.isEarly=true});
+      trucks.forEach(t=>{t.biK=biK;t.origBiK=t.items.reduce((m,it)=>it.origBiK&&it.origBiK<m?it.origBiK:m,biK);// see DATE RULE
+      t.dd=dk(dDate);t.idealDisp=dk(dDate);t.isOverflow=false;t.isEarly=true});
       days.push({biK,biDate:new Date(biK+"T12:00:00"),dDate,dKey:dk(dDate),
         trucks:trucks.filter(t=>t.items.length>0),isEarly:true,hasOverflow:false,
         dayPlt:Math.round(ep*10)/10,exactPlt:ep,totalQty:loaded.reduce((s,x)=>s+x.loadQty,0)});
@@ -9544,7 +9552,9 @@ function build(venue,venueList,skipNoBi){
     const isOverflow=!allDates.includes(dateK);
 
     realTrucks.forEach(t=>{
-      t.biK=dateK;t.origBiK=t.items.reduce((m,it)=>it.origBiK&&it.origBiK<m?it.origBiK:m,dateK);t.dd=dk(dispDate);t.idealDisp=dk(dispDate);t.isOverflow=isOverflow;t.isEarly=false;t.tCap=dayTCap;
+      t.biK=dateK;// planBiK — for scheduling only
+      t.origBiK=t.items.reduce((m,it)=>it.origBiK&&it.origBiK<m?it.origBiK:m,dateK);// original need date — for display/reporting only
+      t.dd=dk(dispDate);t.idealDisp=dk(dispDate);t.isOverflow=isOverflow;t.isEarly=false;t.tCap=dayTCap;
       // Stamp pool remaining after this truck's loads
       t.items.forEach(it=>{it.poolAfter=pool[it.sku]?.remaining||0});
     });
@@ -10733,7 +10743,7 @@ let LM_dateOverrides={};// {fingerprint: newDate} — manual date changes
 let LM_lsrNumbers={};// {fingerprint: lsrString} — LSR numbers for LM trucks
 let LM_lockedSnapshots={};// {fingerprint: truckSnapshot} — frozen truck data for locked trucks
 let LM_holds=new Set();// "venue|sku" pairs on hold — excluded from build() demand aggregation
-let LM_holdReleased={};// "venue|sku" → "YYYY-MM-DD" — eligibility floor date for released holds
+let LM_holdReleased={};// "venue|sku" → "YYYY-MM-DD" — eligibility floor: build() clamps planBiK to max(origBiK, releaseDate, today)
 function LM_toggleHold(venue,sku){
   if(ROLE==='viewer')return;
   const k=venue+'|'+sku;
