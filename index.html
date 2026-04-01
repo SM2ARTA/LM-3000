@@ -10708,7 +10708,7 @@ function rTotals(){
   const bar=document.getElementById("totbar");
   if(bar)bar.style.display="flex";
 }
-function rT(){const icons={dashboard:'📊',demand:'📋',trucks:'🚛',analysis:'🔍'};document.getElementById("tabs").innerHTML=["dashboard","demand","trucks","analysis"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
+function rT(){const icons={dashboard:'📊',demand:'📋',trucks:'🚛',holds:'⏸',analysis:'🔍'};document.getElementById("tabs").innerHTML=["dashboard","demand","trucks","holds","analysis"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
 function B(t,c,s){return`<span class="bg ${s?'bgs':''} bg-${c}">${t}</span>`}
 function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95?"var(--rd)":p>80?"var(--or)":"var(--ac)";return`<div class="bw"><div class="btr"><div class="bfl" style="width:${p}%;background:${c}"></div></div><span class="blb" style="color:${c}">${p}%</span></div>`}
 
@@ -13324,6 +13324,74 @@ function _onDateRuleChange(e){
   numberAll();saveSharedData();rVL();rMain();
 }
 
+// ── LM HOLDS TAB ──
+function LM_renderHolds(el){
+  if(!RW.length){el.innerHTML='<div class="lp-empty">No demand data loaded.</div>';return}
+  // Aggregate by SKU across all venues
+  const bySku={};
+  for(const r of RW){
+    const s=r.Nomenclature;if(!s||!NOM[s])continue;
+    if(r._kit)continue;// skip kit rows — kits are their own SKU
+    const q=r._effQty||0;if(q<=0)continue;
+    if(!bySku[s])bySku[s]={sku:s,name:NOM[s]?.nm||s,src:NOM[s]?.src||'',demand:0,venues:new Set()};
+    bySku[s].demand+=q;
+    bySku[s].venues.add(r.Venue);
+  }
+  const skus=Object.values(bySku).sort((a,b)=>a.sku.localeCompare(b.sku));
+  const inStockCount=skus.filter(s=>STOCK_SKUS.has(s.sku)).length;
+  const heldCount=skus.filter(s=>LM_holds.has('*|'+s.sku)).length;
+  // Count per-venue holds too
+  const perVenueHeldSkus=new Set();
+  for(const k of LM_holds){if(!k.startsWith('*|')){const sku=k.split('|')[1];if(sku)perVenueHeldSkus.add(sku)}}
+
+  let html=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+    <h2 style="font-size:16px;font-weight:700;margin:0">⏸ Holds</h2>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span class="bg bg-bl">${skus.length} SKUs</span>
+      <span class="bg bg-gn">🟢 ${inStockCount}/${skus.length} in stock</span>
+      ${heldCount>0?`<span class="bg" style="background:#F3F4F6;color:#6B7280;border:1px solid #D1D5DB">⏸ ${heldCount} global</span>`:''}
+      ${perVenueHeldSkus.size>0?`<span class="bg" style="background:#FEF3EB;color:var(--or)">📍 ${perVenueHeldSkus.size} per-venue</span>`:''}
+      ${LM_holds.size>0&&ROLE!=='viewer'?`<button class="rbtn" onclick="LM_holds=new Set();LM_saveDateOverrides();PLAN_CACHE={};numberAll();rMain();rVL()" style="font-size:9px;padding:2px 6px" title="Clear all holds">↻ Clear All</button>`:''}
+    </div>
+  </div>`;
+  html+=`<input type="text" class="lp-search" placeholder="Search SKU or item name..." id="lmHoldSearch" oninput="LM_filterHolds()" style="margin-bottom:10px">`;
+  html+=`<table class="dtb" style="font-size:11px"><thead><tr>
+    <th style="width:28px"></th><th>SKU</th><th>Item</th><th>Source</th><th style="text-align:right">Demand</th><th style="text-align:right">Stock</th><th>Status</th><th style="text-align:right">Venues</th>${ROLE!=='viewer'?'<th style="text-align:center">Hold</th>':''}
+  </tr></thead><tbody>`;
+  for(const s of skus){
+    const inStock=STOCK_SKUS.has(s.sku);
+    const stockQty=STOCK_QTYS[s.sku];
+    const hasStockQty=stockQty!==undefined&&stockQty!==null;
+    const globalHeld=LM_holds.has('*|'+s.sku);
+    const venueHeldCount=[...s.venues].filter(v=>LM_holds.has(v+'|'+s.sku)).length;
+    const isHeldAny=globalHeld||venueHeldCount>0;
+    const shortage=inStock&&hasStockQty&&stockQty<s.demand;
+    const statusText=!inStock?'No stock':shortage?'Short ('+(s.demand-stockQty).toLocaleString()+')':'OK';
+    const statusColor=!inStock?'var(--rd)':shortage?'var(--or)':'var(--gn)';
+    const dot=inStock?'🟢':'🔴';
+    html+=`<tr class="lm-hold-row" data-search="${(s.sku+' '+s.name+' '+s.src).toLowerCase()}" style="${isHeldAny?'background:#F3F4F6;opacity:0.7':''}">
+      <td style="text-align:center;font-size:12px">${dot}</td>
+      <td class="mono fw6">${s.sku}${globalHeld?' <span style="color:var(--or);font-size:8px;font-weight:700">⏸ ALL</span>':''}${venueHeldCount>0&&!globalHeld?' <span style="color:var(--or);font-size:8px">⏸${venueHeldCount}v</span>':''}</td>
+      <td class="tcl">${s.name}</td>
+      <td style="color:var(--tt)">${s.src}</td>
+      <td class="mono" style="text-align:right">${s.demand.toLocaleString()}</td>
+      <td class="mono" style="text-align:right;color:${inStock?'var(--gn)':'var(--tt)'}">${hasStockQty?stockQty.toLocaleString():'—'}</td>
+      <td style="color:${statusColor};font-weight:600;font-size:10px">${statusText}</td>
+      <td class="mono" style="text-align:right">${s.venues.size}</td>
+      ${ROLE!=='viewer'?`<td style="text-align:center"><span onclick="LM_toggleHold('*','${s.sku}')" style="cursor:pointer;font-size:12px;color:${globalHeld?'var(--or)':'var(--tt)'}" title="${globalHeld?'Release global hold':'Hold in ALL venues'}">${globalHeld?'▶':'⏸'}</span></td>`:''}
+    </tr>`;
+  }
+  html+=`</tbody></table>`;
+  if(!skus.length)html+=`<div style="text-align:center;padding:24px;color:var(--tt)">No SKU data available.</div>`;
+  el.innerHTML=html;
+}
+function LM_filterHolds(){
+  const q=(document.getElementById('lmHoldSearch')?.value||'').toLowerCase().trim();
+  document.querySelectorAll('.lm-hold-row').forEach(r=>{
+    r.style.display=(!q||(r.dataset.search||'').includes(q))?'':'none';
+  });
+}
+
 // ── LM DEMAND TAB ──
 function LM_renderDemand(el){
   if(!RW.length){el.innerHTML='<div class="lp-empty">No demand data loaded.</div>';return}
@@ -13654,6 +13722,9 @@ if((!LP_ARRIVAL_FIFO||!Object.keys(LP_ARRIVAL_FIFO).length)&&LP_STATE?.generated
 
 // ── ANALYSIS VIEW ──
 if(cv==="analysis"){LM_renderAnalysis(el);return}
+
+// ── HOLDS VIEW ──
+if(cv==="holds"){LM_renderHolds(el);return}
 
 // ── DEMAND VIEW ──
 if(cv==="demand"){LM_renderDemand(el);return}
