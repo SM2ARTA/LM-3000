@@ -11049,7 +11049,10 @@ function LM_kitReadiness(kitId,frozenItems){
   // frozenItems: optional array of {sku,qty} from locked snapshot — bypasses live LM_KITS
   const srcItems=frozenItems||(()=>{const kit=LM_getKitById(kitId);return kit?.items||[]})();
   if(!srcItems.length)return{total:0,inStock:0,pct:0,items:[]};
-  const items=srcItems.filter(i=>{const s=(NOM[i.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')}).map(i=>{
+  // Detect stationery kit: if majority of items are STP/CT, don't filter them out
+  const _stpCount=srcItems.filter(i=>{const s=(NOM[i.sku]?.src||'').toUpperCase();return s.startsWith('STP')||s.startsWith('CT')}).length;
+  const _isStpKit=_stpCount>srcItems.length/2;
+  const items=(_isStpKit?srcItems:srcItems.filter(i=>{const s=(NOM[i.sku]?.src||'').toUpperCase();return!s.startsWith('STP')&&!s.startsWith('CT')})).map(i=>{
     const inStock=STOCK_SKUS.has(i.sku);
     const stockQty=STOCK_QTYS[i.sku]||0;
     return{sku:i.sku,name:NOM[i.sku]?.nm||i.sku,needed:i.qty,stockQty,inStock,fulfilled:inStock&&stockQty>=i.qty};
