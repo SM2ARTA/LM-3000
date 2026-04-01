@@ -10137,8 +10137,20 @@ function numberAll(){
           NOM[it.sku]={_kitNom:true,_kitId:it._kitId||'_locked',nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
         }
       }
-      // Apply date override if exists (FP is stable — uses snapshot _kitId via compat NOM)
-      const dateOvr=LM_dateOverrides[fp];
+      // Reconcile FP: snapshot key may have been stored under a different FP format
+      // (e.g., before LM_fp() was updated to use i._kitId instead of live NOM._kitId)
+      const computedFP=LM_fp(trk);
+      if(computedFP!==fp){
+        // FP mismatch — migrate all FP-keyed maps from stored key to computed key
+        if(LM_dispatched.has(fp)){LM_dispatched.delete(fp);LM_dispatched.add(computedFP)}
+        for(const m of [LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr]){if(m[fp]!==undefined){m[computedFP]=m[fp];delete m[fp]}}
+        if(LM_lockedSnapshots[fp]){LM_lockedSnapshots[computedFP]=LM_lockedSnapshots[fp];delete LM_lockedSnapshots[fp]}
+        const oldMI='LM-'+fp,newMI='LM-'+computedFP;
+        if(MANUAL_ITEMS[oldMI]){MANUAL_ITEMS[newMI]=MANUAL_ITEMS[oldMI];delete MANUAL_ITEMS[oldMI]}
+      }
+      const activeFP=computedFP;
+      // Apply date override if exists
+      const dateOvr=LM_dateOverrides[activeFP];
       if(dateOvr){trk.dd=dateOvr;trk.dKey=dateOvr}
       const dk=trk.dd||trk.dKey||'9999-12-31';
       allTrucks.push({dateK:dk,ref:trk,label:label,dispLabel:clDisp(label),_isStepB:!!trk._isStepB});
