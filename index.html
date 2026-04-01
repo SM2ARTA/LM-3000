@@ -9306,7 +9306,7 @@ function build(venue,venueList,skipNoBi){
     const _ltbd=window._lmLockedTrucksByDate||{};
     const _ltDirect=(_ltbd[venue]&&_ltbd[venue][dateK])||0;
     const _ltCluster=(()=>{const cl=VN.find(v=>v.name===venue)?.cluster;return(cl&&cl!==venue&&_ltbd[cl]&&_ltbd[cl][dateK])||0})();
-    const dayMaxT=Math.max(1,_rawMaxT-_ltDirect-_ltCluster);
+    const dayMaxT=Math.max(0,_rawMaxT-_ltDirect-_ltCluster);
     const noTopUp=!!_dovr.noTopUp||(carryOver.length>0&&_inheritedNoTopUp);
 
     // Collect items for today: requested items + carry-over from previous day
