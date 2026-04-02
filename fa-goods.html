@@ -673,7 +673,7 @@ function FA_renderDemand(){
     const isAssigned=d.linkedTruck||d.linkedKit;
     const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
     let linkDisp='<span style="color:var(--tt)">—</span>';
-    if(d.linkedTruck){const _lk=_faIsLocked(d.linkedTruck);linkDisp='<span class="bg bg-pu">🚛 '+d.linkedTruck+'</span>'+(_lk?' <span style="font-size:7px;color:var(--gn);font-weight:700">🔒</span>':' <span style="font-size:7px;color:var(--or);font-weight:700">⚠ unlocked</span>')}
+    if(d.linkedTruck){const _lk=_faIsLocked(d.linkedTruck);linkDisp='<span class="bg bg-pu">🚛 '+d.linkedTruck+'</span> '+(_lk?'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:2px 6px;border-radius:3px">🔒 LOCKED</span>':'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--or);padding:2px 6px;border-radius:3px">⚠ UNLOCKED</span>')}
     if(d.linkedKit)linkDisp+=(d.linkedTruck?' ':'')+'<span class="bg bg-gn">📦 '+d.linkedKit+'</span>';
     h+=`<tr data-search="${d.sku} ${d.name} ${d.venue} ${d.fa||''} ${d.linkedTruck||''} ${d.linkedKit||''} ${d.note||''}" data-venue="${d.venue}" data-status="${isAssigned?'assigned':'open'}" style="cursor:pointer" onclick="FA_editDemand(${d.id})">
       <td class="mono" style="color:var(--tt)">${d.id}</td>
@@ -735,7 +735,7 @@ function FA_renderShipments(){
     const totalQty=g.items.reduce((s,d)=>s+d.qty,0);
     const venues=[...new Set(g.items.map(d=>d.venue))].join(', ');
     const _gLocked=_faIsLocked(g.label);
-    const _lockBadge=g.isTruck?(_gLocked?' <span style="font-size:8px;color:var(--gn);font-weight:700">🔒 locked</span>':' <span style="font-size:8px;color:var(--or);font-weight:700">⚠ unlocked</span>'):'';
+    const _lockBadge=g.isTruck?(_gLocked?' <span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:2px 6px;border-radius:3px">🔒 LOCKED</span>':' <span style="font-size:9px;font-weight:700;color:#fff;background:var(--or);padding:2px 6px;border-radius:3px">⚠ UNLOCKED</span>'):'';
     const badge=(g.isTruck?'<span class="bg bg-pu">🚛 '+g.label+'</span>':'<span class="bg bg-gn">📦 '+g.label+'</span>')+_lockBadge;
     h+=`<div class="card" style="margin-bottom:8px" data-search="${g.label} ${venues} ${g.items.map(d=>d.sku+' '+d.name).join(' ')}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">

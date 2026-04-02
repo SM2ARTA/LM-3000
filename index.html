@@ -12970,6 +12970,8 @@ function generateDailyDigest(){
     for(const t of _digestData.generatedPlan){if(t.destination&&!_digestData.destNames[t.destination])_digestData.destNames[t.destination]=clDisp(t.destination)}
     for(const t of _lmTruckList){if(t.dest&&!_digestData.destNames[t.dest])_digestData.destNames[t.dest]=clDisp(t.dest)}
   }
+  // FA Goods items (read from Supabase)
+  _digestData.faItems=(FA_LINKED._items||[]).filter(it=>it.linkedTruck||it.linkedKit);
   try{sessionStorage.setItem('_digestData',JSON.stringify(_digestData))}catch(e){console.error('Digest data too large:',e);return}
   // Save lightweight KPI snapshot to Supabase for WHS dashboard
   try{
