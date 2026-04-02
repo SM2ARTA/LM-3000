@@ -10262,6 +10262,21 @@ function numberAll(){
     }
   });
 
+  // Re-apply compat NOM entries for locked trucks AFTER kit rename
+  // Kit rename may create NOM entries with live kit IDs for SKU names that collide
+  // with locked truck frozen SKUs (e.g., both LM-5 unlocked and LM-10 locked have FNKIT-002-LM-5-01)
+  allTrucks.forEach(e=>{
+    if(!e.ref._locked)return;
+    for(const it of e.ref.items){
+      const isKit=it._kitNom||(it.sku.startsWith('FNKIT')||it.sku.startsWith('OSKIT'));
+      if(isKit){
+        const _stableId=it._kitId||('_lock:'+it.sku);
+        NOM[it.sku]={_kitNom:true,_kitId:_stableId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
+        if(!it._kitId)it._kitId=_stableId;
+      }
+    }
+  });
+
   // Sort and number CORT globally C-1, C-2...
   allCort.sort((a,b)=>a.dateK<b.dateK?-1:a.dateK>b.dateK?1:0);
   let cn=1;allCort.forEach(e=>{e.ref.id=`C-${cn++}`;e.ref.destDisplay=e.venueName||''});
