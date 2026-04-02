@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ML3K — FA Goods</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1"></script>
+<style>
+:root{--bg:#F4F5F7;--sf:#FFF;--bd:#E2E4E9;--bl:#EDEEF1;--tp:#111318;--ts:#60646C;--tt:#9CA0AA;--ac:#CF5D5D;--as:#FDF0F0;--ab:#E8A5A5;--gn:#12804A;--gs:#E6F5ED;--or:#C4550A;--os:#FEF3EB;--rd:#C62A2F;--rs:#FDEBED;--pu:#6E3FF3;--ps:#F0EBFE;--fd:'DM Sans',system-ui,sans-serif;--fm:'IBM Plex Mono',monospace;--r:10px;--cy:#0891B2;--cs:#ECFEFF}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--fd);background:var(--bg);color:var(--tp);font-size:13px;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+.mono{font-family:var(--fm)}
+.fw6{font-weight:600}
+.hd{background:var(--sf);border-bottom:1px solid var(--bd);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hl{display:flex;align-items:center;gap:10px}
+.main{flex:1;overflow-y:auto;padding:20px;padding-bottom:44px}
+
+/* Badges */
+.bg{display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;white-space:nowrap}
+.bg-bl{background:var(--as);color:var(--ac)}.bg-gn{background:var(--gs);color:var(--gn)}.bg-or{background:var(--os);color:var(--or)}.bg-rd{background:var(--rs);color:var(--rd)}.bg-pu{background:var(--ps);color:var(--pu)}.bg-gy{background:#F0F1F3;color:var(--tt)}.bg-cy{background:var(--cs);color:var(--cy)}
+
+/* Buttons */
+.rbtn{padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid var(--bd);cursor:pointer;font-family:var(--fd);font-weight:600;background:var(--sf);color:var(--tp);transition:all .15s}
+.rbtn:hover{box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.mbtn{padding:9px 22px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid var(--bd);cursor:pointer;font-family:var(--fd);background:var(--sf);color:var(--tp);transition:all .15s}
+.mbtn-primary{background:var(--ac);color:#fff;border-color:var(--ac)}
+.mbtn-danger{background:var(--rd);color:#fff;border-color:var(--rd)}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--bd);margin-bottom:16px}
+.tab{padding:8px 20px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ts);transition:all .15s}
+.tab:hover{color:var(--tp)}
+.tab.act{color:var(--ac);border-bottom-color:var(--ac)}
+.tab-panel{display:none}.tab-panel.vis{display:block}
+
+/* Cards */
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+
+/* Tables */
+.dtb{width:100%;border-collapse:collapse;font-size:12px}
+.dtb th{text-align:left;padding:8px 10px;font-weight:600;color:var(--ts);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--bd);background:var(--bg)}
+.dtb td{padding:7px 10px;border-bottom:1px solid var(--bl)}
+.dtb tr:hover{background:#FAFBFC}
+
+/* KPI cards */
+.kpi-row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.kpi{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:12px 16px;min-width:120px}
+.kpi .kl{font-size:10px;color:var(--ts);margin-bottom:4px}
+.kpi .kv{font-size:22px;font-weight:700;font-family:var(--fm)}
+
+/* Modal */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--sf);border-radius:12px;max-width:640px;width:90%;max-height:85vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal h3{font-size:16px;margin-bottom:16px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* Form elements */
+input[type=text],input[type=number],input[type=date],select{padding:6px 10px;font-size:12px;font-family:var(--fd);border:1px solid var(--bd);border-radius:6px;outline:none;transition:border .15s}
+input:focus,select:focus{border-color:var(--ac)}
+.form-row{display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.form-label{font-size:11px;font-weight:600;color:var(--ts);min-width:60px}
+
+/* Search/lookup */
+.lookup-wrap{position:relative}
+.lookup-results{position:absolute;top:100%;left:0;right:0;max-height:240px;overflow-y:auto;background:var(--sf);border:1px solid var(--bd);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;display:none}
+.lookup-results.vis{display:block}
+.lookup-item{padding:6px 10px;cursor:pointer;font-size:11px;display:flex;gap:8px;align-items:center}
+.lookup-item:hover{background:var(--bg)}
+.lookup-item .sku{font-family:var(--fm);font-weight:600;min-width:120px}
+.lookup-item .nm{color:var(--ts);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Shipment cards */
+.ship-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:14px;cursor:pointer;transition:all .2s}
+.ship-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.06)}
+
+/* Status badges */
+.st-draft{background:#F0F1F3;color:var(--tt)}
+.st-oor{background:var(--os);color:var(--or)}
+.st-packed{background:var(--ps);color:var(--pu)}
+.st-shipped{background:var(--cs);color:var(--cy)}
+.st-delivered{background:var(--gs);color:var(--gn)}
+
+/* Bottom bar */
+#fa-bar{position:fixed;bottom:0;left:0;right:0;height:44px;background:var(--sf);border-top:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;gap:8px;z-index:65}
+
+/* Supabase status */
+.sb-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px}
+.sb-ok{background:var(--gn)}.sb-err{background:var(--rd)}.sb-chk{background:var(--or)}
+
+/* Responsive */
+@media(max-width:768px){.hd{padding:8px 12px;flex-wrap:wrap;gap:8px}.main{padding:12px}.kpi-row{gap:8px}.kpi{min-width:90px;padding:8px 10px}.kpi .kv{font-size:18px}}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hd">
+  <div class="hl">
+    <div style="width:28px;height:28px;background:var(--ac);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700">FA</div>
+    <div>
+      <div style="font-size:14px;font-weight:700">FA Goods
+        <span id="sbStatus" style="font-size:10px;font-weight:500;color:var(--tt)"><span class="sb-dot sb-chk"></span>Connecting...</span>
+      </div>
+      <div style="font-size:10px;color:var(--tt)" id="hdrSummary">No data loaded</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <button class="rbtn" onclick="FA_sync()" title="Refresh from server" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">⟳ Sync</button>
+    <button class="rbtn" onclick="window.open('/','_self')" style="background:var(--as);color:var(--ac);border-color:var(--ab)">← ML3K</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div style="padding:12px 20px 0;background:var(--sf);flex-shrink:0">
+  <div class="tabs" id="faTabs">
+    <div class="tab act" onclick="FA_tab('nom')">📋 Nomenclature</div>
+    <div class="tab" onclick="FA_tab('demand')">📦 Demand</div>
+    <div class="tab" onclick="FA_tab('shipments')">🚛 Assignments</div>
+  </div>
+</div>
+
+<!-- Tab panels -->
+<div class="main" id="faMain">
+  <!-- NOM tab -->
+  <div class="tab-panel vis" id="pNom">
+    <div class="card">
+      <div class="card-hd">
+        <div>
+          <span style="font-weight:700;font-size:14px">FA Nomenclature</span>
+          <span class="bg bg-gy" id="nomCount">0 SKUs</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <input type="file" id="nomFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="FA_parseNom(this.files[0]);this.value=''">
+          <button class="rbtn" onclick="document.getElementById('nomFileInput').click()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">📎 Upload NOM</button>
+          <button class="rbtn" onclick="FA_addNomManual()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">+ Add SKU</button>
+          <button class="rbtn" onclick="FA_clearNom()" style="background:var(--rs);color:var(--rd);border-color:#F5C6C7">✕ Clear</button>
+        </div>
+      </div>
+      <input type="text" id="nomSearch" placeholder="Search SKU or name..." oninput="FA_filterNom()" style="width:100%;margin-bottom:8px">
+      <div id="nomTable" style="max-height:60vh;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- Demand tab -->
+  <div class="tab-panel" id="pDemand">
+    <div class="kpi-row" id="demKpis"></div>
+    <div class="card">
+      <div class="card-hd">
+        <div>
+          <span style="font-weight:700;font-size:14px">FA Demand</span>
+          <span class="bg bg-gy" id="demCount">0 items</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="rbtn" onclick="FA_showAddDemand()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">+ Add Demand</button>
+          <button class="rbtn" onclick="FA_clearDemand()" style="background:var(--rs);color:var(--rd);border-color:#F5C6C7">✕ Clear</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <input type="text" id="demSearch" placeholder="Search SKU, name, venue..." oninput="FA_filterDem()" style="flex:1;min-width:200px">
+        <select id="demVenueFilter" onchange="FA_filterDem()" style="min-width:140px"><option value="">All Venues</option></select>
+        <select id="demStatusFilter" onchange="FA_filterDem()" style="min-width:120px">
+          <option value="">All</option>
+          <option value="assigned">Assigned</option>
+          <option value="open">Unassigned</option>
+        </select>
+      </div>
+      <div id="demTable" style="max-height:55vh;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- Assignments tab -->
+  <div class="tab-panel" id="pShipments">
+    <div class="kpi-row" id="shipKpis"></div>
+    <div class="card">
+      <div class="card-hd">
+        <div>
+          <span style="font-weight:700;font-size:14px">Assignments</span>
+          <span class="bg bg-gy" id="shipCount">0 assigned</span>
+        </div>
+      </div>
+      <input type="text" id="shipSearch" placeholder="Search truck, kit, venue, SKU..." oninput="FA_filterShip()" style="width:100%;margin-bottom:8px">
+      <div id="shipGrid" style="max-height:55vh;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom bar -->
+<div id="fa-bar">
+  <span style="font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | <span style="font-weight:600">SM²ARTA™</span> — FA Goods Module</span>
+  <span style="margin-left:auto;display:flex;gap:6px">
+    <button class="rbtn" onclick="FA_exportAll()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">⬇ Export</button>
+    <button class="rbtn" onclick="FA_help()" style="background:var(--bg);color:var(--ts)">? Help</button>
+  </span>
+</div>
+
+<!-- Modal container -->
+<div id="faModal"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// FA Goods Module — Standalone, isolated from ML3K index.html
+// Reads/writes only fa-* Supabase keys. Zero coupling.
+// ═══════════════════════════════════════════════════════════════
+
+// ── Supabase ──
+const SUPABASE_URL='https://stwopndhnxcjyomkufii.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
+let SB=null;
+try{SB=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.warn('Supabase init failed:',e)}
+
+// ── State ──
+let FA_NOM={};       // {sku: {name, uom, pq, ps, src, ppu}}
+let FA_DEMAND=[];    // [{id, sku, name, venue, fa, qty, biDate, note, shipmentId, created}]
+let FA_nextDemId=1;
+let FA_curTab='nom';
+
+// ── Supabase read/write helpers ──
+async function FA_sbRead(key){
+  if(!SB)return null;
+  try{
+    const{data,error}=await SB.from('shared_state').select('value').eq('id',key).single();
+    if(error||!data)return null;
+    return JSON.parse(data.value);
+  }catch(e){console.warn('FA read '+key+':',e);return null}
+}
+async function FA_sbWrite(key,val){
+  if(!SB)return;
+  try{
+    await SB.from('shared_state').upsert({id:key,value:JSON.stringify(val),updated_at:new Date().toISOString()});
+  }catch(e){console.warn('FA write '+key+':',e)}
+}
+
+// ── ML3K Lookup (read-only — never writes to these keys) ──
+let FA_ML3K_VENUES=[];// [{name, cluster, biDate}] — from fm-rw
+let FA_ML3K_TRUCKS=[];// [{id, dest, date, type:'lp'|'lm'}] — from lp-plan + lm dispatch
+let FA_ML3K_KITS=[];  // [{id, sku, venue, type, truckRef}] — from fm-lm-kits
+let _faKitTruckMap={}; // kitId → truck ref (from locked snapshots)
+async function FA_loadML3K(){
+  try{
+    const[rw,lpPlan,lmDisp,lmKits]=await Promise.all([
+      FA_sbRead('fm-rw'),FA_sbRead('lp-plan'),FA_sbRead('fm-lm-dispatch'),FA_sbRead('fm-lm-kits')
+    ]);
+    // Extract unique venues + earliest BI date from RW
+    if(rw&&Array.isArray(rw)){
+      const vmap={};
+      for(const r of rw){
+        const v=r["Venue"];if(!v)continue;
+        const bi=r["Estimated bump-in date"]||'';
+        const cl=r["Venue cluster"]||'';
+        if(!vmap[v]||(bi&&(!vmap[v].biDate||bi<vmap[v].biDate)))vmap[v]={name:v,cluster:cl,biDate:bi};
+      }
+      FA_ML3K_VENUES=Object.values(vmap).sort((a,b)=>a.name.localeCompare(b.name));
+    }
+    // Extract LP truck list with dates
+    const _fmtD=d=>{if(!d)return'';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};
+    if(lpPlan&&Array.isArray(lpPlan)){
+      const tmap={};
+      for(const r of lpPlan){
+        const tid=r['Truck ID']||r.truckId;if(!tid)continue;
+        if(!tmap[tid])tmap[tid]={id:'LP-'+tid,dest:r.Destination||r.destination||'',date:r.Date||r.date||'',type:'lp'};
+      }
+      FA_ML3K_TRUCKS=Object.values(tmap).sort((a,b)=>{const na=parseInt(a.id.replace(/\D/g,'')),nb=parseInt(b.id.replace(/\D/g,''));return na-nb});
+    }
+    // Extract LM trucks from locked snapshots + build kit→truck map
+    _faKitTruckMap={};
+    if(lmDisp&&lmDisp.lockedSnapshots){
+      const lsrMap=lmDisp.lsrNumbers||{};
+      for(const fp in lmDisp.lockedSnapshots){
+        const snap=lmDisp.lockedSnapshots[fp];
+        const dest=snap.destLabel||snap.destDisplay||'';
+        const lsr=lsrMap[fp]||'';
+        const dd=snap.dKey||snap.dd||'';
+        const truckRef='LM '+dest+(lsr?' · '+lsr:'');
+        if(dest)FA_ML3K_TRUCKS.push({id:truckRef,dest,date:dd,type:'lm',lsr});
+        // Map kit items to this truck
+        if(snap.items){for(const it of snap.items){if(it._kitId)_faKitTruckMap[it._kitId]=truckRef}}
+      }
+    }
+    // Extract kits with truck reference
+    if(lmKits&&Array.isArray(lmKits)){
+      FA_ML3K_KITS=lmKits.map(k=>{
+        const kid=k.id||k.sku;
+        return{id:kid,sku:k.sku,venue:k.venue||'',type:k.sku?.startsWith('FNKIT')?'FF&E':'Stationery',truckRef:_faKitTruckMap[kid]||null};
+      });
+    }
+    console.log('[FA] ML3K lookup: '+FA_ML3K_VENUES.length+' venues, '+FA_ML3K_TRUCKS.length+' trucks, '+FA_ML3K_KITS.length+' kits');
+  }catch(e){console.warn('[FA] ML3K lookup failed:',e)}
+}
+// Get trucks relevant to a venue (by destination match)
+function _faTrucksForVenue(venue){
+  if(!venue)return FA_ML3K_TRUCKS;
+  const vl=venue.toLowerCase();
+  // Find ML3K venue cluster
+  const ml=FA_ML3K_VENUES.find(v=>v.name===venue);
+  const cl=(ml?.cluster||'').toLowerCase();
+  return FA_ML3K_TRUCKS.filter(t=>{
+    const dl=t.dest.toLowerCase();
+    return dl.includes(vl)||vl.includes(dl)||(cl&&dl.includes(cl));
+  });
+}
+function _faKitsForVenue(venue){
+  if(!venue)return FA_ML3K_KITS;
+  return FA_ML3K_KITS.filter(k=>k.venue===venue);
+}
+
+// ── Save/Load ──
+let _faSaveTimer=null;
+function FA_saveDebounced(){clearTimeout(_faSaveTimer);_faSaveTimer=setTimeout(FA_save,1500)}
+async function FA_save(){
+  await Promise.all([
+    FA_sbWrite('fa-nom',FA_NOM),
+    FA_sbWrite('fa-demand',{items:FA_DEMAND,nextId:FA_nextDemId})
+  ]);
+  console.log('[FA] Saved to Supabase');
+}
+async function FA_load(){
+  const[nom,dem]=await Promise.all([
+    FA_sbRead('fa-nom'),
+    FA_sbRead('fa-demand')
+  ]);
+  if(nom)FA_NOM=nom;
+  if(dem){FA_DEMAND=dem.items||[];FA_nextDemId=dem.nextId||FA_DEMAND.length+1}
+  console.log('[FA] Loaded: '+Object.keys(FA_NOM).length+' NOM, '+FA_DEMAND.length+' demand');
+  FA_updateStatus(true);
+  FA_render();
+}
+
+// ── Tab switching ──
+function FA_tab(id){
+  FA_curTab=id;
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('act',['nom','demand','shipments'][i]===id));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('vis'));
+  document.getElementById({nom:'pNom',demand:'pDemand',shipments:'pShipments'}[id]).classList.add('vis');
+  FA_render();
+}
+
+// ── Render all ──
+function FA_render(){
+  if(FA_curTab==='nom')FA_renderNom();
+  else if(FA_curTab==='demand')FA_renderDemand();
+  else if(FA_curTab==='shipments')FA_renderShipments();
+  FA_updateHeader();
+}
+
+function FA_updateHeader(){
+  const n=Object.keys(FA_NOM).length;
+  const d=FA_DEMAND.length;
+  const a=FA_DEMAND.filter(x=>x.linkedTruck||x.linkedKit).length;
+  document.getElementById('hdrSummary').textContent=n+' SKUs · '+d+' demand lines · '+a+' assigned';
+}
+
+function FA_updateStatus(ok){
+  const el=document.getElementById('sbStatus');
+  if(ok)el.innerHTML='<span class="sb-dot sb-ok"></span>Connected';
+  else el.innerHTML='<span class="sb-dot sb-err"></span>Error';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NOM TAB
+// ═══════════════════════════════════════════════════════════════
+function FA_parseNom(file){
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!rows.length)throw new Error('Empty file');
+      const hdrs=Object.keys(rows[0]);
+      const hl=h=>h.toLowerCase().replace(/[\s_\-\.]/g,'');
+      const skuCol=hdrs.find(h=>hl(h).includes('nomenclaturecode'))||hdrs.find(h=>hl(h).includes('code'))||hdrs.find(h=>hl(h).includes('sku'))||hdrs[0];
+      const nameCol=hdrs.find(h=>hl(h).includes('nomenclaturename'))||hdrs.find(h=>hl(h).includes('name'))||hdrs[1];
+      const uomCol=hdrs.find(h=>hl(h).includes('uom'))||hdrs.find(h=>hl(h).includes('unit'));
+      const srcCol=hdrs.find(h=>hl(h).includes('source'))||hdrs.find(h=>hl(h).includes('supplier'));
+      const pqCol=hdrs.find(h=>h.toLowerCase().includes('pallet')&&h.toLowerCase().includes('quantity')&&h.toLowerCase().includes('disassembled'))||hdrs.find(h=>hl(h).includes('disqty'))||hdrs.find(h=>hl(h).includes('palletqty')||hl(h)==='pq');
+      const psCol=hdrs.find(h=>h.toLowerCase().includes('pallet')&&h.toLowerCase().includes('spaces')&&h.toLowerCase().includes('disassembled'))||hdrs.find(h=>hl(h).includes('disspc'))||hdrs.find(h=>hl(h).includes('palletspc')||hl(h)==='ps');
+      const ppuCol=hdrs.find(h=>hl(h)==='ppu'||hl(h).includes('piecesper')||hl(h).includes('perunit')||h.toLowerCase().includes('pieces per'));
+      const hsCol=hdrs.find(h=>hl(h)==='hscode'||h.toLowerCase().includes('hs code'));
+      const countryCol=hdrs.find(h=>h.toLowerCase().includes('country of origin'));
+      const priceCol=hdrs.find(h=>hl(h).includes('price')||hl(h).includes('unitprice')||hl(h).includes('cost'));
+      window._faNomHdrs=hdrs;
+      console.log('[FA NOM] Headers:',JSON.stringify(hdrs),'| Detected: sku='+skuCol+' name='+nameCol+' src='+srcCol+' uom='+uomCol+' pq='+pqCol+' ps='+psCol+' price='+priceCol);
+      let count=0;
+      for(const row of rows){
+        const sku=String(row[skuCol]||'').trim();
+        if(!sku||sku.toLowerCase()==='total')continue;
+        FA_NOM[sku]={
+          name:String(row[nameCol]||'').trim(),
+          uom:uomCol?String(row[uomCol]||'').trim():'Each',
+          src:srcCol?String(row[srcCol]||'').trim():'',
+          pq:pqCol?parseFloat(row[pqCol])||0:0,
+          ps:psCol?parseFloat(row[psCol])||0:0,
+          ppu:ppuCol?parseFloat(row[ppuCol])||1:1,
+          price:priceCol?parseFloat(String(row[priceCol]||'').replace(/[,$]/g,''))||0:0,
+          hsCode:hsCol?String(row[hsCol]||'').trim():'',
+          country:countryCol?String(row[countryCol]||'').trim():''
+        };
+        count++;
+      }
+      console.log('[FA NOM] Parsed '+count+' SKUs ('+Object.keys(FA_NOM).length+' total) from columns: sku='+skuCol+' name='+nameCol);
+      FA_save();
+      FA_render();
+    }catch(err){alert('Failed to parse NOM: '+err.message)}
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function FA_addNomManual(){
+  const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
+    <div class="modal"><h3>Add SKU</h3>
+    <div class="form-row"><span class="form-label">SKU</span><input type="text" id="_faNomSku" style="flex:1" placeholder="FA-001-001"></div>
+    <div class="form-row"><span class="form-label">Name</span><input type="text" id="_faNomName" style="flex:1" placeholder="Item name"></div>
+    <div class="form-row"><span class="form-label">UoM</span><input type="text" id="_faNomUom" value="Each" style="width:80px"><span class="form-label">Source</span><input type="text" id="_faNomSrc" style="width:100px" placeholder="RGS"></div>
+    <div class="form-row"><span class="form-label">Plt Qty</span><input type="number" id="_faNomPq" value="0" style="width:60px"><span class="form-label">Plt Spc</span><input type="number" id="_faNomPs" value="0" style="width:60px"><span class="form-label">Price</span><input type="number" id="_faNomPrice" value="0" style="width:80px" step="0.01"></div>
+    <div class="modal-actions"><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_addNomConfirm()">Add</button></div>
+    </div></div>`;
+  document.getElementById('faModal').innerHTML=h;
+}
+function FA_addNomConfirm(){
+  const sku=document.getElementById('_faNomSku').value.trim();
+  if(!sku)return alert('SKU required');
+  FA_NOM[sku]={
+    name:document.getElementById('_faNomName').value.trim(),
+    uom:document.getElementById('_faNomUom').value.trim()||'Each',
+    src:document.getElementById('_faNomSrc').value.trim(),
+    pq:parseFloat(document.getElementById('_faNomPq').value)||0,
+    ps:parseFloat(document.getElementById('_faNomPs').value)||0,
+    ppu:1,
+    price:parseFloat(document.getElementById('_faNomPrice').value)||0
+  };
+  document.getElementById('faModal').innerHTML='';
+  FA_saveDebounced();FA_render();
+}
+
+function FA_deleteNom(sku){
+  if(!confirm('Delete SKU '+sku+'?'))return;
+  delete FA_NOM[sku];
+  FA_saveDebounced();FA_render();
+}
+
+function FA_clearNom(){
+  if(!confirm('Clear all FA nomenclature?'))return;
+  FA_NOM={};FA_saveDebounced();FA_render();
+}
+
+function FA_renderNom(){
+  const skus=Object.keys(FA_NOM).sort();
+  document.getElementById('nomCount').textContent=skus.length+' SKUs';
+  if(!skus.length){document.getElementById('nomTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No nomenclature loaded. Upload a file or add SKUs manually.</div>';return}
+  let h='<table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th>UoM</th><th style="text-align:right">Plt Qty</th><th style="text-align:right">Plt Spc</th><th style="text-align:right">Price</th><th></th></tr></thead><tbody>';
+  for(const sku of skus){
+    const n=FA_NOM[sku];
+    h+=`<tr data-search="${sku} ${n.name} ${n.src}"><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src}</td><td>${n.uom}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td><td><button class="rbtn" onclick="FA_deleteNom('${sku}')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td></tr>`;
+  }
+  h+='</tbody></table>';
+  document.getElementById('nomTable').innerHTML=h;
+  FA_filterNom();
+}
+function FA_filterNom(){
+  const q=(document.getElementById('nomSearch').value||'').toLowerCase();
+  document.querySelectorAll('#nomTable tbody tr').forEach(r=>{
+    r.style.display=!q||r.getAttribute('data-search').toLowerCase().includes(q)?'':'none';
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEMAND TAB
+// ═══════════════════════════════════════════════════════════════
+function FA_showAddDemand(){
+  // Merge ML3K venues + already-used venues
+  const usedVenues=[...new Set(FA_DEMAND.map(d=>d.venue).filter(Boolean))];
+  const ml3kNames=FA_ML3K_VENUES.map(v=>v.name);
+  const allVenues=[...new Set([...ml3kNames,...usedVenues])].sort();
+  const fas=[...new Set(FA_DEMAND.map(d=>d.fa).filter(Boolean))].sort();
+  const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
+    <div class="modal"><h3>Add Demand Line</h3>
+    <div class="form-row"><span class="form-label">Venue</span>
+      <input type="text" id="_faDemVenue" list="_faDemVenueList" style="flex:1" placeholder="Venue name" onchange="FA_autoFillBI()">
+      <datalist id="_faDemVenueList">${allVenues.map(v=>'<option value="'+v+'">').join('')}</datalist>
+    </div>
+    <div class="form-row"><span class="form-label">FA</span>
+      <input type="text" id="_faDemFa" list="_faDemFaList" style="flex:1" placeholder="Functional Area (e.g., Catering, Media)">
+      <datalist id="_faDemFaList">${fas.map(f=>'<option value="'+f+'">').join('')}</datalist>
+    </div>
+    <div class="form-row"><span class="form-label">BI Date</span><input type="date" id="_faDemBi" style="width:160px"><span id="_faBiHint" style="font-size:10px;color:var(--tt)"></span></div>
+    <div class="form-row"><span class="form-label">SKU</span>
+      <div class="lookup-wrap" style="flex:1">
+        <input type="text" id="_faDemSku" style="width:100%" placeholder="Type to search NOM..." oninput="FA_lookupSku(this.value)" autocomplete="off">
+        <div class="lookup-results" id="_faDemLookup"></div>
+      </div>
+    </div>
+    <div class="form-row"><span class="form-label">Name</span><input type="text" id="_faDemName" style="flex:1" readonly></div>
+    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faDemQty" value="1" min="1" style="width:80px"><span class="form-label">Note</span><input type="text" id="_faDemNote" style="flex:1" placeholder="Optional note"></div>
+    <div class="modal-actions"><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn" style="background:var(--gn);color:#fff;border-color:var(--gn)" onclick="FA_addDemandMore()">Add & More</button><button class="mbtn mbtn-primary" onclick="FA_addDemandConfirm(true)">Add & Close</button></div>
+    </div></div>`;
+  document.getElementById('faModal').innerHTML=h;
+}
+
+function FA_autoFillBI(){
+  const venue=document.getElementById('_faDemVenue').value.trim();
+  const biEl=document.getElementById('_faDemBi');
+  const hint=document.getElementById('_faBiHint');
+  const ml=FA_ML3K_VENUES.find(v=>v.name===venue);
+  if(ml&&ml.biDate){
+    if(!biEl.value)biEl.value=ml.biDate;
+    hint.textContent='ML3K: '+new Date(ml.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+(ml.cluster?' · '+ml.cluster:'');
+  }else{hint.textContent=''}
+}
+function FA_lookupSku(q){
+  const drop=document.getElementById('_faDemLookup');
+  if(!q||q.length<1){drop.classList.remove('vis');return}
+  const ql=q.toLowerCase();
+  const matches=Object.keys(FA_NOM).filter(s=>s.toLowerCase().includes(ql)||FA_NOM[s].name.toLowerCase().includes(ql)).slice(0,15);
+  if(!matches.length){drop.classList.remove('vis');return}
+  drop.innerHTML=matches.map(s=>`<div class="lookup-item" onclick="FA_selectSku('${s}')"><span class="sku">${s}</span><span class="nm">${FA_NOM[s].name}</span><span class="bg bg-gy">${FA_NOM[s].uom}</span></div>`).join('');
+  drop.classList.add('vis');
+}
+function FA_selectSku(sku){
+  document.getElementById('_faDemSku').value=sku;
+  document.getElementById('_faDemName').value=FA_NOM[sku]?.name||'';
+  document.getElementById('_faDemLookup').classList.remove('vis');
+}
+function FA_addDemandMore(){FA_addDemandConfirm(false)}
+function FA_addDemandConfirm(close){
+  const sku=document.getElementById('_faDemSku').value.trim();
+  const venue=document.getElementById('_faDemVenue').value.trim();
+  const fa=document.getElementById('_faDemFa').value.trim();
+  const qty=parseInt(document.getElementById('_faDemQty').value)||1;
+  const biDate=document.getElementById('_faDemBi').value||'';
+  const note=document.getElementById('_faDemNote').value.trim();
+  if(!sku)return alert('SKU required');
+  if(!venue)return alert('Venue required');
+  const name=FA_NOM[sku]?.name||document.getElementById('_faDemName').value.trim()||sku;
+  FA_DEMAND.push({id:FA_nextDemId++,sku,name,venue,fa,qty,biDate,note,linkedTruck:null,linkedKit:null,created:new Date().toISOString()});
+  FA_saveDebounced();
+  if(close){document.getElementById('faModal').innerHTML='';FA_render()}
+  else{document.getElementById('_faDemSku').value='';document.getElementById('_faDemName').value='';document.getElementById('_faDemQty').value='1';document.getElementById('_faDemNote').value='';document.getElementById('_faDemSku').focus()}
+}
+
+function FA_editDemand(id){
+  const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
+  const _fmtD=dt=>{if(!dt)return'';try{return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return dt}};
+  const relTrucks=_faTrucksForVenue(d.venue);
+  const truckOpts=relTrucks.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}</option>`).join('');
+  const relKits=_faKitsForVenue(d.venue);
+  const kitOpts=relKits.map(k=>`<option value="${k.id}">${k.id} — ${k.type}${k.truckRef?' · 🚛 '+k.truckRef:''}</option>`).join('');
+  const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
+    <div class="modal"><h3>Edit Demand #${id}</h3>
+    <div class="form-row"><span class="form-label">SKU</span><input type="text" id="_faEdSku" value="${d.sku}" style="flex:1" readonly></div>
+    <div class="form-row"><span class="form-label">Venue</span><input type="text" id="_faEdVenue" value="${d.venue}" style="flex:1"></div>
+    <div class="form-row"><span class="form-label">FA</span><input type="text" id="_faEdFa" value="${d.fa||''}" style="flex:1"></div>
+    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faEdQty" value="${d.qty}" min="1" style="width:80px"><span class="form-label">BI Date</span><input type="date" id="_faEdBi" value="${d.biDate||''}" style="width:160px"></div>
+    <div class="form-row"><span class="form-label">Truck</span>
+      <input type="text" id="_faEdTruck" value="${d.linkedTruck||''}" list="_faEdTruckList" style="flex:1" placeholder="LP-42 or LM (venue)">
+      <datalist id="_faEdTruckList">${truckOpts}</datalist>
+      <span style="font-size:9px;color:var(--tt)">${relTrucks.length} for venue</span>
+    </div>
+    <div class="form-row"><span class="form-label">Kit</span>
+      <input type="text" id="_faEdKit" value="${d.linkedKit||''}" list="_faEdKitList" style="flex:1" placeholder="FNKIT-002-42" onchange="FA_kitAutoTruck()">
+      <datalist id="_faEdKitList">${kitOpts}</datalist>
+      <span style="font-size:9px;color:var(--tt)">${relKits.length} for venue</span>
+    </div>
+    <div class="form-row"><span class="form-label">Note</span><input type="text" id="_faEdNote" value="${d.note||''}" style="flex:1"></div>
+    <div class="modal-actions"><button class="mbtn mbtn-danger" onclick="FA_deleteDemand(${id})">Delete</button><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveDemandEdit(${id})">Save</button></div>
+    </div></div>`;
+  document.getElementById('faModal').innerHTML=h;
+}
+function FA_kitAutoTruck(){
+  const kitId=document.getElementById('_faEdKit').value.trim();
+  if(!kitId)return;
+  const kit=FA_ML3K_KITS.find(k=>k.id===kitId);
+  if(kit&&kit.truckRef){
+    const truckEl=document.getElementById('_faEdTruck');
+    if(!truckEl.value)truckEl.value=kit.truckRef;
+  }
+}
+function FA_saveDemandEdit(id){
+  const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
+  d.venue=document.getElementById('_faEdVenue').value.trim();
+  d.fa=document.getElementById('_faEdFa').value.trim();
+  d.qty=parseInt(document.getElementById('_faEdQty').value)||1;
+  d.biDate=document.getElementById('_faEdBi').value||'';
+  d.linkedTruck=document.getElementById('_faEdTruck').value.trim()||null;
+  d.linkedKit=document.getElementById('_faEdKit').value.trim()||null;
+  d.note=document.getElementById('_faEdNote').value.trim();
+  document.getElementById('faModal').innerHTML='';
+  FA_saveDebounced();FA_render();
+}
+function FA_deleteDemand(id){
+  if(!confirm('Delete demand line #'+id+'?'))return;
+  FA_DEMAND=FA_DEMAND.filter(x=>x.id!==id);
+  document.getElementById('faModal').innerHTML='';
+  FA_saveDebounced();FA_render();
+}
+function FA_clearDemand(){
+  if(!confirm('Clear all FA demand?'))return;
+  FA_DEMAND=[];FA_nextDemId=1;FA_saveDebounced();FA_render();
+}
+
+function FA_renderDemand(){
+  const totalQty=FA_DEMAND.reduce((s,d)=>s+d.qty,0);
+  const venues=new Set(FA_DEMAND.map(d=>d.venue));
+  const assigned=FA_DEMAND.filter(d=>d.linkedTruck||d.linkedKit).length;
+  document.getElementById('demKpis').innerHTML=`
+    <div class="kpi"><div class="kl">📦 Items</div><div class="kv" style="color:var(--ac)">${FA_DEMAND.length}</div></div>
+    <div class="kpi"><div class="kl">📋 Total Qty</div><div class="kv" style="color:var(--tp)">${totalQty.toLocaleString()}</div></div>
+    <div class="kpi"><div class="kl">📍 Venues</div><div class="kv" style="color:var(--pu)">${venues.size}</div></div>
+    <div class="kpi"><div class="kl">🚛 Assigned</div><div class="kv" style="color:var(--gn)">${assigned}</div></div>
+    <div class="kpi"><div class="kl">📭 Unassigned</div><div class="kv" style="color:${FA_DEMAND.length-assigned>0?'var(--or)':'var(--gn)'}">${FA_DEMAND.length-assigned}</div></div>`;
+  document.getElementById('demCount').textContent=FA_DEMAND.length+' items';
+
+  const vf=document.getElementById('demVenueFilter');
+  const curV=vf.value;
+  const vList=[...new Set(FA_DEMAND.map(d=>d.venue))].sort();
+  vf.innerHTML='<option value="">All Venues</option>'+vList.map(v=>`<option value="${v}"${v===curV?' selected':''}>${v}</option>`).join('');
+
+  if(!FA_DEMAND.length){document.getElementById('demTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No demand yet. Click "+ Add Demand" to start building.</div>';return}
+
+  let h='<table class="dtb"><thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th>BI Date</th><th>Truck / Kit</th><th>Note</th></tr></thead><tbody>';
+  const sorted=[...FA_DEMAND].sort((a,b)=>(a.venue||'').localeCompare(b.venue)||((a.biDate||'').localeCompare(b.biDate||''))||a.id-b.id);
+  for(const d of sorted){
+    const isAssigned=d.linkedTruck||d.linkedKit;
+    const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+    let linkDisp='<span style="color:var(--tt)">—</span>';
+    if(d.linkedTruck)linkDisp='<span class="bg bg-pu">🚛 '+d.linkedTruck+'</span>';
+    if(d.linkedKit)linkDisp+=(d.linkedTruck?' ':'')+'<span class="bg bg-gn">📦 '+d.linkedKit+'</span>';
+    h+=`<tr data-search="${d.sku} ${d.name} ${d.venue} ${d.fa||''} ${d.linkedTruck||''} ${d.linkedKit||''} ${d.note||''}" data-venue="${d.venue}" data-status="${isAssigned?'assigned':'open'}" style="cursor:pointer" onclick="FA_editDemand(${d.id})">
+      <td class="mono" style="color:var(--tt)">${d.id}</td>
+      <td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td>
+      <td class="mono fw6" style="text-align:right">${d.qty.toLocaleString()}</td>
+      <td>${biDisp}</td>
+      <td>${linkDisp}</td>
+      <td style="color:var(--tt);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.note||''}</td></tr>`;
+  }
+  h+='</tbody></table>';
+  document.getElementById('demTable').innerHTML=h;
+  FA_filterDem();
+}
+function FA_filterDem(){
+  const q=(document.getElementById('demSearch').value||'').toLowerCase();
+  const vf=document.getElementById('demVenueFilter').value;
+  const sf=document.getElementById('demStatusFilter').value;
+  document.querySelectorAll('#demTable tbody tr').forEach(r=>{
+    let show=true;
+    if(q&&!r.getAttribute('data-search').toLowerCase().includes(q))show=false;
+    if(vf&&r.getAttribute('data-venue')!==vf)show=false;
+    if(sf&&r.getAttribute('data-status')!==sf)show=false;
+    r.style.display=show?'':'none';
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHIPMENTS TAB
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// ASSIGNMENTS TAB — grouped view of demand by truck/kit
+// ═══════════════════════════════════════════════════════════════
+function FA_renderShipments(){
+  const assigned=FA_DEMAND.filter(d=>d.linkedTruck||d.linkedKit);
+  const unassigned=FA_DEMAND.filter(d=>!d.linkedTruck&&!d.linkedKit);
+  const trucks=new Set(assigned.map(d=>d.linkedTruck).filter(Boolean));
+  const kits=new Set(assigned.map(d=>d.linkedKit).filter(Boolean));
+  document.getElementById('shipKpis').innerHTML=`
+    <div class="kpi"><div class="kl">📦 Total Items</div><div class="kv" style="color:var(--ac)">${FA_DEMAND.length}</div></div>
+    <div class="kpi"><div class="kl">🚛 Assigned</div><div class="kv" style="color:var(--gn)">${assigned.length}</div></div>
+    <div class="kpi"><div class="kl">📭 Unassigned</div><div class="kv" style="color:${unassigned.length?'var(--or)':'var(--gn)'}">${unassigned.length}</div></div>
+    <div class="kpi"><div class="kl">🚛 Trucks</div><div class="kv" style="color:var(--pu)">${trucks.size}</div></div>
+    <div class="kpi"><div class="kl">📦 Kits</div><div class="kv" style="color:var(--cy)">${kits.size}</div></div>`;
+  document.getElementById('shipCount').textContent=assigned.length+' assigned';
+
+  // Group by truck, then by kit (items can have both)
+  const groups={};
+  for(const d of assigned){
+    const key=d.linkedTruck||d.linkedKit||'?';
+    if(!groups[key])groups[key]={label:key,isTruck:!!d.linkedTruck,isKit:!!d.linkedKit&&!d.linkedTruck,items:[]};
+    groups[key].items.push(d);
+  }
+  const sortedGroups=Object.values(groups).sort((a,b)=>a.label.localeCompare(b.label));
+
+  let h='';
+  // Assigned groups
+  for(const g of sortedGroups){
+    const totalQty=g.items.reduce((s,d)=>s+d.qty,0);
+    const venues=[...new Set(g.items.map(d=>d.venue))].join(', ');
+    const badge=g.isTruck?'<span class="bg bg-pu">🚛 '+g.label+'</span>':'<span class="bg bg-gn">📦 '+g.label+'</span>';
+    h+=`<div class="card" style="margin-bottom:8px" data-search="${g.label} ${venues} ${g.items.map(d=>d.sku+' '+d.name).join(' ')}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        ${badge}
+        <span class="bg bg-gy">${g.items.length} items</span>
+        <span class="bg bg-gy">${totalQty.toLocaleString()} qty</span>
+        <span style="font-size:10px;color:var(--ts)">📍 ${venues}</span>
+        <button class="rbtn" onclick="FA_exportOORGroup('${g.label.replace(/'/g,"\\'")}')" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8;padding:3px 8px;font-size:10px">⬇ OOR</button>
+      </div>
+      <table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th>BI Date</th></tr></thead><tbody>`;
+    for(const d of g.items){
+      const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+      h+=`<tr style="cursor:pointer" onclick="FA_editDemand(${d.id})"><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td><td class="mono fw6" style="text-align:right">${d.qty}</td><td>${biDisp}</td></tr>`;
+    }
+    h+=`</tbody></table></div>`;
+  }
+
+  // Unassigned section
+  if(unassigned.length){
+    h+=`<div class="card" style="margin-bottom:8px;border-color:var(--or)" data-search="${unassigned.map(d=>d.sku+' '+d.name+' '+d.venue).join(' ')}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="bg bg-or">📭 Unassigned</span>
+        <span class="bg bg-gy">${unassigned.length} items</span>
+        <span class="bg bg-gy">${unassigned.reduce((s,d)=>s+d.qty,0).toLocaleString()} qty</span>
+      </div>
+      <table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th>BI Date</th></tr></thead><tbody>`;
+    for(const d of unassigned){
+      const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+      h+=`<tr style="cursor:pointer" onclick="FA_editDemand(${d.id})"><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td><td class="mono fw6" style="text-align:right">${d.qty}</td><td>${biDisp}</td></tr>`;
+    }
+    h+=`</tbody></table></div>`;
+  }
+
+  if(!FA_DEMAND.length)h='<div style="color:var(--tt);padding:20px;text-align:center">No demand items yet. Add demand first, then assign to trucks/kits.</div>';
+  document.getElementById('shipGrid').innerHTML=h;
+  FA_filterShip();
+}
+function FA_filterShip(){
+  const q=(document.getElementById('shipSearch').value||'').toLowerCase();
+  document.querySelectorAll('#shipGrid .card').forEach(c=>{
+    c.style.display=!q||c.getAttribute('data-search').toLowerCase().includes(q)?'':'none';
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OOR EXPORT
+// ═══════════════════════════════════════════════════════════════
+async function FA_exportOORGroup(groupKey){
+  const items=FA_DEMAND.filter(d=>(d.linkedTruck||d.linkedKit)===groupKey);
+  if(!items.length)return alert('No items for '+groupKey);
+  const venue=[...new Set(items.map(d=>d.venue))].join(' / ');
+  if(typeof ExcelJS==='undefined')return alert('ExcelJS not loaded yet, try again');
+  try{
+    const wb=new ExcelJS.Workbook();
+    const ws=wb.addWorksheet('OOR',{pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+    ws.columns=[{width:12},{width:20},{width:32},{width:12},{width:12},{width:12}];
+    const COLS=6;
+    const C_HDR='FF5B1A18',C_WH='FFFFFFFF',C_BG='FFFDF5F0',C_BRD='FFB8805A',C_DK='FF3B0F0D';
+    const mkF=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+    const fillH=mkF(C_HDR),fillW=mkF(C_WH),fillBg=mkF(C_BG);
+    const brd={top:{style:'thin',color:{argb:C_BRD}},left:{style:'thin',color:{argb:C_BRD}},bottom:{style:'thin',color:{argb:C_BRD}},right:{style:'thin',color:{argb:C_BRD}}};
+    const fTtl={name:'Calibri',size:14,bold:true,color:{argb:C_DK}};
+    const fLbl={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
+    const fVal={name:'Calibri',size:10,color:{argb:C_DK}};
+    const fValB={name:'Calibri',size:10,bold:true,color:{argb:C_DK}};
+    const fHdr={name:'Calibri',size:10,bold:true,color:{argb:C_WH}};
+    const fData={name:'Calibri',size:10,color:{argb:C_DK}};
+    const alC={horizontal:'center',vertical:'middle',wrapText:true},alL={horizontal:'left',vertical:'middle'};
+    const cl=(r,c,val,font,align,fill,border)=>{const x=ws.getRow(r).getCell(c);x.value=val!=null?val:'';if(font)x.font=font;if(align)x.alignment=align;if(fill)x.fill=fill;if(border)x.border=border};
+    const mg=(r1,c1,r2,c2)=>{try{ws.mergeCells(r1,c1,r2,c2)}catch(e){}};
+    const fillRow=(r,c1,c2,fill,border)=>{for(let c=c1;c<=c2;c++){cl(r,c,'',null,null,fill,border)}};
+    const now=new Date();
+    const ts=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+' '+String(now.getDate()).padStart(2,'0')+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+now.getFullYear();
+
+    let R=2;fillRow(R,1,COLS,fillW,brd);mg(R,1,R,COLS);
+    cl(R,1,'Outbound Order Request # '+groupKey,fTtl,alC,fillW,brd);ws.getRow(R).height=30;
+    R=3;fillRow(R,1,COLS,fillBg,brd);mg(R,1,R,2);cl(R,1,'Dispatch Date and Time',fLbl,alC,fillH,brd);mg(R,3,R,COLS);cl(R,3,ts,fVal,alC,fillBg,brd);
+    R=4;fillRow(R,1,COLS,fillBg,brd);mg(R,1,R,2);cl(R,1,'Delivery Date and Time',fLbl,alC,fillH,brd);mg(R,3,R,4);cl(R,3,'',fVal,alC,fillBg,brd);cl(R,5,'Requestor Name',fLbl,alC,fillH,brd);cl(R,6,'',fVal,alC,fillBg,brd);
+    R=5;fillRow(R,1,COLS,fillBg,brd);cl(R,1,'Ship From',fLbl,alC,fillH,brd);mg(R,2,R,4);cl(R,2,'Dallas - Main Logistics Center',fValB,alC,fillBg,brd);cl(R,5,'LSR',fLbl,alC,fillH,brd);cl(R,6,'',fVal,alC,fillBg,brd);
+    R=6;fillRow(R,1,COLS,fillBg,brd);cl(R,1,'Ship To',fLbl,alC,fillH,brd);mg(R,2,R,4);cl(R,2,venue,fValB,alC,fillBg,brd);cl(R,5,'Reference',fLbl,alC,fillH,brd);cl(R,6,groupKey,fValB,alC,fillBg,brd);
+    R=7;ws.getRow(R).height=8;
+    R=8;['Line #','Nomenclature Code','Nomenclature name','Source','UOM','Quantity'].forEach((h,i)=>{cl(R,i+1,h,fHdr,alC,fillH,brd)});ws.getRow(R).height=28;
+    items.forEach((item,idx)=>{
+      R++;const rFill=idx%2===0?fillW:fillBg;const n=FA_NOM[item.sku]||{};
+      cl(R,1,idx+1,fValB,alC,rFill,brd);cl(R,2,item.sku,fData,alL,rFill,brd);cl(R,3,item.name,fData,alL,rFill,brd);
+      cl(R,4,n.src||'',fData,alC,rFill,brd);cl(R,5,n.uom||'Each',fData,alC,rFill,brd);cl(R,6,item.qty,fValB,alC,rFill,brd);
+    });
+
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='FA_OOR_'+groupKey.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx';a.click();
+  }catch(e){alert('Export failed: '+e.message);console.error(e)}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORT ALL
+// ═══════════════════════════════════════════════════════════════
+async function FA_exportAll(){
+  if(typeof ExcelJS==='undefined')return alert('ExcelJS not loaded yet');
+  try{
+    const wb=new ExcelJS.Workbook();
+    // NOM sheet
+    const ws1=wb.addWorksheet('Nomenclature');
+    ws1.columns=[{header:'SKU',key:'sku',width:18},{header:'Name',key:'name',width:35},{header:'Source',key:'src',width:10},{header:'UoM',key:'uom',width:10},{header:'Plt Qty',key:'pq',width:10},{header:'Plt Spc',key:'ps',width:10},{header:'Price',key:'price',width:12}];
+    const hdr1=ws1.getRow(1);hdr1.font={bold:true,size:10};hdr1.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
+    for(const sku of Object.keys(FA_NOM).sort()){const n=FA_NOM[sku];ws1.addRow({sku,name:n.name,src:n.src,uom:n.uom,pq:n.pq,ps:n.ps,price:n.price})}
+    ws1.views=[{state:'frozen',ySplit:1}];ws1.autoFilter={from:'A1',to:'G1'};
+
+    // Demand sheet
+    const ws2=wb.addWorksheet('Demand');
+    ws2.columns=[{header:'#',key:'id',width:6},{header:'SKU',key:'sku',width:18},{header:'Name',key:'name',width:30},{header:'Venue',key:'venue',width:25},{header:'FA',key:'fa',width:15},{header:'Qty',key:'qty',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Truck',key:'truck',width:14},{header:'Kit',key:'kit',width:18},{header:'Note',key:'note',width:20}];
+    const hdr2=ws2.getRow(1);hdr2.font={bold:true,size:10};hdr2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
+    for(const d of FA_DEMAND){ws2.addRow({id:d.id,sku:d.sku,name:d.name,venue:d.venue,fa:d.fa||'',qty:d.qty,biDate:d.biDate||'',truck:d.linkedTruck||'',kit:d.linkedKit||'',note:d.note||''})}
+    ws2.views=[{state:'frozen',ySplit:1}];ws2.autoFilter={from:'A1',to:'J1'};
+
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='FA_Goods_Export_'+new Date().toISOString().slice(0,10)+'.xlsx';a.click();
+  }catch(e){alert('Export failed: '+e.message);console.error(e)}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SYNC — reload from Supabase
+// ═══════════════════════════════════════════════════════════════
+async function FA_sync(){
+  const btn=document.querySelector('.sys-sync,.hd .rbtn:first-of-type');
+  if(btn){btn.disabled=true;btn.textContent='⟳ Loading...'}
+  await Promise.all([FA_load(),FA_loadML3K()]);
+  if(btn){btn.disabled=false;btn.textContent='⟳ Sync'}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELP
+// ═══════════════════════════════════════════════════════════════
+function FA_help(){
+  const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
+    <div class="modal"><h3>FA Goods — Help</h3>
+    <div style="font-size:12px;line-height:1.6;color:var(--ts)">
+      <p><b>Nomenclature</b> — Upload an Excel file with FA-specific SKUs, or add manually. Columns auto-detected: SKU code, name, source, UoM, pallet qty/spc, price.</p>
+      <p style="margin-top:8px"><b>Demand</b> — Build demand per venue. Search NOM by SKU or name, set qty and bump-in date. Venues and BI dates auto-populated from ML3K data.</p>
+      <p style="margin-top:8px"><b>Assignments</b> — Assign each demand line to an existing ML3K truck (LP-42, LM-7) or kit (FNKIT-002-42). Items grouped by truck/kit in the Assignments tab.</p>
+      <p style="margin-top:8px"><b>OOR Export</b> — Generate government-template Excel per truck/kit group for warehouse outbound orders.</p>
+      <p style="margin-top:8px"><b>Data Isolation</b> — FA data is completely independent from ML3K FF&E data. Uses separate Supabase keys (fa-nom, fa-demand). ML3K venue/truck data is read-only.</p>
+    </div>
+    <div class="modal-actions"><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Close</button></div>
+    </div></div>`;
+  document.getElementById('faModal').innerHTML=h;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+(async function(){
+  try{await Promise.all([FA_load(),FA_loadML3K()])}catch(e){console.warn('FA init:',e);FA_updateStatus(false);FA_render()}
+})();
+</script>
+</body>
+</html>
