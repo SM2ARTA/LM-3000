@@ -9214,7 +9214,9 @@ function build(venue,venueList,skipNoBi){
         cortDated[fallbackBk].push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||'',isUnplanned:true});
         continue;
       }
-      if(!noBiAgg[s])noBiAgg[s]={sku:s,nm:nm?.nm||r["Item"]||s,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0,isCort:ct};
+      const _nbNoPlt=!(pqUom>0&&psVal>0);
+      const _nbEffPq=_nbNoPlt?99999:pqUom;const _nbEffPs=_nbNoPlt?0.0001:psVal;
+      if(!noBiAgg[s])noBiAgg[s]={sku:s,nm:nm?.nm||r["Item"]||s,qty:0,pq:_nbEffPq,ps:_nbEffPs,ok:true,noPallet:_nbNoPlt,isCort:ct};
       noBiAgg[s].qty+=q;
       noBiRows.push({sku:s,nm:nm?.nm||r["Item"]||s,qty:q,venue:r["Venue"]||'',id:r["ID"]||r["id"]||r["Row"]||r["row"]||r["#"]||r["Material plan ID"]||r["Plan ID"]||'',isCort:ct});
       continue;
@@ -9234,7 +9236,9 @@ function build(venue,venueList,skipNoBi){
     const _floor=_relDate?(_relDate>_bToday?_relDate:_bToday):'';
     const planBiK=(_floor&&origBiK<_floor)?_floor:origBiK;
     const k=planBiK+"|"+s;
-    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:planBiK,origBiK,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0};
+    const _noPlt=!(pqUom>0&&psVal>0);
+    const _effPq=_noPlt?99999:pqUom;const _effPs=_noPlt?0.0001:psVal;
+    if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:planBiK,origBiK,qty:0,pq:_effPq,ps:_effPs,ok:true,noPallet:_noPlt};
     if(origBiK<(agg[k].origBiK||origBiK))agg[k].origBiK=origBiK;// keep earliest original need date
     agg[k].qty+=q}
 
@@ -9318,8 +9322,8 @@ function build(venue,venueList,skipNoBi){
       const qty=Math.min(dateRemaining,pool[it.sku]?.remaining||0);
       if(qty<=0)continue;
       const exact=(qty/it.pq)*it.ps;
-      ep+=exact;
-      loaded.push({sku:it.sku,nm:it.nm,sched:it.qty,loadQty:qty,loadPlt:Math.round(exact*100)/100,pq:it.pq,ps:it.ps,biK:it.biK,origBiK:it.origBiK||it.biK,topUp:0,pulled:false,pulledFrom:""});
+      if(!it.noPallet)ep+=exact;
+      loaded.push({sku:it.sku,nm:it.nm,sched:it.qty,loadQty:qty,loadPlt:it.noPallet?0:Math.round(exact*100)/100,pq:it.noPallet?0:it.pq,ps:it.noPallet?0:it.ps,biK:it.biK,origBiK:it.origBiK||it.biK,topUp:0,pulled:false,pulledFrom:"",noPallet:!!it.noPallet});
       pool[it.sku].remaining-=qty;
     }
     if(loaded.length>0){
@@ -9462,10 +9466,10 @@ function build(venue,venueList,skipNoBi){
       }// end !noTopUp
 
       _planned[it.sku]=(_planned[it.sku]||0)+qty;// shadow-deduct so next entry sees reduced avail
-      const loadPlt=(qty/it.pq)*it.ps;
-      loadList.push({sku:it.sku,nm:it.nm,loadQty:qty,loadPlt:Math.round(loadPlt*100)/100,
-        pq:it.pq,ps:it.ps,biK:it.biK,sched:it.sched||0,topUp,
-        pulled:topUp>0,pulledFrom:topUp>0?'pool':'',remainder:0,origReq:it.origReq||0});
+      const loadPlt=it.noPallet?0:(qty/it.pq)*it.ps;
+      loadList.push({sku:it.sku,nm:it.nm,loadQty:qty,loadPlt:it.noPallet?0:Math.round(loadPlt*100)/100,
+        pq:it.noPallet?0:it.pq,ps:it.noPallet?0:it.ps,biK:it.biK,sched:it.sched||0,topUp,
+        pulled:topUp>0,pulledFrom:topUp>0?'pool':'',remainder:0,origReq:it.origReq||0,noPallet:!!it.noPallet});
     }
 
     // Skip truck creation entirely if no items to load (locked truck covered all demand for this date)
