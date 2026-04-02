@@ -13023,6 +13023,12 @@ async function generateDailyDigest(){
       if(_faR?.data){const _faD=JSON.parse(_faR.data.value);_digestData.faItems=(_faD.items||[]).filter(it=>it.linkedTruck||it.linkedKit)}
     }catch(e){}
   }
+  // Venue BI dates for FA delivery column
+  const _venueBiMap={};
+  for(const v of VN){if(v.earlyBI)_venueBiMap[v.name]=typeof v.earlyBI==='string'?v.earlyBI:v.earlyBI.toISOString().slice(0,10)}
+  // Also from RW for venues not in VN
+  for(const r of RW){const vn=r["Venue"];const bi=r["Estimated bump-in date"];if(vn&&bi&&!_venueBiMap[vn])_venueBiMap[vn]=bi}
+  _digestData.venueBiDates=_venueBiMap;
   try{sessionStorage.setItem('_digestData',JSON.stringify(_digestData))}catch(e){console.error('Digest data too large:',e);return}
   // Save lightweight KPI snapshot to Supabase for WHS dashboard
   try{
