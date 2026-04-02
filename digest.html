@@ -361,7 +361,6 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
         wsFa.addRow({dispatch:dd?_fmtD(dd):'',venue:r.venue||'',delivery:del?_fmtD(del):'',sku:r.sku,name:r.name,qty:r.qty,truck:r.linkedTruck||'',kit:r.linkedKit||''})
       }
       wsFa.getColumn('qty').numFmt='#,##0';wsFa.getColumn('qty').alignment={horizontal:'right'};
-      wsFa.getColumn('pallets').numFmt='#,##0.0';wsFa.getColumn('pallets').alignment={horizontal:'right'};
       _autoFilter(wsFa);
     }
 
