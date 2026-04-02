@@ -93,6 +93,7 @@ input:focus,select:focus{border-color:var(--ac)}
 
 /* Responsive */
 @media(max-width:768px){.hd{padding:8px 12px;flex-wrap:wrap;gap:8px}.main{padding:12px}.kpi-row{gap:8px}.kpi{min-width:90px;padding:8px 10px}.kpi .kv{font-size:18px}}
+body.viewer .fa-admin{display:none!important}
 </style>
 </head>
 <body>
@@ -103,6 +104,7 @@ input:focus,select:focus{border-color:var(--ac)}
     <div style="width:28px;height:28px;background:var(--ac);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700">FA</div>
     <div>
       <div style="font-size:14px;font-weight:700">FA Goods
+        <span id="faRoleBadge"></span>
         <span id="sbStatus" style="font-size:10px;font-weight:500;color:var(--tt)"><span class="sb-dot sb-chk"></span>Connecting...</span>
       </div>
       <div style="font-size:10px;color:var(--tt)" id="hdrSummary">No data loaded</div>
@@ -135,9 +137,9 @@ input:focus,select:focus{border-color:var(--ac)}
         </div>
         <div style="display:flex;gap:6px">
           <input type="file" id="nomFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="FA_parseNom(this.files[0]);this.value=''">
-          <button class="rbtn" onclick="document.getElementById('nomFileInput').click()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">📎 Upload NOM</button>
-          <button class="rbtn" onclick="FA_addNomManual()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">+ Add SKU</button>
-          <button class="rbtn" onclick="FA_clearNom()" style="background:var(--rs);color:var(--rd);border-color:#F5C6C7">✕ Clear</button>
+          <button class="rbtn fa-admin" onclick="document.getElementById('nomFileInput').click()" style="background:var(--as);color:var(--ac);border-color:var(--ab)">📎 Upload NOM</button>
+          <button class="rbtn fa-admin" onclick="FA_addNomManual()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">+ Add SKU</button>
+          <button class="rbtn fa-admin" onclick="FA_clearNom()" style="background:var(--rs);color:var(--rd);border-color:#F5C6C7">✕ Clear</button>
         </div>
       </div>
       <input type="text" id="nomSearch" placeholder="Search SKU or name..." oninput="FA_filterNom()" style="width:100%;margin-bottom:8px">
@@ -155,8 +157,8 @@ input:focus,select:focus{border-color:var(--ac)}
           <span class="bg bg-gy" id="demCount">0 items</span>
         </div>
         <div style="display:flex;gap:6px">
-          <button class="rbtn" onclick="FA_showAddDemand()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">+ Add Demand</button>
-          <button class="rbtn" onclick="FA_clearDemand()" style="background:var(--rs);color:var(--rd);border-color:#F5C6C7">✕ Clear</button>
+          <button class="rbtn fa-admin" onclick="FA_showAddDemand()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">+ Add Demand</button>
+          <button class="rbtn fa-admin" onclick="FA_clearDemand()" style="background:var(--rs);color:var(--rd);border-color:#F5C6C7">✕ Clear</button>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
@@ -217,6 +219,9 @@ let FA_NOM={};       // {sku: {name, uom, pq, ps, src, ppu}}
 let FA_DEMAND=[];    // [{id, sku, name, venue, fa, qty, biDate, note, shipmentId, created}]
 let FA_nextDemId=1;
 let FA_curTab='nom';
+// Role: from URL param (?role=admin) or cookie (ml3k_role)
+const FA_ROLE=(()=>{const p=new URLSearchParams(window.location.search).get('role');if(p==='admin'||p==='viewer')return p;const c=document.cookie.match(/ml3k_role=(admin|viewer)/);return c?c[1]:'viewer'})();
+function _faIsViewer(){return FA_ROLE==='viewer'}
 
 // ── Supabase read/write helpers ──
 async function FA_sbRead(key){
@@ -309,8 +314,9 @@ function _faKitsForVenue(venue){
 
 // ── Save/Load ──
 let _faSaveTimer=null;
-function FA_saveDebounced(){clearTimeout(_faSaveTimer);_faSaveTimer=setTimeout(FA_save,1500)}
+function FA_saveDebounced(){if(_faIsViewer())return;clearTimeout(_faSaveTimer);_faSaveTimer=setTimeout(FA_save,1500)}
 async function FA_save(){
+  if(_faIsViewer())return;
   await Promise.all([
     FA_sbWrite('fa-nom',FA_NOM),
     FA_sbWrite('fa-demand',{items:FA_DEMAND,nextId:FA_nextDemId})
@@ -455,7 +461,7 @@ function FA_renderNom(){
   let h='<table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th>UoM</th><th style="text-align:right">Plt Qty</th><th style="text-align:right">Plt Spc</th><th style="text-align:right">Price</th><th></th></tr></thead><tbody>';
   for(const sku of skus){
     const n=FA_NOM[sku];
-    h+=`<tr data-search="${sku} ${n.name} ${n.src}"><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src}</td><td>${n.uom}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td><td><button class="rbtn" onclick="FA_deleteNom('${sku}')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td></tr>`;
+    h+=`<tr data-search="${sku} ${n.name} ${n.src}"><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src}</td><td>${n.uom}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td>${_faIsViewer()?'':'<td><button class="rbtn" onclick="FA_deleteNom(\''+sku+'\')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td>'}</tr>`;
   }
   h+='</tbody></table>';
   document.getElementById('nomTable').innerHTML=h;
@@ -495,7 +501,7 @@ function FA_showAddDemand(){
       </div>
     </div>
     <div class="form-row"><span class="form-label">Name</span><input type="text" id="_faDemName" style="flex:1" readonly></div>
-    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faDemQty" value="1" min="1" style="width:80px"><span class="form-label">Note</span><input type="text" id="_faDemNote" style="flex:1" placeholder="Optional note"></div>
+    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faDemQty" value="1" min="1" style="width:80px"><span class="form-label">Pallets</span><input type="number" id="_faDemPlt" value="0" min="0" step="0.1" style="width:80px"><span class="form-label">Note</span><input type="text" id="_faDemNote" style="flex:1" placeholder="Optional note"></div>
     <div class="modal-actions"><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn" style="background:var(--gn);color:#fff;border-color:var(--gn)" onclick="FA_addDemandMore()">Add & More</button><button class="mbtn mbtn-primary" onclick="FA_addDemandConfirm(true)">Add & Close</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
@@ -536,10 +542,11 @@ function FA_addDemandConfirm(close){
   if(!sku)return alert('SKU required');
   if(!venue)return alert('Venue required');
   const name=FA_NOM[sku]?.name||document.getElementById('_faDemName').value.trim()||sku;
-  FA_DEMAND.push({id:FA_nextDemId++,sku,name,venue,fa,qty,biDate,note,linkedTruck:null,linkedKit:null,created:new Date().toISOString()});
+  const pallets=parseFloat(document.getElementById('_faDemPlt')?.value)||0;
+  FA_DEMAND.push({id:FA_nextDemId++,sku,name,venue,fa,qty,pallets,biDate,note,linkedTruck:null,linkedKit:null,created:new Date().toISOString()});
   FA_saveDebounced();
   if(close){document.getElementById('faModal').innerHTML='';FA_render()}
-  else{document.getElementById('_faDemSku').value='';document.getElementById('_faDemName').value='';document.getElementById('_faDemQty').value='1';document.getElementById('_faDemNote').value='';document.getElementById('_faDemSku').focus()}
+  else{document.getElementById('_faDemSku').value='';document.getElementById('_faDemName').value='';document.getElementById('_faDemQty').value='1';document.getElementById('_faDemPlt').value='0';document.getElementById('_faDemNote').value='';document.getElementById('_faDemSku').focus()}
 }
 
 function FA_editDemand(id){
@@ -554,7 +561,7 @@ function FA_editDemand(id){
     <div class="form-row"><span class="form-label">SKU</span><input type="text" id="_faEdSku" value="${d.sku}" style="flex:1" readonly></div>
     <div class="form-row"><span class="form-label">Venue</span><input type="text" id="_faEdVenue" value="${d.venue}" style="flex:1"></div>
     <div class="form-row"><span class="form-label">FA</span><input type="text" id="_faEdFa" value="${d.fa||''}" style="flex:1"></div>
-    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faEdQty" value="${d.qty}" min="1" style="width:80px"><span class="form-label">BI Date</span><input type="date" id="_faEdBi" value="${d.biDate||''}" style="width:160px"></div>
+    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faEdQty" value="${d.qty}" min="1" style="width:80px"><span class="form-label">Pallets</span><input type="number" id="_faEdPlt" value="${d.pallets||0}" min="0" step="0.1" style="width:80px"><span class="form-label">BI Date</span><input type="date" id="_faEdBi" value="${d.biDate||''}" style="width:160px"></div>
     <div class="form-row"><span class="form-label">Truck</span>
       <input type="text" id="_faEdTruck" value="${d.linkedTruck||''}" list="_faEdTruckList" style="flex:1" placeholder="LP-42 or LM (venue)">
       <datalist id="_faEdTruckList">${truckOpts}</datalist>
@@ -584,6 +591,7 @@ function FA_saveDemandEdit(id){
   d.venue=document.getElementById('_faEdVenue').value.trim();
   d.fa=document.getElementById('_faEdFa').value.trim();
   d.qty=parseInt(document.getElementById('_faEdQty').value)||1;
+  d.pallets=parseFloat(document.getElementById('_faEdPlt').value)||0;
   d.biDate=document.getElementById('_faEdBi').value||'';
   d.linkedTruck=document.getElementById('_faEdTruck').value.trim()||null;
   d.linkedKit=document.getElementById('_faEdKit').value.trim()||null;
@@ -621,7 +629,7 @@ function FA_renderDemand(){
 
   if(!FA_DEMAND.length){document.getElementById('demTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No demand yet. Click "+ Add Demand" to start building.</div>';return}
 
-  let h='<table class="dtb"><thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th>BI Date</th><th>Truck / Kit</th><th>Note</th></tr></thead><tbody>';
+  let h='<table class="dtb"><thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th><th>Truck / Kit</th><th>Note</th></tr></thead><tbody>';
   const sorted=[...FA_DEMAND].sort((a,b)=>(a.venue||'').localeCompare(b.venue)||((a.biDate||'').localeCompare(b.biDate||''))||a.id-b.id);
   for(const d of sorted){
     const isAssigned=d.linkedTruck||d.linkedKit;
@@ -633,6 +641,7 @@ function FA_renderDemand(){
       <td class="mono" style="color:var(--tt)">${d.id}</td>
       <td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td>
       <td class="mono fw6" style="text-align:right">${d.qty.toLocaleString()}</td>
+      <td class="mono" style="text-align:right;color:var(--pu)">${d.pallets?d.pallets.toFixed(1):'—'}</td>
       <td>${biDisp}</td>
       <td>${linkDisp}</td>
       <td style="color:var(--tt);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.note||''}</td></tr>`;
@@ -693,13 +702,14 @@ function FA_renderShipments(){
         ${badge}
         <span class="bg bg-gy">${g.items.length} items</span>
         <span class="bg bg-gy">${totalQty.toLocaleString()} qty</span>
+        <span class="bg bg-pu">${g.items.reduce((s,d)=>s+(d.pallets||0),0).toFixed(1)} plt</span>
         <span style="font-size:10px;color:var(--ts)">📍 ${venues}</span>
         <button class="rbtn" onclick="FA_exportOORGroup('${g.label.replace(/'/g,"\\'")}')" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8;padding:3px 8px;font-size:10px">⬇ OOR</button>
       </div>
-      <table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th>BI Date</th></tr></thead><tbody>`;
+      <table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th></tr></thead><tbody>`;
     for(const d of g.items){
       const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
-      h+=`<tr style="cursor:pointer" onclick="FA_editDemand(${d.id})"><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td><td class="mono fw6" style="text-align:right">${d.qty}</td><td>${biDisp}</td></tr>`;
+      h+=`<tr style="cursor:pointer" onclick="FA_editDemand(${d.id})"><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td><td class="mono fw6" style="text-align:right">${d.qty}</td><td class="mono" style="text-align:right;color:var(--pu)">${d.pallets?d.pallets.toFixed(1):'—'}</td><td>${biDisp}</td></tr>`;
     }
     h+=`</tbody></table></div>`;
   }
@@ -712,10 +722,10 @@ function FA_renderShipments(){
         <span class="bg bg-gy">${unassigned.length} items</span>
         <span class="bg bg-gy">${unassigned.reduce((s,d)=>s+d.qty,0).toLocaleString()} qty</span>
       </div>
-      <table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th>BI Date</th></tr></thead><tbody>`;
+      <table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th></tr></thead><tbody>`;
     for(const d of unassigned){
       const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
-      h+=`<tr style="cursor:pointer" onclick="FA_editDemand(${d.id})"><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td><td class="mono fw6" style="text-align:right">${d.qty}</td><td>${biDisp}</td></tr>`;
+      h+=`<tr style="cursor:pointer" onclick="FA_editDemand(${d.id})"><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td><td class="mono fw6" style="text-align:right">${d.qty}</td><td class="mono" style="text-align:right;color:var(--pu)">${d.pallets?d.pallets.toFixed(1):'—'}</td><td>${biDisp}</td></tr>`;
     }
     h+=`</tbody></table></div>`;
   }
@@ -797,9 +807,9 @@ async function FA_exportAll(){
 
     // Demand sheet
     const ws2=wb.addWorksheet('Demand');
-    ws2.columns=[{header:'#',key:'id',width:6},{header:'SKU',key:'sku',width:18},{header:'Name',key:'name',width:30},{header:'Venue',key:'venue',width:25},{header:'FA',key:'fa',width:15},{header:'Qty',key:'qty',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Truck',key:'truck',width:14},{header:'Kit',key:'kit',width:18},{header:'Note',key:'note',width:20}];
+    ws2.columns=[{header:'#',key:'id',width:6},{header:'SKU',key:'sku',width:18},{header:'Name',key:'name',width:30},{header:'Venue',key:'venue',width:25},{header:'FA',key:'fa',width:15},{header:'Qty',key:'qty',width:10},{header:'Pallets',key:'pallets',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Truck',key:'truck',width:14},{header:'Kit',key:'kit',width:18},{header:'Note',key:'note',width:20}];
     const hdr2=ws2.getRow(1);hdr2.font={bold:true,size:10};hdr2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
-    for(const d of FA_DEMAND){ws2.addRow({id:d.id,sku:d.sku,name:d.name,venue:d.venue,fa:d.fa||'',qty:d.qty,biDate:d.biDate||'',truck:d.linkedTruck||'',kit:d.linkedKit||'',note:d.note||''})}
+    for(const d of FA_DEMAND){ws2.addRow({id:d.id,sku:d.sku,name:d.name,venue:d.venue,fa:d.fa||'',qty:d.qty,pallets:d.pallets||0,biDate:d.biDate||'',truck:d.linkedTruck||'',kit:d.linkedKit||'',note:d.note||''})}
     ws2.views=[{state:'frozen',ySplit:1}];ws2.autoFilter={from:'A1',to:'J1'};
 
     const buf=await wb.xlsx.writeBuffer();
@@ -839,6 +849,10 @@ function FA_help(){
 // ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
+// Apply role
+if(_faIsViewer())document.body.classList.add('viewer');
+document.getElementById('faRoleBadge').innerHTML=FA_ROLE==='admin'?'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--ac);padding:1px 6px;border-radius:3px">Admin</span>':'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:1px 6px;border-radius:3px">Viewer</span>';
+
 (async function(){
   try{await Promise.all([FA_load(),FA_loadML3K()])}catch(e){console.warn('FA init:',e);FA_updateStatus(false);FA_render()}
 })();
