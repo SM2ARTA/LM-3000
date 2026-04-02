@@ -595,7 +595,9 @@ function _faItemsForTruck(truckId,dest,lsr){
   return items.filter(it=>{
     if(!it.linkedTruck)return false;
     if(it.linkedTruck===truckId)return true;
-    if(lsr&&it.linkedTruck.includes(lsr))return true;
+    const hasLsr=it.linkedTruck.includes('LSR');
+    if(hasLsr&&lsr&&it.linkedTruck.includes(lsr))return true;
+    if(!hasLsr&&dest&&it.linkedTruck==='LM '+dest)return true;
     return false;
   }).map(it=>({sku:it.sku,name:it.name,qty:it.qty,pallets:it.pallets||0,biDate:it.biDate||'',venue:it.venue||'',src:'FA',uom:'Each'}));
 }
@@ -605,12 +607,21 @@ function _faMatchTruck(truckId,dest,lsr){
   if(!Object.keys(FA_LINKED).length)return null;
   // Direct match by exact ID (LP-42, LM-4)
   if(FA_LINKED[truckId])return{ref:truckId,...FA_LINKED[truckId]};
+  // Aggregate from all matching FA keys
+  let total=null;
   for(const k in FA_LINKED){
     if(k.startsWith('LP-')||k.startsWith('_'))continue;
-    // LSR match — most precise
-    if(lsr&&k.includes(lsr))return{ref:k,...FA_LINKED[k]};
+    const f=FA_LINKED[k];
+    const hasLsr=k.includes('LSR');
+    let match=false;
+    if(hasLsr&&lsr&&k.includes(lsr))match=true;// LSR match (precise)
+    if(!hasLsr&&dest&&k==='LM '+dest)match=true;// Exact dest match for no-LSR refs
+    if(match){
+      if(!total)total={ref:k,count:0,qty:0,plt:0};
+      total.count+=f.count;total.qty+=f.qty;total.plt+=f.plt;
+    }
   }
-  return null;
+  return total;
 }
 // Match LP truck by ID
 function _faMatchLP(truckId){return FA_LINKED['LP-'+truckId]?{ref:'LP-'+truckId,...FA_LINKED['LP-'+truckId]}:null}
