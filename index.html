@@ -10262,17 +10262,20 @@ function numberAll(){
     }
   });
 
-  // Re-apply compat NOM entries for locked trucks AFTER kit rename
-  // Kit rename may create NOM entries with live kit IDs for SKU names that collide
-  // with locked truck frozen SKUs (e.g., both LM-5 unlocked and LM-10 locked have FNKIT-002-LM-5-01)
+  // Backfill _kitId on locked truck items AFTER kit rename
+  // Don't overwrite NOM — live NOM entries are needed for unlocked trucks that share the same SKU names.
+  // LM_fp() reads i._kitId first, so locked trucks don't need NOM for FP computation.
+  // Only create compat NOM if no live entry exists (locked-only SKU names).
   allTrucks.forEach(e=>{
     if(!e.ref._locked)return;
     for(const it of e.ref.items){
       const isKit=it._kitNom||(it.sku.startsWith('FNKIT')||it.sku.startsWith('OSKIT'));
       if(isKit){
         const _stableId=it._kitId||('_lock:'+it.sku);
-        NOM[it.sku]={_kitNom:true,_kitId:_stableId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
         if(!it._kitId)it._kitId=_stableId;
+        if(!it._kitNom)it._kitNom=true;
+        // Only create compat NOM if no live entry exists (avoids overwriting unlocked truck's NOM)
+        if(!NOM[it.sku])NOM[it.sku]={_kitNom:true,_kitId:_stableId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
       }
     }
   });
