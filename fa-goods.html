@@ -244,6 +244,8 @@ let FA_ML3K_VENUES=[];// [{name, cluster, biDate}] — from fm-rw
 let FA_ML3K_TRUCKS=[];// [{id, dest, date, type:'lp'|'lm'}] — from lp-plan + lm dispatch
 let FA_ML3K_KITS=[];  // [{id, sku, venue, type, truckRef}] — from fm-lm-kits
 let _faKitTruckMap={}; // kitId → truck ref (from locked snapshots)
+let _faLockedTrucks=new Set(); // set of locked truck refs (LP dispatched + LM locked)
+let _faLockedLP=new Set(); // set of dispatched LP truck IDs
 async function FA_loadML3K(){
   try{
     const[rw,lpPlan,lmDisp,lmKits]=await Promise.all([
@@ -271,7 +273,13 @@ async function FA_loadML3K(){
       FA_ML3K_TRUCKS=Object.values(tmap).sort((a,b)=>{const na=parseInt(a.id.replace(/\D/g,'')),nb=parseInt(b.id.replace(/\D/g,''));return na-nb});
     }
     // Extract LM trucks from locked snapshots + build kit→truck map
-    _faKitTruckMap={};
+    _faKitTruckMap={};_faLockedTrucks=new Set();_faLockedLP=new Set();
+    // LP dispatched trucks
+    const lpTruckState=await FA_sbRead('lp-truck-state');
+    if(lpTruckState&&lpTruckState.dispatched){
+      for(const tid of lpTruckState.dispatched){_faLockedLP.add(Number(tid));_faLockedTrucks.add('LP-'+tid)}
+    }
+    console.log('[FA] Locked: '+_faLockedTrucks.size+' trucks ('+_faLockedLP.size+' LP dispatched)');
     if(lmDisp&&lmDisp.lockedSnapshots){
       const lsrMap=lmDisp.lsrNumbers||{};
       for(const fp in lmDisp.lockedSnapshots){
@@ -280,8 +288,7 @@ async function FA_loadML3K(){
         const lsr=lsrMap[fp]||'';
         const dd=snap.dKey||snap.dd||'';
         const truckRef='LM '+dest+(lsr?' · '+lsr:'');
-        if(dest)FA_ML3K_TRUCKS.push({id:truckRef,dest,date:dd,type:'lm',lsr});
-        // Map kit items to this truck
+        if(dest){FA_ML3K_TRUCKS.push({id:truckRef,dest,date:dd,type:'lm',lsr,locked:true});_faLockedTrucks.add(truckRef)}
         if(snap.items){for(const it of snap.items){if(it._kitId)_faKitTruckMap[it._kitId]=truckRef}}
       }
     }
@@ -295,21 +302,52 @@ async function FA_loadML3K(){
     console.log('[FA] ML3K lookup: '+FA_ML3K_VENUES.length+' venues, '+FA_ML3K_TRUCKS.length+' trucks, '+FA_ML3K_KITS.length+' kits');
   }catch(e){console.warn('[FA] ML3K lookup failed:',e)}
 }
+function _faIsLocked(ref){
+  if(!ref)return false;
+  if(_faLockedTrucks.has(ref))return true;
+  // Check partial match for LM refs (LSR or dest substring)
+  const rl=ref.toLowerCase();
+  for(const k of _faLockedTrucks){const kl=k.toLowerCase();if(rl.includes(kl)||kl.includes(rl))return true}
+  // Check LP by number (ref="LP-66", locked has "LP-66")
+  const lpMatch=ref.match(/^LP-(\d+)$/);
+  if(lpMatch)return _faLockedLP.has(parseInt(lpMatch[1]));
+  return false;
+}
+// LP destination abbreviation → city name mapping
+const _FA_DEST_MAP={hou:'houston',kchouston:'houston',kc:'kansas city',ny:'new york',tor:'toronto',van:'vancouver',cdmx:'mexico city',gdl:'guadalajara',mty:'monterrey'};
+function _faDestCity(dest){
+  const dl=dest.toLowerCase();
+  // Try abbreviation match (e.g., "USA HOU" → "houston")
+  for(const[abbr,city] of Object.entries(_FA_DEST_MAP)){if(dl.includes(abbr))return city}
+  return dl;
+}
 // Get trucks relevant to a venue (by destination match)
 function _faTrucksForVenue(venue){
   if(!venue)return FA_ML3K_TRUCKS;
   const vl=venue.toLowerCase();
-  // Find ML3K venue cluster
   const ml=FA_ML3K_VENUES.find(v=>v.name===venue);
   const cl=(ml?.cluster||'').toLowerCase();
   return FA_ML3K_TRUCKS.filter(t=>{
     const dl=t.dest.toLowerCase();
-    return dl.includes(vl)||vl.includes(dl)||(cl&&dl.includes(cl));
+    const city=_faDestCity(t.dest);
+    return dl.includes(vl)||vl.includes(dl)||vl.includes(city)||(cl&&(dl.includes(cl)||cl.includes(city)));
   });
 }
 function _faKitsForVenue(venue){
   if(!venue)return FA_ML3K_KITS;
-  return FA_ML3K_KITS.filter(k=>k.venue===venue);
+  // Exact match first
+  const exact=FA_ML3K_KITS.filter(k=>k.venue===venue);
+  if(exact.length)return exact;
+  // Fallback: same city/cluster (e.g., "Houston Accreditation Centre" → all Houston kits)
+  const vl=venue.toLowerCase();
+  const ml=FA_ML3K_VENUES.find(v=>v.name===venue);
+  const cl=(ml?.cluster||'').toLowerCase();
+  return FA_ML3K_KITS.filter(k=>{
+    const kl=k.venue.toLowerCase();
+    // Share a common city word (first significant word)
+    const vWords=vl.split(/[\s\/]+/).filter(w=>w.length>3);
+    return vWords.some(w=>kl.includes(w))||(cl&&kl.includes(cl));
+  });
 }
 
 // ── Save/Load ──
@@ -553,7 +591,7 @@ function FA_editDemand(id){
   const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
   const _fmtD=dt=>{if(!dt)return'';try{return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return dt}};
   const relTrucks=_faTrucksForVenue(d.venue);
-  const truckOpts=relTrucks.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}</option>`).join('');
+  const truckOpts=relTrucks.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
   const relKits=_faKitsForVenue(d.venue);
   const kitOpts=relKits.map(k=>`<option value="${k.id}">${k.id} — ${k.type}${k.truckRef?' · 🚛 '+k.truckRef:''}</option>`).join('');
   const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
@@ -563,7 +601,7 @@ function FA_editDemand(id){
     <div class="form-row"><span class="form-label">FA</span><input type="text" id="_faEdFa" value="${d.fa||''}" style="flex:1"></div>
     <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faEdQty" value="${d.qty}" min="1" style="width:80px"><span class="form-label">Pallets</span><input type="number" id="_faEdPlt" value="${d.pallets||0}" min="0" step="0.1" style="width:80px"><span class="form-label">BI Date</span><input type="date" id="_faEdBi" value="${d.biDate||''}" style="width:160px"></div>
     <div class="form-row"><span class="form-label">Truck</span>
-      <input type="text" id="_faEdTruck" value="${d.linkedTruck||''}" list="_faEdTruckList" style="flex:1" placeholder="LP-42 or LM (venue)">
+      <input type="text" id="_faEdTruck" value="${d.linkedTruck||''}" list="_faEdTruckList" style="flex:1" placeholder="Type LP-42 or LM-7 (LM unlocked: type manually from ML3K)">
       <datalist id="_faEdTruckList">${truckOpts}</datalist>
       <span style="font-size:9px;color:var(--tt)">${relTrucks.length} for venue</span>
     </div>
@@ -635,7 +673,7 @@ function FA_renderDemand(){
     const isAssigned=d.linkedTruck||d.linkedKit;
     const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
     let linkDisp='<span style="color:var(--tt)">—</span>';
-    if(d.linkedTruck)linkDisp='<span class="bg bg-pu">🚛 '+d.linkedTruck+'</span>';
+    if(d.linkedTruck){const _lk=_faIsLocked(d.linkedTruck);linkDisp='<span class="bg bg-pu">🚛 '+d.linkedTruck+'</span>'+(_lk?' <span style="font-size:7px;color:var(--gn);font-weight:700">🔒</span>':' <span style="font-size:7px;color:var(--or);font-weight:700">⚠ unlocked</span>')}
     if(d.linkedKit)linkDisp+=(d.linkedTruck?' ':'')+'<span class="bg bg-gn">📦 '+d.linkedKit+'</span>';
     h+=`<tr data-search="${d.sku} ${d.name} ${d.venue} ${d.fa||''} ${d.linkedTruck||''} ${d.linkedKit||''} ${d.note||''}" data-venue="${d.venue}" data-status="${isAssigned?'assigned':'open'}" style="cursor:pointer" onclick="FA_editDemand(${d.id})">
       <td class="mono" style="color:var(--tt)">${d.id}</td>
@@ -696,7 +734,9 @@ function FA_renderShipments(){
   for(const g of sortedGroups){
     const totalQty=g.items.reduce((s,d)=>s+d.qty,0);
     const venues=[...new Set(g.items.map(d=>d.venue))].join(', ');
-    const badge=g.isTruck?'<span class="bg bg-pu">🚛 '+g.label+'</span>':'<span class="bg bg-gn">📦 '+g.label+'</span>';
+    const _gLocked=_faIsLocked(g.label);
+    const _lockBadge=g.isTruck?(_gLocked?' <span style="font-size:8px;color:var(--gn);font-weight:700">🔒 locked</span>':' <span style="font-size:8px;color:var(--or);font-weight:700">⚠ unlocked</span>'):'';
+    const badge=(g.isTruck?'<span class="bg bg-pu">🚛 '+g.label+'</span>':'<span class="bg bg-gn">📦 '+g.label+'</span>')+_lockBadge;
     h+=`<div class="card" style="margin-bottom:8px" data-search="${g.label} ${venues} ${g.items.map(d=>d.sku+' '+d.name).join(' ')}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         ${badge}
