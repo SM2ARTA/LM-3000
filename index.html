@@ -10238,44 +10238,16 @@ function numberAll(){
       if(LM_excludeUserOvr[fp]===true)LM_excluded.add(e.ref.id);
     }
   });
-  // ── Rename kit SKUs: FNKIT-002-NNN / OSKIT-002-NNN (globally numbered by truck order) ──
-  // SKIP locked trucks — their kit SKUs are frozen at lock time
-  let _fnN=1,_osN=1;
-  allTrucks.forEach(e=>{
-    const trk=e.ref;
-    if(trk._locked)return;// locked trucks are immutable
-    for(const it of trk.items){
-      const oldSku=it.sku;
-      const nom=NOM[oldSku];if(!nom||!nom._kitNom)continue;
-      const isFn=oldSku.startsWith('FNKIT');
-      const seq=isFn?_fnN++:_osN++;
-      const newSku=(isFn?'FNKIT-002-':'OSKIT-002-')+trk.id+'-'+String(seq).padStart(2,'0');
-      if(newSku===oldSku)continue;
-      // Update NOM
-      NOM[newSku]=nom;delete NOM[oldSku];
-      // Update truck item
-      it.sku=newSku;
-      // Update RW row
-      for(const r of RW){if(r._kit&&r.Nomenclature===oldSku){r.Nomenclature=newSku;break}}
-      // Update LM_KITS
-      if(nom._kitId){const kit=LM_KITS.find(k=>k.id===nom._kitId);if(kit)kit.sku=newSku}
-    }
-  });
-
-  // Backfill _kitId on locked truck items AFTER kit rename
-  // Don't overwrite NOM — live NOM entries are needed for unlocked trucks that share the same SKU names.
-  // LM_fp() reads i._kitId first, so locked trucks don't need NOM for FP computation.
-  // Only create compat NOM if no live entry exists (locked-only SKU names).
+  // Kit SKUs are stable from LM_injectKits() (e.g., FNKIT-002-42) — no rename needed.
+  // Locked trucks keep their frozen SKU names. Compat NOM entries for locked-only SKUs:
   allTrucks.forEach(e=>{
     if(!e.ref._locked)return;
     for(const it of e.ref.items){
       const isKit=it._kitNom||(it.sku.startsWith('FNKIT')||it.sku.startsWith('OSKIT'));
       if(isKit){
-        const _stableId=it._kitId||('_lock:'+it.sku);
-        if(!it._kitId)it._kitId=_stableId;
+        if(!it._kitId)it._kitId='_lock:'+it.sku;
         if(!it._kitNom)it._kitNom=true;
-        // Only create compat NOM if no live entry exists (avoids overwriting unlocked truck's NOM)
-        if(!NOM[it.sku])NOM[it.sku]={_kitNom:true,_kitId:_stableId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
+        if(!NOM[it.sku])NOM[it.sku]={_kitNom:true,_kitId:it._kitId,nm:it.nm||it.sku,pq:it.pq||1,ps:it.ps||0,ppu:1,uom:'kit',src:'KIT',pqA:0,psA:0};
       }
     }
   });
