@@ -341,10 +341,17 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const faRows=D.faItems||[];
     if(faRows.length){
       const wsFa=wb.addWorksheet('FA Goods');
-      wsFa.columns=[{header:'Venue',key:'venue',width:30},{header:'SKU',key:'sku',width:18},{header:'Item',key:'name',width:30},{header:'FA',key:'fa',width:12},{header:'Qty',key:'qty',width:10},{header:'Pallets',key:'pallets',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Truck',key:'truck',width:28},{header:'Kit',key:'kit',width:16}];
+      wsFa.columns=[{header:'Venue',key:'venue',width:30},{header:'SKU',key:'sku',width:18},{header:'Item',key:'name',width:30},{header:'FA',key:'fa',width:12},{header:'Qty',key:'qty',width:10},{header:'Pallets',key:'pallets',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Dispatch',key:'dispatch',width:14},{header:'Truck',key:'truck',width:28},{header:'Kit',key:'kit',width:16}];
       _hdr(wsFa);
+      // Build dispatch date lookup (same as email section)
+      const _xlLpDt={};const _xlLpS=new Set();for(const r of(D.generatedPlan||[])){const tid=r.truckId||r['Truck ID'];if(!tid||_xlLpS.has(tid))continue;_xlLpS.add(tid);_xlLpDt['LP-'+tid]=r.date||''}
+      const _xlLmDt={};for(const t of(D.lmTrucks||[])){if(t.dd){_xlLmDt[t.id]=t.dd;if(t.lsr)_xlLmDt[t.lsr]=t.dd;_xlLmDt['LM '+t.dest]=t.dd}}
       faRows.sort((a,b)=>(a.venue||'').localeCompare(b.venue)||(a.biDate||'').localeCompare(b.biDate));
-      for(const r of faRows){wsFa.addRow({venue:r.venue||'',sku:r.sku,name:r.name,fa:r.fa||'',qty:r.qty,pallets:r.pallets||0,biDate:r.biDate?_fmtD(r.biDate):'',truck:r.linkedTruck||'',kit:r.linkedKit||''})}
+      for(const r of faRows){
+        let dd=r.linkedTruck?(_xlLpDt[r.linkedTruck]||''):'';
+        if(!dd&&r.linkedTruck){for(const k in _xlLmDt){if(r.linkedTruck.includes(k)&&k.length>2){dd=_xlLmDt[k];break}}}
+        wsFa.addRow({venue:r.venue||'',sku:r.sku,name:r.name,fa:r.fa||'',qty:r.qty,pallets:r.pallets||0,biDate:r.biDate?_fmtD(r.biDate):'',dispatch:dd?_fmtD(dd):'',truck:r.linkedTruck||'',kit:r.linkedKit||''})
+      }
       wsFa.getColumn('qty').numFmt='#,##0';wsFa.getColumn('qty').alignment={horizontal:'right'};
       wsFa.getColumn('pallets').numFmt='#,##0.0';wsFa.getColumn('pallets').alignment={horizontal:'right'};
       _autoFilter(wsFa);
@@ -855,13 +862,46 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   }
   html+='</table></td></tr>';
 
-  // ── FA Goods Section ──
+  // ── FA Goods Forecast Section ──
   if(_faItems.length>0){
+    // Resolve dispatch date from linked truck
+    // Build LP truck date map: truckId → date
+    const _lpDateMap={};
+    const _lpSeen=new Set();
+    for(const r of (D.generatedPlan||[])){
+      const tid=r.truckId||r['Truck ID'];if(!tid||_lpSeen.has(tid))continue;_lpSeen.add(tid);
+      _lpDateMap['LP-'+tid]=r.date||r.Date||'';
+    }
+    // Build LM truck date map: various refs → dd
+    const _lmDateMap={};
+    for(const t of (D.lmTrucks||[])){
+      if(t.dd){_lmDateMap[t.id]=t.dd;if(t.lsr)_lmDateMap[t.lsr]=t.dd;_lmDateMap['LM '+t.dest]=t.dd}
+    }
+    // Resolve each FA item's dispatch date
+    const _faResolved=_faItems.map(it=>{
+      let dd='';
+      if(it.linkedTruck){
+        dd=_lpDateMap[it.linkedTruck]||'';
+        if(!dd){// LM truck — match by LSR or dest
+          for(const k in _lmDateMap){if(it.linkedTruck.includes(k)&&k.length>2){dd=_lmDateMap[k];break}}
+        }
+      }
+      return{...it,dispDate:dd};
+    });
+
     const _faTotalQty=_faItems.reduce((s,i)=>s+i.qty,0);
     const _faTotalPlt=_faItems.reduce((s,i)=>s+(i.pallets||0),0);
     const _faVenues=[...new Set(_faItems.map(i=>i.venue))];
     const _faTrucks=[...new Set(_faItems.map(i=>i.linkedTruck).filter(Boolean))];
-    html+=_sec('&#128230;','FA Goods &#8212; Functional Area Assets','#0891B2');
+
+    // Group by dispatch date, find next 3 active days from tomorrow
+    const _faByDate={};
+    for(const it of _faResolved){const d=it.dispDate||'unscheduled';if(!_faByDate[d])_faByDate[d]=[];_faByDate[d].push(it)}
+    const _faDates=Object.keys(_faByDate).filter(d=>d!=='unscheduled'&&d>=dShort).sort();
+    const _faUpcoming=_faDates.slice(0,3);
+    const _faUnscheduled=_faByDate['unscheduled']||[];
+
+    html+=_sec('&#128230;','FA Goods &#8212; Forecast','#0891B2');
     html+='<tr><td style="padding:0 32px 20px">';
     // KPI chips
     html+='<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px"><tr>';
@@ -871,27 +911,46 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faVenues.length+' venues</td><td style="width:8px"></td>';
     html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faTrucks.length+' trucks</td>';
     html+='</tr></table>';
-    // Table
+    // Forecast table
     html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
-    const _h='padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2';
-    html+='<tr bgcolor="#E0F7FA"><td style="'+_h+'">VENUE</td><td style="'+_h+'">SKU</td><td style="'+_h+'">ITEM</td><td style="'+_h+'">FA</td><td style="'+_h+';text-align:right">QTY</td><td style="'+_h+';text-align:right">PLT</td><td style="'+_h+'">BI DATE</td><td style="'+_h+'">TRUCK / KIT</td></tr>';
-    _faItems.sort((a,b)=>(a.venue||'').localeCompare(b.venue)||(a.biDate||'').localeCompare(b.biDate));
-    _faItems.forEach((it,idx)=>{
-      const bg=idx%2?'#F0FDFE':'#ffffff';
+    const _fh='padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2';
+    html+='<tr bgcolor="#E0F7FA"><td style="'+_fh+'">DISPATCH</td><td style="'+_fh+'">VENUE</td><td style="'+_fh+'">SKU</td><td style="'+_fh+'">ITEM</td><td style="'+_fh+';text-align:right">QTY</td><td style="'+_fh+';text-align:right">PLT</td><td style="'+_fh+'">TRUCK / KIT</td></tr>';
+    let _faIdx=0;
+    const _faRow=(it,dateLabel)=>{
+      const bg=_faIdx%2?'#F0FDFE':'#ffffff';
       const truckDisp=it.linkedTruck?'<span style="font-size:10px;font-weight:700;color:#4A148C">'+it.linkedTruck+'</span>':'';
       const kitDisp=it.linkedKit?'<span style="font-size:10px;font-weight:600;color:#12804A">'+it.linkedKit+'</span>':'';
-      const biDisp=it.biDate?fD(it.biDate):'—';
       const _b='padding:5px 10px;border-bottom:1px solid #E0F2F1';
-      html+='<tr bgcolor="'+bg+'">';
-      html+='<td style="'+_b+';font-size:10px;font-weight:600;color:#333">'+it.venue+'</td>';
-      html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;color:#0891B2">'+it.sku+'</td>';
-      html+='<td style="'+_b+';font-size:11px">'+it.name+'</td>';
-      html+='<td style="'+_b+';font-size:10px;color:#0891B2;font-weight:600">'+(it.fa||'')+'</td>';
-      html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right">'+it.qty+'</td>';
-      html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;text-align:right;color:#4A148C">'+(it.pallets?it.pallets.toFixed(1):'—')+'</td>';
-      html+='<td style="'+_b+';font-size:10px;font-weight:600">'+biDisp+'</td>';
-      html+='<td style="'+_b+';font-size:10px">'+truckDisp+(truckDisp&&kitDisp?' ':'')+kitDisp+'</td>';
-      html+='</tr>';
+      let r='<tr bgcolor="'+bg+'">';
+      r+='<td style="'+_b+';font-size:10px;font-weight:700">'+dateLabel+'</td>';
+      r+='<td style="'+_b+';font-size:10px;font-weight:600;color:#333">'+it.venue+'</td>';
+      r+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;color:#0891B2">'+it.sku+'</td>';
+      r+='<td style="'+_b+';font-size:11px">'+it.name+'</td>';
+      r+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right">'+it.qty+'</td>';
+      r+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;text-align:right;color:#4A148C">'+(it.pallets?it.pallets.toFixed(1):'—')+'</td>';
+      r+='<td style="'+_b+';font-size:10px">'+truckDisp+(truckDisp&&kitDisp?' ':'')+kitDisp+'</td>';
+      r+='</tr>';_faIdx++;return r;
+    };
+    for(const d of _faUpcoming){
+      const items=_faByDate[d];
+      const dayQty=items.reduce((s,i)=>s+i.qty,0);const dayPlt=items.reduce((s,i)=>s+(i.pallets||0),0);
+      const dayLabel=fD(d)+' <span style="font-size:9px;color:#666">('+items.length+' items &middot; '+dayQty+'qty &middot; '+dayPlt.toFixed(1)+'plt)</span>';
+      items.sort((a,b)=>(a.venue||'').localeCompare(b.venue));
+      items.forEach((it,j)=>{html+=_faRow(it,j===0?dayLabel:'')});
+    }
+    // Past / today items
+    const _faPast=Object.keys(_faByDate).filter(d=>d!=='unscheduled'&&d<dShort).sort();
+    if(_faPast.length){
+      for(const d of _faPast){_faByDate[d].forEach((it,j)=>{html+=_faRow(it,j===0?'<span style="color:#999">'+fD(d)+' (past)</span>':'')})}
+    }
+    if(_faUnscheduled.length){
+      _faUnscheduled.forEach((it,j)=>{html+=_faRow(it,j===0?'<span style="color:#C4550A">Unscheduled</span>':'')});
+    }
+    // Remaining future (beyond 3 days)
+    const _faLater=_faDates.slice(3);
+    if(_faLater.length){
+      for(const d of _faLater){_faByDate[d].forEach((it,j)=>{html+=_faRow(it,j===0?fD(d):'')})}
+    }
     });
     html+='</table></td></tr>';
   }
