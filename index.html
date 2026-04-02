@@ -4939,6 +4939,7 @@ function LP_renderPlan(el){
   const dispCount=LP_dispatched.size;
   const readyCount=truckList.filter(t=>!LP_dispatched.has(t.id)&&_truckInStock(t)).length;
   const fullCount=truckList.filter(t=>!LP_dispatched.has(t.id)&&_truckInStock(t)&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
+  const noOorCount=truckList.filter(t=>LP_dispatched.has(t.id)&&!LP_oorTrucks.has(t.id)).length;
 
   // ── KPI Summary ──
   const lpTotalTrucks=truckList.length;
@@ -5006,6 +5007,7 @@ function LP_renderPlan(el){
     </div>
     <div style="display:flex;gap:6px">
       <button class="rbtn" id="lpReadyBtn" onclick="LP_toggleReadyFilter()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">✅ Ready (${fullCount})</button>
+      <button class="rbtn" id="lpNoOorBtn" onclick="LP_toggleNoOorFilter()" style="background:var(--os);color:var(--or);border-color:#F5D6B8">🔒 No OOR (${noOorCount})</button>
       <button class="rbtn" id="lpLsrBtn" onclick="LP_toggleLsrFilter()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📋 LSR (${Object.keys(LP_lsrNumbers).length})</button>
     </div>
   </div>
@@ -5035,7 +5037,7 @@ function LP_renderPlan(el){
     const _isReadyFull=_isReady&&pct>=95;
     const dispClass=isDisp?' dispatched':'';const checked=isDisp?'checked':'';
     const _cargoVal=aggSkus.reduce((s,sk)=>{const cd=_custForDest(sk.sku,t.dest);return s+(cd.unitPrice||0)*sk.qty},0);
-    let h='<div class="lp-truck'+dispClass+'" data-search="'+t.id+' LP-'+t.id+' '+t.dest+' '+clDisp(t.dest)+' '+lsr+' '+aggSkus.map(s=>s.sku+' '+s.name).join(' ')+'" data-ready="'+(_isReady?1:0)+'" data-full="'+(_isReadyFull?1:0)+'" data-locked="'+(isDisp?1:0)+'" data-lsr="'+(lsr?1:0)+'" onclick="LP_showTruckModal('+t.id+')">';
+    let h='<div class="lp-truck'+dispClass+'" data-search="'+t.id+' LP-'+t.id+' '+t.dest+' '+clDisp(t.dest)+' '+lsr+' '+aggSkus.map(s=>s.sku+' '+s.name).join(' ')+'" data-ready="'+(_isReady?1:0)+'" data-full="'+(_isReadyFull?1:0)+'" data-locked="'+(isDisp?1:0)+'" data-oor="'+(isOOR?1:0)+'" data-lsr="'+(lsr?1:0)+'" onclick="LP_showTruckModal('+t.id+')">';
     // Row 1: icon + ID + dest badge (wraps naturally)
     h+='<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">';
     h+='<span>'+(isDisp?'🔒':'🚛')+'</span>';
@@ -5291,17 +5293,20 @@ function LP_filterStatus(){filterBySearch('lpStatusSearch','#lpStatusBody','tr[d
 
 function LP_filterPlan(){filterBySearch('lpPlanSearch','#lpPlanBody','.lp-truck',{dayHdrSel:'.lp-day-hdr'})}
 let _lpReadyFilter=false;
+let _lpNoOorFilter=false;
 let _lpLsrFilter=false;
 function _lpApplyTruckFilters(){
   const body=document.getElementById('lpPlanBody');if(!body)return;
   body.querySelectorAll('.lp-truck').forEach(el=>{
     let show=true;
     if(_lpReadyFilter){
-      // Ready filter: show only unlocked + ready-full trucks
       if(el.getAttribute('data-locked')==='1'||el.getAttribute('data-full')!=='1')show=false;
     }
+    if(_lpNoOorFilter){
+      // No OOR filter: show only locked trucks that are NOT OOR
+      if(el.getAttribute('data-locked')!=='1'||el.getAttribute('data-oor')==='1')show=false;
+    }
     if(_lpLsrFilter){
-      // LSR filter: show only trucks with LSR numbers
       if(el.getAttribute('data-lsr')!=='1')show=false;
     }
     el.style.display=show?'':'none';
@@ -5313,23 +5318,28 @@ function _lpApplyTruckFilters(){
     hdr.style.display=visible?'':'none';grid.style.display=visible?'':'none';
   });
 }
+function _lpSyncFilterBtns(){
+  const b1=document.getElementById('lpReadyBtn');
+  if(b1){b1.style.background=_lpReadyFilter?'var(--gn)':'var(--gs)';b1.style.color=_lpReadyFilter?'#fff':'var(--gn)'}
+  const b2=document.getElementById('lpNoOorBtn');
+  if(b2){b2.style.background=_lpNoOorFilter?'var(--or)':'var(--os)';b2.style.color=_lpNoOorFilter?'#fff':'var(--or)'}
+  const b3=document.getElementById('lpLsrBtn');
+  if(b3){b3.style.background=_lpLsrFilter?'var(--pu)':'var(--ps)';b3.style.color=_lpLsrFilter?'#fff':'var(--pu)'}
+}
 function LP_toggleReadyFilter(){
   _lpReadyFilter=!_lpReadyFilter;
-  if(_lpReadyFilter)_lpLsrFilter=false;// mutual exclusion
-  const btn=document.getElementById('lpReadyBtn');
-  if(btn){btn.style.background=_lpReadyFilter?'var(--gn)':'var(--gs)';btn.style.color=_lpReadyFilter?'#fff':'var(--gn)'}
-  const btn2=document.getElementById('lpLsrBtn');
-  if(btn2){btn2.style.background=_lpLsrFilter?'var(--pu)':'var(--ps)';btn2.style.color=_lpLsrFilter?'#fff':'var(--pu)'}
-  _lpApplyTruckFilters();
+  if(_lpReadyFilter){_lpLsrFilter=false;_lpNoOorFilter=false}
+  _lpSyncFilterBtns();_lpApplyTruckFilters();
+}
+function LP_toggleNoOorFilter(){
+  _lpNoOorFilter=!_lpNoOorFilter;
+  if(_lpNoOorFilter){_lpReadyFilter=false;_lpLsrFilter=false}
+  _lpSyncFilterBtns();_lpApplyTruckFilters();
 }
 function LP_toggleLsrFilter(){
   _lpLsrFilter=!_lpLsrFilter;
-  if(_lpLsrFilter)_lpReadyFilter=false;// mutual exclusion
-  const btn=document.getElementById('lpLsrBtn');
-  if(btn){btn.style.background=_lpLsrFilter?'var(--pu)':'var(--ps)';btn.style.color=_lpLsrFilter?'#fff':'var(--pu)'}
-  const btn2=document.getElementById('lpReadyBtn');
-  if(btn2){btn2.style.background=_lpReadyFilter?'var(--gn)':'var(--gs)';btn2.style.color=_lpReadyFilter?'#fff':'var(--gn)'}
-  _lpApplyTruckFilters();
+  if(_lpLsrFilter){_lpReadyFilter=false;_lpNoOorFilter=false}
+  _lpSyncFilterBtns();_lpApplyTruckFilters();
 }
 
 function LP_toggleDispatch(truckId,checked){
