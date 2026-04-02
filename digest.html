@@ -138,6 +138,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // ── LP Status ──
   const dispatched=new Set(D.dispatched);
   const lsrNumbers=D.lsrNumbers||{};
+  const lpHolds=new Set(D.holds||[]);
+  const lpStockHolds=new Set(D.stockHolds||[]);
   const lpTrucks={};
   for(const r of D.generatedPlan){if(!lpTrucks[r.truckId])lpTrucks[r.truckId]={id:r.truckId,date:r.date,dest:r.destination,plt:0,qty:0};lpTrucks[r.truckId].plt+=r.pallets||0;lpTrucks[r.truckId].qty+=r.qty||0}
   const lpList=Object.values(lpTrucks);
@@ -902,8 +904,52 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     ],i%2?'#FFF8F8':'#fff')}).join('')+
     '<tr bgcolor="#F0F1F3" style="font-weight:700;border-top:2px solid #F5B8BA"><td style="padding:6px 10px;font-size:10px">Total &middot; '+_lateDestKeys.length+' destinations</td><td style="padding:6px 10px"></td><td style="padding:6px 10px;font-size:10px;text-align:right">'+_lateTotalSKUs+'</td><td style="padding:6px 10px;font-size:10px;text-align:right">'+_lateTotalTrucks+'</td><td style="padding:6px 10px;font-size:10px;text-align:right;font-family:Courier New,monospace">'+_lateTotalQty.toLocaleString()+'</td><td style="padding:6px 10px;font-size:10px;text-align:right;color:#C62828;font-weight:800">+'+_maxLateAll+'d</td></tr>'+
     '</table>'
-  )+'</td></tr>'+
-  (downloadUrl?
+  )+'</td></tr>';
+
+  // ── LP Holds Section ──
+  const _allHolds=[...lpHolds,...lpStockHolds];
+  const _uniqueHolds=[...new Set(_allHolds)];
+  if(_uniqueHolds.length>0){
+    // Group by destination
+    const _holdsByDest={};
+    for(const h of _uniqueHolds){
+      const[dest,sku]=h.split('|');if(!dest||!sku)continue;
+      if(!_holdsByDest[dest])_holdsByDest[dest]=[];
+      const isManual=lpHolds.has(h);
+      const isStock=lpStockHolds.has(h);
+      const nom=D.nomenclature?.[sku]||{};
+      _holdsByDest[dest].push({sku,name:nom.name||sku,isManual,isStock});
+    }
+    const _holdDests=Object.keys(_holdsByDest).sort();
+    const _holdTotal=_uniqueHolds.length;
+    const _manualCount=[...lpHolds].length;
+    const _stockCount=[...lpStockHolds].length;
+
+    html+=_sec('&#9208;','On Hold &#8212; LP Items Excluded from Plan','#C4550A')+
+    '<tr><td style="padding:0 32px 20px">'+
+    '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px"><tr>'+
+    '<td bgcolor="#FEF3EB" style="padding:5px 14px;font-size:12px;font-weight:700;color:#C4550A;border:none">'+_holdTotal+' holds</td><td style="width:8px"></td>'+
+    (_manualCount?'<td bgcolor="#FEF3EB" style="padding:5px 14px;font-size:11px;font-weight:700;color:#C4550A;border:none">&#9888; '+_manualCount+' manual</td><td style="width:8px"></td>':'')+
+    (_stockCount?'<td bgcolor="#FFF8E1" style="padding:5px 14px;font-size:11px;font-weight:700;color:#E65100;border:none">&#128230; '+_stockCount+' low stock</td>':'')+
+    '</tr></table>'+
+    '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
+    html+='<tr bgcolor="#FEF3EB"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C4550A">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C4550A">SKU</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C4550A">ITEM</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C4550A">TYPE</td></tr>';
+    let _hIdx=0;
+    for(const dest of _holdDests){
+      const items=_holdsByDest[dest];
+      const destLabel=D.destNames?.[dest]||dest;
+      for(let j=0;j<items.length;j++){
+        const it=items[j];
+        const bg=_hIdx%2?'#FFF8F0':'#ffffff';
+        const typeLabel=it.isManual&&it.isStock?'<span style="font-size:9px;font-weight:700;color:#C4550A;background:#FEF3EB;padding:2px 6px">MANUAL</span> <span style="font-size:9px;font-weight:700;color:#E65100;background:#FFF8E1;padding:2px 6px">LOW STOCK</span>':(it.isManual?'<span style="font-size:9px;font-weight:700;color:#C4550A;background:#FEF3EB;padding:2px 6px">MANUAL</span>':'<span style="font-size:9px;font-weight:700;color:#E65100;background:#FFF8E1;padding:2px 6px">LOW STOCK</span>');
+        html+='<tr bgcolor="'+bg+'"><td style="padding:5px 10px;font-size:11px;font-weight:600;border-bottom:1px solid #FDE8D4">'+(j===0?destLabel:'')+'</td><td style="padding:5px 10px;font-size:11px;font-family:Courier New,monospace;font-weight:700;color:#C4550A;border-bottom:1px solid #FDE8D4">'+it.sku+'</td><td style="padding:5px 10px;font-size:11px;border-bottom:1px solid #FDE8D4">'+it.name+'</td><td style="padding:5px 10px;border-bottom:1px solid #FDE8D4">'+typeLabel+'</td></tr>';
+        _hIdx++;
+      }
+    }
+    html+='</table></td></tr>';
+  }
+
+  html+=(downloadUrl?
     '<tr><td style="padding:0 32px 24px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
       '<td bgcolor="#F0EBFE" style="padding:18px 24px;border:none">'+
         '<b style="font-size:12px">&#128206; Reports &amp; Links</b><br><br>'+
