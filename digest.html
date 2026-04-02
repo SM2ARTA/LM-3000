@@ -337,6 +337,19 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     wsKit.getColumn('compQty').numFmt='#,##0';wsKit.getColumn('compQty').alignment={horizontal:'right'};
     _autoFilter(wsKit);
 
+    // Sheet 7: FA Goods
+    const faRows=D.faItems||[];
+    if(faRows.length){
+      const wsFa=wb.addWorksheet('FA Goods');
+      wsFa.columns=[{header:'Venue',key:'venue',width:30},{header:'SKU',key:'sku',width:18},{header:'Item',key:'name',width:30},{header:'FA',key:'fa',width:12},{header:'Qty',key:'qty',width:10},{header:'Pallets',key:'pallets',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Truck',key:'truck',width:28},{header:'Kit',key:'kit',width:16}];
+      _hdr(wsFa);
+      faRows.sort((a,b)=>(a.venue||'').localeCompare(b.venue)||(a.biDate||'').localeCompare(b.biDate));
+      for(const r of faRows){wsFa.addRow({venue:r.venue||'',sku:r.sku,name:r.name,fa:r.fa||'',qty:r.qty,pallets:r.pallets||0,biDate:r.biDate?_fmtD(r.biDate):'',truck:r.linkedTruck||'',kit:r.linkedKit||''})}
+      wsFa.getColumn('qty').numFmt='#,##0';wsFa.getColumn('qty').alignment={horizontal:'right'};
+      wsFa.getColumn('pallets').numFmt='#,##0.0';wsFa.getColumn('pallets').alignment={horizontal:'right'};
+      _autoFilter(wsFa);
+    }
+
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 
@@ -560,7 +573,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
         html+='<td bgcolor="'+dc[1]+'" style="padding:5px 7px;border-left:4px solid '+dc[0]+'">';
         html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">LP-'+t.id+'</span>';
         html+=' <span style="font-size:9px;font-weight:700;color:'+statusClr+';background:'+statusBg+';padding:1px 5px">'+statusIcon+'</span>';
-        const _wkFa=_faForLP(t.id);if(_wkFa)html+=_faBadgeHtml(_wkFa);
+        const _wkFa=_faForLP(t.id);if(_wkFa)html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">FA</span>';
         html+='<br><span style="font-size:10px;color:'+destClr+';font-weight:600">'+dest+'</span>';
         if(lsr)html+='<br><span style="font-size:9px;color:'+lsrClr+';font-family:Courier New,monospace">LSR '+lsr+'</span>';
         html+='</td></tr></table>';
@@ -671,7 +684,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
           const _nwFa=t.type==='LP'?_faForLP(parseInt(String(t.id).replace('LP-',''))):_faForLM(t.dest,t.lsr);
           html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">'+prefix+t.id+'</span>';
           html+=' <span style="font-size:9px;font-weight:700;color:#304FFE;background:#BBDEFB;padding:1px 5px">&#9654;</span>';
-          if(_nwFa)html+=_faBadgeHtml(_nwFa);
+          if(_nwFa)html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">FA</span>';
           html+='<br><span style="font-size:10px;color:#444;font-weight:600">'+dest+'</span>';
           html+='<br><span style="font-size:9px;color:#888;font-family:Courier New,monospace">LSR '+t.lsr+'</span>';
           html+='</td></tr></table>';
@@ -860,19 +873,24 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     html+='</tr></table>';
     // Table
     html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
-    html+='<tr bgcolor="#E0F7FA"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2">SKU</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2">ITEM</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2">VENUE</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2">FA</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2;text-align:right">QTY</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2;text-align:right">PLT</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2">TRUCK / KIT</td></tr>';
+    const _h='padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2';
+    html+='<tr bgcolor="#E0F7FA"><td style="'+_h+'">VENUE</td><td style="'+_h+'">SKU</td><td style="'+_h+'">ITEM</td><td style="'+_h+'">FA</td><td style="'+_h+';text-align:right">QTY</td><td style="'+_h+';text-align:right">PLT</td><td style="'+_h+'">BI DATE</td><td style="'+_h+'">TRUCK / KIT</td></tr>';
+    _faItems.sort((a,b)=>(a.venue||'').localeCompare(b.venue)||(a.biDate||'').localeCompare(b.biDate));
     _faItems.forEach((it,idx)=>{
       const bg=idx%2?'#F0FDFE':'#ffffff';
       const truckDisp=it.linkedTruck?'<span style="font-size:10px;font-weight:700;color:#4A148C">'+it.linkedTruck+'</span>':'';
       const kitDisp=it.linkedKit?'<span style="font-size:10px;font-weight:600;color:#12804A">'+it.linkedKit+'</span>':'';
+      const biDisp=it.biDate?fD(it.biDate):'—';
+      const _b='padding:5px 10px;border-bottom:1px solid #E0F2F1';
       html+='<tr bgcolor="'+bg+'">';
-      html+='<td style="padding:5px 10px;font-size:11px;font-family:Courier New,monospace;font-weight:700;color:#0891B2;border-bottom:1px solid #E0F2F1">'+it.sku+'</td>';
-      html+='<td style="padding:5px 10px;font-size:11px;border-bottom:1px solid #E0F2F1">'+it.name+'</td>';
-      html+='<td style="padding:5px 10px;font-size:10px;color:#666;border-bottom:1px solid #E0F2F1">'+it.venue+'</td>';
-      html+='<td style="padding:5px 10px;font-size:10px;color:#0891B2;font-weight:600;border-bottom:1px solid #E0F2F1">'+(it.fa||'')+'</td>';
-      html+='<td style="padding:5px 10px;font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right;border-bottom:1px solid #E0F2F1">'+it.qty+'</td>';
-      html+='<td style="padding:5px 10px;font-size:11px;font-family:Courier New,monospace;text-align:right;color:#4A148C;border-bottom:1px solid #E0F2F1">'+(it.pallets?it.pallets.toFixed(1):'—')+'</td>';
-      html+='<td style="padding:5px 10px;font-size:10px;border-bottom:1px solid #E0F2F1">'+truckDisp+(truckDisp&&kitDisp?' ':'')+kitDisp+'</td>';
+      html+='<td style="'+_b+';font-size:10px;font-weight:600;color:#333">'+it.venue+'</td>';
+      html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;color:#0891B2">'+it.sku+'</td>';
+      html+='<td style="'+_b+';font-size:11px">'+it.name+'</td>';
+      html+='<td style="'+_b+';font-size:10px;color:#0891B2;font-weight:600">'+(it.fa||'')+'</td>';
+      html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right">'+it.qty+'</td>';
+      html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;text-align:right;color:#4A148C">'+(it.pallets?it.pallets.toFixed(1):'—')+'</td>';
+      html+='<td style="'+_b+';font-size:10px;font-weight:600">'+biDisp+'</td>';
+      html+='<td style="'+_b+';font-size:10px">'+truckDisp+(truckDisp&&kitDisp?' ':'')+kitDisp+'</td>';
       html+='</tr>';
     });
     html+='</table></td></tr>';
@@ -907,48 +925,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     '</table>'
   )+'</td></tr>';
 
-  // ── LP Holds Section ──
-  const _allHolds=[...lpHolds,...lpStockHolds];
-  const _uniqueHolds=[...new Set(_allHolds)];
-  if(_uniqueHolds.length>0){
-    // Group by destination
-    const _holdsByDest={};
-    for(const h of _uniqueHolds){
-      const[dest,sku]=h.split('|');if(!dest||!sku)continue;
-      if(!_holdsByDest[dest])_holdsByDest[dest]=[];
-      const isManual=lpHolds.has(h);
-      const isStock=lpStockHolds.has(h);
-      const nom=D.nomenclature?.[sku]||{};
-      _holdsByDest[dest].push({sku,name:nom.name||sku,isManual,isStock});
-    }
-    const _holdDests=Object.keys(_holdsByDest).sort();
-    const _holdTotal=_uniqueHolds.length;
-    const _manualCount=[...lpHolds].length;
-    const _stockCount=[...lpStockHolds].length;
-
-    html+=_sec('&#9208;','On Hold &#8212; LP Items Excluded from Plan','#C4550A')+
-    '<tr><td style="padding:0 32px 20px">'+
-    '<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px"><tr>'+
-    '<td bgcolor="#FEF3EB" style="padding:5px 14px;font-size:12px;font-weight:700;color:#C4550A;border:none">'+_holdTotal+' holds</td><td style="width:8px"></td>'+
-    (_manualCount?'<td bgcolor="#FEF3EB" style="padding:5px 14px;font-size:11px;font-weight:700;color:#C4550A;border:none">&#9888; '+_manualCount+' manual</td><td style="width:8px"></td>':'')+
-    (_stockCount?'<td bgcolor="#FFF8E1" style="padding:5px 14px;font-size:11px;font-weight:700;color:#E65100;border:none">&#128230; '+_stockCount+' low stock</td>':'')+
-    '</tr></table>'+
-    '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
-    html+='<tr bgcolor="#FEF3EB"><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C4550A">DESTINATION</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C4550A">SKU</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C4550A">ITEM</td><td style="padding:6px 10px;font-size:10px;font-weight:700;color:#C4550A">TYPE</td></tr>';
-    let _hIdx=0;
-    for(const dest of _holdDests){
-      const items=_holdsByDest[dest];
-      const destLabel=D.destNames?.[dest]||dest;
-      for(let j=0;j<items.length;j++){
-        const it=items[j];
-        const bg=_hIdx%2?'#FFF8F0':'#ffffff';
-        const typeLabel=it.isManual&&it.isStock?'<span style="font-size:9px;font-weight:700;color:#C4550A;background:#FEF3EB;padding:2px 6px">MANUAL</span> <span style="font-size:9px;font-weight:700;color:#E65100;background:#FFF8E1;padding:2px 6px">LOW STOCK</span>':(it.isManual?'<span style="font-size:9px;font-weight:700;color:#C4550A;background:#FEF3EB;padding:2px 6px">MANUAL</span>':'<span style="font-size:9px;font-weight:700;color:#E65100;background:#FFF8E1;padding:2px 6px">LOW STOCK</span>');
-        html+='<tr bgcolor="'+bg+'"><td style="padding:5px 10px;font-size:11px;font-weight:600;border-bottom:1px solid #FDE8D4">'+(j===0?destLabel:'')+'</td><td style="padding:5px 10px;font-size:11px;font-family:Courier New,monospace;font-weight:700;color:#C4550A;border-bottom:1px solid #FDE8D4">'+it.sku+'</td><td style="padding:5px 10px;font-size:11px;border-bottom:1px solid #FDE8D4">'+it.name+'</td><td style="padding:5px 10px;border-bottom:1px solid #FDE8D4">'+typeLabel+'</td></tr>';
-        _hIdx++;
-      }
-    }
-    html+='</table></td></tr>';
-  }
+  // On Hold section removed — too large for email digest
 
   html+=(downloadUrl?
     '<tr><td style="padding:0 32px 24px"><table width="100%" cellpadding="0" cellspacing="0"><tr>'+
