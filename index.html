@@ -595,9 +595,9 @@ function _faItemsForTruck(truckId,dest,lsr){
   return items.filter(it=>{
     if(!it.linkedTruck)return false;
     if(it.linkedTruck===truckId)return true;
-    const hasLsr=it.linkedTruck.includes('LSR');
-    if(hasLsr&&lsr&&it.linkedTruck.includes(lsr))return true;
-    if(!hasLsr&&dest&&it.linkedTruck==='LM '+dest)return true;
+    const hasRef=it.linkedTruck.includes('·');
+    if(hasRef&&lsr&&it.linkedTruck.includes(lsr))return true;
+    if(!hasRef&&dest&&it.linkedTruck==='LM '+dest)return true;
     return false;
   }).map(it=>({sku:it.sku,name:it.name,qty:it.qty,pallets:it.pallets||0,biDate:it.biDate||'',venue:it.venue||'',src:'FA',uom:'Each'}));
 }
@@ -612,10 +612,10 @@ function _faMatchTruck(truckId,dest,lsr){
   for(const k in FA_LINKED){
     if(k.startsWith('LP-')||k.startsWith('_'))continue;
     const f=FA_LINKED[k];
-    const hasLsr=k.includes('LSR');
+    const hasRef=k.includes('·');// has LSR or other ref after "·"
     let match=false;
-    if(hasLsr&&lsr&&k.includes(lsr))match=true;// LSR match (precise)
-    if(!hasLsr&&dest&&k==='LM '+dest)match=true;// Exact dest match for no-LSR refs
+    if(hasRef&&lsr&&k.includes(lsr))match=true;// LSR/ref match (precise)
+    if(!hasRef&&dest&&k==='LM '+dest)match=true;// Exact dest match for no-ref links
     if(match){
       if(!total)total={ref:k,count:0,qty:0,plt:0};
       total.count+=f.count;total.qty+=f.qty;total.plt+=f.plt;
