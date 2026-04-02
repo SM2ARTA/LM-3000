@@ -14286,7 +14286,7 @@ if(cv==="dashboard"){
 
   // ── Day-by-day detail table ──
   if(calDates.length>0){
-    h+=`<details class="csf fin" style="margin-top:16px" open><summary class="sti" style="cursor:pointer;user-select:none">📅 Daily Dispatch Detail <span class="bg bgs bg-gy" style="font-weight:400">${calDates.length} days</span></summary>
+    h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none">📅 Daily Dispatch Detail <span class="bg bgs bg-gy" style="font-weight:400">${calDates.length} days</span></summary>
     <table class="dtb"><thead><tr><th>Dispatch</th><th>Day</th><th>Trucks</th><th style="color:#E31837">CORT</th><th style="color:#EF6C00">STP</th><th>Pallets</th><th>Qty</th><th>CORT Qty</th><th>STP Qty</th><th style="width:140px">Load</th></tr></thead><tbody>`;
     let _totTrk=0,_totCrt=0,_totStp=0,_totPlt=0,_totPcs=0,_totCrtPcs=0,_totStpPcs=0;
     calDates.forEach(dk3=>{
@@ -14616,7 +14616,7 @@ if(cv==="dashboard"){
       // Update WHS snapshot with fresh late data
       clearTimeout(window._whsSnapTimer);window._whsSnapTimer=setTimeout(_saveWhsSnapshot,2000);
 
-      h+=`<details class="csf fin" style="margin-top:16px;border:2px solid var(--rd);background:linear-gradient(135deg,#fff,#FEF0F0)" open>
+      h+=`<details class="csf fin" style="margin-top:16px;border:2px solid var(--rd);background:linear-gradient(135deg,#fff,#FEF0F0)">
         <summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">⚠ Late Arrivals
           <span class="bg bgs bg-rd">${_lateItems.length} items</span>
           <span class="bg bgs bg-rd">${_lateTotalSKUs} SKUs</span>
