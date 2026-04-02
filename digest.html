@@ -61,6 +61,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // Match FA to LM truck by dest substring
   const _faForLM=(dest,lsr)=>{for(const k in _faByTruck){if(k.startsWith('LP-'))continue;if(dest&&k.includes(dest))return _faByTruck[k];if(lsr&&k.includes(lsr))return _faByTruck[k]}return null};
   const _faBadgeHtml=(items)=>{if(!items||!items.length)return'';const qty=items.reduce((s,i)=>s+i.qty,0);const plt=items.reduce((s,i)=>s+(i.pallets||0),0);return' <span style="font-size:9px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:2px 6px;border:1px solid #A5F3FC">&#128230; FA '+items.length+' &middot; '+qty+'qty'+(plt>0?' &middot; '+plt.toFixed(1)+'plt':'')+'</span>'};
+  if(_faItems.length)console.log('[Digest] FA:',_faItems.length,'items, trucks:',Object.keys(_faByTruck),'kits:',Object.keys(_faByKit));
 
   // ── Football "On This Day" icebreaker (ESPN historical matches) ──
   let footballFact='';
