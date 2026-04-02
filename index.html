@@ -9287,26 +9287,8 @@ function build(venue,venueList,skipNoBi){
 
   const days=[];
 
-  // ── Build per-date locked demand for early path ──
-  // The pool deduction handles total, but early path loads per-date demand which may overlap
-  const _ldByDate={};// biK → {sku: qty}
-  if(Object.keys(_ld).length>0){
-    // Check locked snapshots for this venue to get per-date breakdown
-    const _lsAll=window.LM_lockedSnapshots||{};
-    for(const fp in _lsAll){
-      const snap=_lsAll[fp];
-      if(!snap||!snap.items)continue;
-      const dest=snap.destLabel||snap.destDisplay||'';
-      if(dest!==venue&&!(selCluster&&dest===selCluster))continue;
-      for(const it of snap.items){
-        const itemBiK=it.biK||it.origBiK||snap.dKey||'';
-        if(!itemBiK)continue;
-        if(!_ldByDate[itemBiK])_ldByDate[itemBiK]={};
-        _ldByDate[itemBiK][it.sku]=(_ldByDate[itemBiK][it.sku]||0)+(it.loadQty||0);
-      }
-    }
-  }
-
+  // ── Per-date locked demand for early path (pre-computed in numberAll) ──
+  const _ldByDate=(window._lmLockedDemandByDate||{})[venue]||{};
   // ── EARLY: ship as-is, deduct from pool ──
   for(const biK of earlyDates){
     const items=byDate[biK];
@@ -10116,8 +10098,10 @@ function numberAll(){
   const _lockedByLabel={};// label -> [{fp, snap}]
   const _lockedDemandByLabel={};// label -> {sku: qty}
   const _lockedTrucksByDate={};// label -> {dateKey: count} — locked truck count per date for capacity check
+  const _lockedDemandByDate={};// label -> {biK -> {sku: qty}} — per-date locked demand for early path
   window._lmLockedDemandByLabel=_lockedDemandByLabel;// expose for lazy build fallbacks
   window._lmLockedTrucksByDate=_lockedTrucksByDate;// expose for capacity check in build()
+  window._lmLockedDemandByDate=_lockedDemandByDate;// expose for early path deduction in build()
   for(const fp in LM_lockedSnapshots){
     const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
     const label=snap.destLabel||'';
@@ -10144,6 +10128,13 @@ function numberAll(){
       } else {
         // Regular (non-kit) item: deduct by snapshot SKU directly
         _lockedDemandByLabel[label][it.sku]=(_lockedDemandByLabel[label][it.sku]||0)+(it.loadQty||0);
+      }
+      // Per-date locked demand (for early path deduction)
+      const _itBiK=it.biK||it.origBiK||_ldk||'';
+      if(_itBiK){
+        if(!_lockedDemandByDate[label])_lockedDemandByDate[label]={};
+        if(!_lockedDemandByDate[label][_itBiK])_lockedDemandByDate[label][_itBiK]={};
+        _lockedDemandByDate[label][_itBiK][it.sku]=(_lockedDemandByDate[label][_itBiK][it.sku]||0)+(it.loadQty||0);
       }
     }
   }
