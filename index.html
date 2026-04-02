@@ -9932,7 +9932,7 @@ for(const r of RW){const v=r["Venue"];if(!v)continue;
   if(r["Venue cluster"])clMap[v]=r["Venue cluster"];
   const vc=String(r["Venue code"]||"").trim().toUpperCase();
   if(vc&&!vcMap[v])vcMap[v]=vc;
-  if(!vtMapLocal[v]){const vt=LM_VENUE_TYPE_MAP[v]||String(r["Venue type"]||"").trim();vtMapLocal[v]=vt}
+  if(!vtMapLocal[v]){const _vNorm=v.replace(/\u00A0/g,' ');const vt=LM_VENUE_TYPE_MAP[v]||LM_VENUE_TYPE_MAP[_vNorm]||String(r["Venue type"]||"").trim();vtMapLocal[v]=vt}
   // Skip STP items at venues with STP delivery (they go to STP truck)
   const _bvSku=r["Nomenclature"]||"?";
   // Always create venue entry first so venue appears in sidebar even if all items are STP
