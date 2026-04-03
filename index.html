@@ -6074,9 +6074,16 @@ async function LP_exportSingleTruck(truckId){
     return{sku:s.sku,name:lmNom.nm||lpNom.name||s.name||s.sku,src:lpNom.source||'',uom:lpNom.uom||'Each',qty:s.qty};
   });
   for(const mi of MI_get(MI_lpKey(truckId))){items.push({sku:mi.sku,name:mi.name||'',src:'MANUAL',uom:'Each',qty:mi.qty||0})}
+  // Ship To: MEX/CAN → "City Regional Warehouse", USA → "City Satellite Warehouse"
+  const _lpWhsMap={TOR:'Toronto',VAN:'Vancouver',CDMX:'Mexico City',GDL:'Guadalajara',MTY:'Monterrey',HOU:'Houston',KC:'Kansas City',NY:'New York'};
+  const _lpAbbr=LP_matchTransitAbbr(first.destination);
+  const _lpCity=_lpWhsMap[_lpAbbr]||dest;
+  const _lpDu=(first.destination||'').toUpperCase();
+  const _lpWhsType=_lpDu.includes('CAN')||_lpDu.includes('MEX')?'Regional Warehouse':'Satellite Warehouse';
+  const _lpShipTo=_lpCity+' '+_lpWhsType;
   const wb=new ExcelJS.Workbook();
   const _lpFaItems=_faItemsForTruck('LP-'+truckId,'','');
-  _oorSheet(wb,'OOR','LP-'+truckId,first.destination,dest,items,{dispatchDate:first.date,lsr,faItems:_lpFaItems});
+  _oorSheet(wb,'OOR','LP-'+truckId,first.destination,_lpShipTo,items,{dispatchDate:first.date,lsr,faItems:_lpFaItems});
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OOR_LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx';a.click();URL.revokeObjectURL(a.href);
