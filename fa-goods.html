@@ -255,6 +255,7 @@ let FA_ML3K_KITS=[];  // [{id, sku, venue, type, truckRef}] — from fm-lm-kits
 let _faKitTruckMap={}; // kitId → truck ref (from locked snapshots)
 let _faLockedTrucks=new Set(); // set of locked truck refs (LP dispatched + LM locked)
 let _faLockedLP=new Set(); // set of dispatched LP truck IDs
+let FA_ASSIGNMENTS={}; // groupId -> {lp:{truckId,date,dest}, lm:{truckId,date,dest,biK,locked}}
 async function FA_loadML3K(){
   try{
     const[rw,lpPlan,lmDisp,lmKits]=await Promise.all([
@@ -317,6 +318,9 @@ async function FA_loadML3K(){
       });
     }
     console.log('[FA] ML3K lookup: '+FA_ML3K_VENUES.length+' venues, '+FA_ML3K_TRUCKS.length+' trucks, '+FA_ML3K_KITS.length+' kits');
+    // Load FA assignments (engine truck placements from ML3K)
+    const assigns=await FA_sbRead('fa-assignments');
+    if(assigns&&typeof assigns==='object'){FA_ASSIGNMENTS=assigns;console.log('[FA] Assignments loaded:',Object.keys(assigns).length,'groups')}
   }catch(e){console.warn('[FA] ML3K lookup failed:',e)}
 }
 function _faIsLocked(ref){
@@ -906,18 +910,33 @@ function FA_renderGroups(){
   let h='<table class="dtb"><thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th>Dispatch</th><th>Delivery</th><th style="text-align:right">Items</th><th style="text-align:center">Pallets</th><th>LP Truck</th><th>LM Truck</th><th>Kit</th><th>Status</th></tr></thead><tbody>';
   const sorted=[...FA_GROUPS].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue));
   for(const g of sorted){
-    const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM));
-    const lpDisp=g.linkedLP?'<span class="bg" style="background:#EFF6FF;color:#2563eb;border:1px solid #BFDBFE">'+g.linkedLP+'</span>'+(isLocked&&g.linkedLP&&_faIsLocked(g.linkedLP)?' 🔒':''):'<span style="color:var(--tt)">—</span>';
-    const lmDisp=g.linkedLM?'<span class="bg bg-pu">'+g.linkedLM+'</span>'+(isLocked&&g.linkedLM&&_faIsLocked(g.linkedLM)?' 🔒':''):'<span style="color:var(--tt)">—</span>';
+    const asgn=FA_ASSIGNMENTS[g.id]||{};
+    const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))||(asgn.lm&&asgn.lm.locked);
+    // LP: manual link or engine assignment
+    const lpRef=g.linkedLP||(asgn.lp?asgn.lp.truckId:null);
+    const lpIsEngine=!g.linkedLP&&asgn.lp;
+    const lpDisp=lpRef?'<span class="bg" style="background:'+(lpIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'#EFF6FF;color:#2563eb;border:1px solid #BFDBFE')+'">'+lpRef+'</span>'+(g.linkedLP&&_faIsLocked(g.linkedLP)?' 🔒':''):'<span style="color:var(--tt)">—</span>';
+    // LM: manual link or engine assignment
+    const lmRef=g.linkedLM||(asgn.lm?asgn.lm.truckId:null);
+    const lmIsEngine=!g.linkedLM&&asgn.lm;
+    const lmDisp=lmRef?'<span class="bg" style="background:'+(lmIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'var(--ps);color:var(--pu);border:1px solid #D4C5FE')+'">'+lmRef+'</span>'+(asgn.lm&&asgn.lm.locked?' 🔒':(g.linkedLM&&_faIsLocked(g.linkedLM)?' 🔒':'')):'<span style="color:var(--tt)">—</span>';
     const kitDisp=g.linkedKit?'<span class="bg bg-gn">📦 '+g.linkedKit+'</span>':'<span style="color:var(--tt)">—</span>';
-    const statusBadge=isLocked?'<span class="bg bg-gn">🔒 Locked</span>':g.linkedLP||g.linkedLM?'<span class="bg bg-cy">Assigned</span>':g.pallets>0?'<span class="bg bg-or">Pallets set</span>':'<span class="bg bg-gy">Open</span>';
-    h+=`<tr data-search="${g.sku} ${g.venue} ${g.fa} ${g.linkedLP||''} ${g.linkedLM||''} ${g.linkedKit||''}" style="cursor:pointer" onclick="FA_editGroup(${g.id})">
+    const hasAsgn=lpRef||lmRef;
+    const statusBadge=isLocked?'<span class="bg bg-gn">🔒 Locked</span>':hasAsgn?'<span class="bg bg-cy">On Truck</span>':g.pallets>0?'<span class="bg bg-or">Pallets set</span>':'<span class="bg bg-gy">Open</span>';
+    // Dispatch: earliest of LP or LM truck date (manual or engine)
+    const lpDate=g.linkedLP&&_lpTruckMap[g.linkedLP]?_lpTruckMap[g.linkedLP].date:(asgn.lp?asgn.lp.date:null);
+    const lmT=_lmFind(g.linkedLM);
+    const lmDate=lmT?lmT.date:(asgn.lm?asgn.lm.date:null);
+    const dispDate=lpDate&&lmDate?(lpDate<lmDate?lpDate:lmDate):lpDate||lmDate;
+    // Delivery: LM biK (manual or engine)
+    const delDate=lmT?(lmT.biDate||lmT.date):(asgn.lm?asgn.lm.biK:null);
+    h+=`<tr data-search="${g.sku} ${g.venue} ${g.fa} ${lpRef||''} ${lmRef||''} ${g.linkedKit||''}" style="cursor:pointer" onclick="FA_editGroup(${g.id})">
       <td class="mono fw6" style="color:var(--cy)">${g.sku}</td>
       <td>${g.venue}</td>
       <td style="color:var(--pu)">${g.fa||'—'}</td>
       <td>${_fmtD(g.biDate)}</td>
-      <td>${(()=>{const lp=g.linkedLP&&_lpTruckMap[g.linkedLP]?_lpTruckMap[g.linkedLP].date:null;const lm=_lmFind(g.linkedLM);const lmD=lm?lm.date:null;const d=lp&&lmD?(lp<lmD?lp:lmD):lp||lmD;return d?_fmtD(d):'<span style="color:var(--tt)">—</span>'})()}</td>
-      <td>${(()=>{const t=_lmFind(g.linkedLM);return t?_fmtD(t.biDate||t.date):'<span style="color:var(--tt)">—</span>'})()}</td>
+      <td>${dispDate?_fmtD(dispDate):'<span style="color:var(--tt)">—</span>'}</td>
+      <td>${delDate?_fmtD(delDate):'<span style="color:var(--tt)">—</span>'}</td>
       <td class="mono" style="text-align:right">${(g.items||[]).length}</td>
       <td style="text-align:center"><span class="mono fw6" style="color:${g.pallets>0?'var(--ac)':'var(--tt)'}">${g.pallets||0}</span></td>
       <td>${lpDisp}</td>

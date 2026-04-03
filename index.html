@@ -10745,9 +10745,43 @@ function numberAll(){
   LM_buildLPArrivalMap();
   try{LM_buildLPArrivalFifo()}catch(e){console.warn('FIFO build:',e)}
 
+  // ── Save FA group → truck assignments to Supabase (fa-goods reads these) ──
+  clearTimeout(window._faAssignTimer);
+  window._faAssignTimer=setTimeout(_saveFaAssignments,2000);
+
   // ── Save WHS snapshot to Supabase (lightweight, debounced) ──
   clearTimeout(window._whsSnapTimer);
   window._whsSnapTimer=setTimeout(_saveWhsSnapshot,3000);
+}
+
+function _saveFaAssignments(){
+  if(ROLE==='viewer'||!SB)return;
+  try{
+    const assigns={};// groupId -> {lp:{truckId,date,dest}, lm:{truckId,date,dest,biK,locked}}
+    // LM assignments from PLAN_CACHE
+    for(const label in PLAN_CACHE){
+      const P=PLAN_CACHE[label];if(!P)continue;
+      for(const t of P.allT||[]){
+        for(const it of t.items||[]){
+          if(it._fa&&it._faGroup){
+            if(!assigns[it._faGroup])assigns[it._faGroup]={};
+            assigns[it._faGroup].lm={truckId:t.id,date:t.dd||t.dKey||'',dest:t.destLabel||label,biK:t.biK||t.origBiK||'',locked:LM_isDispatched(t)};
+          }
+        }
+      }
+    }
+    // LP assignments from generatedPlan
+    for(const r of (LP_STATE.generatedPlan||[])){
+      if(!r.sku||!r.sku.startsWith('FA-')||!r.sku.includes('-G'))continue;
+      const g=(LP_FA_GROUPS||[]).find(g=>g.sku===r.sku);
+      if(g&&g.id){
+        if(!assigns[g.id])assigns[g.id]={};
+        assigns[g.id].lp={truckId:'LP-'+r.truckId,date:r.date||'',dest:r.destination||''};
+      }
+    }
+    if(!Object.keys(assigns).length)return;
+    SB.from('shared_state').upsert({id:'fa-assignments',value:JSON.stringify(assigns),updated_at:new Date().toISOString()}).then(()=>{}).catch(e=>console.warn('FA assigns save:',e));
+  }catch(e){}
 }
 
 function _saveWhsSnapshot(){
