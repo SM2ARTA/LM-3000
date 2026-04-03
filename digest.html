@@ -60,7 +60,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _faForLP=tid=>{const k='LP-'+tid;return _faByTruck[k]||null};
   // Match FA to LM truck by dest substring
   const _faForLM=(dest,lsr)=>{for(const k in _faByTruck){if(k.startsWith('LP-'))continue;if(dest&&k.includes(dest))return _faByTruck[k];if(lsr&&k.includes(lsr))return _faByTruck[k]}return null};
-  const _faBadgeHtml=(items)=>{if(!items||!items.length)return'';const qty=items.reduce((s,i)=>s+i.qty,0);const plt=items.reduce((s,i)=>s+(i.pallets||0),0);return' <span style="font-size:9px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:2px 6px;border:1px solid #A5F3FC">&#128230; FA '+items.length+' &middot; '+qty+'qty'+(plt>0?' &middot; '+plt.toFixed(1)+'plt':'')+'</span>'};
+  const _faBadgeHtml=(items)=>{if(!items||!items.length)return'';const qty=items.reduce((s,i)=>s+i.qty,0);const fas=[...new Set(items.map(i=>i.fa||'FA'))].join(', ');return' <span style="font-size:9px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:2px 6px;border:1px solid #A5F3FC">&#128230; '+fas+' '+items.length+' &middot; '+qty+'qty</span>'};
   if(_faItems.length)console.log('[Digest] FA:',_faItems.length,'items, trucks:',Object.keys(_faByTruck),'kits:',Object.keys(_faByKit));
 
   // ── Football "On This Day" icebreaker (ESPN historical matches) ──
@@ -587,7 +587,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
         html+='<td bgcolor="'+dc[1]+'" style="padding:5px 7px;border-left:4px solid '+dc[0]+'">';
         html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">LP-'+t.id+'</span>';
         html+=' <span style="font-size:9px;font-weight:700;color:'+statusClr+';background:'+statusBg+';padding:1px 5px">'+statusIcon+'</span>';
-        const _wkFa=_faForLP(t.id);if(_wkFa)html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">FA</span>';
+        const _wkFa=_faForLP(t.id);if(_wkFa){const _wkFas=[...new Set(_wkFa.map(i=>i.fa||'FA'))].join(', ');html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">'+_wkFas+'</span>';}
         html+='<br><span style="font-size:10px;color:'+destClr+';font-weight:600">'+dest+'</span>';
         if(lsr)html+='<br><span style="font-size:9px;color:'+lsrClr+';font-family:Courier New,monospace">LSR '+lsr+'</span>';
         html+='</td></tr></table>';
@@ -698,7 +698,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
           const _nwFa=t.type==='LP'?_faForLP(parseInt(String(t.id).replace('LP-',''))):_faForLM(t.dest,t.lsr);
           html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">'+prefix+t.id+'</span>';
           html+=' <span style="font-size:9px;font-weight:700;color:#304FFE;background:#BBDEFB;padding:1px 5px">&#9654;</span>';
-          if(_nwFa)html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">FA</span>';
+          if(_nwFa){const _nwFas=[...new Set(_nwFa.map(i=>i.fa||'FA'))].join(', ');html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">'+_nwFas+'</span>';}
           html+='<br><span style="font-size:10px;color:#444;font-weight:600">'+dest+'</span>';
           html+='<br><span style="font-size:9px;color:#888;font-family:Courier New,monospace">LSR '+t.lsr+'</span>';
           html+='</td></tr></table>';

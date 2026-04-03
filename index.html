@@ -579,10 +579,10 @@ async function FA_loadLinked(){
     const items=d.items||[];
     FA_LINKED={_byVenue:{},_items:items};
     for(const it of items){
-      const plt=it.pallets||0;
-      if(it.linkedTruck){const k=it.linkedTruck;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt}
-      if(it.linkedKit){const k=it.linkedKit;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt}
-      if(it.venue){const v=it.venue;if(!FA_LINKED._byVenue[v])FA_LINKED._byVenue[v]={count:0,qty:0,plt:0};FA_LINKED._byVenue[v].count++;FA_LINKED._byVenue[v].qty+=it.qty||0;FA_LINKED._byVenue[v].plt+=plt}
+      const plt=it.pallets||0;const fa=it.fa||'FA';
+      if(it.linkedTruck){const k=it.linkedTruck;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
+      if(it.linkedKit){const k=it.linkedKit;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
+      if(it.venue){const v=it.venue;if(!FA_LINKED._byVenue[v])FA_LINKED._byVenue[v]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED._byVenue[v].count++;FA_LINKED._byVenue[v].qty+=it.qty||0;FA_LINKED._byVenue[v].plt+=plt;FA_LINKED._byVenue[v].fas.add(fa)}
     }
     if(Object.keys(FA_LINKED).length)console.log('[ML3K] FA linked:',Object.keys(FA_LINKED).length,'trucks/kits');
   }catch(e){console.warn('[ML3K] FA load error:',e)}
@@ -611,7 +611,7 @@ function _faMatchTruck(truckId,dest,lsr){
   // Direct match by exact ID (LP-42, LM-4)
   if(FA_LINKED[truckId])return{ref:truckId,...FA_LINKED[truckId]};
   // Aggregate from linked FA keys
-  let total=null;
+  let total=null;const _fas=new Set();
   for(const k in FA_LINKED){
     if(k.startsWith('LP-')||k.startsWith('_'))continue;
     const f=FA_LINKED[k];
@@ -622,20 +622,22 @@ function _faMatchTruck(truckId,dest,lsr){
     if(match){
       if(!total)total={ref:k,count:0,qty:0,plt:0};
       total.count+=f.count;total.qty+=f.qty;total.plt+=f.plt;
+      if(f.fas)f.fas.forEach(fa=>_fas.add(fa));
     }
   }
-  // Also check unlinked items matching by venue (show on all venue trucks until assigned)
+  // Also check unlinked items matching by venue
   if(dest){
     const unlinked=(FA_LINKED._items||[]).filter(it=>!it.linkedTruck&&it.venue===dest);
     if(unlinked.length){
       if(!total)total={ref:'venue:'+dest,count:0,qty:0,plt:0};
-      for(const it of unlinked){total.count++;total.qty+=it.qty||0;total.plt+=it.pallets||0}
+      for(const it of unlinked){total.count++;total.qty+=it.qty||0;total.plt+=it.pallets||0;_fas.add(it.fa||'FA')}
     }
   }
+  if(total)total.fas=[..._fas];
   return total;
 }
 // Match LP truck by ID
-function _faMatchLP(truckId){return FA_LINKED['LP-'+truckId]?{ref:'LP-'+truckId,...FA_LINKED['LP-'+truckId]}:null}
+function _faMatchLP(truckId){const f=FA_LINKED['LP-'+truckId];if(!f)return null;return{ref:'LP-'+truckId,count:f.count,qty:f.qty,plt:f.plt,fas:f.fas?[...f.fas]:['FA']}}
 var STOCK_REPORT_NAME='';
 
 // ── Manual truck items (added by user, persisted to Supabase) ──
@@ -5131,7 +5133,7 @@ function LP_renderPlan(el){
     h+='</div>';
     const mi=MI_get(MI_lpKey(t.id));
     if(mi.length)h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ '+mi.length+' manual item'+(mi.length>1?'s':'')+'</span></div>';
-    const _lpFa=_faMatchLP(t.id);if(_lpFa){const _lpFaDts=[...new Set(_faItemsForTruck('LP-'+t.id,'','').map(i=>i.biDate).filter(Boolean))].sort().map(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}});h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 FA: '+_lpFa.count+' items · '+_lpFa.qty+'qty · '+_lpFa.plt.toFixed(1)+'plt'+(_lpFaDts.length?' · BI: '+_lpFaDts.join(', '):'')+'</span></div>'}
+    const _lpFa=_faMatchLP(t.id);if(_lpFa){const _lpFaLabel=_lpFa.fas&&_lpFa.fas.length?_lpFa.fas.join(', '):'FA';const _lpFaDts=[...new Set(_faItemsForTruck('LP-'+t.id,'','').map(i=>i.biDate).filter(Boolean))].sort().map(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}});h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 '+_lpFaLabel+': '+_lpFa.count+' items · '+_lpFa.qty+'qty · '+_lpFa.plt.toFixed(1)+'plt'+(_lpFaDts.length?' · BI: '+_lpFaDts.join(', '):'')+'</span></div>'}
     if(ROLE==="viewer"){if(isDisp)h+='<div class="lp-dispatch-row"><span>🔒 Locked</span>'+(isOOR?' <span style="color:#2563eb;font-weight:600">OOR</span>':'')+'</div>';}
     else{h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input type="checkbox" '+checked+' onclick="event.stopPropagation();LP_toggleDispatch('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0">'+(isDisp?'🔒 Lock':'Lock')+'</span><input type="checkbox" '+(isOOR?'checked':'')+' onclick="event.stopPropagation();LP_toggleOOR('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0;color:#2563eb">'+(isOOR?'📋 OOR':'OOR')+'</span><input type="date" value="'+t.date+'" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate('+t.id+',this.value)"></div>';}
     const lsrEsc=lsr.replace(/"/g,'&quot;');
@@ -7200,7 +7202,7 @@ function V26_render(){
           const t=nbLpTrucks[li];const lsr=LP_lsrNumbers[t.id]||'';
           html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showLpTruck(${li})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <div style="font-size:11px;font-weight:700;color:var(--tp)">LP-${t.id} ${lsr?'<span class="mono" style="font-size:9px;color:var(--pu)">'+lsr+'</span>':''} → <span style="color:var(--ac)">${clDisp(t.dest)}</span>${_faMatchLP(t.id)?'<span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px;margin-left:4px">📦 FA</span>':''}</div>
+              <div style="font-size:11px;font-weight:700;color:var(--tp)">LP-${t.id} ${lsr?'<span class="mono" style="font-size:9px;color:var(--pu)">'+lsr+'</span>':''} → <span style="color:var(--ac)">${clDisp(t.dest)}</span>${(()=>{const _f=_faMatchLP(t.id);return _f?'<span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px;margin-left:4px">📦 '+(_f.fas||['FA']).join(', ')+'</span>':'';})()}</div>
               <div style="font-size:9px;color:var(--tt)">${_effKey}</div>
             </div>
             <div style="font-size:10px;color:var(--ts)">${t.items.length} SKU${t.items.length>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.plt.toFixed(1)} plt</div>
@@ -7210,7 +7212,7 @@ function V26_render(){
           const t=nbLmTrucks[mi];
           html+=`<div style="background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:4px;cursor:pointer;transition:box-shadow .15s" onclick="NB_showLmTruck(${mi})" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <div style="font-size:11px;font-weight:700;color:var(--tp)">${t.id} → <span style="color:var(--gn)">${clDisp(t.dest)}</span>${_faMatchTruck(t.id,t.dest,'')?'<span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px;margin-left:4px">📦 FA</span>':''}</div>
+              <div style="font-size:11px;font-weight:700;color:var(--tp)">${t.id} → <span style="color:var(--gn)">${clDisp(t.dest)}</span>${(()=>{const _f=_faMatchTruck(t.id,t.dest,'');return _f?'<span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px;margin-left:4px">📦 '+(_f.fas||['FA']).join(', ')+'</span>':'';})()}</div>
               <div style="font-size:9px;color:var(--tt)">${_effKey}</div>
             </div>
             <div style="font-size:10px;color:var(--ts)">${t.skus} SKU${t.skus>1?'s':''} · ${t.qty.toLocaleString()} pcs · ${t.pallets.toFixed(1)} plt</div>
@@ -9000,7 +9002,7 @@ function renderTruckCard(t,opts){
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
       ${(()=>{if(!t.items)return'';const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom||it._kitNom);if(!kitItems.length)return'';const badges=kitItems.map(it=>{const frozen=it._kitItems||null;const r=LM_kitReadiness(NOM[it.sku]?._kitId||it._kitId,frozen);if(!r.total)return'';const sc=STOCK_SKUS.size===0?'var(--tt)':(r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)');const bg=STOCK_SKUS.size===0?'var(--bg)':(r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)');return`<span class="bg bgs" style="background:${bg};color:${sc};border:1px solid ${sc}40">📦 Kit ${STOCK_SKUS.size===0?'—':r.pct+'%'} (${r.inStock}/${r.total})</span>`}).filter(Boolean).join(' ');return badges?`<div style="font-size:9px;margin-top:2px">${badges}</div>`:''})()}
       ${(()=>{if(!t.items||!opts.venueType)return'';const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,opts.venueType,opts.country)).length;return ac>0?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:var(--os);color:var(--or);border:1px solid var(--or)40">🔧 ${ac} assembly</span></div>`:''})()}
-      ${(()=>{const _lsr=LM_getLsr(t);const _dest=t.destLabel||t.dest||opts.displayName||'';const _fm=_faMatchTruck(t.id,_dest,_lsr);if(!_fm)return'';const _faDts=[...new Set((_faItemsForTruck(t.id,_dest,_lsr)).map(i=>i.biDate).filter(Boolean))].sort();const _faDtDisp=_faDts.length?_faDts.map(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}}).join(', '):'';return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 FA: ${_fm.count} items · ${_fm.qty}qty · ${_fm.plt.toFixed(1)}plt${_faDtDisp?' · BI: '+_faDtDisp:''}</span></div>`})()}
+      ${(()=>{const _lsr=LM_getLsr(t);const _dest=t.destLabel||t.dest||opts.displayName||'';const _fm=_faMatchTruck(t.id,_dest,_lsr);if(!_fm)return'';const _faLabel=_fm.fas&&_fm.fas.length?_fm.fas.join(', '):'FA';const _faDts=[...new Set((_faItemsForTruck(t.id,_dest,_lsr)).map(i=>i.biDate).filter(Boolean))].sort();const _faDtDisp=_faDts.length?_faDts.map(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}}).join(', '):'';return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 ${_faLabel}: ${_fm.count} items · ${_fm.qty}qty · ${_fm.plt.toFixed(1)}plt${_faDtDisp?' · BI: '+_faDtDisp:''}</span></div>`})()}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
@@ -13802,7 +13804,7 @@ function LM_renderDemand(el){
     html+=`<div class="lm-dem-venue" data-search="${(v.name+' '+v.skuList.map(s=>s.sku+' '+s.name).join(' ')+' '+venueKits.map(k=>k.sku+' '+k.name).join(' ')).toLowerCase()}" style="background:var(--sf);border:1px solid ${hasStp?'#EF6C00':hasKit?'#43A047':hasManual?'var(--gn)':hasAdj?'var(--pu)':'var(--bd)'};border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="this.parentElement.querySelector('.lm-dem-body').classList.toggle('lm-dem-open')">
         <div style="min-width:0;flex:1">
-          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${(VN.find(vn=>vn.name===v.name)||{}).hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;vertical-align:middle">CORT</span>':''}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}${hasStp?' <span class="bg bgs" style="background:#FFF3E0;color:#EF6C00;font-size:8px;vertical-align:middle">🏪 STP'+(venueStpArr.length>1?' '+venueStpArr.length:'')+'</span>':''}${_vHoldCount>0?' <span class="bg bgs" style="background:#F3F4F6;color:#6B7280;font-size:8px;vertical-align:middle">⏸'+_vHoldCount+'</span>':''}${(()=>{const _vfa=_faVenueCount(v.name);return _vfa?' <span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC;font-size:8px;vertical-align:middle">📦 FA '+_vfa.count+' · '+_vfa.plt.toFixed(1)+'plt</span>':''})()}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--tp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}${(VN.find(vn=>vn.name===v.name)||{}).hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;vertical-align:middle">CORT</span>':''}${hasManual?' <span class="bg bgs bg-gn" style="font-size:8px;vertical-align:middle">✏</span>':''}${hasKit?' <span class="bg bgs" style="background:#E8F5E9;color:#43A047;font-size:8px;vertical-align:middle">📦 '+venueKits.length+'</span>':''}${hasStp?' <span class="bg bgs" style="background:#FFF3E0;color:#EF6C00;font-size:8px;vertical-align:middle">🏪 STP'+(venueStpArr.length>1?' '+venueStpArr.length:'')+'</span>':''}${_vHoldCount>0?' <span class="bg bgs" style="background:#F3F4F6;color:#6B7280;font-size:8px;vertical-align:middle">⏸'+_vHoldCount+'</span>':''}${(()=>{const _vfa=_faVenueCount(v.name);return _vfa?' <span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC;font-size:8px;vertical-align:middle">📦 '+(_vfa.fas?[..._vfa.fas].join(', '):'FA')+' '+_vfa.count+' · '+_vfa.plt.toFixed(1)+'plt</span>':''})()}</div>
           <div style="font-size:10px;color:var(--tt)">${v.skuList.length} SKUs · ${v.totalOrig.toLocaleString()} pcs${v.totalAdj!==v.totalOrig?' → <strong style="color:var(--pu)">'+v.totalAdj.toLocaleString()+'</strong>':''}</div>
         </div>
         <span style="font-size:10px;color:var(--tt)">▼</span>
