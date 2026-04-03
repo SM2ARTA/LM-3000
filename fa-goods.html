@@ -668,7 +668,7 @@ function FA_renderDemand(){
   if(!FA_DEMAND.length){document.getElementById('demTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No demand yet. Click "+ Add Demand" to start building.</div>';return}
 
   let h='<table class="dtb"><thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th><th>Truck / Kit</th><th>Note</th></tr></thead><tbody>';
-  const sorted=[...FA_DEMAND].sort((a,b)=>(a.venue||'').localeCompare(b.venue)||((a.biDate||'').localeCompare(b.biDate||''))||a.id-b.id);
+  const sorted=[...FA_DEMAND].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue)||a.id-b.id);
   for(const d of sorted){
     const isAssigned=d.linkedTruck||d.linkedKit;
     const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
