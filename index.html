@@ -593,32 +593,43 @@ function _faItemsForKit(kitId){return(FA_LINKED._items||[]).filter(it=>it.linked
 function _faItemsForTruck(truckId,dest,lsr){
   const items=FA_LINKED._items||[];if(!items.length)return[];
   return items.filter(it=>{
-    if(!it.linkedTruck)return false;
-    if(it.linkedTruck===truckId)return true;
-    const hasRef=it.linkedTruck.includes('·');
-    if(hasRef&&lsr&&it.linkedTruck.includes(lsr))return true;
-    if(!hasRef&&dest&&it.linkedTruck==='LM '+dest)return true;
-    return false;
+    if(it.linkedTruck){
+      if(it.linkedTruck===truckId)return true;
+      const hasRef=it.linkedTruck.includes('·');
+      if(hasRef&&lsr&&it.linkedTruck.includes(lsr))return true;
+      if(!hasRef&&dest&&it.linkedTruck==='LM '+dest)return true;
+      return false;
+    }
+    // Unlinked: match by venue (show on all venue trucks until assigned to specific truck)
+    return dest&&it.venue===dest;
   }).map(it=>({sku:it.sku,name:it.name,qty:it.qty,pallets:it.pallets||0,biDate:it.biDate||'',venue:it.venue||'',src:'FA',uom:'Each'}));
 }
 function _faBadge(ref){const f=FA_LINKED[ref];if(!f)return'';return`<span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC;font-size:8px">📦 FA ${f.count} · ${f.qty}qty · ${f.plt.toFixed(1)}plt</span>`}
-// Match LM truck by scanning FA_LINKED keys
+// Match LM truck by scanning FA_LINKED keys + unlinked venue items
 function _faMatchTruck(truckId,dest,lsr){
-  if(!Object.keys(FA_LINKED).length)return null;
+  if(!Object.keys(FA_LINKED).length&&!(FA_LINKED._items||[]).length)return null;
   // Direct match by exact ID (LP-42, LM-4)
   if(FA_LINKED[truckId])return{ref:truckId,...FA_LINKED[truckId]};
-  // Aggregate from all matching FA keys
+  // Aggregate from linked FA keys
   let total=null;
   for(const k in FA_LINKED){
     if(k.startsWith('LP-')||k.startsWith('_'))continue;
     const f=FA_LINKED[k];
-    const hasRef=k.includes('·');// has LSR or other ref after "·"
+    const hasRef=k.includes('·');
     let match=false;
-    if(hasRef&&lsr&&k.includes(lsr))match=true;// LSR/ref match (precise)
-    if(!hasRef&&dest&&k==='LM '+dest)match=true;// Exact dest match for no-ref links
+    if(hasRef&&lsr&&k.includes(lsr))match=true;
+    if(!hasRef&&dest&&k==='LM '+dest)match=true;
     if(match){
       if(!total)total={ref:k,count:0,qty:0,plt:0};
       total.count+=f.count;total.qty+=f.qty;total.plt+=f.plt;
+    }
+  }
+  // Also check unlinked items matching by venue (show on all venue trucks until assigned)
+  if(dest){
+    const unlinked=(FA_LINKED._items||[]).filter(it=>!it.linkedTruck&&it.venue===dest);
+    if(unlinked.length){
+      if(!total)total={ref:'venue:'+dest,count:0,qty:0,plt:0};
+      for(const it of unlinked){total.count++;total.qty+=it.qty||0;total.plt+=it.pallets||0}
     }
   }
   return total;
