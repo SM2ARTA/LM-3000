@@ -9525,6 +9525,20 @@ function build(venue,venueList,skipNoBi){
     if(origBiK<(agg[k].origBiK||origBiK))agg[k].origBiK=origBiK;// keep earliest original need date
     agg[k].qty+=q}
 
+  // ── FA Goods: inject capacity reservations as engine demand ──
+  // FA groups become demand entries (qty=1, pq=1, ps=pallets = indivisible block).
+  // Engine creates a truck for the FA biDate and tops it up with FF&E naturally.
+  // Skip Step B (skipNoBi=true) — cluster build handles those venues.
+  if(!skipNoBi)for(const g of (LP_FA_GROUPS||[])){
+    if(!venuesToUse.includes(g.venue))continue;
+    if((g.pallets||0)<=0)continue;
+    const faSku=g.sku;
+    if(!NOM[faSku])NOM[faSku]={nm:'FA: '+(g.fa||'FA')+' Reserve',src:'FA',pq:1,ps:g.pallets,ppu:1,pqA:0,psA:0,_fa:true};
+    const faBiK=g.biDate||biSK||'2026-05-04';
+    const k=faBiK+'|'+faSku;
+    agg[k]={sku:faSku,nm:'FA: '+(g.fa||'FA')+' Reserve',bi:new Date(faBiK+'T12:00:00'),biK:faBiK,origBiK:faBiK,qty:1,pq:1,ps:g.pallets,ok:true,_fa:true,_faGroup:g.id};
+  }
+
   // qty already accumulated as per-row ceil — no further conversion needed
   const all=Object.values(agg),noP=all.filter(x=>!x.ok),pAll=all.filter(x=>x.ok);
   // noBiAgg qty also already per-row ceiled
@@ -10435,17 +10449,18 @@ function numberAll(){
       window._lmBuildLockedDemand=_lockedDemandByLabel[label]||{};
       const P=vl?build(name,vl,false):build(name,null,skipNoBi);
       PLAN_CACHE[label]=P;
-      // FA Goods post-build injection: fit onto existing trucks or create FA trucks
-      // Skip Step B (skipNoBi=true) — cluster build (Step A) already handles those venues
-      if(!skipNoBi){
-        const _faTCap=gTC(name);
-        const _isDalDirect=name==='Dallas Stadium'||name==='International Broadcast Centre'||vcIsIBC(name);
-        const _skipWhs=LM_isLPFed(name)||_isDalDirect;
-        let _faLt=gLT(name)+(_skipWhs?0:gWP(name));
-        if(!LM_isLPFed(name)&&!_isDalDirect)_faLt+=gLT2(name);
-        if(vl&&!vcIsCAN(name)&&!vcIsMEX(name))_faLt+=LM_clusterTurnaround;
-        if(!vl)_lmFaInject(P,name,_faTCap,_faLt);
-        if(vl)for(const cv of vl)_lmFaInject(P,cv,_faTCap,_faLt);
+      // Post-tag FA items on trucks (flags for rendering — demand was injected in build())
+      if(P.allT)for(const t of P.allT){
+        let hasFa=false;
+        for(const it of t.items||[]){
+          if(it.sku&&it.sku.startsWith('FA-')&&it.sku.includes('-G')){
+            it._fa=true;
+            const g=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);
+            if(g)it._faGroup=g.id;
+            hasFa=true;
+          }
+        }
+        if(hasFa&&t.items.every(it=>it._fa))t._faTruck=true;
       }
       const dispLabel=clDisp(label);
       P.days.forEach(d=>{d.trucks.forEach(t=>{allTrucks.push({dateK:d.dKey,ref:t,label:label,dispLabel:dispLabel})})});
@@ -13992,44 +14007,7 @@ function LM_filterHolds(){
   });
 }
 
-// ── LM FA GOODS INJECTION ──
-// Post-build: inject FA groups onto existing LM trucks or create new FA trucks
-function _lmFaInject(P,venue,tCap,lt){
-  if(!P||!P.allT)return;
-  const groups=(LP_FA_GROUPS||[]).filter(g=>g.venue===venue&&(g.pallets||0)>0);
-  if(!groups.length)return;
-  for(const g of groups){
-    if(!NOM[g.sku])NOM[g.sku]={nm:'FA: '+(g.fa||'FA')+' Reserve',src:'FA',pq:1,ps:g.pallets,ppu:1,pqA:0,psA:0,_fa:true};
-    const biK=g.biDate||'9999-12-31';
-    // Find existing truck: biK <= FA BI date AND has capacity
-    const candidates=P.allT.filter(t=>!t._locked&&!t._faTruck&&t.biK&&t.biK<=biK&&(tCap-(t.pallets||0))>=(g.pallets||0));
-    const faItem={sku:g.sku,nm:'FA: '+(g.fa||'FA')+' Reserve',loadQty:1,loadPlt:g.pallets,pq:1,ps:g.pallets,biK:biK,origBiK:biK,_fa:true,_faGroup:g.id};
-    if(candidates.length){
-      // Pick truck with biK closest to (but <=) FA BI date
-      candidates.sort((a,b)=>b.biK.localeCompare(a.biK));
-      const truck=candidates[0];
-      truck.items.push(faItem);
-      truck.pallets=Math.round((truck.pallets+(g.pallets||0))*100)/100;
-    } else {
-      // Create new FA truck
-      const dispDate=disp(new Date(biK+'T12:00:00'),lt);
-      const dd=dk(dispDate);
-      const newTruck={
-        items:[faItem],pallets:g.pallets||0,pcs:0,
-        biK:biK,origBiK:biK,dd:dd,dKey:dd,idealDisp:dd,
-        isOverflow:false,isEarly:false,tCap:tCap,_faTruck:true
-      };
-      P.allT.push(newTruck);
-      let day=P.days.find(d=>d.dKey===dd);
-      if(!day){
-        day={dKey:dd,biDate:new Date(biK+'T12:00:00'),dDate:dispDate,biK:biK,trucks:[],dayPlt:0,exactPlt:0,totalQty:0,isEarly:false,hasOverflow:false};
-        P.days.push(day);P.days.sort((a,b)=>a.dKey<b.dKey?-1:a.dKey>b.dKey?1:0);
-      }
-      day.trucks.push(newTruck);
-      day.dayPlt=Math.round((day.dayPlt+(g.pallets||0))*100)/100;
-    }
-  }
-}
+// _lmFaInject removed — FA demand injected directly into build() engine demand aggregation
 
 // ── LM FA GOODS TAB (read-only) ──
 function LM_renderFAGoods(el){
