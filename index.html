@@ -6060,34 +6060,26 @@ function LP_showSkuVenues(sku,destAbbr){
 }
 function LP_closeVenueModal(){document.getElementById('lpVenueModal')?.remove();}
 
-function LP_exportSingleTruck(truckId){
+async function LP_exportSingleTruck(truckId){
+  if(typeof ExcelJS==='undefined')return alert('ExcelJS not loaded yet');
   const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
   if(!rawPlan.length)return;
   const agg=LP_aggregateTruck(rawPlan);
   const first=rawPlan[0];
   const dest=clDisp(first.destination);
-  const rows=agg.map(s=>{
+  const lsr=LP_lsrNumbers[truckId]||'';
+  const items=agg.map(s=>{
     const lpNom=LP_STATE.nomenclature[s.sku]||{};
     const lmNom=NOM[s.sku]||{};
-    return{
-      'Nomenclature code':s.sku,
-      'Nomenclature name':lmNom.nm||lpNom.name||s.name||s.sku,
-      'Source':lpNom.source||'',
-      'In Stock':STOCK_SKUS.has(s.sku)?'Yes':'No',
-      'Qty':_lpEffQty(s.sku,s.qty)
-    };
+    return{sku:s.sku,name:lmNom.nm||lpNom.name||s.name||s.sku,src:lpNom.source||'',uom:lpNom.uom||'Each',qty:s.qty};
   });
-  // Append manual items
-  for(const mi of MI_get(MI_lpKey(truckId))){
-    rows.push({'Nomenclature code':mi.sku,'Nomenclature name':mi.name||'','Source':'MANUAL','In Stock':'—','Qty':mi.qty||0});
-  }
-  const wb=XLSX.utils.book_new();
-  const hdr=[['Truck','LP-'+truckId,'Destination',dest,'Date',first.date]];
-  const ws=XLSX.utils.aoa_to_sheet(hdr);
-  XLSX.utils.sheet_add_json(ws,rows,{origin:'A3'});
-  ws['!cols']=[{wch:22},{wch:40},{wch:16},{wch:10},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,ws,'LP-'+truckId);
-  XLSX.writeFile(wb,'LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_Shipping_Order.xlsx');
+  for(const mi of MI_get(MI_lpKey(truckId))){items.push({sku:mi.sku,name:mi.name||'',src:'MANUAL',uom:'Each',qty:mi.qty||0})}
+  const wb=new ExcelJS.Workbook();
+  const _lpFaItems=_faItemsForTruck('LP-'+truckId,'','');
+  _oorSheet(wb,'OOR','LP-'+truckId,first.destination,dest,items,{dispatchDate:first.date,lsr,faItems:_lpFaItems});
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OOR_LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx';a.click();URL.revokeObjectURL(a.href);
 }
 
 /* ─────────────────────────────────────────────
