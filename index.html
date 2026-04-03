@@ -600,36 +600,70 @@ function _faHasKit(kitId){return FA_LINKED[kitId]||null}
 function _faVenueCount(venue){if(!FA_LINKED._byVenue)return null;return FA_LINKED._byVenue[venue]||null}
 function _faItemsForKit(kitId){
   const groups=FA_LINKED._groups||[];const items=FA_LINKED._items||[];
-  if(!groups.length)return[];
   const itemById={};for(const it of items)itemById[it.id]=it;
-  const result=[];
+  const result=[];const seenGroups=new Set();
+  // 1. Check FA_LINKED groups (Supabase cross-reference)
   for(const g of groups){
     if(g.linkedKit!==kitId)continue;
+    seenGroups.add(g.id);
     for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'})}
   }
+  // 2. Check LP_FA_GROUPS for engine-injected FA linked to this kit (by kit ID or SKU)
+  for(const g of (LP_FA_GROUPS||[])){
+    if(seenGroups.has(g.id))continue;
+    if(g.linkedKit!==kitId&&g.linkedKit!==kitId?.toString())continue;
+    seenGroups.add(g.id);
+    const gi=_faGroupItems(g.id);
+    if(gi.length)result.push(...gi);
+    else if(g.pallets>0)result.push({sku:g.sku,name:'FA: '+(g.fa||'FA')+' Reserve',qty:1,pallets:g.pallets,biDate:g.biDate||'',venue:g.venue||'',src:'FA',uom:'Each'});
+  }
+  return result;
+}
+// Resolve FA group ID → detail items (nomenclature from fa-demand)
+function _faGroupItems(groupId){
+  const groups=FA_LINKED._groups||[];const items=FA_LINKED._items||[];
+  if(!groups.length||!items.length)return[];
+  const g=groups.find(g=>g.id===groupId);if(!g)return[];
+  const itemById={};for(const it of items)itemById[it.id]=it;
+  const result=[];
+  for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'})}
   return result;
 }
 function _faItemsForTruck(truckId,dest,lsr){
   // Match via groups: find groups whose linkedLP or linkedLM matches this truck
   const groups=FA_LINKED._groups||[];const items=FA_LINKED._items||[];
-  if(!groups.length)return[];
-  const itemById={};for(const it of items)itemById[it.id]=it;
   const result=[];
-  for(const g of groups){
-    let match=false;
-    // LP truck match
-    if(g.linkedLP&&g.linkedLP===truckId)match=true;
-    // LM truck match
-    if(g.linkedLM){
-      if(g.linkedLM===truckId)match=true;
-      const hasRef=g.linkedLM.includes('·');
-      if(hasRef&&lsr&&g.linkedLM.includes(lsr))match=true;
-      if(!hasRef&&dest&&g.linkedLM==='LM '+dest)match=true;
+  if(groups.length){
+    const itemById={};for(const it of items)itemById[it.id]=it;
+    for(const g of groups){
+      let match=false;
+      if(g.linkedLP&&g.linkedLP===truckId)match=true;
+      if(g.linkedLM){
+        if(g.linkedLM===truckId)match=true;
+        const hasRef=g.linkedLM.includes('·');
+        if(hasRef&&lsr&&g.linkedLM.includes(lsr))match=true;
+        if(!hasRef&&dest&&g.linkedLM==='LM '+dest)match=true;
+      }
+      if(match){
+        for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'})}
+      }
     }
-    if(match){
-      for(const did of g.items||[]){
-        const it=itemById[did];
-        if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'});
+  }
+  // Also check engine-injected FA items on LM trucks (via _faGroup → detail items)
+  if(truckId&&truckId.startsWith('LM-')){
+    const seenGroups=new Set(result.map(r=>r._gid).filter(Boolean));
+    for(const label in PLAN_CACHE){
+      const P=PLAN_CACHE[label];if(!P)continue;
+      for(const t of P.allT||[]){
+        if(t.id!==truckId)continue;
+        for(const it of t.items||[]){
+          if(it._fa&&it._faGroup&&!seenGroups.has(it._faGroup)){
+            seenGroups.add(it._faGroup);
+            const gi=_faGroupItems(it._faGroup);
+            if(gi.length)result.push(...gi);
+            else result.push({sku:it.sku,name:it.nm||'FA Reserve',qty:1,pallets:it.loadPlt||0,biDate:it.biK||'',venue:'',src:'FA',uom:'Each'});
+          }
+        }
       }
     }
   }
@@ -15456,8 +15490,8 @@ if(cv==="dashboard"){
         const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
         const daysAtCort=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
         const _fcCargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
-        const _fcLsr=LM_getLsr(t);const _fcFa=_faMatchTruck(t.id,clDisp(label),_fcLsr);
-        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:_fcLsr,isCort:_hasCort,asmCount,dispLoc:_fcDispLoc,clusterLabel:_fcClusterLabel,lateCount,vtype:window._fcVtype||'other',cargo:_fcCargo,faCount:_fcFa?.count||0,faTruck:!!t._faTruck});
+        const _fcLsr=LM_getLsr(t);const _fcFa=_faMatchTruck(t.id,clDisp(label),_fcLsr);const _fcFaEng=t.items?t.items.filter(i=>i._fa).length:0;
+        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:_fcLsr,isCort:_hasCort,asmCount,dispLoc:_fcDispLoc,clusterLabel:_fcClusterLabel,lateCount,vtype:window._fcVtype||'other',cargo:_fcCargo,faCount:(_fcFa?.count||0)+_fcFaEng,faTruck:!!t._faTruck});
       }
     };
     // 1. USA cluster trucks (Step A)
@@ -15526,7 +15560,7 @@ if(cv==="dashboard"){
           h+=`<tr class="ufc-wk" data-vtype="${r.vtype}"${_fcHide?' style="display:none"':r.dispatched?' style="background:var(--gs)"':''}>
             <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
             <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':''}</td>
-            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${r.faTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
+            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
             <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
             <td>${dStr}</td>
             <td class="mono" style="text-align:center">${r.transit}d</td>
@@ -15572,8 +15606,8 @@ if(cv==="dashboard"){
           const tBI=t.origBiK||t.biK||null;
           const daysBeforeBI=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
           const _fcCargo2=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
-          const _fcLsr2=LM_getLsr(t);const _fcFa2=_faMatchTruck(t.id,v.name,_fcLsr2);
-          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,daysBeforeBI,lsr:_fcLsr2,asmCount,lateCount,dispLoc:_dispLoc,cargo:_fcCargo2,faCount:_fcFa2?.count||0,faTruck:!!t._faTruck});
+          const _fcLsr2=LM_getLsr(t);const _fcFa2=_faMatchTruck(t.id,v.name,_fcLsr2);const _fcFaEng2=t.items?t.items.filter(i=>i._fa).length:0;
+          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,daysBeforeBI,lsr:_fcLsr2,asmCount,lateCount,dispLoc:_dispLoc,cargo:_fcCargo2,faCount:(_fcFa2?.count||0)+_fcFaEng2,faTruck:!!t._faTruck});
         }
       });
       if(!_rows.length)return;
@@ -15609,7 +15643,7 @@ if(cv==="dashboard"){
           h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
             <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
             <td style="font-size:11px;font-weight:600">${r.dest}</td>
-            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${r.faTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
+            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
             <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
             <td>${dStr}</td>
             <td class="mono" style="text-align:center">${r.transit}d</td>
