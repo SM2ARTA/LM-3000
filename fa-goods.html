@@ -17,7 +17,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);font-size:13px;h
 .fw6{font-weight:600}
 .hd{background:var(--sf);border-bottom:1px solid var(--bd);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .hl{display:flex;align-items:center;gap:10px}
-.main{flex:1;overflow-y:auto;padding:20px;padding-bottom:44px}
+.main{flex:1;overflow:hidden;padding:20px;padding-bottom:44px;display:flex;flex-direction:column}
 
 /* Badges */
 .bg{display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;white-space:nowrap}
@@ -35,7 +35,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);font-size:13px;h
 .tab{padding:8px 20px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ts);transition:all .15s}
 .tab:hover{color:var(--tp)}
 .tab.act{color:var(--ac);border-bottom-color:var(--ac)}
-.tab-panel{display:none}.tab-panel.vis{display:block}
+.tab-panel{display:none}.tab-panel.vis{display:flex;flex-direction:column;flex:1;min-height:0}
 
 /* Cards */
 .card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-bottom:12px}
@@ -130,7 +130,7 @@ body.viewer .fa-admin{display:none!important}
 <div class="main" id="faMain">
   <!-- NOM tab -->
   <div class="tab-panel vis" id="pNom">
-    <div class="card">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
       <div class="card-hd">
         <div>
           <span style="font-weight:700;font-size:14px">FA Nomenclature</span>
@@ -144,14 +144,14 @@ body.viewer .fa-admin{display:none!important}
         </div>
       </div>
       <input type="text" id="nomSearch" placeholder="Search SKU or name..." oninput="FA_filterNom()" style="width:100%;margin-bottom:8px">
-      <div id="nomTable" style="max-height:60vh;overflow-y:auto"></div>
+      <div id="nomTable" style="flex:1;overflow-y:auto"></div>
     </div>
   </div>
 
   <!-- Demand tab -->
   <div class="tab-panel" id="pDemand">
     <div class="kpi-row" id="demKpis"></div>
-    <div class="card">
+    <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
       <div class="card-hd">
         <div>
           <span style="font-weight:700;font-size:14px">FA Demand</span>
@@ -171,12 +171,12 @@ body.viewer .fa-admin{display:none!important}
           <option value="open">Unassigned</option>
         </select>
       </div>
-      <div id="demTable" style="max-height:55vh;overflow-y:auto"></div>
+      <div id="demTable" style="flex:1;overflow-y:auto"></div>
     </div>
   </div>
 
   <!-- Assignments tab -->
-  <div class="tab-panel" id="pShipments">
+  <div class="tab-panel" id="pShipments" style="overflow-y:auto">
     <div class="kpi-row" id="shipKpis"></div>
     <div class="card">
       <div class="card-hd">
@@ -309,13 +309,20 @@ async function FA_loadML3K(){
 }
 function _faIsLocked(ref){
   if(!ref)return false;
+  // Exact match first
   if(_faLockedTrucks.has(ref))return true;
-  // Check partial match for LM refs (LSR or dest substring)
-  const rl=ref.toLowerCase();
-  for(const k of _faLockedTrucks){const kl=k.toLowerCase();if(rl.includes(kl)||kl.includes(rl))return true}
-  // Check LP by number (ref="LP-66", locked has "LP-66")
+  // LP trucks: strict numeric check only
   const lpMatch=ref.match(/^LP-(\d+)$/);
   if(lpMatch)return _faLockedLP.has(parseInt(lpMatch[1]));
+  // LM trucks: partial match for LSR variations (e.g., "LM Houston · LSR-001" vs "LM Houston")
+  if(ref.startsWith('LM ')){
+    const rl=ref.toLowerCase();
+    for(const k of _faLockedTrucks){
+      if(!k.startsWith('LM '))continue;// only match LM against LM
+      const kl=k.toLowerCase();
+      if(rl.includes(kl)||kl.includes(rl))return true;
+    }
+  }
   return false;
 }
 // LP destination abbreviation → city name mapping
@@ -447,6 +454,8 @@ function FA_parseNom(file){
       const priceCol=hdrs.find(h=>hl(h).includes('price')||hl(h).includes('unitprice')||hl(h).includes('cost'));
       window._faNomHdrs=hdrs;
       console.log('[FA NOM] Headers:',JSON.stringify(hdrs),'| Detected: sku='+skuCol+' name='+nameCol+' src='+srcCol+' uom='+uomCol+' pq='+pqCol+' ps='+psCol+' price='+priceCol);
+      // Merge into existing NOM — new file updates/adds SKUs but does NOT remove existing ones
+      // This protects demand items that reference SKUs not in the new file
       let count=0;
       for(const row of rows){
         const sku=String(row[skuCol]||'').trim();
@@ -473,8 +482,8 @@ function FA_parseNom(file){
 }
 
 function FA_addNomManual(){
-  const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
-    <div class="modal"><h3>Add SKU</h3>
+  const h=`<div class="modal-ov">
+    <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Add SKU</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
     <div class="form-row"><span class="form-label">SKU</span><input type="text" id="_faNomSku" style="flex:1" placeholder="FA-001-001"></div>
     <div class="form-row"><span class="form-label">Name</span><input type="text" id="_faNomName" style="flex:1" placeholder="Item name"></div>
     <div class="form-row"><span class="form-label">UoM</span><input type="text" id="_faNomUom" value="Each" style="width:80px"><span class="form-label">Source</span><input type="text" id="_faNomSrc" style="width:100px" placeholder="RGS"></div>
@@ -539,8 +548,8 @@ function FA_showAddDemand(){
   const ml3kNames=FA_ML3K_VENUES.map(v=>v.name);
   const allVenues=[...new Set([...ml3kNames,...usedVenues])].sort();
   const fas=[...new Set(FA_DEMAND.map(d=>d.fa).filter(Boolean))].sort();
-  const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
-    <div class="modal"><h3>Add Demand Line</h3>
+  const h=`<div class="modal-ov">
+    <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Add Demand Line</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
     <div class="form-row"><span class="form-label">Venue</span>
       <input type="text" id="_faDemVenue" list="_faDemVenueList" style="flex:1" placeholder="Venue name" onchange="FA_autoFillBI()">
       <datalist id="_faDemVenueList">${allVenues.map(v=>'<option value="'+v+'">').join('')}</datalist>
@@ -614,12 +623,14 @@ function FA_editDemand(id){
   const truckOpts=relTrucks.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
   const relKits=_faKitsForVenue(d.venue);
   const kitOpts=relKits.map(k=>`<option value="${k.id}">${k.id} — ${k.type}${k.truckRef?' · 🚛 '+k.truckRef:''}</option>`).join('');
-  const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
-    <div class="modal"><h3>Edit Demand #${id}</h3>
-    <div class="form-row"><span class="form-label">SKU</span><input type="text" id="_faEdSku" value="${d.sku}" style="flex:1" readonly></div>
-    <div class="form-row"><span class="form-label">Venue</span><input type="text" id="_faEdVenue" value="${d.venue}" style="flex:1"></div>
-    <div class="form-row"><span class="form-label">FA</span><input type="text" id="_faEdFa" value="${d.fa||''}" style="flex:1"></div>
-    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faEdQty" value="${d.qty}" min="1" style="width:80px"><span class="form-label">Pallets</span><input type="number" id="_faEdPlt" value="${d.pallets||0}" min="0" step="0.1" style="width:80px"><span class="form-label">BI Date</span><input type="date" id="_faEdBi" value="${d.biDate||''}" style="width:160px"></div>
+  const h=`<div class="modal-ov">
+    <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Edit Demand #${id}</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
+    <div style="padding:6px 0 4px;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Demand (locked)</div>
+    <div class="form-row"><span class="form-label">SKU</span><input type="text" value="${d.sku}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
+    <div class="form-row"><span class="form-label">Name</span><input type="text" value="${d.name||''}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
+    <div class="form-row"><span class="form-label">Venue</span><input type="text" value="${d.venue}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
+    <div class="form-row"><span class="form-label">FA</span><input type="text" value="${d.fa||''}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
+    <div class="form-row"><span class="form-label">Qty</span><input type="text" value="${d.qty}" style="width:80px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">Pallets</span><input type="text" value="${d.pallets||0}" style="width:80px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">BI Date</span><input type="text" value="${d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}" style="width:160px;background:var(--bg);color:var(--ts)" readonly></div>
     <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">① LP Truck (Dallas → Warehouse)</div>
     <div class="form-row"><span class="form-label">LP Truck</span>
       <input type="text" id="_faEdLP" value="${d.linkedLP||''}" list="_faEdLPList" style="flex:1" placeholder="LP-42">
@@ -638,7 +649,7 @@ function FA_editDemand(id){
       <span style="font-size:9px;color:var(--tt)">${relKits.length} kits</span>
     </div>
     <div class="form-row"><span class="form-label">Note</span><input type="text" id="_faEdNote" value="${d.note||''}" style="flex:1"></div>
-    <div class="modal-actions"><button class="mbtn mbtn-danger" onclick="FA_deleteDemand(${id})">Delete</button><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveDemandEdit(${id})">Save</button></div>
+    <div class="modal-actions"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveDemandEdit(${id})">Save</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
 }
@@ -653,11 +664,7 @@ function FA_kitAutoTruck(){
 }
 function FA_saveDemandEdit(id){
   const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
-  d.venue=document.getElementById('_faEdVenue').value.trim();
-  d.fa=document.getElementById('_faEdFa').value.trim();
-  d.qty=parseInt(document.getElementById('_faEdQty').value)||1;
-  d.pallets=parseFloat(document.getElementById('_faEdPlt').value)||0;
-  d.biDate=document.getElementById('_faEdBi').value||'';
+  // Only assignment fields are editable — demand data is locked after creation
   d.linkedLP=document.getElementById('_faEdLP').value.trim()||null;
   d.linkedTruck=document.getElementById('_faEdTruck').value.trim()||null;
   d.linkedKit=document.getElementById('_faEdKit').value.trim()||null;
@@ -672,7 +679,8 @@ function FA_deleteDemand(id){
   FA_saveDebounced();FA_render();
 }
 function FA_clearDemand(){
-  if(!confirm('Clear all FA demand?'))return;
+  if(!confirm('Clear ALL FA demand lines? This cannot be undone.'))return;
+  if(!confirm('Are you sure? This will permanently delete all '+FA_DEMAND.length+' demand lines.'))return;
   FA_DEMAND=[];FA_nextDemId=1;FA_saveDebounced();FA_render();
 }
 
@@ -905,8 +913,8 @@ async function FA_sync(){
 // HELP
 // ═══════════════════════════════════════════════════════════════
 function FA_help(){
-  const h=`<div class="modal-ov" onclick="if(event.target===this)this.remove()">
-    <div class="modal"><h3>FA Goods — Help</h3>
+  const h=`<div class="modal-ov">
+    <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>FA Goods — Help</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
     <div style="font-size:12px;line-height:1.6;color:var(--ts)">
       <p><b>Nomenclature</b> — Upload an Excel file with FA-specific SKUs, or add manually. Columns auto-detected: SKU code, name, source, UoM, pallet qty/spc, price.</p>
       <p style="margin-top:8px"><b>Demand</b> — Build demand per venue. Search NOM by SKU or name, set qty and bump-in date. Venues and BI dates auto-populated from ML3K data.</p>
