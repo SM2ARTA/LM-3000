@@ -265,15 +265,17 @@ async function FA_loadML3K(){
     }
     // Extract LP truck list with dates
     const _fmtD=d=>{if(!d)return'';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};
+    // ── Build separate LP and LM truck lists ──
+    let _faLPTrucks=[];// LP trucks (Dallas → WHS)
     if(lpPlan&&Array.isArray(lpPlan)){
       const tmap={};
       for(const r of lpPlan){
         const tid=r['Truck ID']||r.truckId;if(!tid)continue;
         if(!tmap[tid])tmap[tid]={id:'LP-'+tid,dest:r.Destination||r.destination||'',date:r.Date||r.date||'',type:'lp'};
       }
-      FA_ML3K_TRUCKS=Object.values(tmap).sort((a,b)=>{const na=parseInt(a.id.replace(/\D/g,'')),nb=parseInt(b.id.replace(/\D/g,''));return na-nb});
+      _faLPTrucks=Object.values(tmap).sort((a,b)=>{const na=parseInt(a.id.replace(/\D/g,'')),nb=parseInt(b.id.replace(/\D/g,''));return na-nb});
     }
-    // Extract LM trucks from locked snapshots + build kit→truck map
+    FA_ML3K_TRUCKS=[];// LM trucks only (WHS → venue)
     _faKitTruckMap={};_faLockedTrucks=new Set();_faLockedLP=new Set();
     // LP dispatched trucks
     const lpTruckState=await FA_sbRead('lp-truck-state');
@@ -293,6 +295,8 @@ async function FA_loadML3K(){
         if(snap.items){for(const it of snap.items){if(it._kitId)_faKitTruckMap[it._kitId]=truckRef}}
       }
     }
+    // Store LP trucks globally for LP assignment dropdown
+    window._faLPTrucks=_faLPTrucks;
     // Extract kits with truck reference
     if(lmKits&&Array.isArray(lmKits)){
       FA_ML3K_KITS=lmKits.map(k=>{
@@ -322,7 +326,7 @@ function _faDestCity(dest){
   for(const[abbr,city] of Object.entries(_FA_DEST_MAP)){if(dl.includes(abbr))return city}
   return dl;
 }
-// Get trucks relevant to a venue (by destination match)
+// Get LM trucks relevant to a venue (by destination match)
 function _faTrucksForVenue(venue){
   if(!venue)return FA_ML3K_TRUCKS;
   const vl=venue.toLowerCase();
@@ -332,6 +336,19 @@ function _faTrucksForVenue(venue){
     const dl=t.dest.toLowerCase();
     const city=_faDestCity(t.dest);
     return dl.includes(vl)||vl.includes(dl)||vl.includes(city)||(cl&&(dl.includes(cl)||cl.includes(city)));
+  });
+}
+// Get LP trucks relevant to a venue (match via cluster → LP destination city)
+function _faLPTrucksForVenue(venue){
+  const lpTrucks=window._faLPTrucks||[];
+  if(!venue)return lpTrucks;
+  const vl=venue.toLowerCase();
+  const ml=FA_ML3K_VENUES.find(v=>v.name===venue);
+  const cl=(ml?.cluster||'').toLowerCase();
+  return lpTrucks.filter(t=>{
+    const dl=t.dest.toLowerCase();
+    const city=_faDestCity(t.dest);
+    return vl.includes(city)||dl.includes(vl)||(cl&&(dl.includes(cl)||cl.includes(city)));
   });
 }
 function _faKitsForVenue(venue){
@@ -394,7 +411,7 @@ function FA_render(){
 function FA_updateHeader(){
   const n=Object.keys(FA_NOM).length;
   const d=FA_DEMAND.length;
-  const a=FA_DEMAND.filter(x=>x.linkedTruck||x.linkedKit).length;
+  const a=FA_DEMAND.filter(x=>x.linkedLP||x.linkedTruck||x.linkedKit).length;
   document.getElementById('hdrSummary').textContent=n+' SKUs · '+d+' demand lines · '+a+' assigned';
 }
 
@@ -591,6 +608,8 @@ function FA_addDemandConfirm(close){
 function FA_editDemand(id){
   const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
   const _fmtD=dt=>{if(!dt)return'';try{return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return dt}};
+  const relLPTrucks=_faLPTrucksForVenue(d.venue);
+  const lpTruckOpts=relLPTrucks.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
   const relTrucks=_faTrucksForVenue(d.venue);
   const truckOpts=relTrucks.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
   const relKits=_faKitsForVenue(d.venue);
@@ -601,15 +620,22 @@ function FA_editDemand(id){
     <div class="form-row"><span class="form-label">Venue</span><input type="text" id="_faEdVenue" value="${d.venue}" style="flex:1"></div>
     <div class="form-row"><span class="form-label">FA</span><input type="text" id="_faEdFa" value="${d.fa||''}" style="flex:1"></div>
     <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faEdQty" value="${d.qty}" min="1" style="width:80px"><span class="form-label">Pallets</span><input type="number" id="_faEdPlt" value="${d.pallets||0}" min="0" step="0.1" style="width:80px"><span class="form-label">BI Date</span><input type="date" id="_faEdBi" value="${d.biDate||''}" style="width:160px"></div>
-    <div class="form-row"><span class="form-label">Truck</span>
-      <input type="text" id="_faEdTruck" value="${d.linkedTruck||''}" list="_faEdTruckList" style="flex:1" placeholder="Type LP-42 or LM-7 (LM unlocked: type manually from ML3K)">
+    <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">① LP Truck (Dallas → Warehouse)</div>
+    <div class="form-row"><span class="form-label">LP Truck</span>
+      <input type="text" id="_faEdLP" value="${d.linkedLP||''}" list="_faEdLPList" style="flex:1" placeholder="LP-42">
+      <datalist id="_faEdLPList">${lpTruckOpts}</datalist>
+      <span style="font-size:9px;color:var(--tt)">${relLPTrucks.length} LP</span>
+    </div>
+    <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">② LM Truck (Warehouse → Venue)</div>
+    <div class="form-row"><span class="form-label">LM Truck</span>
+      <input type="text" id="_faEdTruck" value="${d.linkedTruck||''}" list="_faEdTruckList" style="flex:1" placeholder="LM Houston · LSR-001">
       <datalist id="_faEdTruckList">${truckOpts}</datalist>
-      <span style="font-size:9px;color:var(--tt)">${relTrucks.length} for venue</span>
+      <span style="font-size:9px;color:var(--tt)">${relTrucks.length} LM</span>
     </div>
     <div class="form-row"><span class="form-label">Kit</span>
       <input type="text" id="_faEdKit" value="${d.linkedKit||''}" list="_faEdKitList" style="flex:1" placeholder="FNKIT-002-42" onchange="FA_kitAutoTruck()">
       <datalist id="_faEdKitList">${kitOpts}</datalist>
-      <span style="font-size:9px;color:var(--tt)">${relKits.length} for venue</span>
+      <span style="font-size:9px;color:var(--tt)">${relKits.length} kits</span>
     </div>
     <div class="form-row"><span class="form-label">Note</span><input type="text" id="_faEdNote" value="${d.note||''}" style="flex:1"></div>
     <div class="modal-actions"><button class="mbtn mbtn-danger" onclick="FA_deleteDemand(${id})">Delete</button><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveDemandEdit(${id})">Save</button></div>
@@ -632,6 +658,7 @@ function FA_saveDemandEdit(id){
   d.qty=parseInt(document.getElementById('_faEdQty').value)||1;
   d.pallets=parseFloat(document.getElementById('_faEdPlt').value)||0;
   d.biDate=document.getElementById('_faEdBi').value||'';
+  d.linkedLP=document.getElementById('_faEdLP').value.trim()||null;
   d.linkedTruck=document.getElementById('_faEdTruck').value.trim()||null;
   d.linkedKit=document.getElementById('_faEdKit').value.trim()||null;
   d.note=document.getElementById('_faEdNote').value.trim();
@@ -652,7 +679,7 @@ function FA_clearDemand(){
 function FA_renderDemand(){
   const totalQty=FA_DEMAND.reduce((s,d)=>s+d.qty,0);
   const venues=new Set(FA_DEMAND.map(d=>d.venue));
-  const assigned=FA_DEMAND.filter(d=>d.linkedTruck||d.linkedKit).length;
+  const assigned=FA_DEMAND.filter(d=>d.linkedLP||d.linkedTruck||d.linkedKit).length;
   document.getElementById('demKpis').innerHTML=`
     <div class="kpi"><div class="kl">📦 Items</div><div class="kv" style="color:var(--ac)">${FA_DEMAND.length}</div></div>
     <div class="kpi"><div class="kl">📋 Total Qty</div><div class="kv" style="color:var(--tp)">${totalQty.toLocaleString()}</div></div>
@@ -668,20 +695,25 @@ function FA_renderDemand(){
 
   if(!FA_DEMAND.length){document.getElementById('demTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No demand yet. Click "+ Add Demand" to start building.</div>';return}
 
-  let h='<table class="dtb"><thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th><th>Truck / Kit</th><th>Note</th></tr></thead><tbody>';
+  let h='<table class="dtb"><thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th><th>LP Truck</th><th>LM Truck / Kit</th><th>Note</th></tr></thead><tbody>';
   const sorted=[...FA_DEMAND].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue)||a.id-b.id);
   for(const d of sorted){
-    const isAssigned=d.linkedTruck||d.linkedKit;
+    const isAssigned=d.linkedLP||d.linkedTruck||d.linkedKit;
     const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+    // LP Truck column
+    let lpDisp='<span style="color:var(--tt)">—</span>';
+    if(d.linkedLP){const _lkLP=_faIsLocked(d.linkedLP);lpDisp='<span class="bg" style="background:#EFF6FF;color:#2563eb;border:1px solid #BFDBFE">📦 '+d.linkedLP+'</span> '+(_lkLP?'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:2px 6px;border-radius:3px">🔒 LOCKED</span>':'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--or);padding:2px 6px;border-radius:3px">⚠ UNLOCKED</span>')}
+    // LM Truck / Kit column
     let linkDisp='<span style="color:var(--tt)">—</span>';
     if(d.linkedTruck){const _lk=_faIsLocked(d.linkedTruck);linkDisp='<span class="bg bg-pu">🚛 '+d.linkedTruck+'</span> '+(_lk?'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:2px 6px;border-radius:3px">🔒 LOCKED</span>':'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--or);padding:2px 6px;border-radius:3px">⚠ UNLOCKED</span>')}
     if(d.linkedKit)linkDisp+=(d.linkedTruck?' ':'')+'<span class="bg bg-gn">📦 '+d.linkedKit+'</span>';
-    h+=`<tr data-search="${d.sku} ${d.name} ${d.venue} ${d.fa||''} ${d.linkedTruck||''} ${d.linkedKit||''} ${d.note||''}" data-venue="${d.venue}" data-status="${isAssigned?'assigned':'open'}" style="cursor:pointer" onclick="FA_editDemand(${d.id})">
+    h+=`<tr data-search="${d.sku} ${d.name} ${d.venue} ${d.fa||''} ${d.linkedLP||''} ${d.linkedTruck||''} ${d.linkedKit||''} ${d.note||''}" data-venue="${d.venue}" data-status="${isAssigned?'assigned':'open'}" style="cursor:pointer" onclick="FA_editDemand(${d.id})">
       <td class="mono" style="color:var(--tt)">${d.id}</td>
       <td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td>
       <td class="mono fw6" style="text-align:right">${d.qty.toLocaleString()}</td>
       <td class="mono" style="text-align:right;color:var(--pu)">${d.pallets?d.pallets.toFixed(1):'—'}</td>
       <td>${biDisp}</td>
+      <td>${lpDisp}</td>
       <td>${linkDisp}</td>
       <td style="color:var(--tt);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.note||''}</td></tr>`;
   }
@@ -709,8 +741,8 @@ function FA_filterDem(){
 // ASSIGNMENTS TAB — grouped view of demand by truck/kit
 // ═══════════════════════════════════════════════════════════════
 function FA_renderShipments(){
-  const assigned=FA_DEMAND.filter(d=>d.linkedTruck||d.linkedKit);
-  const unassigned=FA_DEMAND.filter(d=>!d.linkedTruck&&!d.linkedKit);
+  const assigned=FA_DEMAND.filter(d=>d.linkedLP||d.linkedTruck||d.linkedKit);
+  const unassigned=FA_DEMAND.filter(d=>!d.linkedLP&&!d.linkedTruck&&!d.linkedKit);
   const trucks=new Set(assigned.map(d=>d.linkedTruck).filter(Boolean));
   const kits=new Set(assigned.map(d=>d.linkedKit).filter(Boolean));
   document.getElementById('shipKpis').innerHTML=`
@@ -721,11 +753,11 @@ function FA_renderShipments(){
     <div class="kpi"><div class="kl">📦 Kits</div><div class="kv" style="color:var(--cy)">${kits.size}</div></div>`;
   document.getElementById('shipCount').textContent=assigned.length+' assigned';
 
-  // Group by truck, then by kit (items can have both)
+  // Group by primary assignment: LM truck > kit > LP truck
   const groups={};
   for(const d of assigned){
-    const key=d.linkedTruck||d.linkedKit||'?';
-    if(!groups[key])groups[key]={label:key,isTruck:!!d.linkedTruck,isKit:!!d.linkedKit&&!d.linkedTruck,items:[]};
+    const key=d.linkedTruck||d.linkedKit||d.linkedLP||'?';
+    if(!groups[key])groups[key]={label:key,isLP:!!d.linkedLP&&!d.linkedTruck&&!d.linkedKit,isTruck:!!d.linkedTruck,isKit:!!d.linkedKit&&!d.linkedTruck,items:[]};
     groups[key].items.push(d);
   }
   const sortedGroups=Object.values(groups).sort((a,b)=>a.label.localeCompare(b.label));
@@ -786,7 +818,7 @@ function FA_filterShip(){
 // OOR EXPORT
 // ═══════════════════════════════════════════════════════════════
 async function FA_exportOORGroup(groupKey){
-  const items=FA_DEMAND.filter(d=>(d.linkedTruck||d.linkedKit)===groupKey);
+  const items=FA_DEMAND.filter(d=>(d.linkedTruck||d.linkedKit||d.linkedLP)===groupKey);
   if(!items.length)return alert('No items for '+groupKey);
   const venue=[...new Set(items.map(d=>d.venue))].join(' / ');
   if(typeof ExcelJS==='undefined')return alert('ExcelJS not loaded yet, try again');
@@ -850,7 +882,7 @@ async function FA_exportAll(){
     const ws2=wb.addWorksheet('Demand');
     ws2.columns=[{header:'#',key:'id',width:6},{header:'SKU',key:'sku',width:18},{header:'Name',key:'name',width:30},{header:'Venue',key:'venue',width:25},{header:'FA',key:'fa',width:15},{header:'Qty',key:'qty',width:10},{header:'Pallets',key:'pallets',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Truck',key:'truck',width:14},{header:'Kit',key:'kit',width:18},{header:'Note',key:'note',width:20}];
     const hdr2=ws2.getRow(1);hdr2.font={bold:true,size:10};hdr2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
-    for(const d of FA_DEMAND){ws2.addRow({id:d.id,sku:d.sku,name:d.name,venue:d.venue,fa:d.fa||'',qty:d.qty,pallets:d.pallets||0,biDate:d.biDate||'',truck:d.linkedTruck||'',kit:d.linkedKit||'',note:d.note||''})}
+    for(const d of FA_DEMAND){ws2.addRow({id:d.id,sku:d.sku,name:d.name,venue:d.venue,fa:d.fa||'',qty:d.qty,pallets:d.pallets||0,biDate:d.biDate||'',lpTruck:d.linkedLP||'',lmTruck:d.linkedTruck||'',kit:d.linkedKit||'',note:d.note||''})}
     ws2.views=[{state:'frozen',ySplit:1}];ws2.autoFilter={from:'A1',to:'J1'};
 
     const buf=await wb.xlsx.writeBuffer();

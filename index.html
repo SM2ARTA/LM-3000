@@ -581,6 +581,7 @@ async function FA_loadLinked(){
     FA_LINKED={_byVenue:{},_items:items};
     for(const it of items){
       const plt=it.pallets||0;const fa=it.fa||'FA';
+      if(it.linkedLP){const k=it.linkedLP;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
       if(it.linkedTruck){const k=it.linkedTruck;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
       if(it.linkedKit){const k=it.linkedKit;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
       if(it.venue){const v=it.venue;if(!FA_LINKED._byVenue[v])FA_LINKED._byVenue[v]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED._byVenue[v].count++;FA_LINKED._byVenue[v].qty+=it.qty||0;FA_LINKED._byVenue[v].plt+=plt;FA_LINKED._byVenue[v].fas.add(fa)}
@@ -13384,12 +13385,12 @@ async function generateDailyDigest(){
     for(const t of _lmTruckList){if(t.dest&&!_digestData.destNames[t.dest])_digestData.destNames[t.dest]=clDisp(t.dest)}
   }
   // FA Goods items (use cached data — refreshed on Sync/load)
-  _digestData.faItems=(FA_LINKED._items||[]).filter(it=>it.linkedTruck||it.linkedKit);
+  _digestData.faItems=(FA_LINKED._items||[]).filter(it=>it.linkedLP||it.linkedTruck||it.linkedKit);
   // If no cached data, try fresh load
   if(!_digestData.faItems.length){
     try{
       const _faR=await SB.from('shared_state').select('value').eq('id','fa-demand').maybeSingle();
-      if(_faR?.data){const _faD=JSON.parse(_faR.data.value);_digestData.faItems=(_faD.items||[]).filter(it=>it.linkedTruck||it.linkedKit)}
+      if(_faR?.data){const _faD=JSON.parse(_faR.data.value);_digestData.faItems=(_faD.items||[]).filter(it=>it.linkedLP||it.linkedTruck||it.linkedKit)}
     }catch(e){}
   }
   // Venue BI dates for FA delivery column
