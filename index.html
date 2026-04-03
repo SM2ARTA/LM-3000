@@ -5254,38 +5254,42 @@ function _lpFaDestStr(abbr){
   return _FA_ABBR_TO_DEST_FALLBACK[abbr]||abbr;
 }
 
-// Generate deterministic SKU from FA type + destination abbreviation
-function _lpFaSku(faType,destAbbr){return'FA-'+faType+'-'+destAbbr}
+// Generate unique SKU per reservation: FA-{TYPE}-{DEST}-{ID}
+function _lpFaSku(faType,destAbbr,id){return'FA-'+faType+'-'+destAbbr+(id?'-'+id:'')}
 
 // Transform LP_FA_GOODS → demand rows for engine consumption
+// qty=1 (one indivisible block), palletSpc=pallets in nom → 1 unit = N pallet spaces
 function _lpFaDemandRows(){
   return LP_FA_GOODS.map(fg=>({
     destination:_lpFaDestStr(fg.dest),
-    sku:_lpFaSku(fg.faType,fg.dest),
-    requiredQty:fg.pallets||0,
-    effQty:fg.pallets||0,
-    name:'FA: '+(LP_FA_TYPE_LABELS[fg.faType]||fg.faType)+' Reserve ('+fg.dest+')',
+    sku:_lpFaSku(fg.faType,fg.dest,fg.id),
+    requiredQty:1,
+    effQty:1,
+    name:'FA: '+(LP_FA_TYPE_LABELS[fg.faType]||fg.faType)+' Reserve #'+fg.id+' ('+fg.dest+')',
     _fa:true
   }));
 }
 
 // Inject FA SKUs into nomenclature (virtual — does not persist to nom file)
+// pq=pallets, ps=pallets → 1 unit = entire reservation as indivisible block
 function _lpFaInjectNom(nom){
   for(const fg of LP_FA_GOODS){
-    const sku=_lpFaSku(fg.faType,fg.dest);
-    if(!nom[sku])nom[sku]={name:'FA: '+(LP_FA_TYPE_LABELS[fg.faType]||fg.faType)+' Reserve ('+fg.dest+')',source:'FA Goods',palletQty:1,palletSpc:1,hsCode:'',country:'',unitPrice:0,ppu:1,_fa:true};
+    const plt=fg.pallets||1;
+    const sku=_lpFaSku(fg.faType,fg.dest,fg.id);
+    if(!nom[sku])nom[sku]={name:'FA: '+(LP_FA_TYPE_LABELS[fg.faType]||fg.faType)+' Reserve #'+fg.id+' ('+fg.dest+')',source:'FA Goods',palletQty:1,palletSpc:plt,hsCode:'',country:'',unitPrice:0,ppu:1,_fa:true};
   }
 }
 
 // Create synthetic arrival rows for FA goods (available today)
+// qty=1 (one block) — palletSpc in nom controls how many pallet spaces it occupies
 function _lpFaArrivalRows(){
   const today=new Date().toISOString().slice(0,10);
   return LP_FA_GOODS.map(fg=>({
-    sku:_lpFaSku(fg.faType,fg.dest),
+    sku:_lpFaSku(fg.faType,fg.dest,fg.id),
     container:'FA-RESERVE',
     arrivalDate:today,
     readyDate:today,
-    qty:fg.pallets||0,
+    qty:1,
     _fa:true
   }));
 }
@@ -5315,13 +5319,10 @@ async function LP_loadFaGoods(){
 }
 
 // Add FA reservation
-function LP_addFaGood(dest,faType,pallets,notes){
+function LP_addFaGood(dest,faType,pallets,notes,biDate){
   if(ROLE==='viewer')return;
   UNDO_capture();
-  // Check for existing same type+dest — merge by adding pallets
-  const existing=LP_FA_GOODS.find(g=>g.dest===dest&&g.faType===faType);
-  if(existing){existing.pallets=(existing.pallets||0)+pallets;if(notes)existing.notes=notes;}
-  else{LP_FA_GOODS.push({id:_lpFaNextId++,dest,faType,pallets:pallets||0,notes:notes||'',createdAt:new Date().toISOString()})}
+  LP_FA_GOODS.push({id:_lpFaNextId++,dest,faType,pallets:pallets||0,notes:notes||'',biDate:biDate||'',createdAt:new Date().toISOString()})
   LP_saveFaGoods();
   if(LP_STATE.planGenerated)LP_regenerate();
   else LP_render();
@@ -5346,6 +5347,15 @@ function LP_updateFaNotes(id,notes){
   LP_saveFaGoods();
 }
 
+// Update FA reservation BI date
+function LP_updateFaBiDate(id,biDate){
+  if(ROLE==='viewer')return;
+  const g=LP_FA_GOODS.find(g=>g.id===id);if(!g)return;
+  g.biDate=biDate||'';
+  LP_saveFaGoods();
+  LP_render();
+}
+
 // Delete FA reservation
 function LP_deleteFaGood(id){
   if(ROLE==='viewer')return;
@@ -5360,14 +5370,16 @@ function LP_deleteFaGood(id){
 function LP_renderFA(el){
   const isViewer=ROLE==='viewer';
   const plan=LP_STATE.generatedPlan||[];
-  // Count how many FA pallets ended up on trucks
-  const truckFa={};// dest -> {type -> placed pallets}
+  // Build per-SKU truck detail: which truck, dispatch date, arrival date, pallets placed, stock status
+  const _stockStatus=window._lpStockStatus||{};
+  const truckFaBySku={};// sku -> {pallets, trucks:[{truckId, date, arrDate, pallets, ready, locked}]}
   for(const r of plan){
     if(!_lpIsFaSku(r.sku))continue;
-    const parts=r.sku.split('-');// FA-TYPE-DEST
-    const type=parts[1]||'',dest=parts[2]||'';
-    if(!truckFa[dest])truckFa[dest]={};
-    truckFa[dest][type]=(truckFa[dest][type]||0)+(r.pallets||0);
+    if(!truckFaBySku[r.sku])truckFaBySku[r.sku]={pallets:0,trucks:[]};
+    truckFaBySku[r.sku].pallets+=(r.pallets||0);
+    const existing=truckFaBySku[r.sku].trucks.find(t=>t.truckId===r.truckId);
+    if(existing){existing.pallets+=(r.pallets||0)}
+    else{const _ss=_stockStatus[r.truckId];truckFaBySku[r.sku].trucks.push({truckId:r.truckId,date:r.date,arrDate:LP_getArrivalDate(r.date,r.destination),pallets:r.pallets||0,dest:r.destination,ready:_ss?_ss.stockReady:false,locked:LP_dispatched.has(r.truckId)})}
   }
 
   let html='<div style="padding:16px">';
@@ -5382,7 +5394,7 @@ function LP_renderFA(el){
   const totalPlt=LP_FA_GOODS.reduce((s,g)=>s+g.pallets,0);
   const totalDests=new Set(LP_FA_GOODS.map(g=>g.dest)).size;
   const totalTypes=new Set(LP_FA_GOODS.map(g=>g.faType)).size;
-  const placedPlt=Object.values(truckFa).reduce((s,types)=>s+Object.values(types).reduce((s2,p)=>s2+p,0),0);
+  const placedPlt=Object.values(truckFaBySku).reduce((s,t)=>s+t.pallets,0);
   html+='<div class="sr" style="margin-bottom:16px">';
   html+=kpi({label:'📐 Reservations',value:LP_FA_GOODS.length,color:'#0891B2'});
   html+=kpi({label:'📦 Pallets Reserved',value:totalPlt,color:'var(--ac)'});
@@ -5402,8 +5414,8 @@ function LP_renderFA(el){
 
   // Table
   html+='<table class="lp-tbl" style="width:100%;font-size:11px">';
-  html+='<thead><tr><th>Destination</th><th>FA Type</th><th>SKU</th><th style="text-align:center">Pallets</th>';
-  if(LP_STATE.planGenerated)html+='<th style="text-align:center">On Trucks</th>';
+  html+='<thead><tr><th>Destination</th><th>FA Type</th><th>SKU</th><th style="text-align:center">Pallets</th><th>BI Date</th>';
+  if(LP_STATE.planGenerated)html+='<th style="text-align:center">On Trucks</th><th>Truck</th><th>Dispatch</th><th>Arrival</th><th>Status</th>';
   html+='<th>Notes</th>';
   if(!isViewer)html+='<th style="width:60px"></th>';
   html+='</tr></thead><tbody>';
@@ -5411,8 +5423,8 @@ function LP_renderFA(el){
   for(const dest of _FA_DEST_ABBRS){
     const items=byDest[dest];if(!items)continue;
     for(const g of items){
-      const sku=_lpFaSku(g.faType,g.dest);
-      const placed=truckFa[g.dest]?.[g.faType]||0;
+      const sku=_lpFaSku(g.faType,g.dest,g.id);
+      const placed=truckFaBySku[sku]||0;
       const dc=LP_destColor(_lpFaDestStr(g.dest));
       html+='<tr>';
       html+='<td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+'">'+(CITY_ABBR[g.dest]||g.dest)+'</span></td>';
@@ -5422,9 +5434,34 @@ function LP_renderFA(el){
       if(isViewer)html+='<span class="mono" style="font-weight:700">'+g.pallets+'</span>';
       else html+='<input type="number" value="'+g.pallets+'" min="0" max="26" style="width:60px;text-align:center;font-size:11px;font-family:var(--fm);padding:3px 6px;border:1px solid var(--bd);border-radius:4px" onchange="LP_updateFaPallets('+g.id+',this.value)">';
       html+='</td>';
+      // BI Date column (always shown — editable inline)
+      html+='<td>';
+      if(isViewer){const _bd=LP_parseLocalDate(g.biDate);html+='<span class="mono" style="font-size:10px">'+(g.biDate?(_bd?_bd.toLocaleDateString('en-US',{month:'short',day:'numeric'}):g.biDate):'—')+'</span>'}
+      else html+='<input type="date" value="'+(g.biDate||'')+'" style="font-size:10px;font-family:var(--fm);padding:3px 6px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="LP_updateFaBiDate('+g.id+',this.value)">';
+      html+='</td>';
       if(LP_STATE.planGenerated){
+        const _fd=truckFaBySku[sku];
         const pltOk=placed>=g.pallets;
         html+='<td style="text-align:center"><span class="mono" style="font-weight:600;color:'+(pltOk?'var(--gn)':'var(--or)')+'">'+Math.round(placed)+'</span></td>';
+        // Truck ID(s)
+        if(_fd&&_fd.trucks.length){
+          const _tks=_fd.trucks;
+          html+='<td style="font-size:10px">'+_tks.map(t=>{const _lbl=t.locked?'🔒':'';const _rdy=t.ready?'<span style="font-size:8px;font-weight:700;color:var(--gn);background:var(--gs);padding:1px 4px;border-radius:3px;border:1px solid #B8DFCA">READY</span>':'<span style="font-size:8px;font-weight:700;color:var(--or);background:var(--os);padding:1px 4px;border-radius:3px;border:1px solid #F5D6B8">PENDING</span>';return _lbl+'<span class="mono" style="cursor:pointer;color:var(--ac);text-decoration:underline" onclick="LP_showTruckModal('+t.truckId+')">LP-'+t.truckId+'</span> '+_rdy}).join('<br>')+'</td>';
+          html+='<td class="mono" style="font-size:10px">'+_tks.map(t=>{const d=LP_parseLocalDate(t.date);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):t.date}).join(', ')+'</td>';
+          html+='<td class="mono" style="font-size:10px">'+_tks.map(t=>{const d=LP_parseLocalDate(t.arrDate);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):t.arrDate||'—'}).join(', ')+'</td>';
+          // Status: compare arrival vs BI date
+          if(g.biDate){
+            const _biD=LP_parseLocalDate(g.biDate);
+            const _lastArr=_tks.map(t=>LP_parseLocalDate(t.arrDate)).filter(Boolean).sort((a,b)=>b-a)[0];
+            if(_biD&&_lastArr){
+              const _diff=Math.round((_biD-_lastArr)/(86400000));
+              if(_diff>=0)html+='<td><span class="bg bgs bg-gn" style="font-size:9px">✓ '+(_diff===0?'On time':_diff+'d early')+'</span></td>';
+              else html+='<td><span class="bg bgs bg-rd" style="font-size:9px">⚠ '+Math.abs(_diff)+'d late</span></td>';
+            }else html+='<td style="color:var(--tt);font-size:10px">—</td>';
+          }else html+='<td style="color:var(--tt);font-size:10px">—</td>';
+        }else{
+          html+='<td style="color:var(--tt);font-size:10px">—</td><td style="color:var(--tt);font-size:10px">—</td><td style="color:var(--tt);font-size:10px">—</td><td style="color:var(--tt);font-size:10px">—</td>';
+        }
       }
       html+='<td>';
       if(isViewer)html+='<span style="color:var(--ts)">'+(g.notes||'—')+'</span>';
@@ -5454,24 +5491,29 @@ function LP_showAddFaModal(){
   const demDests=new Set((LP_STATE.materialPlan||[]).map(d=>LP_matchTransitAbbr(d.destination)).filter(Boolean));
   const destOpts=_FA_DEST_ABBRS.map(a=>'<option value="'+a+'"'+(demDests.has(a)?'':' style="color:var(--tt)"')+'>'+(CITY_ABBR[a]||a)+(demDests.has(a)?'':' (no demand)')+'</option>').join('');
   const typeOpts=LP_FA_TYPES.map(t=>'<option value="'+t+'">'+(LP_FA_TYPE_LABELS[t]||t)+'</option>').join('');
-  mr.innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
-    <div class="mdi" style="max-width:400px">
-      <div class="mdh" style="background:#ECFEFF;border-bottom-color:#0891B2"><h3 style="color:#0891B2">📐 Add Capacity Reservation</h3></div>
-      <div class="mdb" style="padding:16px">
-        <p style="font-size:11px;color:var(--tt);margin:0 0 12px">Reserve pallet space on LP trucks for non-FF&E equipment.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Destination</label>
-          <select id="faAddDest" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px">${destOpts}</select></div>
-          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">FA Type</label>
-          <select id="faAddType" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px">${typeOpts}</select></div>
-          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Pallets</label>
-          <input type="number" id="faAddPlt" min="1" max="26" value="2" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)"></div>
-          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Notes</label>
-          <input type="text" id="faAddNotes" placeholder="Optional..." style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px"></div>
-        </div>
-        <div id="faAddPreview" style="margin-top:10px;padding:8px 12px;background:var(--bg);border-radius:6px;font-size:10px;font-family:var(--fm);color:var(--ts)"></div>
+  mr.innerHTML=`<div class="mo">
+    <div class="mdi" style="max-width:420px">
+      <div class="mdh" style="background:#ECFEFF;border-bottom-color:#0891B2">
+        <h3 style="color:#0891B2">📐 Add Capacity Reservation</h3>
+        <button class="mdc" onclick="this.closest('.mo').remove()">✕</button>
       </div>
-      <div class="mdf"><button class="mbtn" onclick="this.closest('.mo').remove()">Cancel</button><button class="mbtn mbtn-primary" style="background:#0891B2" onclick="LP_confirmAddFa()">Add Reservation</button></div>
+      <div class="mdb" style="padding:20px">
+        <p style="font-size:11px;color:var(--tt);margin:0 0 14px">Reserve pallet space on LP trucks for non-FF&E equipment.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:4px">Destination</label>
+          <select id="faAddDest" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:var(--r);font-size:12px;font-family:var(--fd)">${destOpts}</select></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:4px">FA Type</label>
+          <select id="faAddType" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:var(--r);font-size:12px;font-family:var(--fd)">${typeOpts}</select></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:4px">Pallets</label>
+          <input type="number" id="faAddPlt" min="1" max="26" value="2" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:var(--r);font-size:12px;font-family:var(--fm)"></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:4px">Desired BI Date</label>
+          <input type="date" id="faAddBiDate" style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:var(--r);font-size:12px;font-family:var(--fm)"></div>
+          <div style="grid-column:1/-1"><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:4px">Notes</label>
+          <input type="text" id="faAddNotes" placeholder="Optional..." style="width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:var(--r);font-size:12px;font-family:var(--fd)"></div>
+        </div>
+        <div id="faAddPreview" style="margin-top:12px;padding:10px 14px;background:var(--bg);border-radius:var(--r);font-size:10px;font-family:var(--fm);color:var(--ts)"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--bd)"><button class="mbtn" onclick="this.closest('.mo').remove()">Cancel</button><button class="mbtn mbtn-primary" style="background:#0891B2" onclick="LP_confirmAddFa()">Add Reservation</button></div>
     </div></div>`;
   // Live preview
   const _faPreview=()=>{
@@ -5493,9 +5535,10 @@ function LP_confirmAddFa(){
   const faType=document.getElementById('faAddType')?.value;
   const pallets=parseInt(document.getElementById('faAddPlt')?.value)||0;
   const notes=document.getElementById('faAddNotes')?.value||'';
+  const biDate=document.getElementById('faAddBiDate')?.value||'';
   if(!dest||!faType||pallets<1){alert('Please fill in destination, type, and at least 1 pallet.');return}
   document.querySelector('.mo')?.remove();
-  LP_addFaGood(dest,faType,pallets,notes);
+  LP_addFaGood(dest,faType,pallets,notes,biDate);
 }
 
 
