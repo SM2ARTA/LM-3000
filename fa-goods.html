@@ -122,7 +122,7 @@ body.viewer .fa-admin{display:none!important}
   <div class="tabs" id="faTabs">
     <div class="tab act" onclick="FA_tab('nom')">📋 Nomenclature</div>
     <div class="tab" onclick="FA_tab('demand')">📦 Demand</div>
-    <div class="tab" onclick="FA_tab('shipments')">🚛 Assignments</div>
+    <div class="tab" onclick="FA_tab('groups')">📐 Delivery Groups</div>
   </div>
 </div>
 
@@ -167,28 +167,34 @@ body.viewer .fa-admin{display:none!important}
         <select id="demVenueFilter" onchange="FA_filterDem()" style="min-width:140px"><option value="">All Venues</option></select>
         <select id="demStatusFilter" onchange="FA_filterDem()" style="min-width:120px">
           <option value="">All</option>
-          <option value="assigned">Assigned</option>
-          <option value="open">Unassigned</option>
+          <option value="assigned">Grouped</option>
+          <option value="open">Ungrouped</option>
         </select>
       </div>
       <div id="demTable" style="flex:1;overflow-y:auto"></div>
     </div>
   </div>
 
-  <!-- Assignments tab -->
-  <div class="tab-panel" id="pShipments" style="overflow-y:auto">
-    <div class="kpi-row" id="shipKpis"></div>
-    <div class="card">
+  <!-- Delivery Groups tab -->
+  <div class="tab-panel" id="pGroups">
+    <div class="kpi-row" id="grpKpis"></div>
+    <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
       <div class="card-hd">
         <div>
-          <span style="font-weight:700;font-size:14px">Assignments</span>
-          <span class="bg bg-gy" id="shipCount">0 assigned</span>
+          <span style="font-weight:700;font-size:14px">Delivery Groups</span>
+          <span class="bg bg-gy" id="grpCount">0 groups</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="rbtn fa-admin" onclick="FA_regenGroups()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">⟳ Regenerate</button>
         </div>
       </div>
-      <input type="text" id="shipSearch" placeholder="Search truck, kit, venue, SKU..." oninput="FA_filterShip()" style="width:100%;margin-bottom:8px">
-      <div id="shipGrid" style="max-height:55vh;overflow-y:auto"></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <input type="text" id="grpSearch" placeholder="Search venue, FA, SKU..." oninput="FA_filterGroups()" style="flex:1;min-width:200px">
+      </div>
+      <div id="grpTable" style="flex:1;overflow-y:auto"></div>
     </div>
   </div>
+
 </div>
 
 <!-- Bottom bar -->
@@ -217,8 +223,10 @@ try{SB=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.wa
 
 // ── State ──
 let FA_NOM={};       // {sku: {name, uom, pq, ps, src, ppu}}
-let FA_DEMAND=[];    // [{id, sku, name, venue, fa, qty, biDate, note, shipmentId, created}]
+let FA_DEMAND=[];    // [{id, sku, name, venue, fa, qty, biDate, note, created}]
 let FA_nextDemId=1;
+let FA_GROUPS=[];    // [{id, venue, biDate, fa, sku, pallets, items:[], linkedLP, linkedLM, linkedKit, created}]
+let _faGroupNextId=1;
 let FA_curTab='nom';
 // Role: from URL param (?role=admin) or cookie (ml3k_role)
 const FA_ROLE=(()=>{const p=new URLSearchParams(window.location.search).get('role');if(p==='admin'||p==='viewer')return p;const c=document.cookie.match(/ml3k_role=(admin|viewer)/);return c?c[1]:'viewer'})();
@@ -291,17 +299,21 @@ async function FA_loadML3K(){
         const lsr=lsrMap[fp]||'';
         const dd=snap.dKey||snap.dd||'';
         const truckRef='LM '+dest+(lsr?' · '+lsr:'');
-        if(dest){FA_ML3K_TRUCKS.push({id:truckRef,dest,date:dd,type:'lm',lsr,locked:true});_faLockedTrucks.add(truckRef)}
+        const biK=snap.biK||'';
+        if(dest){FA_ML3K_TRUCKS.push({id:truckRef,dest,date:dd,biDate:biK,type:'lm',lsr,locked:true});_faLockedTrucks.add(truckRef)}
         if(snap.items){for(const it of snap.items){if(it._kitId)_faKitTruckMap[it._kitId]=truckRef}}
       }
     }
     // Store LP trucks globally for LP assignment dropdown
     window._faLPTrucks=_faLPTrucks;
-    // Extract kits with truck reference
+    // Extract kits with truck reference — use numeric id for map lookup, sku for display
     if(lmKits&&Array.isArray(lmKits)){
       FA_ML3K_KITS=lmKits.map(k=>{
-        const kid=k.id||k.sku;
-        return{id:kid,sku:k.sku,venue:k.venue||'',type:k.sku?.startsWith('FNKIT')?'FF&E':'Stationery',truckRef:_faKitTruckMap[kid]||null};
+        const numId=k.id;// numeric kit ID (e.g., 9659)
+        const sku=k.sku||'';// display SKU (e.g., FNKIT-002-9660)
+        const name=k.name||k.venue||'';
+        const trRef=_faKitTruckMap[numId]||_faKitTruckMap[sku]||null;
+        return{id:numId,sku,name,venue:k.venue||'',type:sku.startsWith('FNKIT')?'FF&E':'Stationery',truckRef:trRef};
       });
     }
     console.log('[FA] ML3K lookup: '+FA_ML3K_VENUES.length+' venues, '+FA_ML3K_TRUCKS.length+' trucks, '+FA_ML3K_KITS.length+' kits');
@@ -382,18 +394,25 @@ async function FA_save(){
   if(_faIsViewer())return;
   await Promise.all([
     FA_sbWrite('fa-nom',FA_NOM),
-    FA_sbWrite('fa-demand',{items:FA_DEMAND,nextId:FA_nextDemId})
+    FA_sbWrite('fa-demand',{items:FA_DEMAND,nextId:FA_nextDemId}),
+    FA_sbWrite('fa-groups',{items:FA_GROUPS,nextId:_faGroupNextId})
   ]);
   console.log('[FA] Saved to Supabase');
 }
+async function FA_saveGroups(){
+  if(_faIsViewer())return;
+  await FA_sbWrite('fa-groups',{items:FA_GROUPS,nextId:_faGroupNextId});
+}
 async function FA_load(){
-  const[nom,dem]=await Promise.all([
+  const[nom,dem,grp]=await Promise.all([
     FA_sbRead('fa-nom'),
-    FA_sbRead('fa-demand')
+    FA_sbRead('fa-demand'),
+    FA_sbRead('fa-groups')
   ]);
   if(nom)FA_NOM=nom;
   if(dem){FA_DEMAND=dem.items||[];FA_nextDemId=dem.nextId||FA_DEMAND.length+1}
-  console.log('[FA] Loaded: '+Object.keys(FA_NOM).length+' NOM, '+FA_DEMAND.length+' demand');
+  if(grp){FA_GROUPS=grp.items||[];_faGroupNextId=grp.nextId||1}
+  console.log('[FA] Loaded: '+Object.keys(FA_NOM).length+' NOM, '+FA_DEMAND.length+' demand, '+FA_GROUPS.length+' groups');
   FA_updateStatus(true);
   FA_render();
 }
@@ -401,9 +420,9 @@ async function FA_load(){
 // ── Tab switching ──
 function FA_tab(id){
   FA_curTab=id;
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('act',['nom','demand','shipments'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('act',['nom','demand','groups'][i]===id));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('vis'));
-  document.getElementById({nom:'pNom',demand:'pDemand',shipments:'pShipments'}[id]).classList.add('vis');
+  document.getElementById({nom:'pNom',demand:'pDemand',groups:'pGroups'}[id]).classList.add('vis');
   FA_render();
 }
 
@@ -411,15 +430,16 @@ function FA_tab(id){
 function FA_render(){
   if(FA_curTab==='nom')FA_renderNom();
   else if(FA_curTab==='demand')FA_renderDemand();
-  else if(FA_curTab==='shipments')FA_renderShipments();
+  else if(FA_curTab==='groups')FA_renderGroups();
   FA_updateHeader();
 }
 
 function FA_updateHeader(){
   const n=Object.keys(FA_NOM).length;
   const d=FA_DEMAND.length;
-  const a=FA_DEMAND.filter(x=>x.linkedLP||x.linkedTruck||x.linkedKit).length;
-  document.getElementById('hdrSummary').textContent=n+' SKUs · '+d+' demand lines · '+a+' assigned';
+  const g=FA_GROUPS.length;
+  const assigned=FA_GROUPS.filter(g=>g.linkedLP||g.linkedLM).length;
+  document.getElementById('hdrSummary').textContent=n+' SKUs · '+d+' demand lines · '+g+' groups · '+assigned+' assigned';
 }
 
 function FA_updateStatus(ok){
@@ -566,7 +586,7 @@ function FA_showAddDemand(){
       </div>
     </div>
     <div class="form-row"><span class="form-label">Name</span><input type="text" id="_faDemName" style="flex:1" readonly></div>
-    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faDemQty" value="1" min="1" style="width:80px"><span class="form-label">Pallets</span><input type="number" id="_faDemPlt" value="0" min="0" step="0.1" style="width:80px"><span class="form-label">Note</span><input type="text" id="_faDemNote" style="flex:1" placeholder="Optional note"></div>
+    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faDemQty" value="1" min="1" style="width:80px"><span class="form-label">Note</span><input type="text" id="_faDemNote" style="flex:1" placeholder="Optional note"></div>
     <div class="modal-actions"><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn" style="background:var(--gn);color:#fff;border-color:var(--gn)" onclick="FA_addDemandMore()">Add & More</button><button class="mbtn mbtn-primary" onclick="FA_addDemandConfirm(true)">Add & Close</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
@@ -607,67 +627,34 @@ function FA_addDemandConfirm(close){
   if(!sku)return alert('SKU required');
   if(!venue)return alert('Venue required');
   const name=FA_NOM[sku]?.name||document.getElementById('_faDemName').value.trim()||sku;
-  const pallets=parseFloat(document.getElementById('_faDemPlt')?.value)||0;
-  FA_DEMAND.push({id:FA_nextDemId++,sku,name,venue,fa,qty,pallets,biDate,note,linkedTruck:null,linkedKit:null,created:new Date().toISOString()});
+  FA_DEMAND.push({id:FA_nextDemId++,sku,name,venue,fa,qty,biDate,note,created:new Date().toISOString()});
   FA_saveDebounced();
   if(close){document.getElementById('faModal').innerHTML='';FA_render()}
-  else{document.getElementById('_faDemSku').value='';document.getElementById('_faDemName').value='';document.getElementById('_faDemQty').value='1';document.getElementById('_faDemPlt').value='0';document.getElementById('_faDemNote').value='';document.getElementById('_faDemSku').focus()}
+  else{document.getElementById('_faDemSku').value='';document.getElementById('_faDemName').value='';document.getElementById('_faDemQty').value='1';document.getElementById('_faDemNote').value='';document.getElementById('_faDemSku').focus()}
 }
 
 function FA_editDemand(id){
   const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
-  const _fmtD=dt=>{if(!dt)return'';try{return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return dt}};
-  const relLPTrucks=_faLPTrucksForVenue(d.venue);
-  const lpTruckOpts=relLPTrucks.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
-  const relTrucks=_faTrucksForVenue(d.venue);
-  const truckOpts=relTrucks.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
-  const relKits=_faKitsForVenue(d.venue);
-  const kitOpts=relKits.map(k=>`<option value="${k.id}">${k.id} — ${k.type}${k.truckRef?' · 🚛 '+k.truckRef:''}</option>`).join('');
+  // Find which group this item belongs to
+  const grp=FA_GROUPS.find(g=>g.items&&g.items.includes(id));
+  const grpLabel=grp?'<span class="bg bg-cy">📐 '+grp.sku+' · '+(grp.pallets||0)+' plt</span>':'<span style="color:var(--tt)">Not in any group</span>';
   const h=`<div class="modal-ov">
-    <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Edit Demand #${id}</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
+    <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Demand #${id}</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
     <div style="padding:6px 0 4px;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Demand (locked)</div>
     <div class="form-row"><span class="form-label">SKU</span><input type="text" value="${d.sku}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
     <div class="form-row"><span class="form-label">Name</span><input type="text" value="${d.name||''}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
     <div class="form-row"><span class="form-label">Venue</span><input type="text" value="${d.venue}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
     <div class="form-row"><span class="form-label">FA</span><input type="text" value="${d.fa||''}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
-    <div class="form-row"><span class="form-label">Qty</span><input type="text" value="${d.qty}" style="width:80px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">Pallets</span><input type="text" value="${d.pallets||0}" style="width:80px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">BI Date</span><input type="text" value="${d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}" style="width:160px;background:var(--bg);color:var(--ts)" readonly></div>
-    <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">① LP Truck (Dallas → Warehouse)</div>
-    <div class="form-row"><span class="form-label">LP Truck</span>
-      <input type="text" id="_faEdLP" value="${d.linkedLP||''}" list="_faEdLPList" style="flex:1" placeholder="LP-42">
-      <datalist id="_faEdLPList">${lpTruckOpts}</datalist>
-      <span style="font-size:9px;color:var(--tt)">${relLPTrucks.length} LP</span>
-    </div>
-    <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">② LM Truck (Warehouse → Venue)</div>
-    <div class="form-row"><span class="form-label">LM Truck</span>
-      <input type="text" id="_faEdTruck" value="${d.linkedTruck||''}" list="_faEdTruckList" style="flex:1" placeholder="LM Houston · LSR-001">
-      <datalist id="_faEdTruckList">${truckOpts}</datalist>
-      <span style="font-size:9px;color:var(--tt)">${relTrucks.length} LM</span>
-    </div>
-    <div class="form-row"><span class="form-label">Kit</span>
-      <input type="text" id="_faEdKit" value="${d.linkedKit||''}" list="_faEdKitList" style="flex:1" placeholder="FNKIT-002-42" onchange="FA_kitAutoTruck()">
-      <datalist id="_faEdKitList">${kitOpts}</datalist>
-      <span style="font-size:9px;color:var(--tt)">${relKits.length} kits</span>
-    </div>
+    <div class="form-row"><span class="form-label">Qty</span><input type="text" value="${d.qty}" style="width:80px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">BI Date</span><input type="text" value="${d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}" style="width:160px;background:var(--bg);color:var(--ts)" readonly></div>
+    <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">Delivery Group</div>
+    <div class="form-row">${grpLabel}</div>
     <div class="form-row"><span class="form-label">Note</span><input type="text" id="_faEdNote" value="${d.note||''}" style="flex:1"></div>
     <div class="modal-actions"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveDemandEdit(${id})">Save</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
 }
-function FA_kitAutoTruck(){
-  const kitId=document.getElementById('_faEdKit').value.trim();
-  if(!kitId)return;
-  const kit=FA_ML3K_KITS.find(k=>k.id===kitId);
-  if(kit&&kit.truckRef){
-    const truckEl=document.getElementById('_faEdTruck');
-    if(!truckEl.value)truckEl.value=kit.truckRef;
-  }
-}
 function FA_saveDemandEdit(id){
   const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
-  // Only assignment fields are editable — demand data is locked after creation
-  d.linkedLP=document.getElementById('_faEdLP').value.trim()||null;
-  d.linkedTruck=document.getElementById('_faEdTruck').value.trim()||null;
-  d.linkedKit=document.getElementById('_faEdKit').value.trim()||null;
   d.note=document.getElementById('_faEdNote').value.trim();
   document.getElementById('faModal').innerHTML='';
   FA_saveDebounced();FA_render();
@@ -687,13 +674,16 @@ function FA_clearDemand(){
 function FA_renderDemand(){
   const totalQty=FA_DEMAND.reduce((s,d)=>s+d.qty,0);
   const venues=new Set(FA_DEMAND.map(d=>d.venue));
-  const assigned=FA_DEMAND.filter(d=>d.linkedLP||d.linkedTruck||d.linkedKit).length;
+  // Build demand→group lookup
+  const _demGrp={};// demandId → group
+  for(const g of FA_GROUPS){for(const did of g.items||[])_demGrp[did]=g}
+  const inGroup=FA_DEMAND.filter(d=>_demGrp[d.id]).length;
   document.getElementById('demKpis').innerHTML=`
     <div class="kpi"><div class="kl">📦 Items</div><div class="kv" style="color:var(--ac)">${FA_DEMAND.length}</div></div>
     <div class="kpi"><div class="kl">📋 Total Qty</div><div class="kv" style="color:var(--tp)">${totalQty.toLocaleString()}</div></div>
     <div class="kpi"><div class="kl">📍 Venues</div><div class="kv" style="color:var(--pu)">${venues.size}</div></div>
-    <div class="kpi"><div class="kl">🚛 Assigned</div><div class="kv" style="color:var(--gn)">${assigned}</div></div>
-    <div class="kpi"><div class="kl">📭 Unassigned</div><div class="kv" style="color:${FA_DEMAND.length-assigned>0?'var(--or)':'var(--gn)'}">${FA_DEMAND.length-assigned}</div></div>`;
+    <div class="kpi"><div class="kl">📐 In Groups</div><div class="kv" style="color:var(--gn)">${inGroup}</div></div>
+    <div class="kpi"><div class="kl">📭 Ungrouped</div><div class="kv" style="color:${FA_DEMAND.length-inGroup>0?'var(--or)':'var(--gn)'}">${FA_DEMAND.length-inGroup}</div></div>`;
   document.getElementById('demCount').textContent=FA_DEMAND.length+' items';
 
   const vf=document.getElementById('demVenueFilter');
@@ -703,26 +693,19 @@ function FA_renderDemand(){
 
   if(!FA_DEMAND.length){document.getElementById('demTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No demand yet. Click "+ Add Demand" to start building.</div>';return}
 
-  let h='<table class="dtb"><thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th><th>LP Truck</th><th>LM Truck / Kit</th><th>Note</th></tr></thead><tbody>';
+  let h='<table class="dtb"><thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th>BI Date</th><th>Group</th><th>Note</th></tr></thead><tbody>';
   const sorted=[...FA_DEMAND].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue)||a.id-b.id);
   for(const d of sorted){
-    const isAssigned=d.linkedLP||d.linkedTruck||d.linkedKit;
+    const grp=_demGrp[d.id];
+    const isGrouped=!!grp;
     const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
-    // LP Truck column
-    let lpDisp='<span style="color:var(--tt)">—</span>';
-    if(d.linkedLP){const _lkLP=_faIsLocked(d.linkedLP);lpDisp='<span class="bg" style="background:#EFF6FF;color:#2563eb;border:1px solid #BFDBFE">📦 '+d.linkedLP+'</span> '+(_lkLP?'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:2px 6px;border-radius:3px">🔒 LOCKED</span>':'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--or);padding:2px 6px;border-radius:3px">⚠ UNLOCKED</span>')}
-    // LM Truck / Kit column
-    let linkDisp='<span style="color:var(--tt)">—</span>';
-    if(d.linkedTruck){const _lk=_faIsLocked(d.linkedTruck);linkDisp='<span class="bg bg-pu">🚛 '+d.linkedTruck+'</span> '+(_lk?'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:2px 6px;border-radius:3px">🔒 LOCKED</span>':'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--or);padding:2px 6px;border-radius:3px">⚠ UNLOCKED</span>')}
-    if(d.linkedKit)linkDisp+=(d.linkedTruck?' ':'')+'<span class="bg bg-gn">📦 '+d.linkedKit+'</span>';
-    h+=`<tr data-search="${d.sku} ${d.name} ${d.venue} ${d.fa||''} ${d.linkedLP||''} ${d.linkedTruck||''} ${d.linkedKit||''} ${d.note||''}" data-venue="${d.venue}" data-status="${isAssigned?'assigned':'open'}" style="cursor:pointer" onclick="FA_editDemand(${d.id})">
+    const grpDisp=grp?'<span class="bg bg-cy">📐 '+grp.sku+'</span>':'<span style="color:var(--tt)">—</span>';
+    h+=`<tr data-search="${d.sku} ${d.name} ${d.venue} ${d.fa||''} ${grp?.sku||''} ${d.note||''}" data-venue="${d.venue}" data-status="${isGrouped?'assigned':'open'}" style="cursor:pointer" onclick="FA_editDemand(${d.id})">
       <td class="mono" style="color:var(--tt)">${d.id}</td>
       <td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td>
       <td class="mono fw6" style="text-align:right">${d.qty.toLocaleString()}</td>
-      <td class="mono" style="text-align:right;color:var(--pu)">${d.pallets?d.pallets.toFixed(1):'—'}</td>
       <td>${biDisp}</td>
-      <td>${lpDisp}</td>
-      <td>${linkDisp}</td>
+      <td>${grpDisp}</td>
       <td style="color:var(--tt);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.note||''}</td></tr>`;
   }
   h+='</tbody></table>';
@@ -743,82 +726,213 @@ function FA_filterDem(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SHIPMENTS TAB
+// DELIVERY GROUPS — auto-generated from demand (venue+biDate+FA)
+// Each group is an indivisible block with manual pallet input.
+// Groups are the source of truth for LP and LM capacity reservations.
 // ═══════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════
-// ASSIGNMENTS TAB — grouped view of demand by truck/kit
-// ═══════════════════════════════════════════════════════════════
-function FA_renderShipments(){
-  const assigned=FA_DEMAND.filter(d=>d.linkedLP||d.linkedTruck||d.linkedKit);
-  const unassigned=FA_DEMAND.filter(d=>!d.linkedLP&&!d.linkedTruck&&!d.linkedKit);
-  const trucks=new Set(assigned.map(d=>d.linkedTruck).filter(Boolean));
-  const kits=new Set(assigned.map(d=>d.linkedKit).filter(Boolean));
-  document.getElementById('shipKpis').innerHTML=`
-    <div class="kpi"><div class="kl">📦 Total Items</div><div class="kv" style="color:var(--ac)">${FA_DEMAND.length}</div></div>
-    <div class="kpi"><div class="kl">🚛 Assigned</div><div class="kv" style="color:var(--gn)">${assigned.length}</div></div>
-    <div class="kpi"><div class="kl">📭 Unassigned</div><div class="kv" style="color:${unassigned.length?'var(--or)':'var(--gn)'}">${unassigned.length}</div></div>
-    <div class="kpi"><div class="kl">🚛 Trucks</div><div class="kv" style="color:var(--pu)">${trucks.size}</div></div>
-    <div class="kpi"><div class="kl">📦 Kits</div><div class="kv" style="color:var(--cy)">${kits.size}</div></div>`;
-  document.getElementById('shipCount').textContent=assigned.length+' assigned';
 
-  // Group by primary assignment: LM truck > kit > LP truck
-  const groups={};
-  for(const d of assigned){
-    const key=d.linkedTruck||d.linkedKit||d.linkedLP||'?';
-    if(!groups[key])groups[key]={label:key,isLP:!!d.linkedLP&&!d.linkedTruck&&!d.linkedKit,isTruck:!!d.linkedTruck,isKit:!!d.linkedKit&&!d.linkedTruck,items:[]};
-    groups[key].items.push(d);
-  }
-  const sortedGroups=Object.values(groups).sort((a,b)=>a.label.localeCompare(b.label));
-
-  let h='';
-  // Assigned groups
-  for(const g of sortedGroups){
-    const totalQty=g.items.reduce((s,d)=>s+d.qty,0);
-    const venues=[...new Set(g.items.map(d=>d.venue))].join(', ');
-    const _gLocked=_faIsLocked(g.label);
-    const _lockBadge=g.isTruck?(_gLocked?' <span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:2px 6px;border-radius:3px">🔒 LOCKED</span>':' <span style="font-size:9px;font-weight:700;color:#fff;background:var(--or);padding:2px 6px;border-radius:3px">⚠ UNLOCKED</span>'):'';
-    const badge=(g.isTruck?'<span class="bg bg-pu">🚛 '+g.label+'</span>':'<span class="bg bg-gn">📦 '+g.label+'</span>')+_lockBadge;
-    h+=`<div class="card" style="margin-bottom:8px" data-search="${g.label} ${venues} ${g.items.map(d=>d.sku+' '+d.name).join(' ')}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        ${badge}
-        <span class="bg bg-gy">${g.items.length} items</span>
-        <span class="bg bg-gy">${totalQty.toLocaleString()} qty</span>
-        <span class="bg bg-pu">${g.items.reduce((s,d)=>s+(d.pallets||0),0).toFixed(1)} plt</span>
-        <span style="font-size:10px;color:var(--ts)">📍 ${venues}</span>
-        <button class="rbtn" onclick="FA_exportOORGroup('${g.label.replace(/'/g,"\\'")}')" style="margin-left:auto;background:var(--os);color:var(--or);border-color:#F5D6B8;padding:3px 8px;font-size:10px">⬇ OOR</button>
-      </div>
-      <table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th></tr></thead><tbody>`;
-    for(const d of g.items){
-      const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
-      h+=`<tr style="cursor:pointer" onclick="FA_editDemand(${d.id})"><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td><td class="mono fw6" style="text-align:right">${d.qty}</td><td class="mono" style="text-align:right;color:var(--pu)">${d.pallets?d.pallets.toFixed(1):'—'}</td><td>${biDisp}</td></tr>`;
-    }
-    h+=`</tbody></table></div>`;
-  }
-
-  // Unassigned section
-  if(unassigned.length){
-    h+=`<div class="card" style="margin-bottom:8px;border-color:var(--or)" data-search="${unassigned.map(d=>d.sku+' '+d.name+' '+d.venue).join(' ')}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span class="bg bg-or">📭 Unassigned</span>
-        <span class="bg bg-gy">${unassigned.length} items</span>
-        <span class="bg bg-gy">${unassigned.reduce((s,d)=>s+d.qty,0).toLocaleString()} qty</span>
-      </div>
-      <table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>FA</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th><th>BI Date</th></tr></thead><tbody>`;
-    for(const d of unassigned){
-      const biDisp=d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
-      h+=`<tr style="cursor:pointer" onclick="FA_editDemand(${d.id})"><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td>${d.venue}</td><td style="color:var(--pu)">${d.fa||'—'}</td><td class="mono fw6" style="text-align:right">${d.qty}</td><td class="mono" style="text-align:right;color:var(--pu)">${d.pallets?d.pallets.toFixed(1):'—'}</td><td>${biDisp}</td></tr>`;
-    }
-    h+=`</tbody></table></div>`;
-  }
-
-  if(!FA_DEMAND.length)h='<div style="color:var(--tt);padding:20px;text-align:center">No demand items yet. Add demand first, then assign to trucks/kits.</div>';
-  document.getElementById('shipGrid').innerHTML=h;
-  FA_filterShip();
+// LP destination abbreviation from venue name (for SKU generation)
+const _FA_LP_ABBRS={toronto:'TOR',vancouver:'VAN','mexico city':'CDMX',guadalajara:'GDL',monterrey:'MTY','kansas city':'KC',houston:'HOU','new york':'NY'};
+function _faVenueToLPAbbr(venue){
+  const vl=(venue||'').toLowerCase();
+  for(const[city,abbr]of Object.entries(_FA_LP_ABBRS)){if(vl.includes(city))return abbr}
+  // Try cluster match
+  const ml=FA_ML3K_VENUES.find(v=>v.name===venue);
+  if(ml&&ml.cluster){const cl=ml.cluster.toLowerCase();for(const[city,abbr]of Object.entries(_FA_LP_ABBRS)){if(cl.includes(city))return abbr}}
+  return null;// non-LP venue (Dallas direct, IBC, etc.)
 }
-function FA_filterShip(){
-  const q=(document.getElementById('shipSearch').value||'').toLowerCase();
-  document.querySelectorAll('#shipGrid .card').forEach(c=>{
-    c.style.display=!q||c.getAttribute('data-search').toLowerCase().includes(q)?'':'none';
+
+// Generate group SKU: FA-{FA}-{DEST}-G{id}
+function _faGroupSku(fa,venue,id){
+  const abbr=_faVenueToLPAbbr(venue)||'DFW';
+  return'FA-'+(fa||'OTH').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4)+'-'+abbr+'-G'+id;
+}
+
+// Auto-generate groups from demand. Preserves existing locked groups.
+function FA_buildGroups(){
+  // Index locked groups (assigned to locked truck) — these are immutable
+  const lockedGrpIds=new Set();
+  for(const g of FA_GROUPS){
+    if((g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM)))lockedGrpIds.add(g.id);
+  }
+  // Collect demand IDs already in locked groups
+  const lockedDemIds=new Set();
+  for(const g of FA_GROUPS){if(lockedGrpIds.has(g.id)){for(const did of g.items||[])lockedDemIds.add(did)}}
+  // Keep locked groups as-is
+  const kept=FA_GROUPS.filter(g=>lockedGrpIds.has(g.id));
+  // Build new groups from ungrouped demand
+  const ungrouped=FA_DEMAND.filter(d=>!lockedDemIds.has(d.id));
+  const newGroups={};// key → {venue, biDate, fa, items:[]}
+  for(const d of ungrouped){
+    const key=(d.venue||'')+'|'+(d.biDate||'')+'|'+(d.fa||'');
+    if(!newGroups[key])newGroups[key]={venue:d.venue,biDate:d.biDate,fa:d.fa||'',items:[]};
+    newGroups[key].items.push(d.id);
+  }
+  // Merge with existing open groups (preserve pallets + truck assignments if key matches)
+  const oldOpen={};// key → group (for preserving manual pallets)
+  for(const g of FA_GROUPS){
+    if(lockedGrpIds.has(g.id))continue;
+    const key=(g.venue||'')+'|'+(g.biDate||'')+'|'+(g.fa||'');
+    oldOpen[key]=g;
+  }
+  const built=[];
+  for(const[key,ng] of Object.entries(newGroups)){
+    if(!ng.items.length)continue;
+    const old=oldOpen[key];
+    built.push({
+      id:old?.id||_faGroupNextId++,
+      venue:ng.venue,
+      biDate:ng.biDate,
+      fa:ng.fa,
+      sku:old?.sku||_faGroupSku(ng.fa,ng.venue,old?.id||(_faGroupNextId-1)),
+      pallets:old?.pallets||0,
+      items:ng.items,
+      linkedLP:old?.linkedLP||null,
+      linkedLM:old?.linkedLM||null,
+      created:old?.created||new Date().toISOString()
+    });
+    // Remove from oldOpen so we know which are stale
+    delete oldOpen[key];
+  }
+  FA_GROUPS=[...kept,...built];
+  // Regenerate SKUs for new groups that didn't have one
+  for(const g of FA_GROUPS){if(!g.sku)g.sku=_faGroupSku(g.fa,g.venue,g.id)}
+}
+
+// Regenerate groups (user-triggered)
+function FA_regenGroups(){
+  FA_buildGroups();
+  FA_saveGroups();
+  FA_render();
+}
+
+// Edit group (pallets + truck assignments)
+function FA_editGroup(id){
+  const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
+  const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM));
+  const _fmtD=dt=>{if(!dt)return'';try{return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return dt}};
+  const relLP=_faLPTrucksForVenue(g.venue);
+  const lpOpts=relLP.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
+  const relLM=_faTrucksForVenue(g.venue);
+  const lmOpts=relLM.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
+  const relKits=_faKitsForVenue(g.venue);
+  const kitOpts=relKits.map(k=>`<option value="${k.sku||k.id}">${k.sku||k.id} — ${k.venue} — ${k.type}${k.truckRef?' · 🚛 '+k.truckRef:''}</option>`).join('');
+  // Items in this group
+  const items=FA_DEMAND.filter(d=>g.items&&g.items.includes(d.id));
+  let itemRows='';
+  for(const d of items){itemRows+=`<tr><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td class="mono" style="text-align:right">${d.qty}</td></tr>`}
+  const h=`<div class="modal-ov">
+    <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Group: ${g.sku}</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
+    ${isLocked?'<div style="padding:6px 10px;background:var(--gs);border:1px solid #B8DFCA;border-radius:6px;font-size:11px;color:var(--gn);margin-bottom:10px">🔒 This group is locked — assigned truck is dispatched. Data is immutable.</div>':''}
+    <div style="padding:6px 0 4px;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Group Info</div>
+    <div class="form-row"><span class="form-label">Venue</span><input type="text" value="${g.venue}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
+    <div class="form-row"><span class="form-label">FA</span><input type="text" value="${g.fa}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
+    <div class="form-row"><span class="form-label">BI Date</span><input type="text" value="${_fmtD(g.biDate)}" style="width:160px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">SKU</span><input type="text" value="${g.sku}" class="mono" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
+    <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">Capacity Reservation</div>
+    <div class="form-row"><span class="form-label">Pallets</span><input type="number" id="_faGrpPlt" value="${g.pallets||0}" min="0" max="26" step="0.1" style="width:80px;font-family:var(--fm)"${isLocked?' readonly style="width:80px;font-family:var(--fm);background:var(--bg);color:var(--ts)"':''}></div>
+    <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">① LP Truck (Dallas → Warehouse)</div>
+    <div class="form-row"><span class="form-label">LP Truck</span>
+      <input type="text" id="_faGrpLP" value="${g.linkedLP||''}" list="_faGrpLPList" style="flex:1" placeholder="LP-42">
+      <datalist id="_faGrpLPList">${lpOpts}</datalist>
+      <span style="font-size:9px;color:var(--tt)">${relLP.length} LP</span>
+    </div>
+    <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">② LM Truck (Warehouse → Venue)</div>
+    <div class="form-row"><span class="form-label">LM Truck</span>
+      <input type="text" id="_faGrpLM" value="${g.linkedLM||''}" list="_faGrpLMList" style="flex:1" placeholder="LM Houston · LSR-001">
+      <datalist id="_faGrpLMList">${lmOpts}</datalist>
+      <span style="font-size:9px;color:var(--tt)">${relLM.length} LM</span>
+    </div>
+    <div class="form-row"><span class="form-label">Kit</span>
+      <input type="text" id="_faGrpKit" value="${g.linkedKit||''}" list="_faGrpKitList" style="flex:1" placeholder="FNKIT-002-42" onchange="FA_grpKitAutoLM()">
+      <datalist id="_faGrpKitList">${kitOpts}</datalist>
+      <span style="font-size:9px;color:var(--tt)">${relKits.length} kits</span>
+    </div>
+    <div style="padding:8px 0 4px;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Items (${items.length})</div>
+    <div style="max-height:200px;overflow-y:auto"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th style="text-align:right">Qty</th></tr></thead><tbody>${itemRows}</tbody></table></div>
+    <div class="modal-actions"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveGroupEdit(${id})">Save</button></div>
+    </div></div>`;
+  document.getElementById('faModal').innerHTML=h;
+}
+function FA_grpKitAutoLM(){
+  const kitVal=document.getElementById('_faGrpKit').value.trim();
+  if(!kitVal)return;
+  const lmEl=document.getElementById('_faGrpLM');
+  if(!lmEl||lmEl.value)return;// don't overwrite existing
+  // Find kit by SKU or numeric ID
+  const kit=FA_ML3K_KITS.find(k=>k.sku===kitVal||String(k.id)===kitVal);
+  if(!kit)return;
+  // Locked kit → use truckRef directly
+  if(kit.truckRef){lmEl.value=kit.truckRef;return}
+  // Unlocked kit → find first LM truck matching kit venue
+  const lmTrucks=_faTrucksForVenue(kit.venue);
+  if(lmTrucks.length===1)lmEl.value=lmTrucks[0].id;// auto-fill only if exactly 1 match
+}
+function FA_saveGroupEdit(id){
+  const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
+  g.pallets=parseFloat(document.getElementById('_faGrpPlt').value)||0;
+  g.linkedLP=document.getElementById('_faGrpLP').value.trim()||null;
+  g.linkedLM=document.getElementById('_faGrpLM').value.trim()||null;
+  g.linkedKit=document.getElementById('_faGrpKit').value.trim()||null;
+  document.getElementById('faModal').innerHTML='';
+  FA_saveGroups();FA_render();
+}
+
+// Render Delivery Groups tab
+function FA_renderGroups(){
+  // Auto-build groups if none exist but demand does
+  if(!FA_GROUPS.length&&FA_DEMAND.length)FA_buildGroups();
+  const totalPlt=FA_GROUPS.reduce((s,g)=>s+(g.pallets||0),0);
+  const lpAssigned=FA_GROUPS.filter(g=>g.linkedLP).length;
+  const lmAssigned=FA_GROUPS.filter(g=>g.linkedLM).length;
+  const locked=FA_GROUPS.filter(g=>(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))).length;
+  document.getElementById('grpKpis').innerHTML=`
+    <div class="kpi"><div class="kl">📐 Groups</div><div class="kv" style="color:var(--cy)">${FA_GROUPS.length}</div></div>
+    <div class="kpi"><div class="kl">📦 Total Pallets</div><div class="kv" style="color:var(--ac)">${totalPlt}</div></div>
+    <div class="kpi"><div class="kl">📦 LP Assigned</div><div class="kv" style="color:#2563eb">${lpAssigned}</div></div>
+    <div class="kpi"><div class="kl">🚛 LM Assigned</div><div class="kv" style="color:var(--pu)">${lmAssigned}</div></div>
+    <div class="kpi"><div class="kl">🔒 Locked</div><div class="kv" style="color:var(--gn)">${locked}</div></div>`;
+  document.getElementById('grpCount').textContent=FA_GROUPS.length+' groups';
+
+  if(!FA_GROUPS.length){
+    document.getElementById('grpTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No groups yet. Add demand items first, then click <b>⟳ Regenerate</b> to create delivery groups.</div>';return;
+  }
+
+  const _fmtD=dt=>{if(!dt)return'—';try{return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return dt}};
+  // Build truck date lookups
+  const _lpTruckMap={};for(const t of window._faLPTrucks||[]){_lpTruckMap[t.id]=t}
+  const _lmTruckMap={};for(const t of FA_ML3K_TRUCKS){_lmTruckMap[t.id]=t}
+  // Fuzzy LM truck lookup (linkedLM may include LSR suffix not in truck ID)
+  const _lmFind=ref=>{if(!ref)return null;if(_lmTruckMap[ref])return _lmTruckMap[ref];for(const t of FA_ML3K_TRUCKS){if(ref.includes(t.id)||t.id.includes(ref))return t}return null}
+  let h='<table class="dtb"><thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th>Dispatch</th><th>Delivery</th><th style="text-align:right">Items</th><th style="text-align:center">Pallets</th><th>LP Truck</th><th>LM Truck</th><th>Kit</th><th>Status</th></tr></thead><tbody>';
+  const sorted=[...FA_GROUPS].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue));
+  for(const g of sorted){
+    const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM));
+    const lpDisp=g.linkedLP?'<span class="bg" style="background:#EFF6FF;color:#2563eb;border:1px solid #BFDBFE">'+g.linkedLP+'</span>'+(isLocked&&g.linkedLP&&_faIsLocked(g.linkedLP)?' 🔒':''):'<span style="color:var(--tt)">—</span>';
+    const lmDisp=g.linkedLM?'<span class="bg bg-pu">'+g.linkedLM+'</span>'+(isLocked&&g.linkedLM&&_faIsLocked(g.linkedLM)?' 🔒':''):'<span style="color:var(--tt)">—</span>';
+    const kitDisp=g.linkedKit?'<span class="bg bg-gn">📦 '+g.linkedKit+'</span>':'<span style="color:var(--tt)">—</span>';
+    const statusBadge=isLocked?'<span class="bg bg-gn">🔒 Locked</span>':g.linkedLP||g.linkedLM?'<span class="bg bg-cy">Assigned</span>':g.pallets>0?'<span class="bg bg-or">Pallets set</span>':'<span class="bg bg-gy">Open</span>';
+    h+=`<tr data-search="${g.sku} ${g.venue} ${g.fa} ${g.linkedLP||''} ${g.linkedLM||''} ${g.linkedKit||''}" style="cursor:pointer" onclick="FA_editGroup(${g.id})">
+      <td class="mono fw6" style="color:var(--cy)">${g.sku}</td>
+      <td>${g.venue}</td>
+      <td style="color:var(--pu)">${g.fa||'—'}</td>
+      <td>${_fmtD(g.biDate)}</td>
+      <td>${(()=>{const lp=g.linkedLP&&_lpTruckMap[g.linkedLP]?_lpTruckMap[g.linkedLP].date:null;const lm=_lmFind(g.linkedLM);const lmD=lm?lm.date:null;const d=lp&&lmD?(lp<lmD?lp:lmD):lp||lmD;return d?_fmtD(d):'<span style="color:var(--tt)">—</span>'})()}</td>
+      <td>${(()=>{const t=_lmFind(g.linkedLM);return t?_fmtD(t.biDate||t.date):'<span style="color:var(--tt)">—</span>'})()}</td>
+      <td class="mono" style="text-align:right">${(g.items||[]).length}</td>
+      <td style="text-align:center"><span class="mono fw6" style="color:${g.pallets>0?'var(--ac)':'var(--tt)'}">${g.pallets||0}</span></td>
+      <td>${lpDisp}</td>
+      <td>${lmDisp}</td>
+      <td>${kitDisp}</td>
+      <td>${statusBadge}</td></tr>`;
+  }
+  h+='</tbody></table>';
+  document.getElementById('grpTable').innerHTML=h;
+  FA_filterGroups();
+}
+function FA_filterGroups(){
+  const q=(document.getElementById('grpSearch').value||'').toLowerCase();
+  document.querySelectorAll('#grpTable tbody tr').forEach(r=>{
+    r.style.display=!q||r.getAttribute('data-search').toLowerCase().includes(q)?'':'none';
   });
 }
 
@@ -826,7 +940,9 @@ function FA_filterShip(){
 // OOR EXPORT
 // ═══════════════════════════════════════════════════════════════
 async function FA_exportOORGroup(groupKey){
-  const items=FA_DEMAND.filter(d=>(d.linkedTruck||d.linkedKit||d.linkedLP)===groupKey);
+  // Find group by SKU
+  const grp=FA_GROUPS.find(g=>g.sku===groupKey);
+  const items=grp?FA_DEMAND.filter(d=>grp.items&&grp.items.includes(d.id)):[];
   if(!items.length)return alert('No items for '+groupKey);
   const venue=[...new Set(items.map(d=>d.venue))].join(' / ');
   if(typeof ExcelJS==='undefined')return alert('ExcelJS not loaded yet, try again');
@@ -888,10 +1004,29 @@ async function FA_exportAll(){
 
     // Demand sheet
     const ws2=wb.addWorksheet('Demand');
-    ws2.columns=[{header:'#',key:'id',width:6},{header:'SKU',key:'sku',width:18},{header:'Name',key:'name',width:30},{header:'Venue',key:'venue',width:25},{header:'FA',key:'fa',width:15},{header:'Qty',key:'qty',width:10},{header:'Pallets',key:'pallets',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Truck',key:'truck',width:14},{header:'Kit',key:'kit',width:18},{header:'Note',key:'note',width:20}];
+    ws2.columns=[{header:'#',key:'id',width:6},{header:'SKU',key:'sku',width:18},{header:'Name',key:'name',width:30},{header:'Venue',key:'venue',width:25},{header:'FA',key:'fa',width:15},{header:'Qty',key:'qty',width:10},{header:'BI Date',key:'biDate',width:14},{header:'Group',key:'group',width:18},{header:'Note',key:'note',width:20}];
     const hdr2=ws2.getRow(1);hdr2.font={bold:true,size:10};hdr2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
-    for(const d of FA_DEMAND){ws2.addRow({id:d.id,sku:d.sku,name:d.name,venue:d.venue,fa:d.fa||'',qty:d.qty,pallets:d.pallets||0,biDate:d.biDate||'',lpTruck:d.linkedLP||'',lmTruck:d.linkedTruck||'',kit:d.linkedKit||'',note:d.note||''})}
-    ws2.views=[{state:'frozen',ySplit:1}];ws2.autoFilter={from:'A1',to:'J1'};
+    const _demGrpX={};for(const g of FA_GROUPS){for(const did of g.items||[])_demGrpX[did]=g.sku}
+    for(const d of FA_DEMAND){ws2.addRow({id:d.id,sku:d.sku,name:d.name,venue:d.venue,fa:d.fa||'',qty:d.qty,biDate:d.biDate||'',group:_demGrpX[d.id]||'',note:d.note||''})}
+    ws2.views=[{state:'frozen',ySplit:1}];ws2.autoFilter={from:'A1',to:'I1'};
+
+    // Groups sheet
+    const ws3=wb.addWorksheet('Delivery Groups');
+    const _xLpMap={};for(const t of window._faLPTrucks||[]){_xLpMap[t.id]=t}
+    const _xLmFind=ref=>{if(!ref)return null;for(const t of FA_ML3K_TRUCKS){if(ref.includes(t.id)||t.id.includes(ref))return t}return null};
+    ws3.columns=[{header:'SKU',key:'sku',width:20},{header:'Venue',key:'venue',width:28},{header:'FA',key:'fa',width:12},{header:'FA BI Date',key:'biDate',width:14},{header:'Dispatch',key:'dispatch',width:14},{header:'Delivery',key:'delivery',width:14},{header:'Pallets',key:'pallets',width:10},{header:'Items',key:'items',width:8},{header:'LP Truck',key:'lp',width:14},{header:'LM Truck',key:'lm',width:28},{header:'Kit',key:'kit',width:18},{header:'Status',key:'status',width:12}];
+    const hdr3=ws3.getRow(1);hdr3.font={bold:true,size:10};hdr3.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F1F3'}};
+    for(const g of FA_GROUPS){
+      const lpT=g.linkedLP&&_xLpMap[g.linkedLP]?_xLpMap[g.linkedLP]:null;
+      const lmT=_xLmFind(g.linkedLM);
+      const lpDate=lpT?lpT.date:null;const lmDate=lmT?lmT.date:null;
+      const dispatch=lpDate&&lmDate?(lpDate<lmDate?lpDate:lmDate):lpDate||lmDate||'';
+      const delivery=lmT?(lmT.biDate||lmT.date):'';
+      const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM));
+      const status=isLocked?'Locked':g.linkedLP||g.linkedLM?'Assigned':g.pallets>0?'Pallets set':'Open';
+      ws3.addRow({sku:g.sku,venue:g.venue,fa:g.fa,biDate:g.biDate||'',dispatch,delivery,pallets:g.pallets||0,items:(g.items||[]).length,lp:g.linkedLP||'',lm:g.linkedLM||'',kit:g.linkedKit||'',status})
+    }
+    ws3.views=[{state:'frozen',ySplit:1}];ws3.autoFilter={from:'A1',to:'L1'};
 
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -916,11 +1051,13 @@ function FA_help(){
   const h=`<div class="modal-ov">
     <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>FA Goods — Help</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
     <div style="font-size:12px;line-height:1.6;color:var(--ts)">
-      <p><b>Nomenclature</b> — Upload an Excel file with FA-specific SKUs, or add manually. Columns auto-detected: SKU code, name, source, UoM, pallet qty/spc, price.</p>
-      <p style="margin-top:8px"><b>Demand</b> — Build demand per venue. Search NOM by SKU or name, set qty and bump-in date. Venues and BI dates auto-populated from ML3K data.</p>
-      <p style="margin-top:8px"><b>Assignments</b> — Assign each demand line to an existing ML3K truck (LP-42, LM-7) or kit (FNKIT-002-42). Items grouped by truck/kit in the Assignments tab.</p>
-      <p style="margin-top:8px"><b>OOR Export</b> — Generate government-template Excel per truck/kit group for warehouse outbound orders.</p>
-      <p style="margin-top:8px"><b>Data Isolation</b> — FA data is completely independent from ML3K FF&E data. Uses separate Supabase keys (fa-nom, fa-demand). ML3K venue/truck data is read-only.</p>
+      <p><b>Nomenclature</b> — Upload an Excel file with FA-specific SKUs, or add manually. Columns auto-detected: SKU code, name, source, UoM, pallet qty/spc, price. NOM reupload merges (never removes existing SKUs).</p>
+      <p style="margin-top:8px"><b>Demand</b> — Build demand per venue. Search NOM by SKU or name, set qty and bump-in date. Venues and BI dates auto-populated from ML3K data. Demand is <b>immutable</b> after creation — only notes can be edited.</p>
+      <p style="margin-top:8px"><b>Delivery Groups</b> — Auto-generated from demand by <b>venue + BI date + FA area</b>. Each group is an indivisible delivery block. Set <b>pallets</b> manually (capacity reservation). Assign to <b>LP Truck</b> (Dallas → warehouse), <b>LM Truck</b> (warehouse → venue), and/or <b>Kit</b>. Groups with 0 pallets are excluded from LP/LM engine injection. Locked groups (assigned to dispatched truck) preserve items during regeneration — new demand for the same venue+date+FA creates a new group.</p>
+      <p style="margin-top:8px"><b>Dates</b> — <b>FA BI Date</b>: when FA items are requested. <b>Dispatch</b>: earliest of LP or LM truck dispatch. <b>Delivery</b>: LM truck bump-in date (when items arrive at venue).</p>
+      <p style="margin-top:8px"><b>OOR Export</b> — Generate government-template Excel per delivery group for warehouse outbound orders.</p>
+      <p style="margin-top:8px"><b>Excel Export</b> — Full export with 3 sheets: Nomenclature, Demand (with group assignment), Delivery Groups (with dispatch/delivery dates, truck/kit assignments, status).</p>
+      <p style="margin-top:8px"><b>Data Isolation</b> — FA data is independent from ML3K FF&E data. Uses separate Supabase keys (fa-nom, fa-demand, fa-groups). ML3K reads groups for LP/LM capacity reservations and truck badge display.</p>
     </div>
     <div class="modal-actions"><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Close</button></div>
     </div></div>`;
@@ -935,7 +1072,7 @@ if(_faIsViewer())document.body.classList.add('viewer');
 document.getElementById('faRoleBadge').innerHTML=FA_ROLE==='admin'?'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--ac);padding:1px 6px;border-radius:3px">Admin</span>':'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:1px 6px;border-radius:3px">Viewer</span>';
 
 (async function(){
-  try{await Promise.all([FA_load(),FA_loadML3K()])}catch(e){console.warn('FA init:',e);FA_updateStatus(false);FA_render()}
+  try{await Promise.all([FA_load(),FA_loadML3K()]);FA_render()}catch(e){console.warn('FA init:',e);FA_updateStatus(false);FA_render()}
 })();
 </script>
 </body>

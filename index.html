@@ -574,37 +574,67 @@ var FA_LINKED={};// {truckRef: {count,qty}, kitId: {count,qty}}
 async function FA_loadLinked(){
   try{
     if(!SB)return;
-    const{data,error}=await SB.from('shared_state').select('value').eq('id','fa-demand').maybeSingle();
-    if(error||!data)return;
-    const d=JSON.parse(data.value);
-    const items=d.items||[];
-    FA_LINKED={_byVenue:{},_items:items};
-    for(const it of items){
-      const plt=it.pallets||0;const fa=it.fa||'FA';
-      if(it.linkedLP){const k=it.linkedLP;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
-      if(it.linkedTruck){const k=it.linkedTruck;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
-      if(it.linkedKit){const k=it.linkedKit;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count++;FA_LINKED[k].qty+=it.qty||0;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
-      if(it.venue){const v=it.venue;if(!FA_LINKED._byVenue[v])FA_LINKED._byVenue[v]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED._byVenue[v].count++;FA_LINKED._byVenue[v].qty+=it.qty||0;FA_LINKED._byVenue[v].plt+=plt;FA_LINKED._byVenue[v].fas.add(fa)}
+    const[demRes,grpRes]=await Promise.all([
+      SB.from('shared_state').select('value').eq('id','fa-demand').maybeSingle(),
+      SB.from('shared_state').select('value').eq('id','fa-groups').maybeSingle()
+    ]);
+    const items=demRes?.data?JSON.parse(demRes.data.value).items||[]:[];
+    const groups=grpRes?.data?JSON.parse(grpRes.data.value).items||[]:[];
+    FA_LINKED={_byVenue:{},_items:items,_groups:groups};
+    // Build item lookup by ID
+    const itemById={};for(const it of items)itemById[it.id]=it;
+    // Index by group truck assignments (source of truth for LP/LM linking)
+    for(const g of groups){
+      const grpItems=(g.items||[]).map(id=>itemById[id]).filter(Boolean);
+      const totalQty=grpItems.reduce((s,it)=>s+(it.qty||0),0);
+      const plt=g.pallets||0;const fa=g.fa||'FA';
+      if(g.linkedLP){const k=g.linkedLP;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count+=grpItems.length;FA_LINKED[k].qty+=totalQty;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
+      if(g.linkedLM){const k=g.linkedLM;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count+=grpItems.length;FA_LINKED[k].qty+=totalQty;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
+      if(g.linkedKit){const k=g.linkedKit;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count+=grpItems.length;FA_LINKED[k].qty+=totalQty;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
+      // By venue
+      if(g.venue){const v=g.venue;if(!FA_LINKED._byVenue[v])FA_LINKED._byVenue[v]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED._byVenue[v].count+=grpItems.length;FA_LINKED._byVenue[v].qty+=totalQty;FA_LINKED._byVenue[v].plt+=plt;FA_LINKED._byVenue[v].fas.add(fa)}
     }
-    if(Object.keys(FA_LINKED).length)console.log('[ML3K] FA linked:',Object.keys(FA_LINKED).length,'trucks/kits');
+    if(Object.keys(FA_LINKED).length>3)console.log('[ML3K] FA linked:',Object.keys(FA_LINKED).length-3,'trucks/groups');
   }catch(e){console.warn('[ML3K] FA load error:',e)}
 }
 function _faHasKit(kitId){return FA_LINKED[kitId]||null}
 function _faVenueCount(venue){if(!FA_LINKED._byVenue)return null;return FA_LINKED._byVenue[venue]||null}
-function _faItemsForKit(kitId){return(FA_LINKED._items||[]).filter(it=>it.linkedKit===kitId).map(it=>({sku:it.sku,name:it.name,qty:it.qty,pallets:it.pallets||0,biDate:it.biDate||'',venue:it.venue||'',src:'FA',uom:'Each'}))}
+function _faItemsForKit(kitId){
+  const groups=FA_LINKED._groups||[];const items=FA_LINKED._items||[];
+  if(!groups.length)return[];
+  const itemById={};for(const it of items)itemById[it.id]=it;
+  const result=[];
+  for(const g of groups){
+    if(g.linkedKit!==kitId)continue;
+    for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'})}
+  }
+  return result;
+}
 function _faItemsForTruck(truckId,dest,lsr){
-  const items=FA_LINKED._items||[];if(!items.length)return[];
-  return items.filter(it=>{
-    if(it.linkedTruck){
-      if(it.linkedTruck===truckId)return true;
-      const hasRef=it.linkedTruck.includes('·');
-      if(hasRef&&lsr&&it.linkedTruck.includes(lsr))return true;
-      if(!hasRef&&dest&&it.linkedTruck==='LM '+dest)return true;
-      return false;
+  // Match via groups: find groups whose linkedLP or linkedLM matches this truck
+  const groups=FA_LINKED._groups||[];const items=FA_LINKED._items||[];
+  if(!groups.length)return[];
+  const itemById={};for(const it of items)itemById[it.id]=it;
+  const result=[];
+  for(const g of groups){
+    let match=false;
+    // LP truck match
+    if(g.linkedLP&&g.linkedLP===truckId)match=true;
+    // LM truck match
+    if(g.linkedLM){
+      if(g.linkedLM===truckId)match=true;
+      const hasRef=g.linkedLM.includes('·');
+      if(hasRef&&lsr&&g.linkedLM.includes(lsr))match=true;
+      if(!hasRef&&dest&&g.linkedLM==='LM '+dest)match=true;
     }
-    // Unlinked: match by venue (show on all venue trucks until assigned to specific truck)
-    return dest&&it.venue===dest;
-  }).map(it=>({sku:it.sku,name:it.name,qty:it.qty,pallets:it.pallets||0,biDate:it.biDate||'',venue:it.venue||'',src:'FA',uom:'Each'}));
+    if(match){
+      for(const did of g.items||[]){
+        const it=itemById[did];
+        if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'});
+      }
+    }
+  }
+  return result;
 }
 function _faBadge(ref){const f=FA_LINKED[ref];if(!f)return'';return`<span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC;font-size:8px">📦 FA ${f.count} · ${f.qty}qty · ${f.plt.toFixed(1)}plt</span>`}
 // Match LM truck by scanning FA_LINKED keys + unlinked venue items
@@ -5260,8 +5290,9 @@ function _lpFaSku(faType,destAbbr,id){return'FA-'+faType+'-'+destAbbr+(id?'-'+id
 
 // Transform LP_FA_GOODS → demand rows for engine consumption
 // qty=1 (one indivisible block), palletSpc=pallets in nom → 1 unit = N pallet spaces
+// Skip groups with 0 pallets — not ready for engine
 function _lpFaDemandRows(){
-  return LP_FA_GOODS.map(fg=>({
+  return LP_FA_GOODS.filter(fg=>fg.pallets&&fg.pallets>0).map(fg=>({
     destination:_lpFaDestStr(fg.dest),
     sku:_lpFaSku(fg.faType,fg.dest,fg.id),
     requiredQty:1,
@@ -5272,20 +5303,22 @@ function _lpFaDemandRows(){
 }
 
 // Inject FA SKUs into nomenclature (virtual — does not persist to nom file)
-// pq=pallets, ps=pallets → 1 unit = entire reservation as indivisible block
+// pq=1, ps=pallets → 1 unit = entire reservation as indivisible block
+// Skip groups with 0 pallets — not ready for engine
 function _lpFaInjectNom(nom){
   for(const fg of LP_FA_GOODS){
-    const plt=fg.pallets||1;
+    if(!fg.pallets||fg.pallets<=0)continue;
     const sku=_lpFaSku(fg.faType,fg.dest,fg.id);
-    if(!nom[sku])nom[sku]={name:'FA: '+(LP_FA_TYPE_LABELS[fg.faType]||fg.faType)+' Reserve #'+fg.id+' ('+fg.dest+')',source:'FA Goods',palletQty:1,palletSpc:plt,hsCode:'',country:'',unitPrice:0,ppu:1,_fa:true};
+    if(!nom[sku])nom[sku]={name:'FA: '+(LP_FA_TYPE_LABELS[fg.faType]||fg.faType)+' Reserve #'+fg.id+' ('+fg.dest+')',source:'FA Goods',palletQty:1,palletSpc:fg.pallets,hsCode:'',country:'',unitPrice:0,ppu:1,_fa:true};
   }
 }
 
 // Create synthetic arrival rows for FA goods (available today)
 // qty=1 (one block) — palletSpc in nom controls how many pallet spaces it occupies
+// Skip groups with 0 pallets — not ready for engine
 function _lpFaArrivalRows(){
   const today=new Date().toISOString().slice(0,10);
-  return LP_FA_GOODS.map(fg=>({
+  return LP_FA_GOODS.filter(fg=>fg.pallets&&fg.pallets>0).map(fg=>({
     sku:_lpFaSku(fg.faType,fg.dest,fg.id),
     container:'FA-RESERVE',
     arrivalDate:today,
@@ -11353,7 +11386,7 @@ function LM_toggleDispatchTruck(truckIdx,checked){
     LM_dispatched.add(fp);
     // Snapshot truck data — frozen across all future rebuilds
     const snapItems=t.items.map(it=>{const n=NOM[it.sku];const _kit=n?._kitId?LM_getKitById(n._kitId):null;return{...it,_kitId:n?._kitId||null,_kitNom:!!n?._kitNom,_kitVenue:_kit?.venue||null,_kitItems:_kit?JSON.parse(JSON.stringify(_kit.items)):null}});
-    LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:t.dd,dKey:t.dKey||t.dd,destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true};
+    LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:t.dd,dKey:t.dKey||t.dd,biK:t.origBiK||t.biK||'',destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true};
   }else{
     LM_dispatched.delete(fp);delete LM_dateOverrides[fp];delete LM_lockedSnapshots[fp];
   }
