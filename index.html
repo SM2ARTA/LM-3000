@@ -513,6 +513,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
 <button class="tbtn on" onclick="LP_switchTab('plan')">🚛 Plan</button>
 <button class="tbtn" onclick="LP_switchTab('late')">⚠ Late</button>
 <button class="tbtn" onclick="LP_switchTab('status')">📊 Status</button>
+<button class="tbtn admin-only" onclick="LP_switchTab('fa')">📐 FA Goods</button>
 </div>
 <div class="lp-main" id="lpMain"></div>
 </div>
@@ -708,6 +709,8 @@ function _undoSnap(){
     lp_transitDays:JSON.stringify(LP_transitDays||{}),
     lp_destWhsDays:JSON.stringify(LP_destWhsDays||{}),
     lp_lastGenSettings:JSON.stringify(LP_lastGenSettings||{}),
+    lp_faGoods:JSON.stringify(LP_FA_GOODS||[]),
+    lp_faNextId:_lpFaNextId,
     lm_vs:JSON.stringify(VS||{}),
     lm_excluded:JSON.stringify([...(LM_excluded||[])]),
     lm_exclOvr:JSON.stringify(LM_excludeUserOvr||{}),
@@ -777,6 +780,7 @@ function UNDO_restore(){
     LP_applyContDateOverrides();
     LP_applyPalletOverrides();
     if(snap.lp_lastGenSettings)LP_lastGenSettings=JSON.parse(snap.lp_lastGenSettings);else LP_snapshotSettings();
+    if(snap.lp_faGoods){LP_FA_GOODS=JSON.parse(snap.lp_faGoods);_lpFaNextId=snap.lp_faNextId||1}
     // Restore LM
     VS=JSON.parse(snap.lm_vs);
     LM_excluded=new Set(JSON.parse(snap.lm_excluded));
@@ -807,6 +811,7 @@ function UNDO_restore(){
     if(Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();numberAll()}
     // Save restored state (fullSave=true to persist restored NOM+RW)
     LP_saveToSupabase();
+    LP_saveFaGoods();
     saveSharedData(true);
     LM_saveDateOverrides();
     MI_save();
@@ -1423,8 +1428,8 @@ function _lpTailReconstruct(plan,maxPlt){
       _wfByTruck[t.id]=snap;
       // OOR trucks don't deduct
       if(oor.has(t.id))continue;
-      // Deduct
-      const agg={};for(const r of t.items){agg[r.sku]=(agg[r.sku]||0)+(r.qty||0)}
+      // Deduct (skip FA capacity reserve SKUs — not real stock)
+      const agg={};for(const r of t.items){if(!_lpIsFaSku(r.sku))agg[r.sku]=(agg[r.sku]||0)+(r.qty||0)}
       const canFill=Object.keys(agg).every(sku=>(_wfPool[sku]||0)>=agg[sku]);
       if(canFill){for(const sku in agg)_wfPool[sku]=(_wfPool[sku]||0)-agg[sku]}
     }
@@ -1664,6 +1669,13 @@ function _lpTailReconstruct(plan,maxPlt){
       if(r.truckId===idB)ttB+=(r.pallets||0);
     }
     ttA=Math.round(ttA*10000)/10000;ttB=Math.round(ttB*10000)/10000;
+
+    // Guard: if reconstruction created an overflow, skip this pair and keep original
+    if(ttA>maxPlt||ttB>maxPlt){
+      log.push({dest,date,action:'skipped-overflow',idA,idB,pltA,pltB,newA:ttA,newB:ttB});
+      skipCount++;continue;
+    }
+
     for(const r of newPairRows){
       if(r.truckId===idA)r.truckTotal=ttA;
       if(r.truckId===idB)r.truckTotal=ttB;
@@ -1711,10 +1723,13 @@ function _lpTailReconstruct(plan,maxPlt){
     if(Math.abs((snapPlt[d]||0)-(chkPlt[d]||0))>0.01){ok=false;violations.push('pallet mismatch: '+d)}
   }
 
-  // I3: no truck exceeds maxPlt
+  // I3: no truck exceeds maxPlt (skip trucks that were already overflowing in input)
+  const _inputTT={};for(const r of plan)_inputTT[r.truckId]=(_inputTT[r.truckId]||0)+(r.pallets||0);
   const chkTT={};for(const r of out)chkTT[r.truckId]=(chkTT[r.truckId]||0)+(r.pallets||0);
   for(const id of Object.keys(chkTT)){
-    if(Math.round(chkTT[id]*100)/100>maxPlt){ok=false;violations.push('truck overflow: '+id)}
+    const _inPlt=Math.round((_inputTT[id]||0)*100)/100;
+    const _outPlt=Math.round(chkTT[id]*100)/100;
+    if(_outPlt>maxPlt&&_inPlt<=maxPlt){ok=false;violations.push('truck overflow: '+id)}
   }
 
   // I4: protected trucks (locked + OOR) identical
@@ -1876,10 +1891,12 @@ function _lpTailMerge(plan,maxPlt){
     if(Math.abs((snapPlt[d]||0)-(chkPlt[d]||0))>0.01){ok=false;violations.push('pallet mismatch: '+d)}
   }
 
-  // I3: no truck exceeds maxPlt
+  // I3: no truck exceeds maxPlt (skip trucks that were already overflowing in input)
+  const _inputTT={};for(const r of plan)_inputTT[r.truckId]=(_inputTT[r.truckId]||0)+(r.pallets||0);
   const chkTT={};for(const r of out)chkTT[r.truckId]=(chkTT[r.truckId]||0)+(r.pallets||0);
   for(const id of Object.keys(chkTT)){
-    if(Math.round(chkTT[id]*100)/100>maxPlt){ok=false;violations.push('truck overflow: '+id)}
+    const _wasOver=Math.round((_inputTT[id]||0)*100)/100>maxPlt;
+    if(!_wasOver&&Math.round(chkTT[id]*100)/100>maxPlt){ok=false;violations.push('truck overflow: '+id)}
   }
 
   // I4: locked trucks identical
@@ -2061,10 +2078,12 @@ function _lpTailRebalance(plan,maxPlt){
     if(Math.abs((snapPlt[d]||0)-(chkPlt[d]||0))>0.01){ok=false;violations.push('pallet mismatch: '+d)}
   }
 
-  // I3: no truck exceeds maxPlt
+  // I3: no truck exceeds maxPlt (skip trucks that were already overflowing in input)
+  const _inputTT={};for(const r of plan)_inputTT[r.truckId]=(_inputTT[r.truckId]||0)+(r.pallets||0);
   const chkTT={};for(const r of out)chkTT[r.truckId]=(chkTT[r.truckId]||0)+(r.pallets||0);
   for(const id of Object.keys(chkTT)){
-    if(Math.round(chkTT[id]*100)/100>maxPlt){ok=false;violations.push('truck overflow: '+id)}
+    const _wasOver=Math.round((_inputTT[id]||0)*100)/100>maxPlt;
+    if(!_wasOver&&Math.round(chkTT[id]*100)/100>maxPlt){ok=false;violations.push('truck overflow: '+id)}
   }
 
   // I4: locked trucks identical
@@ -2223,6 +2242,11 @@ const LP_TRANSIT_DEFAULTS={TOR:7,VAN:7,CDMX:7,GDL:7,MTY:7,KC:1,HOU:1,NY:3};
 let LP_transitDays={...LP_TRANSIT_DEFAULTS};// dest abbr -> transit days (editable)
 const LP_DEST_WHS_DEFAULTS={TOR:3,VAN:3,CDMX:3,GDL:3,MTY:3,KC:3,HOU:3,NY:3};
 let LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};// dest abbr -> satellite WHS processing days
+// ── FA Goods: planning-layer pallet reservations (capacity reserves, not physical goods) ──
+const LP_FA_TYPES=['TEC','CPM','BRC','WKF','SEC','MED','HOS','TRN','OTH'];// FA area types
+const LP_FA_TYPE_LABELS={TEC:'Technology',CPM:'Competition',BRC:'Broadcast',WKF:'Workforce',SEC:'Security',MED:'Media',HOS:'Hospitality',TRN:'Transport',OTH:'Other'};
+let LP_FA_GOODS=[];// [{id,dest,faType,pallets,notes,createdAt}] — planning-only capacity reservations
+let _lpFaNextId=1;// monotonic counter for FA goods IDs
 // Match destination string to transit abbreviation (checks both abbr and full city name)
 function LP_matchTransitAbbr(dest){
   const u=(dest||'').toUpperCase();
@@ -3908,7 +3932,7 @@ function LP_render(){
   // Sync tab button highlighting
   document.querySelectorAll('#lpTabs .tbtn').forEach(b=>{
     const txt=b.textContent.toLowerCase();
-    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='late'&&txt.includes('late'))||(LP_TAB==='status'&&txt.includes('status'));
+    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='late'&&txt.includes('late'))||(LP_TAB==='status'&&txt.includes('status'))||(LP_TAB==='fa'&&txt.includes('fa g'));
     b.classList.toggle('on',active);
   });
   switch(LP_TAB){
@@ -3916,6 +3940,7 @@ function LP_render(){
     case'demand':LP_renderDemand(el);break;
     case'late':LP_renderLate(el);break;
     case'status':LP_renderStatus(el);break;
+    case'fa':LP_renderFA(el);break;
     case'plan':LP_renderPlan(el);break;
     default:LP_renderPlan(el);
   }
@@ -3927,9 +3952,10 @@ function LP_render(){
   // Update subtitle with stats
   const sub=document.getElementById('lpSubtitle');
   if(sub&&LP_STATE.planGenerated){
+    const _subRows=LP_STATE.generatedPlan.filter(r=>!_lpIsFaSku(r.sku));
     const tks=new Set(LP_STATE.generatedPlan.map(r=>r.truckId)).size;
-    const totalPlt=LP_STATE.generatedPlan.reduce((s,r)=>s+(r.pallets||0),0);
-    const totalQty=LP_STATE.generatedPlan.reduce((s,r)=>s+(r.qty||0),0);
+    const totalPlt=_subRows.reduce((s,r)=>s+(r.pallets||0),0);
+    const totalQty=_subRows.reduce((s,r)=>s+(r.qty||0),0);
     const dests=new Set(LP_STATE.generatedPlan.map(r=>r.destination)).size;
     sub.textContent=`${tks} trucks · ${dests} destinations · ${totalPlt.toFixed(0)} pallets · ${totalQty.toLocaleString()} qty`;
   }
@@ -3982,10 +4008,12 @@ function LP_settingsChanged(){
     LP_lastGenSettings.arrDateHash!==_arrDateHash()||
     LP_lastGenSettings.transitHash!==_transitHash()||
     LP_lastGenSettings.demandHash!==_demandHash()||
-    LP_lastGenSettings.stockHash!==_stockHash();
+    LP_lastGenSettings.stockHash!==_stockHash()||
+    LP_lastGenSettings.faHash!==_faHash();
 }
+function _faHash(){return JSON.stringify(LP_FA_GOODS)}
 function LP_snapshotSettings(){
-  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash(),transitHash:_transitHash(),demandHash:_demandHash(),stockHash:_stockHash()};
+  LP_lastGenSettings={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,turnaround:LP_STATE.turnaround,ricStartDate:LP_STATE.ricStartDate,contDateHash:_contDateHash(),palletOvrHash:_palletOvrHash(),holdsHash:_holdsHash(),arrDateHash:_arrDateHash(),transitHash:_transitHash(),demandHash:_demandHash(),stockHash:_stockHash(),faHash:_faHash()};
 }
 
 // ── Helpers ──
@@ -4020,29 +4048,33 @@ function LP_regenerate(){
   if(!LP_STATE.materialPlan.length||!LP_STATE.arrivals.length)return;
   LP_recalcReadyDates();
   LP_recomputeStockHolds();
-  const _cfg={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples};
+  // ── Inject FA goods into engine inputs (planning-layer only) ──
+  const _regenNom={...LP_STATE.nomenclature};_lpFaInjectNom(_regenNom);
+  const _faDemRows=_lpFaDemandRows();
+  const _faArrRows=_lpFaArrivalRows();
+  const _cfg={maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:_regenNom,ricStartDate:LP_STATE.ricStartDate,stockSkus:_effectiveStockSkus(),holds:[...LP_holds,...LP_stockHolds],excludeStaples:LP_excludeStaples};
   try{
     const dispatchedRows=(LP_STATE.generatedPlan||[]).filter(r=>LP_dispatched.has(r.truckId));
     if(!dispatchedRows.length){
       // Nothing locked — full regenerate
-      LP_STATE.generatedPlan=_lpTailReconstruct(LP_buildPlanV3(LP_STATE.materialPlan,LP_STATE.arrivals,_cfg),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS);
+      LP_STATE.generatedPlan=_lpTailReconstruct(LP_buildPlanV3([...LP_STATE.materialPlan,..._faDemRows],[...LP_STATE.arrivals,..._faArrRows],_cfg),_cfg.maxPallets||LP_DEFAULT_MAX_PALLETS);
       LP_STATE.planGenerated=true;LP_snapshotSettings();LP_updateStockWaterfall();LP_invalidateLate();LP_render();LP_saveToSupabase();_lpNotifyLM();return;
     }
     // Aggregate locked consumption by dest+sku and by sku
     const consumedDemand={},consumedStock={};
     for(const r of dispatchedRows){const k=r.destination+'|'+r.sku;consumedDemand[k]=(consumedDemand[k]||0)+(r.qty||0);consumedStock[r.sku]=(consumedStock[r.sku]||0)+(r.qty||0)}
-    // Reduce demand (all math in UoM via effQty)
+    // Reduce demand — combine real demand with FA demand rows
     const remainDemand=[];
-    for(const d of LP_STATE.materialPlan){
+    for(const d of [...LP_STATE.materialPlan,..._faDemRows]){
       const eq=d.effQty||d.requiredQty||0;
       const k=d.destination+'|'+d.sku;const used=Math.min(consumedDemand[k]||0,eq);
       if(used>0)consumedDemand[k]-=used;
       const rem=Math.max(0,eq-used);
       if(rem>0)remainDemand.push({...d,requiredQty:rem,effQty:rem});
     }
-    // Reduce arrivals (earliest first)
+    // Reduce arrivals — include FA synthetic arrivals
     const remainArrivals=[];
-    const sortedArr=[...LP_STATE.arrivals].sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
+    const sortedArr=[...LP_STATE.arrivals,..._faArrRows].sort((a,b)=>(a.readyDate||'').localeCompare(b.readyDate||''));
     for(const a of sortedArr){const used=Math.min(consumedStock[a.sku]||0,a.qty);if(used>0)consumedStock[a.sku]-=used;const left=a.qty-used;if(left>0)remainArrivals.push({...a,qty:left})}
     const maxId=Math.max(0,...LP_dispatched);
     const lastLockedDate=dispatchedRows.reduce((m,r)=>r.date>m?r.date:m,'');
@@ -4957,10 +4989,11 @@ function LP_computeStockWaterfall(plan,stockSkus,stockQtys,oorTrucks){
     const agg=LP_aggregateTruck(t.items);
     const oor=oorTrucks.has(t.id);
     if(oor){stockStatus[t.id]={stockReady:true,oorSubmitted:true};continue}
-    const canFill=agg.every(s=>(pool[s.sku]||0)>=s.qty);
+    const _realAgg=agg.filter(s=>!_lpIsFaSku(s.sku));// FA items are planning reserves — skip stock check
+    const canFill=_realAgg.every(s=>(pool[s.sku]||0)>=s.qty);
     if(canFill){
       stockStatus[t.id]={stockReady:true,oorSubmitted:false};
-      for(const s of agg)pool[s.sku]=(pool[s.sku]||0)-s.qty;
+      for(const s of _realAgg)pool[s.sku]=(pool[s.sku]||0)-s.qty;
     }else{
       stockStatus[t.id]={stockReady:false,oorSubmitted:false};
     }
@@ -5011,10 +5044,12 @@ function LP_renderPlan(el){
   const fullCount=truckList.filter(t=>!LP_dispatched.has(t.id)&&_truckInStock(t)&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
   const noOorCount=truckList.filter(t=>LP_dispatched.has(t.id)&&!LP_oorTrucks.has(t.id)).length;
 
-  // ── KPI Summary ──
+  // ── KPI Summary (exclude FA goods from material totals) ──
+  const _faPltOnPlan=plan.filter(r=>_lpIsFaSku(r.sku)).reduce((s,r)=>s+(r.pallets||0),0);
+  const _faQtyOnPlan=plan.filter(r=>_lpIsFaSku(r.sku)).reduce((s,r)=>s+(r.qty||0),0);
   const lpTotalTrucks=truckList.length;
-  const lpTotalPlt=truckList.reduce((s,t)=>s+t.totalPlt,0);
-  const lpTotalPcs=truckList.reduce((s,t)=>s+t.totalQty,0);
+  const lpTotalPlt=truckList.reduce((s,t)=>s+t.totalPlt,0)-_faPltOnPlan;
+  const lpTotalPcs=truckList.reduce((s,t)=>s+t.totalQty,0)-_faQtyOnPlan;
   const lpDests=new Set(truckList.map(t=>t.dest)).size;
   const lpDispDays=dates.length;
   const lpAvgUtil=lpTotalTrucks>0?Math.round(truckList.reduce((s,t)=>s+(t.totalPlt/maxPlt)*100,0)/lpTotalTrucks):0;
@@ -5133,6 +5168,9 @@ function LP_renderPlan(el){
     h+='</div>';
     const mi=MI_get(MI_lpKey(t.id));
     if(mi.length)h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ '+mi.length+' manual item'+(mi.length>1?'s':'')+'</span></div>';
+    // FA Goods capacity reservation badge
+    const _faItems=aggSkus.filter(s=>_lpIsFaSku(s.sku));
+    if(_faItems.length){const _faPlt=_faItems.reduce((s,i)=>s+i.pallets,0);const _faTypes=[...new Set(_faItems.map(s=>{const p=s.sku.split('-');return LP_FA_TYPE_LABELS[p[1]]||p[1]}))];h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#FEF3EB;color:#C4550A;border:1px solid #F5D6B8">📐 FA: '+_faTypes.join(', ')+' · '+_faPlt.toFixed(1)+' plt reserved</span></div>'}
     const _lpFa=_faMatchLP(t.id);if(_lpFa){const _lpFaLabel=_lpFa.fas&&_lpFa.fas.length?_lpFa.fas.join(', '):'FA';const _lpFaDts=[...new Set(_faItemsForTruck('LP-'+t.id,'','').map(i=>i.biDate).filter(Boolean))].sort().map(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}});h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 '+_lpFaLabel+': '+_lpFa.count+' items · '+_lpFa.qty+'qty · '+_lpFa.plt.toFixed(1)+'plt'+(_lpFaDts.length?' · BI: '+_lpFaDts.join(', '):'')+'</span></div>'}
     if(ROLE==="viewer"){if(isDisp)h+='<div class="lp-dispatch-row"><span>🔒 Locked</span>'+(isOOR?' <span style="color:#2563eb;font-weight:600">OOR</span>':'')+'</div>';}
     else{h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input type="checkbox" '+checked+' onclick="event.stopPropagation();LP_toggleDispatch('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0">'+(isDisp?'🔒 Lock':'Lock')+'</span><input type="checkbox" '+(isOOR?'checked':'')+' onclick="event.stopPropagation();LP_toggleOOR('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0;color:#2563eb">'+(isOOR?'📋 OOR':'OOR')+'</span><input type="date" value="'+t.date+'" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate('+t.id+',this.value)"></div>';}
@@ -5193,6 +5231,271 @@ function LP_renderPlan(el){
   }
   html+='</div>';
   el.innerHTML=html;
+}
+
+
+/* ─────────────────────────────────────────────
+   FA GOODS TAB — Planning-layer capacity reservations
+   FA goods are NOT physical goods. They are pallet space
+   reservations that inject into the LP engine as controlled
+   dummy SKUs (FA-{TYPE}-{DEST}), with pq=1, ps=1, price=0.
+   ───────────────────────────────────────────── */
+// Fallback dest strings — used when no demand data exists yet. Must pass engine's isTruck filter (requires MEX/CAN/RIC).
+const _FA_ABBR_TO_DEST_FALLBACK={TOR:'CAN TOR',VAN:'CAN VAN',CDMX:'MEX CDMX',GDL:'MEX GDL',MTY:'MEX MTY',KC:'Kansas City / RIC',HOU:'Houston / RIC',NY:'New York New Jersey / RIC'};
+const _FA_DEST_ABBRS=Object.keys(_FA_ABBR_TO_DEST_FALLBACK);// 8 LP destinations
+// Resolve abbreviation to actual destination string from existing demand (matches engine exactly)
+function _lpFaDestStr(abbr){
+  // Find actual destination string from material plan — must pass engine's isTruck filter (MEX/CAN/RIC)
+  const _isTruck=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
+  for(const d of LP_STATE.materialPlan||[]){
+    if(_isTruck(d.destination)&&LP_matchTransitAbbr(d.destination)===abbr)return d.destination;
+  }
+  // Fallback: use canonical string that passes isTruck filter
+  return _FA_ABBR_TO_DEST_FALLBACK[abbr]||abbr;
+}
+
+// Generate deterministic SKU from FA type + destination abbreviation
+function _lpFaSku(faType,destAbbr){return'FA-'+faType+'-'+destAbbr}
+
+// Transform LP_FA_GOODS → demand rows for engine consumption
+function _lpFaDemandRows(){
+  return LP_FA_GOODS.map(fg=>({
+    destination:_lpFaDestStr(fg.dest),
+    sku:_lpFaSku(fg.faType,fg.dest),
+    requiredQty:fg.pallets||0,
+    effQty:fg.pallets||0,
+    name:'FA: '+(LP_FA_TYPE_LABELS[fg.faType]||fg.faType)+' Reserve ('+fg.dest+')',
+    _fa:true
+  }));
+}
+
+// Inject FA SKUs into nomenclature (virtual — does not persist to nom file)
+function _lpFaInjectNom(nom){
+  for(const fg of LP_FA_GOODS){
+    const sku=_lpFaSku(fg.faType,fg.dest);
+    if(!nom[sku])nom[sku]={name:'FA: '+(LP_FA_TYPE_LABELS[fg.faType]||fg.faType)+' Reserve ('+fg.dest+')',source:'FA Goods',palletQty:1,palletSpc:1,hsCode:'',country:'',unitPrice:0,ppu:1,_fa:true};
+  }
+}
+
+// Create synthetic arrival rows for FA goods (available today)
+function _lpFaArrivalRows(){
+  const today=new Date().toISOString().slice(0,10);
+  return LP_FA_GOODS.map(fg=>({
+    sku:_lpFaSku(fg.faType,fg.dest),
+    container:'FA-RESERVE',
+    arrivalDate:today,
+    readyDate:today,
+    qty:fg.pallets||0,
+    _fa:true
+  }));
+}
+
+// Check if SKU is an FA goods reservation
+function _lpIsFaSku(sku){return sku&&sku.startsWith('FA-')&&LP_FA_TYPES.some(t=>sku.startsWith('FA-'+t+'-'))}
+
+// Supabase key for FA goods
+const LP_FA_KEY='lp-fa-goods';
+
+// Save FA goods to Supabase
+async function LP_saveFaGoods(){
+  if(ROLE==='viewer'||!SB)return;
+  try{
+    const now=new Date().toISOString();
+    await SB.from('shared_state').upsert({id:LP_FA_KEY,value:JSON.stringify({items:LP_FA_GOODS,nextId:_lpFaNextId}),updated_at:now});
+  }catch(e){console.warn('FA goods save:',e)}
+}
+
+// Load FA goods from Supabase
+async function LP_loadFaGoods(){
+  if(!SB)return;
+  try{
+    const{data}=await SB.from('shared_state').select('value').eq('id',LP_FA_KEY).maybeSingle();
+    if(data){const v=JSON.parse(data.value);LP_FA_GOODS=v.items||[];_lpFaNextId=v.nextId||1}
+  }catch(e){console.warn('FA goods load:',e)}
+}
+
+// Add FA reservation
+function LP_addFaGood(dest,faType,pallets,notes){
+  if(ROLE==='viewer')return;
+  UNDO_capture();
+  // Check for existing same type+dest — merge by adding pallets
+  const existing=LP_FA_GOODS.find(g=>g.dest===dest&&g.faType===faType);
+  if(existing){existing.pallets=(existing.pallets||0)+pallets;if(notes)existing.notes=notes;}
+  else{LP_FA_GOODS.push({id:_lpFaNextId++,dest,faType,pallets:pallets||0,notes:notes||'',createdAt:new Date().toISOString()})}
+  LP_saveFaGoods();
+  if(LP_STATE.planGenerated)LP_regenerate();
+  else LP_render();
+}
+
+// Update FA reservation pallets
+function LP_updateFaPallets(id,pallets){
+  if(ROLE==='viewer')return;
+  const g=LP_FA_GOODS.find(g=>g.id===id);if(!g)return;
+  UNDO_capture();
+  g.pallets=Math.max(0,parseInt(pallets)||0);
+  LP_saveFaGoods();
+  if(LP_STATE.planGenerated)LP_regenerate();
+  else LP_render();
+}
+
+// Update FA reservation notes
+function LP_updateFaNotes(id,notes){
+  if(ROLE==='viewer')return;
+  const g=LP_FA_GOODS.find(g=>g.id===id);if(!g)return;
+  g.notes=notes||'';
+  LP_saveFaGoods();
+}
+
+// Delete FA reservation
+function LP_deleteFaGood(id){
+  if(ROLE==='viewer')return;
+  UNDO_capture();
+  LP_FA_GOODS=LP_FA_GOODS.filter(g=>g.id!==id);
+  LP_saveFaGoods();
+  if(LP_STATE.planGenerated)LP_regenerate();
+  else LP_render();
+}
+
+// ── FA Goods tab renderer ──
+function LP_renderFA(el){
+  const isViewer=ROLE==='viewer';
+  const plan=LP_STATE.generatedPlan||[];
+  // Count how many FA pallets ended up on trucks
+  const truckFa={};// dest -> {type -> placed pallets}
+  for(const r of plan){
+    if(!_lpIsFaSku(r.sku))continue;
+    const parts=r.sku.split('-');// FA-TYPE-DEST
+    const type=parts[1]||'',dest=parts[2]||'';
+    if(!truckFa[dest])truckFa[dest]={};
+    truckFa[dest][type]=(truckFa[dest][type]||0)+(r.pallets||0);
+  }
+
+  let html='<div style="padding:16px">';
+  // Header
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">';
+  html+='<div><h2 style="font-size:18px;font-weight:700;margin:0">📐 FA Goods — Capacity Reservations</h2>';
+  html+='<p style="font-size:11px;color:var(--tt);margin:4px 0 0">Pallet space reservations for non-FF&E equipment. These are planning placeholders, not physical goods.</p></div>';
+  if(!isViewer)html+='<button class="rbtn" onclick="LP_showAddFaModal()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-weight:600">+ Add Reservation</button>';
+  html+='</div>';
+
+  // KPI summary
+  const totalPlt=LP_FA_GOODS.reduce((s,g)=>s+g.pallets,0);
+  const totalDests=new Set(LP_FA_GOODS.map(g=>g.dest)).size;
+  const totalTypes=new Set(LP_FA_GOODS.map(g=>g.faType)).size;
+  const placedPlt=Object.values(truckFa).reduce((s,types)=>s+Object.values(types).reduce((s2,p)=>s2+p,0),0);
+  html+='<div class="sr" style="margin-bottom:16px">';
+  html+=kpi({label:'📐 Reservations',value:LP_FA_GOODS.length,color:'#0891B2'});
+  html+=kpi({label:'📦 Pallets Reserved',value:totalPlt,color:'var(--ac)'});
+  html+=kpi({label:'📍 Destinations',value:totalDests,color:'var(--pu)'});
+  html+=kpi({label:'🏷 FA Types',value:totalTypes,color:'var(--or)'});
+  if(LP_STATE.planGenerated)html+=kpi({label:'🚛 Placed on Trucks',value:Math.round(placedPlt),color:'var(--gn)'});
+  html+='</div>';
+
+  if(!LP_FA_GOODS.length){
+    html+='<div style="text-align:center;padding:40px;color:var(--tt);font-size:13px">No FA capacity reservations yet.'+(isViewer?'':' Click <b>+ Add Reservation</b> to reserve pallet space.')+'</div>';
+    html+='</div>';el.innerHTML=html;return;
+  }
+
+  // Group by destination
+  const byDest={};
+  for(const g of LP_FA_GOODS){if(!byDest[g.dest])byDest[g.dest]=[];byDest[g.dest].push(g)}
+
+  // Table
+  html+='<table class="lp-tbl" style="width:100%;font-size:11px">';
+  html+='<thead><tr><th>Destination</th><th>FA Type</th><th>SKU</th><th style="text-align:center">Pallets</th>';
+  if(LP_STATE.planGenerated)html+='<th style="text-align:center">On Trucks</th>';
+  html+='<th>Notes</th>';
+  if(!isViewer)html+='<th style="width:60px"></th>';
+  html+='</tr></thead><tbody>';
+
+  for(const dest of _FA_DEST_ABBRS){
+    const items=byDest[dest];if(!items)continue;
+    for(const g of items){
+      const sku=_lpFaSku(g.faType,g.dest);
+      const placed=truckFa[g.dest]?.[g.faType]||0;
+      const dc=LP_destColor(_lpFaDestStr(g.dest));
+      html+='<tr>';
+      html+='<td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+'">'+(CITY_ABBR[g.dest]||g.dest)+'</span></td>';
+      html+='<td><span style="font-weight:600">'+(LP_FA_TYPE_LABELS[g.faType]||g.faType)+'</span></td>';
+      html+='<td class="mono" style="font-size:10px;color:var(--ts)">'+sku+'</td>';
+      html+='<td style="text-align:center">';
+      if(isViewer)html+='<span class="mono" style="font-weight:700">'+g.pallets+'</span>';
+      else html+='<input type="number" value="'+g.pallets+'" min="0" max="26" style="width:60px;text-align:center;font-size:11px;font-family:var(--fm);padding:3px 6px;border:1px solid var(--bd);border-radius:4px" onchange="LP_updateFaPallets('+g.id+',this.value)">';
+      html+='</td>';
+      if(LP_STATE.planGenerated){
+        const pltOk=placed>=g.pallets;
+        html+='<td style="text-align:center"><span class="mono" style="font-weight:600;color:'+(pltOk?'var(--gn)':'var(--or)')+'">'+Math.round(placed)+'</span></td>';
+      }
+      html+='<td>';
+      if(isViewer)html+='<span style="color:var(--ts)">'+(g.notes||'—')+'</span>';
+      else html+='<input type="text" value="'+(g.notes||'').replace(/"/g,'&quot;')+'" placeholder="Optional notes..." style="width:100%;font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;color:var(--ts)" onchange="LP_updateFaNotes('+g.id+',this.value)">';
+      html+='</td>';
+      if(!isViewer)html+='<td><button class="rbtn" onclick="LP_deleteFaGood('+g.id+')" style="background:var(--rs);color:var(--rd);border-color:#F5C6C7;font-size:10px;padding:2px 8px" title="Remove reservation">✕</button></td>';
+      html+='</tr>';
+    }
+  }
+  html+='</tbody></table>';
+
+  // Info callout
+  html+='<div style="margin-top:16px;padding:10px 18px;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:8px;font-size:11px;color:#0891B2">';
+  html+='<b>How it works:</b> Each reservation creates a dummy SKU (e.g., FA-TEC-KC) with 1 pallet per unit. ';
+  html+='The LP engine treats these as normal demand with stock available today, so they naturally consume truck capacity. ';
+  html+='FA goods are excluded from cost calculations and KPI totals. Regenerate the plan to apply changes.</div>';
+
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+// ── Add FA reservation modal ──
+function LP_showAddFaModal(){
+  if(ROLE==='viewer')return;
+  const mr=document.getElementById('mr');
+  // Build destination options (only destinations that have demand OR all 8)
+  const demDests=new Set((LP_STATE.materialPlan||[]).map(d=>LP_matchTransitAbbr(d.destination)).filter(Boolean));
+  const destOpts=_FA_DEST_ABBRS.map(a=>'<option value="'+a+'"'+(demDests.has(a)?'':' style="color:var(--tt)"')+'>'+(CITY_ABBR[a]||a)+(demDests.has(a)?'':' (no demand)')+'</option>').join('');
+  const typeOpts=LP_FA_TYPES.map(t=>'<option value="'+t+'">'+(LP_FA_TYPE_LABELS[t]||t)+'</option>').join('');
+  mr.innerHTML=`<div class="mo" onclick="if(event.target===this)this.remove()">
+    <div class="mdi" style="max-width:400px">
+      <div class="mdh" style="background:#ECFEFF;border-bottom-color:#0891B2"><h3 style="color:#0891B2">📐 Add Capacity Reservation</h3></div>
+      <div class="mdb" style="padding:16px">
+        <p style="font-size:11px;color:var(--tt);margin:0 0 12px">Reserve pallet space on LP trucks for non-FF&E equipment.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Destination</label>
+          <select id="faAddDest" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px">${destOpts}</select></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">FA Type</label>
+          <select id="faAddType" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px">${typeOpts}</select></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Pallets</label>
+          <input type="number" id="faAddPlt" min="1" max="26" value="2" style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px;font-family:var(--fm)"></div>
+          <div><label style="font-size:10px;font-weight:600;color:var(--ts);display:block;margin-bottom:3px">Notes</label>
+          <input type="text" id="faAddNotes" placeholder="Optional..." style="width:100%;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;font-size:12px"></div>
+        </div>
+        <div id="faAddPreview" style="margin-top:10px;padding:8px 12px;background:var(--bg);border-radius:6px;font-size:10px;font-family:var(--fm);color:var(--ts)"></div>
+      </div>
+      <div class="mdf"><button class="mbtn" onclick="this.closest('.mo').remove()">Cancel</button><button class="mbtn mbtn-primary" style="background:#0891B2" onclick="LP_confirmAddFa()">Add Reservation</button></div>
+    </div></div>`;
+  // Live preview
+  const _faPreview=()=>{
+    const d=document.getElementById('faAddDest')?.value||'';
+    const t=document.getElementById('faAddType')?.value||'';
+    const p=parseInt(document.getElementById('faAddPlt')?.value)||0;
+    const sku=_lpFaSku(t,d);
+    const el=document.getElementById('faAddPreview');
+    if(el)el.innerHTML='SKU: <b>'+sku+'</b> · '+p+' pallet'+(p!==1?'s':'')+' → '+(CITY_ABBR[d]||d);
+  };
+  _faPreview();
+  document.getElementById('faAddDest').onchange=_faPreview;
+  document.getElementById('faAddType').onchange=_faPreview;
+  document.getElementById('faAddPlt').oninput=_faPreview;
+}
+
+function LP_confirmAddFa(){
+  const dest=document.getElementById('faAddDest')?.value;
+  const faType=document.getElementById('faAddType')?.value;
+  const pallets=parseInt(document.getElementById('faAddPlt')?.value)||0;
+  const notes=document.getElementById('faAddNotes')?.value||'';
+  if(!dest||!faType||pallets<1){alert('Please fill in destination, type, and at least 1 pallet.');return}
+  document.querySelector('.mo')?.remove();
+  LP_addFaGood(dest,faType,pallets,notes);
 }
 
 
@@ -5526,16 +5829,17 @@ function LP_showTruckModal(truckId){
     const _avlLbl=_wfAvail!==null&&_wfAvail!==Infinity?Math.round(_wfAvail).toLocaleString():'—';
     const _dotTtl=!_inSSet?'Not in stock':(_hasSuff?'In stock: '+_avlLbl+' avail'+(isDisp?' (dispatched)':''):'In stock but only '+_avlLbl+' avail (need '+s.qty.toLocaleString()+')');
     const dot='<span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+_dotClr+';flex-shrink:0" title="'+_dotTtl+'"></span><span style="font-size:8px;color:'+_dotClr+';font-family:var(--fm);min-width:16px" title="'+_dotTtl+'">'+(_inSSet?_avlLbl:'')+'</span></span>';
-    rows+=`<tr>
-      <td>${dot}</td>
+    const _isFa=_lpIsFaSku(s.sku);
+    rows+=`<tr${_isFa?' style="background:#ECFEFF"':''}>
+      <td>${_isFa?'<span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#0891B2" title="FA Capacity Reserve — not physical stock"></span>':dot}</td>
       <td class="mono">${s.sku}</td>
-      <td class="tcl">${s.name||'—'}</td>
-      <td style="font-size:10px;color:var(--ts)">${nom.source||'—'}</td>
+      <td class="tcl">${_isFa?'<span style="color:#0891B2;font-weight:600">'+s.name+'</span>':(s.name||'—')}</td>
+      <td style="font-size:10px;color:${_isFa?'#0891B2':'var(--ts)'}">${_isFa?'📐 FA RESERVE':(nom.source||'—')}</td>
       <td class="mono fw6">${s.qty.toLocaleString()}</td>
       <td class="mono">${s.pallets.toFixed(1)}</td>
-      <td class="mono">${nom.palletQty||'—'}</td>
-      <td class="mono">${nom.palletSpc||'—'}</td>
-      <td class="mono ${remain>0?'cor':'cgn'} fw6" title="Total demand: ${totalDemand.toLocaleString()} − Shipped (LP-1 to LP-${truckId}): ${shippedUpTo.toLocaleString()} = ${remain.toLocaleString()} remaining">${remain.toLocaleString()}</td>
+      <td class="mono">${_isFa?'1':(nom.palletQty||'—')}</td>
+      <td class="mono">${_isFa?'1':(nom.palletSpc||'—')}</td>
+      <td class="mono ${_isFa?'':remain>0?'cor':'cgn'} fw6" title="${_isFa?'FA capacity reservation — not tracked in demand':'Total demand: '+totalDemand.toLocaleString()+' − Shipped (LP-1 to LP-'+truckId+'): '+shippedUpTo.toLocaleString()+' = '+remain.toLocaleString()+' remaining'}">${_isFa?'—':remain.toLocaleString()}</td>
       <td></td>
     </tr>`;
   }
@@ -6064,7 +6368,7 @@ async function LP_exportSingleTruck(truckId){
   if(typeof ExcelJS==='undefined')return alert('ExcelJS not loaded yet');
   const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
   if(!rawPlan.length)return;
-  const agg=LP_aggregateTruck(rawPlan);
+  const agg=LP_aggregateTruck(rawPlan).filter(s=>!_lpIsFaSku(s.sku));// exclude FA capacity reserves
   const first=rawPlan[0];
   const dest=clDisp(first.destination);
   const lsr=LP_lsrNumbers[truckId]||'';
@@ -6399,7 +6703,7 @@ async function LP_exportCI(truckId){
   const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
   if(!rawPlan.length)return;
   const first=rawPlan[0];
-  const agg=LP_aggregateTruck(rawPlan);
+  const agg=LP_aggregateTruck(rawPlan).filter(s=>!_lpIsFaSku(s.sku));// exclude FA capacity reserves
   agg.forEach(it=>{it.qty=_lpEffQty(it.sku,it.qty)});
   // Append manual items
   for(const mi of MI_get(MI_lpKey(truckId))){
@@ -7856,6 +8160,9 @@ async function masterBackupExport(){
     rows.push({Setting:'Holds',Value:JSON.stringify([...LP_holds])});
     rows.push({Setting:'Exclude Staples',Value:LP_excludeStaples?'true':'false'});
     Object.entries(LP_destWhsDays).forEach(([k,v])=>rows.push({Setting:'Dest WHS Days: '+(CITY_ABBR[k]||k),Value:v}));
+    // FA Goods capacity reservations
+    if(LP_FA_GOODS.length)rows.push({Setting:'FA Goods',Value:JSON.stringify(LP_FA_GOODS)});
+    rows.push({Setting:'FA Goods NextId',Value:_lpFaNextId});
     const ws=XLSX.utils.json_to_sheet(rows);
     ws['!cols']=[{wch:40},{wch:60}];
     XLSX.utils.book_append_sheet(wb,ws,'LP Config');
@@ -8094,6 +8401,8 @@ async function masterBackupRestore(file){
         else if(s==='Holds'&&v){try{LP_holds=new Set(JSON.parse(v))}catch(e){}}
         else if(s==='Exclude Staples')LP_excludeStaples=v==='true'
         else if(s.startsWith('Dest WHS Days: ')){const city=s.replace('Dest WHS Days: ','');const abbr=Object.entries(CITY_ABBR).find(([k,n])=>n===city);if(abbr)LP_destWhsDays[abbr[0]]=+v||0}
+        else if(s==='FA Goods'&&v){try{LP_FA_GOODS=JSON.parse(v)}catch(e){}}
+        else if(s==='FA Goods NextId')_lpFaNextId=+v||1
       }
       log.push('LP Config restored');
     }
@@ -8242,6 +8551,7 @@ async function masterBackupRestore(file){
       if(STOCK_SKUS.size>0){
         await SB.from('shared_state').upsert({id:'fm-stock',value:JSON.stringify({skus:[...STOCK_SKUS],qtys:STOCK_QTYS,name:STOCK_REPORT_NAME}),updated_at:new Date().toISOString()});
       }
+      if(LP_FA_GOODS.length)await LP_saveFaGoods();
     }catch(e){console.warn('Backup restore Supabase save error:',e)}
 
     // Refresh derived data before render (plan + stock + OOR all restored above)
@@ -8484,6 +8794,7 @@ function enterApp(){
     // Load LP data
     try{
       lpOk=await LP_loadFromSupabase();
+      await LP_loadFaGoods().catch(()=>{});
       // Rebuild LP→LM arrival FIFO (was built empty during numberAll before LP data loaded)
       if(lpOk&&LP_STATE?.generatedPlan?.length)try{LM_buildLPArrivalFifo()}catch(e){}
     }catch(e){}
@@ -8577,7 +8888,7 @@ async function loadSharedData(){
     const _loadErrs=[];
     const _lc=(fn,name)=>fn().catch(e=>{_loadErrs.push(name);console.warn('Load failed:',name,e)});
     await Promise.all([_lc(stockReportLoad,'Stock Report'),_lc(LM_loadDateOverrides,'Date Overrides'),_lc(MI_load,'Manual Items'),_lc(LM_loadPalletCfg,'Pallet Config'),_lc(LM_loadClusterTA,'Cluster TA')]);
-    await Promise.all([_lc(LM_loadManualDemand,'Manual Demand'),_lc(LM_loadKits,'Kits'),_lc(LM_loadStpDeliveries,'STP Deliveries'),_lc(LM_loadStpStrategy,'STP Strategy'),_lc(DIST_loadOverrides,'Dist Overrides'),_lc(LM_loadDemandAdj,'Demand Adj'),_lc(LM_loadNomOverrides,'Nom Overrides'),_lc(FA_loadLinked,'FA Goods')]);
+    await Promise.all([_lc(LM_loadManualDemand,'Manual Demand'),_lc(LM_loadKits,'Kits'),_lc(LM_loadStpDeliveries,'STP Deliveries'),_lc(LM_loadStpStrategy,'STP Strategy'),_lc(DIST_loadOverrides,'Dist Overrides'),_lc(LM_loadDemandAdj,'Demand Adj'),_lc(LM_loadNomOverrides,'Nom Overrides'),_lc(FA_loadLinked,'FA Goods'),_lc(LP_loadFaGoods,'LP FA Goods')]);
     if(_loadErrs.length)console.warn('Failed to load:',_loadErrs.join(', '));
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
@@ -8638,6 +8949,7 @@ async function syncLP(){
   await _syncSpin('LP',async()=>{
     const had=LP_STATE.planGenerated;
     await LP_loadFromSupabase();
+    await LP_loadFaGoods().catch(()=>{});
     await stockReportLoad().catch(()=>{});
     if(LP_STATE.planGenerated)LP_render();
     else if(had){document.getElementById('LP_US').style.display='flex'}
@@ -8653,6 +8965,7 @@ async function syncV26(){
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadNomOverrides().catch(()=>{}),FA_loadLinked().catch(()=>{})]);
     LM_injectAll();LM_applyNomOverrides();bV();_stpValidateVenues();numberAll();
     await LP_loadFromSupabase().catch(()=>{});
+    await LP_loadFaGoods().catch(()=>{});
     V26_render();
   });
 }
@@ -16394,6 +16707,7 @@ function doSystemReset(){
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
+  LP_FA_GOODS=[];_lpFaNextId=1;
   LP_updateStockWaterfall();LP_invalidateLate();// all state cleared
   // Restore upload screen
   document.getElementById("US").querySelector(".uc").innerHTML=`<div class="sm-logo sm-logo-lg"><img src="ml3k-favicon.svg" style="width:100%;height:100%"></div><h1 style="font-size:26px;font-weight:700">ML3K</h1><label class="dz" id="dz" for="fi" style="cursor:pointer;display:block"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600;font-size:13px">Tap or drop .xlsx files to browse</div></label><input type="file" accept=".xlsx,.xls" multiple id="fi" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><div class="fcs" id="fcs"></div><div id="eb" class="erbox" style="display:none"></div><button class="gbtn off" id="gb">Generate</button>`;
@@ -16618,10 +16932,11 @@ function resetLP(){
 function doResetLP(){
   if(ROLE==="viewer")return;
   if(SB){
-    SB.from('shared_state').delete().in('id',['lp-state','lp-config','lp-nom','lp-demand','lp-demand-raw','lp-arrivals','lp-plan','lp-truck-state']).then(()=>{}).catch(()=>{});
+    SB.from('shared_state').delete().in('id',['lp-state','lp-config','lp-nom','lp-demand','lp-demand-raw','lp-arrivals','lp-plan','lp-truck-state','lp-fa-goods']).then(()=>{}).catch(()=>{});
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
+  LP_FA_GOODS=[];_lpFaNextId=1;
   LP_lastGenSettings={};
   LP_updateStockWaterfall();LP_invalidateLate();// plan cleared
   lpUf=[];lpRenderUpload();
@@ -16740,9 +17055,13 @@ async function goGenerateLP(){
       const n=LP_STATE.nomenclature[d.sku];
       if(n&&n.name)d.name=n.name;// enrich display name from nomenclature
     }
+    // ── Inject FA goods into engine inputs (planning-layer only, not persisted to nom/demand) ──
+    const _genNom={...LP_STATE.nomenclature};_lpFaInjectNom(_genNom);
+    const _genDemand=[...LP_STATE.materialPlan,..._lpFaDemandRows()];
+    const _genArr=[...LP_STATE.arrivals,..._lpFaArrivalRows()];
     LP_STATE.generatedPlan=_lpTailReconstruct(LP_buildPlanV3(
-      LP_STATE.materialPlan,LP_STATE.arrivals,
-      {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:LP_STATE.nomenclature,ricStartDate:LP_STATE.ricStartDate}
+      _genDemand,_genArr,
+      {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:_genNom,ricStartDate:LP_STATE.ricStartDate}
     ),LP_STATE.maxPallets||LP_DEFAULT_MAX_PALLETS);
     LP_STATE.planGenerated=true;
     LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};
