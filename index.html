@@ -512,7 +512,6 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
 <button class="tbtn" onclick="LP_switchTab('demand')">📋 Demand</button>
 <button class="tbtn" onclick="LP_switchTab('fa')">📐 FA Goods</button>
 <button class="tbtn on" onclick="LP_switchTab('plan')">🚛 Plan</button>
-<button class="tbtn" onclick="LP_switchTab('late')">⚠ Late</button>
 <button class="tbtn" onclick="LP_switchTab('status')">📊 Status</button>
 </div>
 <div class="lp-main" id="lpMain"></div>
@@ -3958,7 +3957,7 @@ function LP_render(){
   // Sync tab button highlighting
   document.querySelectorAll('#lpTabs .tbtn').forEach(b=>{
     const txt=b.textContent.toLowerCase();
-    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='fa'&&txt.includes('fa g'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='late'&&txt.includes('late'))||(LP_TAB==='status'&&txt.includes('status'));
+    const active=(LP_TAB==='arrivals'&&txt.includes('arrival'))||(LP_TAB==='demand'&&txt.includes('demand'))||(LP_TAB==='fa'&&txt.includes('fa g'))||(LP_TAB==='plan'&&txt.includes('plan'))||(LP_TAB==='status'&&txt.includes('status'));
     b.classList.toggle('on',active);
   });
   switch(LP_TAB){
@@ -5371,65 +5370,76 @@ function LP_renderFA(el){
   const lpGroups=sorted.filter(g=>_lpFaVenueToAbbr(g.venue));
   const otherGroups=sorted.filter(g=>!_lpFaVenueToAbbr(g.venue));
 
-  // ── LP Eligible (Stadiums) ──
-  html+='<h3 style="font-size:14px;font-weight:700;margin-bottom:8px">🚛 LP Eligible — Stadiums</h3>';
-  if(!lpGroups.length){html+='<div style="color:var(--tt);padding:12px;font-size:12px">No stadium groups with LP destinations.</div>'}
+  // ── LP Eligible (Stadiums) — card per group ──
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><h3 style="font-size:14px;font-weight:700;margin:0">🚛 LP Eligible — Stadiums</h3><span class="bg bg-bl">'+lpGroups.length+' groups</span></div>';
+  if(!lpGroups.length){html+='<div style="color:var(--tt);padding:16px;font-size:12px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--r)">No stadium groups with LP destinations.</div>'}
   else{
-    html+='<table class="lp-tbl" style="width:100%;font-size:11px;margin-bottom:20px">';
-    html+='<thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th>LP Dest</th><th style="text-align:center">Pallets</th>';
-    if(LP_STATE.planGenerated)html+='<th>LP Truck</th><th>Dispatch</th><th>Arrival</th><th>Timeline</th>';
-    html+='</tr></thead><tbody>';
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;margin-bottom:20px">';
     for(const g of lpGroups){
       const abbr=_lpFaVenueToAbbr(g.venue);
       const dc=LP_destColor(_lpFaDestStr(abbr));
       const _fd=truckFaBySku[g.sku];const placed=_fd?_fd.pallets:0;
-      html+='<tr>';
-      html+='<td class="mono fw6" style="color:#0891B2;font-size:10px">'+g.sku+'</td>';
-      html+='<td style="font-weight:600">'+g.venue+'</td>';
-      html+='<td style="color:var(--pu)">'+(g.fa||'—')+'</td>';
-      html+='<td>'+_fmtD(g.biDate)+'</td>';
-      html+='<td><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+'">'+(CITY_ABBR[abbr]||abbr)+'</span></td>';
-      html+='<td style="text-align:center"><span class="mono fw6" style="color:'+(g.pallets>0?'var(--ac)':'var(--tt)')+'">'+(g.pallets||0)+'</span></td>';
+      const hasTruck=_fd&&_fd.trucks.length;
+      const borderClr=g.pallets>0?(hasTruck?'#B8DFCA':'var(--ab)'):'var(--bd)';
+      html+='<div style="background:var(--sf);border:1px solid '+borderClr+';border-radius:var(--r);padding:14px">';
+      // Row 1: SKU + dest badge
+      html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">';
+      html+='<span class="mono fw6" style="font-size:11px;color:#0891B2">'+g.sku+'</span>';
+      html+='<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:'+dc.bg+';color:'+dc.color+';border:1px solid '+dc.border+'">'+(CITY_ABBR[abbr]||abbr)+'</span>';
+      if(g.pallets>0)html+='<span class="mono fw6" style="font-size:12px;color:var(--ac);margin-left:auto">'+g.pallets+' plt</span>';
+      else html+='<span style="font-size:10px;color:var(--tt);margin-left:auto">0 plt</span>';
+      html+='</div>';
+      // Row 2: Venue + FA
+      html+='<div style="font-size:12px;font-weight:600;color:var(--tp)">'+g.venue+'</div>';
+      html+='<div style="font-size:10px;color:var(--ts);margin-top:2px"><span style="color:var(--pu)">'+g.fa+'</span> · BI: '+_fmtD(g.biDate)+'</div>';
+      // Row 3: Truck info
       if(LP_STATE.planGenerated){
-        if(_fd&&_fd.trucks.length){
+        if(hasTruck){
           const _tks=_fd.trucks;
-          html+='<td style="font-size:10px">'+_tks.map(t=>{const _rdy=t.ready?'<span style="font-size:8px;font-weight:700;color:var(--gn);background:var(--gs);padding:1px 4px;border-radius:3px;border:1px solid #B8DFCA">RDY</span>':'<span style="font-size:8px;font-weight:700;color:var(--or);background:var(--os);padding:1px 4px;border-radius:3px;border:1px solid #F5D6B8">PND</span>';return(t.locked?'🔒':'')+'<span class="mono" style="cursor:pointer;color:var(--ac);text-decoration:underline" onclick="LP_showTruckModal('+t.truckId+')">LP-'+t.truckId+'</span> '+_rdy}).join('<br>')+'</td>';
-          html+='<td class="mono" style="font-size:10px">'+_tks.map(t=>_fmtD(t.date)).join(', ')+'</td>';
-          html+='<td class="mono" style="font-size:10px">'+_tks.map(t=>_fmtD(t.arrDate)).join(', ')+'</td>';
-          // Timeline: compare LP arrival vs FA BI date
+          html+='<div style="margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:6px">';
+          for(const t of _tks){
+            const _rdy=t.ready?'<span style="font-size:8px;font-weight:700;color:var(--gn);background:var(--gs);padding:1px 5px;border-radius:3px;border:1px solid #B8DFCA">READY</span>':'<span style="font-size:8px;font-weight:700;color:var(--or);background:var(--os);padding:1px 5px;border-radius:3px;border:1px solid #F5D6B8">PENDING</span>';
+            html+='<div style="display:flex;align-items:center;gap:6px;font-size:11px">';
+            html+=(t.locked?'🔒 ':'')+'<span class="mono fw6" style="cursor:pointer;color:var(--ac);text-decoration:underline" onclick="LP_showTruckModal('+t.truckId+')">LP-'+t.truckId+'</span> '+_rdy;
+            html+='<span style="color:var(--ts);font-size:10px;margin-left:auto">'+_fmtD(t.date)+' → '+_fmtD(t.arrDate)+'</span>';
+            html+='</div>';
+          }
+          // Timeline badge
           const _biD=g.biDate?LP_parseLocalDate(g.biDate):null;
           const _lastArr=_tks.map(t=>LP_parseLocalDate(t.arrDate)).filter(Boolean).sort((a,b)=>b-a)[0];
-          if(_biD&&_lastArr){const _diff=Math.round((_biD-_lastArr)/86400000);html+='<td><span class="bg bgs '+(_diff>=0?'bg-gn':'bg-rd')+'" style="font-size:9px">'+(_diff>=0?'✓ '+(_diff===0?'On time':_diff+'d early'):'⚠ '+Math.abs(_diff)+'d late')+'</span></td>'}
-          else html+='<td style="color:var(--tt)">—</td>';
-        }else{html+='<td style="color:var(--tt)">—</td><td style="color:var(--tt)">—</td><td style="color:var(--tt)">—</td><td><span class="bg bgs bg-gy" style="font-size:9px">'+(g.pallets>0?'Not in plan':'0 plt')+'</span></td>'}
+          if(_biD&&_lastArr){const _diff=Math.round((_biD-_lastArr)/86400000);html+='<div style="margin-top:4px"><span class="bg bgs '+(_diff>=0?'bg-gn':'bg-rd')+'" style="font-size:9px">'+(_diff>=0?'✓ '+(_diff===0?'On time':_diff+'d early'):'⚠ '+Math.abs(_diff)+'d late')+'</span></div>'}
+          html+='</div>';
+        }else{
+          html+='<div style="margin-top:8px;font-size:10px;color:var(--tt)">'+(g.pallets>0?'Not yet in plan — regenerate':'Set pallets to inject into plan')+'</div>';
+        }
       }
-      html+='</tr>';
+      html+='</div>';
     }
-    html+='</tbody></table>';
+    html+='</div>';
   }
 
-  // ── Other Venues (non-LP) ──
+  // ── Other Venues (non-LP) — collapsible ──
   if(otherGroups.length){
-    html+='<h3 style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--ts)">📍 Other Venues (not LP-eligible)</h3>';
-    html+='<table class="lp-tbl" style="width:100%;font-size:11px;opacity:0.6">';
-    html+='<thead><tr><th>Venue</th><th>FA</th><th>FA BI Date</th><th style="text-align:center">Items</th><th style="text-align:center">Pallets</th><th>LM Truck (FA)</th><th>Kit (FA)</th><th>SKU</th></tr></thead><tbody>';
+    html+='<details style="margin-bottom:16px"><summary style="font-size:14px;font-weight:700;color:var(--ts);cursor:pointer;user-select:none;margin-bottom:8px">📍 Other Venues — '+otherGroups.length+' groups (LM/CORT only)</summary>';
+    html+='<table class="lp-tbl" style="width:100%;font-size:11px">';
+    html+='<thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th style="text-align:center">Items</th><th style="text-align:center">Pallets</th><th>LM Truck</th><th>Kit</th></tr></thead><tbody>';
     for(const g of otherGroups){
-      html+='<tr>';
+      html+='<tr style="color:var(--ts)">';
+      html+='<td class="mono" style="font-size:10px;color:var(--tt)">'+g.sku+'</td>';
       html+='<td>'+g.venue+'</td>';
       html+='<td style="color:var(--pu)">'+(g.fa||'—')+'</td>';
       html+='<td>'+_fmtD(g.biDate)+'</td>';
       html+='<td class="mono" style="text-align:center">'+(g.items||[]).length+'</td>';
-      html+='<td style="text-align:center"><span class="mono" style="color:var(--tt)">'+(g.pallets||0)+'</span></td>';
-      html+='<td style="font-size:10px;color:var(--ts)">'+(g.linkedLM||'—')+'</td>';
-      html+='<td style="font-size:10px;color:var(--ts)">'+(g.linkedKit||'—')+'</td>';
-      html+='<td class="mono" style="font-size:10px;color:var(--tt)">'+g.sku+'</td>';
+      html+='<td style="text-align:center"><span class="mono">'+(g.pallets||0)+'</span></td>';
+      html+='<td style="font-size:10px">'+(g.linkedLM||'—')+'</td>';
+      html+='<td style="font-size:10px">'+(g.linkedKit||'—')+'</td>';
       html+='</tr>';
     }
-    html+='</tbody></table>';
+    html+='</tbody></table></details>';
   }
 
-  html+='<div style="margin-top:16px;padding:10px 18px;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:8px;font-size:11px;color:#0891B2">';
-  html+='<b>Source:</b> FA Goods delivery groups. Only <b>stadium</b> venues with pallets > 0 are injected into LP engine. Other venues shown for reference — they use LM/CORT delivery only.</div>';
+  html+='<div style="margin-top:12px;padding:10px 18px;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:8px;font-size:11px;color:#0891B2">';
+  html+='<b>Source:</b> FA Goods delivery groups. Only <b>stadium</b> venues with pallets > 0 are injected into LP engine. Other venues use LM/CORT delivery only.</div>';
   html+='</div>';
   el.innerHTML=html;
 }
@@ -16157,12 +16167,14 @@ function _oorSheet(wb,sheetName,truckId,dest,venue,items,opts){
   // Append FA Goods items if present
   const faItems=opts?.faItems||[];
   if(faItems.length){
+    const _faVenues=[...new Set(faItems.map(i=>i.venue).filter(Boolean))];
+    const _faTotalQty=faItems.reduce((s,i)=>s+(i.qty||0),0);
     R++;ws.getRow(R).height=6;
     R++;fillRow(R,1,COLS,mkF('FF0891B2'),brd);mg(R,1,R,COLS);
-    cl(R,1,'FA Goods ('+faItems.length+' items)',{name:'Calibri',size:10,bold:true,color:{argb:'FFFFFFFF'}},alC,mkF('FF0891B2'),brd);ws.getRow(R).height=22;
+    cl(R,1,'FA Goods — '+_faTotalQty+' items'+(_faVenues.length?' — '+_faVenues.join(', '):''),{name:'Calibri',size:10,bold:true,color:{argb:'FFFFFFFF'}},alC,mkF('FF0891B2'),brd);ws.getRow(R).height=22;
     faItems.forEach((item,idx)=>{
       R++;const rFill=idx%2===0?fillW:mkF('FFECFEFF');
-      cl(R,1,idx+1,fValB,alC,rFill,brd);cl(R,2,item.sku,fData,alL,rFill,brd);cl(R,3,item.name,fData,alL,rFill,brd);
+      cl(R,1,idx+1,fValB,alC,rFill,brd);cl(R,2,item.sku,fData,alL,rFill,brd);cl(R,3,item.name+(item.venue?' ('+item.venue+')':''),fData,alL,rFill,brd);
       cl(R,4,item.src||'FA',fData,alC,rFill,brd);cl(R,5,item.uom||'Each',fData,alC,rFill,brd);cl(R,6,item.qty,fValB,alC,rFill,brd);
     });
   }
