@@ -599,19 +599,39 @@ async function FA_loadLinked(){
 function _faHasKit(kitId){return FA_LINKED[kitId]||null}
 function _faVenueCount(venue){if(!FA_LINKED._byVenue)return null;return FA_LINKED._byVenue[venue]||null}
 function _faItemsForKit(kitId){
+  // Kit IDs are volatile (change on strategy reapply). Match by:
+  // 1. Exact kit ID or SKU
+  // 2. Fallback: same venue + same kit type prefix (FNKIT/OSKIT)
+  const kit=typeof LM_getKitById==='function'?LM_getKitById(kitId):null;
+  const kitSku=kit?.sku||'';
+  const kitVenue=kit?.venue||'';
+  const kitPrefix=kitSku.startsWith('FNKIT')?'FNKIT':(kitSku.startsWith('OSKIT')?'OSKIT':'');
+  const _matchKit=ref=>{
+    if(!ref)return false;
+    if(ref===kitId||ref===kitSku)return true;
+    // Fallback: match by venue + type prefix (handles stale linkedKit after kit ID change)
+    if(kitVenue&&kitPrefix&&ref.startsWith(kitPrefix)){
+      // Check if this ref was for same venue by looking up in LP_FA_GROUPS
+      const fg=(LP_FA_GROUPS||[]).find(g=>g.linkedKit===ref);
+      if(fg&&fg.venue===kitVenue)return true;
+      const lg=(FA_LINKED._groups||[]).find(g=>g.linkedKit===ref);
+      if(lg&&lg.venue===kitVenue)return true;
+    }
+    return false;
+  };
   const groups=FA_LINKED._groups||[];const items=FA_LINKED._items||[];
   const itemById={};for(const it of items)itemById[it.id]=it;
   const result=[];const seenGroups=new Set();
   // 1. Check FA_LINKED groups (Supabase cross-reference)
   for(const g of groups){
-    if(g.linkedKit!==kitId)continue;
+    if(!_matchKit(g.linkedKit))continue;
     seenGroups.add(g.id);
     for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'})}
   }
-  // 2. Check LP_FA_GROUPS for engine-injected FA linked to this kit (by kit ID or SKU)
+  // 2. Check LP_FA_GROUPS for engine-injected FA linked to this kit
   for(const g of (LP_FA_GROUPS||[])){
     if(seenGroups.has(g.id))continue;
-    if(g.linkedKit!==kitId&&g.linkedKit!==kitId?.toString())continue;
+    if(!_matchKit(g.linkedKit))continue;
     seenGroups.add(g.id);
     const gi=_faGroupItems(g.id);
     if(gi.length)result.push(...gi);

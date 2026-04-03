@@ -1041,7 +1041,22 @@ async function FA_sync(){
   const btn=document.querySelector('.sys-sync,.hd .rbtn:first-of-type');
   if(btn){btn.disabled=true;btn.textContent='⟳ Loading...'}
   await Promise.all([FA_load(),FA_loadML3K()]);
+  // Migrate stale kit references after sync
+  if(FA_GROUPS.length&&FA_ML3K_KITS.length){
+    let migrated=false;
+    for(const g of FA_GROUPS){
+      if(!g.linkedKit)continue;
+      const exact=FA_ML3K_KITS.find(k=>k.sku===g.linkedKit||k.id===g.linkedKit);
+      if(exact)continue;
+      const prefix=g.linkedKit.startsWith('FNKIT')?'FNKIT':(g.linkedKit.startsWith('OSKIT')?'OSKIT':'');
+      if(!prefix)continue;
+      const match=FA_ML3K_KITS.find(k=>k.venue===g.venue&&k.sku.startsWith(prefix));
+      if(match){console.log('[FA] Kit migrate: '+g.linkedKit+' → '+match.sku+' ('+g.venue+')');g.linkedKit=match.sku;migrated=true}
+    }
+    if(migrated&&!_faIsViewer())FA_save();
+  }
   if(btn){btn.disabled=false;btn.textContent='⟳ Sync'}
+  FA_render();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1072,7 +1087,24 @@ if(_faIsViewer())document.body.classList.add('viewer');
 document.getElementById('faRoleBadge').innerHTML=FA_ROLE==='admin'?'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--ac);padding:1px 6px;border-radius:3px">Admin</span>':'<span style="font-size:9px;font-weight:700;color:#fff;background:var(--gn);padding:1px 6px;border-radius:3px">Viewer</span>';
 
 (async function(){
-  try{await Promise.all([FA_load(),FA_loadML3K()]);FA_render()}catch(e){console.warn('FA init:',e);FA_updateStatus(false);FA_render()}
+  try{
+    await Promise.all([FA_load(),FA_loadML3K()]);
+    // Migrate stale kit references: if linkedKit no longer matches any current kit, find by venue+type
+    if(FA_GROUPS.length&&FA_ML3K_KITS.length){
+      let migrated=false;
+      for(const g of FA_GROUPS){
+        if(!g.linkedKit)continue;
+        const exact=FA_ML3K_KITS.find(k=>k.sku===g.linkedKit||k.id===g.linkedKit);
+        if(exact)continue;// still valid
+        const prefix=g.linkedKit.startsWith('FNKIT')?'FNKIT':(g.linkedKit.startsWith('OSKIT')?'OSKIT':'');
+        if(!prefix)continue;
+        const match=FA_ML3K_KITS.find(k=>k.venue===g.venue&&k.sku.startsWith(prefix));
+        if(match){console.log('[FA] Kit migrate: '+g.linkedKit+' → '+match.sku+' ('+g.venue+')');g.linkedKit=match.sku;migrated=true}
+      }
+      if(migrated&&!_faIsViewer())FA_save();
+    }
+    FA_render();
+  }catch(e){console.warn('FA init:',e);FA_updateStatus(false);FA_render()}
 })();
 </script>
 </body>
