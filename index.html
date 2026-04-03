@@ -8741,6 +8741,8 @@ function enterApp(){
       await LP_loadFaGoods().catch(()=>{});
       // Rebuild LP→LM arrival FIFO (was built empty during numberAll before LP data loaded)
       if(lpOk&&LP_STATE?.generatedPlan?.length)try{LM_buildLPArrivalFifo()}catch(e){}
+      // Re-inject FA groups into LM trucks (LP_FA_GROUPS loaded AFTER first numberAll)
+      if(lmOk&&LP_FA_GROUPS.length&&VN.length){PLAN_CACHE={};numberAll()}
     }catch(e){}
     
     document.getElementById("pov").style.display="none";
@@ -9522,6 +9524,25 @@ function build(venue,venueList,skipNoBi){
     if(!agg[k])agg[k]={sku:s,nm:nm?.nm||r["Item"]||s,bi,biK:planBiK,origBiK,qty:0,pq:pqUom,ps:psVal,ok:pqUom>0&&psVal>0};
     if(origBiK<(agg[k].origBiK||origBiK))agg[k].origBiK=origBiK;// keep earliest original need date
     agg[k].qty+=q}
+
+  // ── FA Goods: inject capacity reservations as primary demand ──
+  // FA groups matching this venue become demand entries: qty=1, pq=1, ps=pallets (indivisible block)
+  // This displaces top-ups rather than fighting for post-build space.
+  // Scheduling date = venue's bump-in start (biSK), NOT the FA BI date.
+  // This ensures FA competes for space on the first trucks alongside regular demand.
+  // The FA BI date is a delivery constraint (already met since truck departs before FA BI).
+  // Skip for Step B builds (skipNoBi=true) — cluster build (Step A) already handles those venues.
+  if(!skipNoBi)for(const g of (LP_FA_GROUPS||[])){
+    if(!venuesToUse.includes(g.venue))continue;
+    if((g.pallets||0)<=0)continue;
+    const faSku=g.sku;
+    if(!NOM[faSku])NOM[faSku]={nm:'FA: '+(g.fa||'FA')+' Reserve',src:'FA',pq:1,ps:g.pallets,ppu:1,pqA:0,psA:0,_fa:true};
+    // Schedule on venue's earliest bump-in so FA lands on same trucks as regular demand
+    const faSchedK=biSK||g.biDate||'2026-05-04';
+    const faOrigK=g.biDate||faSchedK;
+    const k=faSchedK+'|'+faSku;
+    agg[k]={sku:faSku,nm:'FA: '+(g.fa||'FA')+' Reserve',bi:new Date(faSchedK+'T12:00:00'),biK:faSchedK,origBiK:faOrigK,qty:1,pq:1,ps:g.pallets,ok:true,_fa:true,_faGroup:g.id};
+  }
 
   // qty already accumulated as per-row ceil — no further conversion needed
   const all=Object.values(agg),noP=all.filter(x=>!x.ok),pAll=all.filter(x=>x.ok);
@@ -10433,6 +10454,21 @@ function numberAll(){
       window._lmBuildLockedDemand=_lockedDemandByLabel[label]||{};
       const P=vl?build(name,vl,false):build(name,null,skipNoBi);
       PLAN_CACHE[label]=P;
+      // Post-tag FA items on trucks (flags for rendering — demand was injected in build())
+      if(P.allT)for(const t of P.allT){
+        let hasFa=false;
+        for(const it of t.items||[]){
+          if(it.sku&&it.sku.startsWith('FA-')&&it.sku.includes('-G')){
+            it._fa=true;
+            // Find group ID from LP_FA_GROUPS
+            const g=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);
+            if(g)it._faGroup=g.id;
+            hasFa=true;
+          }
+        }
+        // Mark as FA-only truck if ALL items are FA
+        if(hasFa&&t.items.every(it=>it._fa))t._faTruck=true;
+      }
       const dispLabel=clDisp(label);
       P.days.forEach(d=>{d.trucks.forEach(t=>{allTrucks.push({dateK:d.dKey,ref:t,label:label,dispLabel:dispLabel})})});
       return P;
@@ -11180,7 +11216,7 @@ function rTotals(){
   const bar=document.getElementById("totbar");
   if(bar)bar.style.display="flex";
 }
-function rT(){const icons={dashboard:'📊',demand:'📋',trucks:'🚛',holds:'⏸',analysis:'🔍',pallets:'📦'};document.getElementById("tabs").innerHTML=["dashboard","demand","trucks","holds","analysis","pallets"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${t==='pallets'?'Pallets':t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
+function rT(){const icons={dashboard:'📊',demand:'📋',fagoods:'📐',trucks:'🚛',holds:'⏸',analysis:'🔍',pallets:'📦'};const labels={dashboard:'dashboard',demand:'demand',fagoods:'FA Goods',trucks:'trucks',holds:'holds',analysis:'analysis',pallets:'Pallets'};document.getElementById("tabs").innerHTML=["dashboard","demand","fagoods","trucks","holds","analysis","pallets"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${labels[t]||t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}${t==='fagoods'&&(LP_FA_GROUPS||[]).length>0?' <span style="background:#ECFEFF;color:#0891B2;font-size:8px;padding:0 4px;border-radius:3px;font-weight:600">'+(LP_FA_GROUPS||[]).length+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
 function B(t,c,s){return`<span class="bg ${s?'bgs':''} bg-${c}">${t}</span>`}
 function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95?"var(--rd)":p>80?"var(--or)":"var(--ac)";return`<div class="bw"><div class="btr"><div class="bfl" style="width:${p}%;background:${c}"></div></div><span class="blb" style="color:${c}">${p}%</span></div>`}
 
@@ -12724,7 +12760,7 @@ const _mCountry=LM_venueCountry(selCluster||'',sel||'');
 const _mLpAbbrs=LM_isLPFed(_mCacheKey)?LM_getLPDestAbbrs(_mCacheKey):[];
 const _mIsLpFed=_mLpAbbrs.length>0&&Object.keys(LP_ARRIVAL_MAP).length>0;
 let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stopPropagation()">
-<div class="mdh"><div><h3>🚛 ${t.id}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
+<div class="mdh"><div><h3>🚛 ${t.id}${t._faTruck?' <span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📐 FA Truck</span>':''}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
 <div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${_showTCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span>${(()=>{const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,_mVt,_mCountry)).length;return ac>0?`<span style="color:var(--or)">🔧 <strong>${ac}</strong> assembly</span>`:''})()}</div>${PB(t.pallets,_showTCap)}
 ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10px 0;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:11px;flex-wrap:wrap">
   <input type="checkbox" ${LM_isDispatched(t)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_isDispatched(t)?'🔒 Locked':'Lock'}</span>
@@ -12746,6 +12782,16 @@ ${isClusterTruck?'':`<th colspan="2" style="text-align:center;border-right:2px s
 ${isClusterTruck?'':`<th style="color:var(--pu)">NOTE</th>`}
 </tr><tr><th style="width:16px"></th><th>SKU</th><th>Item</th><th style="border-right:2px solid var(--bd)">Source</th><th>Total Qty</th><th style="border-right:2px solid var(--bl)">Per Plt</th>${isClusterTruck?'':`<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th>`}<th>Qty</th><th style="border-right:2px solid var(--bl)">Pallets</th><th style="border-right:2px solid var(--bl)">Remaining</th>${isClusterTruck?'':`<th></th>`}</tr></thead><tbody>`;
 t.items.forEach(it=>{
+if(it._fa){
+  // FA Goods capacity reservation item — render as special row
+  h+=`<tr style="background:#ECFEFF"><td style="text-align:center"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#0891B2" title="FA Reserve"></span></td><td class="mono fw6" style="color:#0891B2">${it.sku}</td><td class="tcl" style="color:#0891B2;font-weight:600">${it.nm||'FA Reserve'} <span style="font-size:8px;font-weight:700;background:#0891B2;color:#fff;padding:1px 5px;border-radius:3px">📐 FA</span></td><td style="font-size:10px;color:var(--tt);border-right:2px solid var(--bl)">FA</td>
+  <td class="fw6">1</td><td class="cgr" style="border-right:2px solid var(--bl)">1</td>
+  ${isClusterTruck?'':`<td>1</td><td style="border-right:2px solid var(--bl)">${it.loadPlt||0}</td>`}
+  <td class="fw7 cgn">1</td><td class="fw7 cbl" style="border-right:2px solid var(--bl)">${it.loadPlt||0}</td>
+  <td style="border-right:2px solid var(--bl)">—</td>
+  ${isClusterTruck?'':`<td style="font-size:10px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">capacity reserve</span></td>`}</tr>`;
+  return;
+}
 const lmSrc=(NOM[it.sku]?.src)||'';
 if(LM_hideStaples&&(lmSrc.toUpperCase().startsWith('STP')))return;
 const _isStp=lmSrc.toUpperCase().startsWith('STP')||lmSrc.toUpperCase().startsWith('CT');
@@ -13968,6 +14014,92 @@ function LM_filterHolds(){
   });
 }
 
+// _lmFaInject — REMOVED: FA demand now injected directly into build() demand aggregation
+// FA groups become primary demand (qty=1, pq=1, ps=pallets) and engine packs them naturally.
+
+// ── LM FA GOODS TAB (read-only) ──
+function LM_renderFAGoods(el){
+  const allGroups=LP_FA_GROUPS||[];
+  if(!allGroups.length){el.innerHTML='<div class="lp-empty" style="padding:40px;text-align:center;color:var(--tt)">No FA delivery groups yet. Create them in <a href="/fa-goods.html?role='+ROLE+'" target="_blank" style="color:#0891B2">FA Goods</a>.</div>';return}
+
+  // Filter by selected venue
+  const isFiltered=!!sel&&!sel.startsWith('__');
+  const isClusterOv=sel&&sel.startsWith('__cluster_');
+  const clOvName=isClusterOv?sel.replace('__cluster_',''):'';
+  let venueFilter=null;
+  if(isFiltered){
+    venueFilter=new Set([sel]);
+    if(selCluster&&CLUSTERS[selCluster])venueFilter=new Set(CLUSTERS[selCluster].venues);
+  } else if(isClusterOv&&CLUSTERS[clOvName]){
+    venueFilter=new Set(CLUSTERS[clOvName].venues);
+  }
+
+  const filtered=venueFilter?allGroups.filter(g=>venueFilter.has(g.venue)):allGroups;
+  const sorted=[...filtered].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue));
+
+  // Build truck lookup: find which LM truck each FA group ended up on
+  const faOnTruck={};// groupId -> {truckId, dd, biK}
+  for(const label in PLAN_CACHE){
+    const P=PLAN_CACHE[label];if(!P)continue;
+    for(const t of P.allT||[]){
+      for(const it of t.items||[]){
+        if(it._faGroup){
+          faOnTruck[it._faGroup]={truckId:t.id,dd:t.dd||t.dKey||'',biK:t.biK||t.origBiK||'',faTruck:!!t._faTruck,locked:LM_isDispatched(t),pallets:it.loadPlt||0};
+        }
+      }
+    }
+  }
+
+  const _fmtD=dt=>{if(!dt)return'—';try{return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return dt}};
+  const totalPlt=filtered.reduce((s,g)=>s+(g.pallets||0),0);
+  const placedCount=filtered.filter(g=>faOnTruck[g.id]).length;
+
+  let html='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:6px">';
+  html+='<div><h2 style="font-size:16px;font-weight:700;margin:0">📐 FA Goods'+( venueFilter?' · '+filtered.length+' groups':'')+'</h2>';
+  html+='<p style="font-size:10px;color:var(--tt);margin:2px 0 0">Read-only view. Manage in <a href="/fa-goods.html?role='+ROLE+'" target="_blank" style="color:#0891B2">FA Goods →</a></p></div>';
+  html+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
+  html+='<button class="rbtn" onclick="window.open(\'/fa-goods.html?role=\'+ROLE,\'_blank\')" style="background:#ECFEFF;color:#0891B2;border-color:#A5F3FC">Open FA Goods</button>';
+  html+='</div></div>';
+
+  // KPIs
+  html+='<div class="sr" style="margin-bottom:12px">';
+  html+=kpi({label:'📐 Groups',value:filtered.length,color:'#0891B2'});
+  html+=kpi({label:'📦 Pallets',value:totalPlt,color:'var(--ac)'});
+  html+=kpi({label:'🚛 On Trucks',value:placedCount,color:'var(--gn)'});
+  html+='</div>';
+
+  if(!sorted.length){
+    html+='<div style="text-align:center;padding:24px;color:var(--tt);font-size:12px">No FA groups for this venue.</div>';
+    el.innerHTML=html;return;
+  }
+
+  // Table
+  html+='<div style="flex:1;overflow-y:auto"><table class="lp-tbl" style="width:100%;font-size:11px">';
+  html+='<thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th style="text-align:center">Items</th><th style="text-align:center">Pallets</th><th>LM Truck</th><th>Dispatch</th><th>Status</th></tr></thead><tbody>';
+  for(const g of sorted){
+    const tk=faOnTruck[g.id];
+    const hasTruck=!!tk;
+    const isLate=hasTruck&&g.biDate&&tk.biK&&tk.biK>g.biDate;
+    const statusBadge=!hasTruck?(g.pallets>0?'<span class="bg bgs bg-or">Pending</span>':'<span class="bg bgs bg-gy">0 plt</span>'):(isLate?'<span class="bg bgs bg-rd">Late</span>':(tk.faTruck?'<span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">FA Truck</span>':'<span class="bg bgs bg-gn">On Truck</span>'));
+    html+='<tr>';
+    html+='<td class="mono" style="font-size:10px;color:#0891B2">'+g.sku+'</td>';
+    html+='<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(g.venue||'')+'">'+(g.venue||'—')+'</td>';
+    html+='<td style="color:var(--pu)">'+(g.fa||'—')+'</td>';
+    html+='<td>'+_fmtD(g.biDate)+'</td>';
+    html+='<td class="mono" style="text-align:center">'+(g.items||[]).length+'</td>';
+    html+='<td class="mono" style="text-align:center">'+(g.pallets||0)+'</td>';
+    html+='<td>'+(hasTruck?'<span class="mono fw6" style="color:'+(tk.faTruck?'#0891B2':'var(--gn)')+'">'+tk.truckId+'</span>'+(tk.locked?' 🔒':''):'—')+'</td>';
+    html+='<td>'+_fmtD(tk?.dd)+'</td>';
+    html+='<td>'+statusBadge+'</td>';
+    html+='</tr>';
+  }
+  html+='</tbody></table></div>';
+
+  html+='<div style="margin-top:10px;padding:8px 14px;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:8px;font-size:10px;color:#0891B2">';
+  html+='FA groups with pallets > 0 are injected onto LM trucks. If no existing truck has capacity, a dedicated <b>FA Truck</b> is created.</div>';
+  el.innerHTML=html;
+}
+
 // ── LM DEMAND TAB ──
 function LM_renderDemand(el){
   if(!RW.length){el.innerHTML='<div class="lp-empty">No demand data loaded.</div>';return}
@@ -14487,6 +14619,9 @@ if(cv==="pallets"){LM_renderPalletCmp(el);return}
 
 // ── HOLDS VIEW ──
 if(cv==="holds"){LM_renderHolds(el);return}
+
+// ── FA GOODS VIEW ──
+if(cv==="fagoods"){LM_renderFAGoods(el);return}
 
 // ── DEMAND VIEW ──
 if(cv==="demand"){LM_renderDemand(el);return}
@@ -15330,7 +15465,7 @@ if(cv==="dashboard"){
         const daysAtCort=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
         const _fcCargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
         const _fcLsr=LM_getLsr(t);const _fcFa=_faMatchTruck(t.id,clDisp(label),_fcLsr);
-        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:_fcLsr,isCort:_hasCort,asmCount,dispLoc:_fcDispLoc,clusterLabel:_fcClusterLabel,lateCount,vtype:window._fcVtype||'other',cargo:_fcCargo,faCount:_fcFa?.count||0});
+        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:_fcLsr,isCort:_hasCort,asmCount,dispLoc:_fcDispLoc,clusterLabel:_fcClusterLabel,lateCount,vtype:window._fcVtype||'other',cargo:_fcCargo,faCount:_fcFa?.count||0,faTruck:!!t._faTruck});
       }
     };
     // 1. USA cluster trucks (Step A)
@@ -15399,7 +15534,7 @@ if(cv==="dashboard"){
           h+=`<tr class="ufc-wk" data-vtype="${r.vtype}"${_fcHide?' style="display:none"':r.dispatched?' style="background:var(--gs)"':''}>
             <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
             <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':''}</td>
-            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
+            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${r.faTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
             <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
             <td>${dStr}</td>
             <td class="mono" style="text-align:center">${r.transit}d</td>
@@ -15446,7 +15581,7 @@ if(cv==="dashboard"){
           const daysBeforeBI=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
           const _fcCargo2=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
           const _fcLsr2=LM_getLsr(t);const _fcFa2=_faMatchTruck(t.id,v.name,_fcLsr2);
-          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,daysBeforeBI,lsr:_fcLsr2,asmCount,lateCount,dispLoc:_dispLoc,cargo:_fcCargo2,faCount:_fcFa2?.count||0});
+          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,daysBeforeBI,lsr:_fcLsr2,asmCount,lateCount,dispLoc:_dispLoc,cargo:_fcCargo2,faCount:_fcFa2?.count||0,faTruck:!!t._faTruck});
         }
       });
       if(!_rows.length)return;
@@ -15482,7 +15617,7 @@ if(cv==="dashboard"){
           h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
             <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
             <td style="font-size:11px;font-weight:600">${r.dest}</td>
-            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}</td>
+            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${r.faTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
             <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
             <td>${dStr}</td>
             <td class="mono" style="text-align:center">${r.transit}d</td>
