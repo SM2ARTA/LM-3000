@@ -1195,7 +1195,8 @@ function FA_renderGroups(){
     // LM: manual link or engine assignment
     const lmRef=g.linkedLM||(asgn.lm?asgn.lm.truckId:null);
     const lmIsEngine=!g.linkedLM&&asgn.lm;
-    const lmDisp=lmRef?'<span class="bg" style="background:'+(lmIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'var(--ps);color:var(--pu);border:1px solid #D4C5FE')+'">'+lmRef+'</span>'+(asgn.lm&&asgn.lm.locked?' 🔒':(g.linkedLM&&_faIsLocked(g.linkedLM)?' 🔒':'')):'<span style="color:var(--tt)">—</span>';
+    const isFaTruck=asgn.lm&&asgn.lm.faTruck;
+    const lmDisp=lmRef?'<span class="bg" style="background:'+(lmIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'var(--ps);color:var(--pu);border:1px solid #D4C5FE')+'">'+lmRef+'</span>'+(isFaTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':'')+(asgn.lm&&asgn.lm.locked?' 🔒':(g.linkedLM&&_faIsLocked(g.linkedLM)?' 🔒':'')):'<span style="color:var(--tt)">—</span>';
     const kitDisp=g.linkedKit?'<span class="bg bg-gn">📦 '+g.linkedKit+'</span>':'<span style="color:var(--tt)">—</span>';
     const hasAsgn=lpRef||lmRef;
     const statusBadge=isLocked?'<span class="bg bg-gn">🔒 Locked</span>':hasAsgn?'<span class="bg bg-cy">On Truck</span>':g.pallets>0?'<span class="bg bg-or">Pallets set</span>':'<span class="bg bg-gy">Open</span>';

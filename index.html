@@ -10767,7 +10767,7 @@ function _saveFaAssignments(){
         for(const it of t.items||[]){
           if(it._fa&&it._faGroup){
             if(!assigns[it._faGroup])assigns[it._faGroup]={};
-            assigns[it._faGroup].lm={truckId:t.id,date:t.dd||t.dKey||'',dest:t.destLabel||label,biK:t.biK||t.origBiK||'',locked:LM_isDispatched(t)};
+            assigns[it._faGroup].lm={truckId:t.id,date:t.dd||t.dKey||'',dest:t.destLabel||label,biK:t.biK||t.origBiK||'',locked:LM_isDispatched(t),faTruck:!!t._faTruck};
           }
         }
       }
