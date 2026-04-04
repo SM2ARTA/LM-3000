@@ -602,6 +602,24 @@ async function FA_loadLinked(){
     if(Object.keys(FA_LINKED).length>3)console.log('[ML3K] FA linked:',Object.keys(FA_LINKED).length-3,'trucks/groups');
   }catch(e){console.warn('[ML3K] FA load error:',e)}
 }
+// Refresh FA_LINKED pallets from LP_FA_GROUPS (called after LP_loadFaGoods when pallets are recomputed)
+function _faRefreshLinkedPallets(){
+  if(!FA_LINKED._groups||!LP_FA_GROUPS.length)return;
+  const _byKey={};for(const fg of LP_FA_GROUPS)_byKey[fg.sku]=fg;
+  const items=FA_LINKED._items||[];const itemById={};for(const it of items)itemById[it.id]=it;
+  // Reset all plt values
+  for(const k in FA_LINKED){if(k.startsWith('_'))continue;if(FA_LINKED[k]&&typeof FA_LINKED[k].plt==='number')FA_LINKED[k].plt=0}
+  if(FA_LINKED._byVenue)for(const v in FA_LINKED._byVenue)FA_LINKED._byVenue[v].plt=0;
+  // Recompute from groups with corrected pallets
+  for(const g of FA_LINKED._groups){
+    const fg=_byKey[g.sku];
+    const plt=fg?.pallets||g.pallets||0;
+    if(g.linkedLP&&FA_LINKED[g.linkedLP])FA_LINKED[g.linkedLP].plt+=plt;
+    if(g.linkedLM&&FA_LINKED[g.linkedLM])FA_LINKED[g.linkedLM].plt+=plt;
+    if(g.linkedKit&&FA_LINKED[g.linkedKit])FA_LINKED[g.linkedKit].plt+=plt;
+    if(g.venue&&FA_LINKED._byVenue&&FA_LINKED._byVenue[g.venue])FA_LINKED._byVenue[g.venue].plt+=plt;
+  }
+}
 function _faHasKit(kitId){
   // Check by kit ID (numeric), kit SKU, or FA_LINKED key
   if(FA_LINKED[kitId])return FA_LINKED[kitId];
@@ -666,8 +684,11 @@ function _faGroupItems(groupId){
   if(!groups.length||!items.length)return[];
   const g=groups.find(g=>g.id===groupId);if(!g)return[];
   const itemById={};for(const it of items)itemById[it.id]=it;
+  const _lpFg=(LP_FA_GROUPS||[]).find(fg=>fg.sku===g.sku);
+  const _gPlt=_lpFg?.pallets||g.pallets||0;
+  const _gFa=g.fa||'FA';
   const result=[];
-  for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'})}
+  for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each',_groupPlt:_gPlt,fa:_gFa,_groupSku:g.sku})}
   return result;
 }
 function _faItemsForTruck(truckId,dest,lsr){
@@ -687,7 +708,10 @@ function _faItemsForTruck(truckId,dest,lsr){
       }
       if(match){
         seenSkus.add(g.sku);
-        for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each'})}
+        const _lpFg=(LP_FA_GROUPS||[]).find(fg=>fg.sku===g.sku);
+        const _gPlt=_lpFg?.pallets||g.pallets||0;
+        const _gFa=g.fa||'FA';
+        for(const did of g.items||[]){const it=itemById[did];if(it)result.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,biDate:g.biDate||it.biDate||'',venue:g.venue||it.venue||'',src:'FA',uom:'Each',_groupPlt:_gPlt,fa:_gFa,_groupSku:g.sku})}
       }
     }
   }
@@ -8922,6 +8946,7 @@ function enterApp(){
     try{
       lpOk=await LP_loadFromSupabase();
       await LP_loadFaGoods().catch(()=>{});
+      _faRefreshLinkedPallets();// FA_LINKED was built before LP_FA_GROUPS — refresh pallets
       // Rebuild LP→LM arrival FIFO (was built empty during numberAll before LP data loaded)
       if(lpOk&&LP_STATE?.generatedPlan?.length)try{LM_buildLPArrivalFifo()}catch(e){}
       // Re-inject FA groups into LM trucks (LP_FA_GROUPS loaded AFTER first numberAll)
@@ -9078,7 +9103,7 @@ async function syncLP(){
   await _syncSpin('LP',async()=>{
     const had=LP_STATE.planGenerated;
     await LP_loadFromSupabase();
-    await LP_loadFaGoods().catch(()=>{});
+    await LP_loadFaGoods().catch(()=>{});_faRefreshLinkedPallets();
     await stockReportLoad().catch(()=>{});
     if(LP_STATE.planGenerated)LP_render();
     else if(had){document.getElementById('LP_US').style.display='flex'}
@@ -9094,7 +9119,7 @@ async function syncV26(){
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadNomOverrides().catch(()=>{}),FA_loadLinked().catch(()=>{})]);
     LM_injectAll();LM_applyNomOverrides();bV();_stpValidateVenues();numberAll();
     await LP_loadFromSupabase().catch(()=>{});
-    await LP_loadFaGoods().catch(()=>{});
+    await LP_loadFaGoods().catch(()=>{});_faRefreshLinkedPallets();
     V26_render();
   });
 }
@@ -9444,7 +9469,7 @@ function renderTruckCard(t,opts){
       ${MI_get(MI_lmKey(t)).length?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs bg-pu">✏️ ${MI_get(MI_lmKey(t)).length} manual</span></div>`:''}
       ${(()=>{if(!t.items)return'';const kitItems=t.items.filter(it=>NOM[it.sku]?._kitNom||it._kitNom);if(!kitItems.length)return'';const badges=kitItems.map(it=>{const frozen=it._kitItems||null;const r=LM_kitReadiness(NOM[it.sku]?._kitId||it._kitId,frozen);if(!r.total)return'';const sc=STOCK_SKUS.size===0?'var(--tt)':(r.pct>=100?'var(--gn)':r.pct>=50?'var(--or)':'var(--rd)');const bg=STOCK_SKUS.size===0?'var(--bg)':(r.pct>=100?'var(--gs)':r.pct>=50?'var(--os)':'var(--rs)');return`<span class="bg bgs" style="background:${bg};color:${sc};border:1px solid ${sc}40">📦 Kit ${STOCK_SKUS.size===0?'—':r.pct+'%'} (${r.inStock}/${r.total})</span>`}).filter(Boolean).join(' ');return badges?`<div style="font-size:9px;margin-top:2px">${badges}</div>`:''})()}
       ${(()=>{if(!t.items||!opts.venueType)return'';const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,opts.venueType,opts.country)).length;return ac>0?`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:var(--os);color:var(--or);border:1px solid var(--or)40">🔧 ${ac} assembly</span></div>`:''})()}
-      ${(()=>{const _lsr=LM_getLsr(t);const _dest=t.destLabel||t.dest||opts.displayName||'';const _faIt=_faItemsForTruck(t.id,_dest,_lsr);if(!_faIt.length)return'';const _fmtBi=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};const byBi={};_faIt.forEach(i=>{const k=i.biDate||'';if(!byBi[k])byBi[k]={count:0,qty:0,plt:0,fas:new Set()};byBi[k].count++;byBi[k].qty+=i.qty;byBi[k].plt+=i.pallets||0;byBi[k].fas.add(i.fa||'FA')});return Object.keys(byBi).sort().map(k=>{const g=byBi[k];const label=[...g.fas].join(', ');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 ${label}: ${g.count} items · ${g.qty}qty · ${g.plt.toFixed(1)}plt${k?' · BI: '+_fmtBi(k):''}</span></div>`}).join('')})()}
+      ${(()=>{const _lsr=LM_getLsr(t);const _dest=t.destLabel||t.dest||opts.displayName||'';const _faIt=_faItemsForTruck(t.id,_dest,_lsr);if(!_faIt.length)return'';const _fmtBi=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};const byGrp={};_faIt.forEach(i=>{const k=i._groupSku||i.biDate||'';if(!byGrp[k])byGrp[k]={count:0,qty:0,plt:0,fas:new Set(),biDate:i.biDate||''};byGrp[k].count++;byGrp[k].qty+=i.qty;byGrp[k].plt=i._groupPlt||byGrp[k].plt||i.pallets||0;byGrp[k].fas.add(i.fa||'FA');if(i.biDate)byGrp[k].biDate=i.biDate});const totalPlt=Object.values(byGrp).reduce((s,g)=>s+g.plt,0);const totalQty=Object.values(byGrp).reduce((s,g)=>s+g.qty,0);const totalCount=_faIt.length;const allFas=new Set();Object.values(byGrp).forEach(g=>g.fas.forEach(f=>allFas.add(f)));const bis=[...new Set(Object.values(byGrp).map(g=>g.biDate).filter(Boolean))].sort();const biStr=bis.length===1?' · BI: '+_fmtBi(bis[0]):(bis.length>1?' · BI: '+_fmtBi(bis[0])+'–'+_fmtBi(bis[bis.length-1]):'');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 FA: ${totalCount} items · ${totalQty}qty · ${totalPlt}plt${biStr}</span></div>`})()}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
@@ -13124,7 +13149,7 @@ if(_lmFaMatch){
   const _lmFaItems=_faItemsForTruck(t.id,_lmFaDest,_lmFaLsr);
   if(_lmFaItems.length){
     h+=`<div style="margin-top:10px;padding:10px;border:1px solid #A5F3FC;border-radius:8px;background:#ECFEFF">
-      <div style="font-size:11px;font-weight:700;color:#0891B2;margin-bottom:6px">📦 FA Goods on this truck (${_lmFaItems.length} items · ${_lmFaItems.reduce((s,x)=>s+x.qty,0)} qty · ${_lmFaItems.reduce((s,x)=>s+(x.pallets||0),0).toFixed(1)} plt)</div>
+      <div style="font-size:11px;font-weight:700;color:#0891B2;margin-bottom:6px">📦 FA Goods on this truck (${_lmFaItems.length} items · ${_lmFaItems.reduce((s,x)=>s+x.qty,0)} qty · ${(()=>{const _gs={};_lmFaItems.forEach(x=>{const k=x._groupSku||x.sku;if(!_gs[k])_gs[k]=x._groupPlt||x.pallets||0});return Object.values(_gs).reduce((s,v)=>s+v,0)})()} plt)</div>
       <table class="dtb" style="font-size:10px"><thead><tr><th>SKU</th><th>Name</th><th style="text-align:right">Qty</th><th style="text-align:right">Plt</th></tr></thead><tbody>`;
     _lmFaItems.forEach(fi=>{h+=`<tr style="background:#F0FDFE"><td class="mono fw6" style="color:#0891B2">${fi.sku}</td><td>${fi.name}</td><td class="mono fw6" style="text-align:right">${fi.qty}</td><td class="mono" style="text-align:right;color:var(--pu)">${fi.pallets?fi.pallets.toFixed(1):'—'}</td></tr>`});
     h+=`</tbody></table>
