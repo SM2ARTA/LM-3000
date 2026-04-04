@@ -805,16 +805,35 @@ async function _faPasteAiPallets(rawVenue,btn){
     const isAsm=!!asmMap[rawVenue+'|'+i.sku];
     return i.name+' × '+i.qty+(isAsm?' [ASSEMBLED - no packaging, bare item]':'');
   }).join('\n');
-  const sys=`You estimate pallet space for logistics shipments. Standard pallet: 48×40 inches (1.2×1.0m), max height 60in.
-RULES:
-- TVs are SECOND-HAND from previous event — NOT in retail boxes. Wrapped in protective foam/blanket only.
-- TVs CANNOT be stacked in layers — single layer only, laid flat on pallet.
-- TV 55" and larger: each TV takes ~1 pallet space. TV 75"+ or 85"+: assume DOUBLE pallet (2 spaces per unit).
-- TV 43" and smaller: 2-4 can share a pallet depending on size.
-- Items marked [ASSEMBLED] ship bare (no box) — bulkier, cannot stack.
-- Small items (printers, stands, cables): multiple can share a pallet.
-Return ONLY JSON: {"pallets":number,"reasoning":"brief"}. Decimal ok (0.1 = small box on shared pallet).`;
-  const usr='Estimate pallets for these FA/technology items:\n\n'+itemList+'\n\nReturn JSON only.';
+  const sys=`You are a logistics pallet estimation specialist for the FIFA World Cup 2026™ ground transport operation.
+
+CONTEXT: We are shipping FA (Functional Area) technology equipment to tournament venues across USA, Canada, and Mexico. Items ship from a central Dallas warehouse to satellite warehouses, then last-mile to venues. Equipment includes TVs, printers, IT hardware, AV gear, furniture, and office supplies for operational areas (media centres, accreditation, VIP hospitality, broadcast compounds, team base camps).
+
+STANDARD PALLET: 48×40 inches (1219×1016mm), max stack height 60 inches (1524mm). Trucks hold up to 26 pallets.
+
+TV PALLETISATION RULES:
+- TVs are REUSED from previous FIFA events (Qatar 2022, etc.) — they are IN ORIGINAL RETAIL BOXES but boxes may be worn/resealed.
+- TVs CANNOT be stacked like factory production pallets. Single layer only — boxes are not structurally reinforced for multi-layer stacking after reuse.
+- TV 32"–43": 2–4 units per pallet (laid flat, single layer). Box dims ~110×65×15cm for 43".
+- TV 55": 1 unit per pallet. Box ~140×85×18cm. Just fits a standard pallet.
+- TV 65": 1 unit per pallet. Box ~155×95×20cm. Overhangs slightly.
+- TV 75": DOUBLE PALLET (2 pallet spaces). Box ~180×110×22cm. Cannot fit single pallet.
+- TV 85": DOUBLE PALLET (2 pallet spaces). Box ~200×120×25cm.
+- TV 100"+: DOUBLE PALLET minimum. May need custom crating.
+
+GENERAL RULES:
+- Items marked [ASSEMBLED] ship without original packaging (bare/wrapped) — bulkier footprint, cannot stack other items on top.
+- Large printers (e.g., "Big Printer", A3+): ~0.3–0.5 pallet each depending on size. Boxes are sturdy, can stack 2 high.
+- Small printers, label printers: 4–8 per pallet.
+- TV stands/mounts: compact, 10–20 per pallet unless assembled.
+- Monitor arms, cables, small accessories: many per pallet (0.05–0.1 each).
+- Ribbon/consumables: very small, negligible pallet space unless bulk quantity.
+- When in doubt, round UP — better to reserve slightly more space than arrive short.
+
+Return ONLY valid JSON: {"pallets": number, "reasoning": "brief explanation of calculation"}
+Number can be decimal (e.g., 0.3 = small items sharing a pallet). Be specific in reasoning.`;
+  const mapped=P.venueMap[rawVenue]||rawVenue;
+  const usr='Estimate total pallet spaces needed for this shipment to '+mapped+':\n\n'+itemList+'\n\nCalculate per item, then sum. Return JSON only.';
   try{
     let text='';
     if(provider==='gemini'){const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}]})});const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.[0]?.text||''}
