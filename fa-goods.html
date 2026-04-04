@@ -318,7 +318,11 @@ async function FA_loadML3K(){
         return{id:numId,sku,name,venue:k.venue||'',type:sku.startsWith('FNKIT')?'FF&E':'Stationery',truckRef:trRef};
       });
     }
-    console.log('[FA] ML3K lookup: '+FA_ML3K_VENUES.length+' venues, '+FA_ML3K_TRUCKS.length+' trucks, '+FA_ML3K_KITS.length+' kits');
+    // Load main NOM for pallet estimates (pq/ps per SKU)
+    const nomData=await FA_sbRead('fm-nom');
+    window._faML3KNom={};
+    if(nomData&&typeof nomData==='object'){for(const sku in nomData){const n=nomData[sku];if(n.pq&&n.ps)window._faML3KNom[sku]={pq:n.pq,ps:n.ps}}}
+    console.log('[FA] ML3K lookup: '+FA_ML3K_VENUES.length+' venues, '+FA_ML3K_TRUCKS.length+' trucks, '+FA_ML3K_KITS.length+' kits, '+Object.keys(window._faML3KNom).length+' NOM pallet entries');
     // Load FA assignments (engine truck placements from ML3K)
     const assigns=await FA_sbRead('fa-assignments');
     if(assigns&&typeof assigns==='object'){FA_ASSIGNMENTS=assigns;console.log('[FA] Assignments loaded:',Object.keys(assigns).length,'groups')}
@@ -1077,7 +1081,7 @@ function FA_renderGroups(){
       <td>${dispDate?_fmtD(dispDate):'<span style="color:var(--tt)">—</span>'}</td>
       <td>${delDate?_fmtD(delDate):'<span style="color:var(--tt)">—</span>'}</td>
       <td class="mono" style="text-align:right">${(g.items||[]).length}</td>
-      <td style="text-align:center"><span class="mono fw6" style="color:${g.pallets>0?'var(--ac)':'var(--tt)'}">${g.pallets||0}</span></td>
+      <td style="text-align:center" onclick="event.stopPropagation()"><input type="number" value="${g.pallets||0}" min="0" max="26" step="0.1" style="width:50px;font-family:var(--fm);font-size:11px;text-align:center;border:1px solid ${g.pallets>0?'var(--ac)':'var(--bd)'};border-radius:4px;padding:2px;color:${g.pallets>0?'var(--ac)':'var(--tt)'}" onchange="FA_setGroupPallets(${g.id},this.value)" ${isLocked?'readonly':''}><button onclick="event.stopPropagation();FA_aiPallets(${g.id},this)" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--cy)" title="AI estimate">🤖</button></td>
       <td>${lpDisp}</td>
       <td>${lmDisp}</td>
       <td>${kitDisp}</td>
@@ -1086,6 +1090,46 @@ function FA_renderGroups(){
   h+='</tbody></table>';
   document.getElementById('grpTable').innerHTML=h;
   FA_filterGroups();
+}
+function FA_setGroupPallets(id,val){
+  const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
+  g.pallets=parseFloat(val)||0;FA_saveGroups();
+}
+async function FA_aiPallets(id,btn){
+  const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
+  const items=FA_DEMAND.filter(d=>g.items&&g.items.includes(d.id));
+  if(!items.length)return alert('No items in this group');
+  const provider=localStorage.getItem('hs-ai-provider')||'';
+  const key=localStorage.getItem('hs-ai-key')||'';
+  if(!provider||!key){alert('No AI provider configured. Set up in ML3K → HS Code → AI Settings.');return}
+  btn.textContent='⏳';btn.disabled=true;
+  const itemList=items.map(i=>i.name+' × '+i.qty).join('\n');
+  const sys='You estimate pallet space for logistics shipments. A standard pallet is 48×40 inches, max height 60 inches. Return ONLY a JSON object: {"pallets": number, "reasoning": "brief explanation"}. Number can be decimal (e.g. 0.5 for half pallet).';
+  const usr='Estimate pallet space needed for these items being shipped to a FIFA World Cup venue:\n\n'+itemList+'\n\nConsider typical packaging dimensions for these products. Return JSON only.';
+  try{
+    let text='';
+    if(provider==='gemini'){
+      const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}]})});
+      const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    } else if(provider==='anthropic'){
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,system:sys,messages:[{role:'user',content:usr}]})});
+      const j=await r.json();text=j?.content?.[0]?.text||'';
+    } else if(provider==='openai'){
+      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:300})});
+      const j=await r.json();text=j?.choices?.[0]?.message?.content||'';
+    }
+    // Parse JSON from response
+    const match=text.match(/\{[\s\S]*?"pallets"\s*:\s*([\d.]+)[\s\S]*?\}/);
+    if(match){
+      const pallets=parseFloat(match[1]);
+      const reasoning=text.match(/"reasoning"\s*:\s*"([^"]*)"/)?.[1]||'';
+      const input=btn.parentElement.querySelector('input[type="number"]');
+      if(input&&confirm('AI suggests '+pallets+' pallets'+(reasoning?'\n\n'+reasoning:'')+'\n\nApply?')){
+        input.value=pallets;g.pallets=pallets;FA_saveGroups();
+      }
+    } else {alert('AI response:\n'+text)}
+  }catch(e){alert('AI error: '+e.message)}
+  btn.textContent='🤖';btn.disabled=false;
 }
 function FA_filterGroups(){
   const q=(document.getElementById('grpSearch').value||'').toLowerCase();
