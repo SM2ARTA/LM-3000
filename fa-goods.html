@@ -1394,7 +1394,7 @@ function FA_renderGroups(){
   _grpData.sort((a,b)=>{
     if(_s==='dispatch')return(a.dispDate||'9').localeCompare(b.dispDate||'9')||(a.g.venue||'').localeCompare(b.g.venue||'');
     if(_s==='venue')return(a.g.venue||'').localeCompare(b.g.venue||'')||(a.g.biDate||'9').localeCompare(b.g.biDate||'9');
-    return(a.g.biDate||'9').localeCompare(b.g.biDate||'9')||(a.g.venue||'').localeCompare(b.g.venue||'');
+    return(a.g.biDate||'9').localeCompare(b.g.biDate||'9')||(a.dispDate||'9').localeCompare(b.dispDate||'9')||(a.g.venue||'').localeCompare(b.g.venue||'');
   });
   let h='<table class="dtb"><thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th>Dispatch</th><th>Delivery</th><th style="text-align:right">Items</th><th style="text-align:center">Pallets</th><th style="text-align:right">Value</th><th>LP Truck</th><th>LM Truck</th><th>Kit</th><th>Status</th></tr></thead><tbody>';
   for(const{g,asgn,lpRef,lmT,dispDate,delDate} of _grpData){
