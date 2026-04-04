@@ -701,234 +701,104 @@ function FA_showPasteDemand(){
   document.getElementById('_faPasteArea').focus();
 }
 
+// ── Step 1: Parse pasted data into items ──
 function _faParsePaste(){
   const raw=document.getElementById('_faPasteArea').value;
-  if(!raw.trim()){document.getElementById('_faPastePreview').innerHTML='<div style="color:var(--tt);font-size:11px">Nothing to parse.</div>';return}
+  if(!raw.trim()){document.getElementById('_faPastePreview').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">Paste data then click Preview.</div>';return}
   const fa=document.getElementById('_faPasteFa').value.trim()||'TEC';
-  const defaultDate=document.getElementById('_faPasteDate').value||'';
+  const dd=document.getElementById('_faPasteDate').value||'';
   const lines=raw.split('\n').map(l=>l.split('\t').map(c=>c.trim()));
   if(!lines.length)return;
-
-  // Detect format: matrix if first row has 4+ columns and data rows have numbers in columns 3+
-  // Row format if columns are: SKU, Name, Venue, Qty (narrow)
   const hdr=lines[0];
-  const dataRows=lines.filter((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
-  const hasNumbers=dataRows.some(r=>r.slice(2).some(c=>c&&/^\d+$/.test(c.trim())));
-  const isMatrix=hdr.length>=4&&hasNumbers;
-
+  const dRows=lines.filter((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
+  const isMatrix=hdr.length>=4&&dRows.some(r=>r.slice(2).some(c=>/^\d+$/.test(c||'')));
   const items=[];
-  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
-
   if(isMatrix){
-    // Matrix: find venue columns — keep raw header text as venue name (mapping step resolves)
-    const venueCols=[];// [{col, venue, biDate}]
-    for(let c=2;c<hdr.length;c++){
-      const cell=hdr[c];if(!cell||/^\d+$/.test(cell))continue;// skip pure numbers
-      venueCols.push({col:c,venue:cell,biDate:''});
-    }
-    // Check row 2-3 for dates (Delivery Date row)
-    for(let r=1;r<Math.min(4,lines.length);r++){
-      const row=lines[r];if(!row)continue;
-      const hasDate=venueCols.some(vc=>row[vc.col]&&/\d/.test(row[vc.col]));
-      if(hasDate){
-        for(const vc of venueCols){
-          const cell=row[vc.col];if(!cell)continue;
-          // Try parse date: "15-May", "May 15", "2026-05-15", etc.
-          const d=_faTryDate(cell);if(d)vc.biDate=d;
-        }
-      }
-    }
-    // Data rows: start after header+metadata rows
-    const dataStart=lines.findIndex((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
-    if(dataStart>=0){
-      for(let r=dataStart;r<lines.length;r++){
-        const row=lines[r];if(!row||!row[0])continue;
-        const sku=row[0];const name=row[1]||FA_NOM[sku]?.name||sku;
-        for(const vc of venueCols){
-          const qty=parseInt(row[vc.col]);
-          if(!qty||qty<=0)continue;
-          const biDate=vc.biDate||defaultDate;
-          const key=sku+'|'+vc.venue+'|'+qty;
-          items.push({sku,name,venue:vc.venue,fa,qty,biDate,dup:_existing.has(key)});
-        }
-      }
-    }
+    const vc=[];for(let c=2;c<hdr.length;c++){if(hdr[c]&&!/^\d+$/.test(hdr[c]))vc.push({col:c,venue:hdr[c],biDate:''})}
+    for(let r=1;r<Math.min(5,lines.length);r++){const row=lines[r];if(!row)continue;for(const v of vc){const d=_faTryDate(row[v.col]);if(d)v.biDate=d}}
+    const ds=lines.findIndex((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
+    if(ds>=0)for(let r=ds;r<lines.length;r++){const row=lines[r];if(!row||!row[0])continue;const sku=row[0],nm=row[1]||FA_NOM[sku]?.name||sku;for(const v of vc){const q=parseInt(row[v.col]);if(q>0)items.push({sku,name:nm,venue:v.venue,fa,qty:q,biDate:v.biDate||dd})}}
   } else {
-    // Row format: each line is SKU, Name?, Venue, Qty, Date?
-    for(const row of lines){
-      if(!row||!row[0]||row[0].toLowerCase()==='sku')continue;
-      let sku,name,venue,qty,biDate;
-      if(row.length>=5){sku=row[0];name=row[1];venue=row[2];qty=parseInt(row[3]);biDate=_faTryDate(row[4])||defaultDate}
-      else if(row.length>=4){sku=row[0];name=row[1];venue=row[2];qty=parseInt(row[3]);biDate=defaultDate}
-      else if(row.length>=3){sku=row[0];venue=row[1];qty=parseInt(row[2]);name=FA_NOM[sku]?.name||sku;biDate=defaultDate}
-      else continue;
-      if(!sku||!venue||!qty||qty<=0)continue;
-      // Keep raw venue name — mapping step handles resolution
-      items.push({sku,name:name||sku,venue,fa,qty,biDate:biDate||'',dup:false});
-    }
+    for(const row of lines){if(!row||!row[0]||row[0].toLowerCase()==='sku')continue;let s,n,v,q,d;
+      if(row.length>=5){s=row[0];n=row[1];v=row[2];q=parseInt(row[3]);d=_faTryDate(row[4])||dd}
+      else if(row.length>=4){s=row[0];n=row[1];v=row[2];q=parseInt(row[3]);d=dd}
+      else if(row.length>=3){s=row[0];v=row[1];q=parseInt(row[2]);n=FA_NOM[s]?.name||s;d=dd}
+      else continue;if(s&&v&&q>0)items.push({sku:s,name:n||s,venue:v,fa,qty:q,biDate:d||''})}
   }
+  window._faPaste={items,venueMap:{},dateMap:{},ovrMap:{}};
+  // Best-guess venue mapping
+  const rv=[...new Set(items.map(i=>i.venue))];
+  for(const r of rv){
+    const exact=FA_ML3K_VENUES.find(v=>v.name===r);
+    if(exact){window._faPaste.venueMap[r]=r;continue}
+    let best='',bestN=0;const rl=r.toLowerCase();
+    for(const v of FA_ML3K_VENUES){const vl=v.name.toLowerCase();const n=rl.split(/[\s,\/]+/).filter(w=>w.length>2&&vl.includes(w)).length;if(n>bestN){bestN=n;best=v.name}}
+    window._faPaste.venueMap[r]=best;
+    // Init date from parsed or ML3K venue
+    const gd=items.find(i=>i.venue===r)?.biDate||'';
+    const vd=FA_ML3K_VENUES.find(v=>v.name===best)?.biDate||'';
+    window._faPaste.dateMap[r]=gd||vd||dd;
+  }
+  _faRenderPasteCards();
+}
+function _faTryDate(s){if(!s)return'';if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const w=s.includes('202')?s:s+' 2026';const d=new Date(w);if(!isNaN(d))return d.toISOString().slice(0,10);const m=/(\d{1,2})[-\/](\w+)/.exec(s);if(m){const d2=new Date(m[2]+' '+m[1]+', 2026');if(!isNaN(d2))return d2.toISOString().slice(0,10)}return''}
 
-  window._faPasteItems=items;
-  window._faPasteVenueMap={};
-
-  // Group by raw venue, find best match for each
-  const rawVenues=[...new Set(items.map(i=>i.venue))];
-  const venueOpts=FA_ML3K_VENUES.map(v=>'<option value="'+v.name+'">'+v.name+'</option>').join('');
-
-  let preview='<div style="font-size:11px;margin-bottom:8px"><b>'+items.length+'</b> items across <b>'+rawVenues.length+'</b> venues. Map each venue below:</div>';
-
+// ── Step 2: Render venue cards (full rebuild on every change) ──
+function _faRenderPasteCards(){
+  const P=window._faPaste;if(!P||!P.items.length){document.getElementById('_faPastePreview').innerHTML='<div style="color:var(--tt);text-align:center;padding:20px">No items parsed.</div>';return}
+  // Build existing demand lookup: sku|venue → qty
+  const exist={};FA_DEMAND.forEach(d=>{exist[d.sku+'|'+d.venue]=d.qty});
+  const rawVenues=[...new Set(P.items.map(i=>i.venue))];
+  const opts=FA_ML3K_VENUES.map(v=>'<option value="'+v.name+'">'+v.name+'</option>').join('');
+  let h='<div style="font-size:11px;margin-bottom:6px"><b>'+P.items.length+'</b> items · <b>'+rawVenues.length+'</b> venues</div>';
   for(const rv of rawVenues){
-    const group=items.filter(i=>i.venue===rv);
-    // Best guess by word overlap
-    let bestGuess='';let bestScore=0;
-    const rl=rv.toLowerCase();
-    const exact=FA_ML3K_VENUES.find(v=>v.name===rv);
-    if(exact){bestGuess=rv}
-    else{
-      for(const v of FA_ML3K_VENUES){
-        const vl=v.name.toLowerCase();
-        const rWords=rl.split(/[\s,\/]+/).filter(w=>w.length>2);
-        const vWords=vl.split(/[\s,\/]+/).filter(w=>w.length>2);
-        const overlap=rWords.filter(w=>vWords.some(vw=>vw.includes(w)||w.includes(vw))).length;
-        if(overlap>bestScore){bestScore=overlap;bestGuess=v.name}
-      }
+    const grp=P.items.filter(i=>i.venue===rv);
+    const mapped=P.venueMap[rv]||'';
+    const dt=P.dateMap[rv]||'';
+    // Count overlaps
+    let nNew=0,nSame=0,nDiff=0;
+    if(mapped)for(const it of grp){const k=it.sku+'|'+mapped;if(exist[k]===undefined)nNew++;else if(exist[k]===it.qty)nSame++;else nDiff++}
+    const hasOld=nSame+nDiff>0;
+    const ovr=P.ovrMap[rv]!==undefined?P.ovrMap[rv]:hasOld;// default checked when existing found
+    const e=rv.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    h+=`<div style="margin-bottom:8px;padding:10px;background:var(--sf);border:1px solid ${hasOld?'var(--pu)':'var(--bd)'};border-radius:8px">`;
+    h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><b>"${rv}"</b> <span class="bg bg-gy">${grp.length}</span>`;
+    if(mapped){if(nNew)h+=` <span class="bg bg-gn">${nNew} new</span>`;if(nSame)h+=` <span class="bg bg-gy">${nSame} same</span>`;if(nDiff)h+=` <span class="bg bg-pu">${nDiff} qty↕</span>`}
+    h+=`</div>`;
+    h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Map to</span><select style="flex:1;font-size:11px" onchange="window._faPaste.venueMap['${e}']=this.value;_faRenderPasteCards()"><option value="">— skip —</option>${opts.replace('value="'+mapped+'"','value="'+mapped+'" selected')}></select></div>`;
+    h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">BI Date</span><input type="date" value="${dt}" style="font-size:11px;font-family:var(--fm)" onchange="window._faPaste.dateMap['${e}']=this.value"></div>`;
+    if(hasOld)h+=`<label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer"><input type="checkbox" ${ovr?'checked':''} onchange="window._faPaste.ovrMap['${e}']=this.checked"> Overwrite ${nSame+nDiff} existing</label>`;
+    // Items with qty diff annotations
+    h+=`<div style="font-size:10px;color:var(--ts)">`;
+    for(const it of grp.slice(0,5)){
+      const ex=mapped?exist[it.sku+'|'+mapped]:undefined;
+      const mark=ex===undefined?'':(ex===it.qty?' <span style="color:var(--tt)">=</span>':' <span style="color:var(--pu)">was '+ex+'</span>');
+      h+=`<div style="display:flex;gap:6px"><span class="mono" style="color:var(--cy)">${it.sku}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.name}</span><span class="mono fw6">${it.qty}</span>${mark}</div>`;
     }
-    window._faPasteVenueMap[rv]=bestGuess;
-
-    const _venueBi=FA_ML3K_VENUES.find(v=>v.name===bestGuess)?.biDate||'';
-    const groupDate=group[0]?.biDate||'';
-    const esc=rv.replace(/"/g,'&quot;');
-
-    preview+=`<div style="margin-bottom:10px;padding:10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:12px;font-weight:700;color:var(--tp)">"${rv}"</span>
-        <span class="bg bg-gy">${group.length} items</span>
-        <span class="_faMatchInfo" style="font-size:10px;color:var(--tt)"></span>
-      </div>
-      <div class="form-row" style="margin-bottom:4px">
-        <span class="form-label" style="font-size:10px">Map to →</span>
-        <select class="_faPasteVenueSelect" data-raw="${esc}" style="flex:1;font-size:11px" onchange="_faPasteVenueChanged()">
-          <option value="">— skip this venue —</option>${venueOpts}
-        </select>
-      </div>
-      <div class="form-row" style="margin-bottom:4px;align-items:center">
-        <span class="form-label" style="font-size:10px">BI Date</span>
-        <input type="date" class="_faPasteDateInput" data-raw="${esc}" value="${groupDate||_venueBi||''}" style="font-size:11px;font-family:var(--fm)">
-        <label class="_faOvrLabel" style="font-size:10px;color:var(--pu);display:none;align-items:center;gap:4px;margin-left:12px"><input type="checkbox" class="_faPasteOvrAllow" data-raw="${esc}" checked> Overwrite existing</label>
-      </div>
-      <div style="margin-top:6px;font-size:10px;color:var(--ts)">`;
-    // Show items summary
-    for(const it of group.slice(0,5)){
-      preview+=`<div style="display:flex;gap:8px"><span class="mono" style="color:var(--cy)">${it.sku}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.name}</span><span class="mono fw6">${it.qty}</span></div>`;
-    }
-    if(group.length>5)preview+=`<div style="color:var(--tt)">...+${group.length-5} more</div>`;
-    preview+=`</div></div>`;
-
+    if(grp.length>5)h+=`<div style="color:var(--tt)">...+${grp.length-5} more</div>`;
+    h+=`</div></div>`;
   }
-
-  document.getElementById('_faPastePreview').innerHTML=preview;
-  // Auto-select best guesses AFTER DOM is rendered, then run detection once
-  for(const rv of rawVenues){
-    const bg=window._faPasteVenueMap[rv];
-    if(bg){const sel=document.querySelector('select._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');if(sel)sel.value=bg}
-  }
-  _faPasteVenueChanged();// single detection pass after all selects set
-  const addBtn=document.getElementById('_faPasteAddBtn');if(addBtn)addBtn.disabled=!items.length;
+  document.getElementById('_faPastePreview').innerHTML=h;
+  document.getElementById('_faPasteAddBtn').disabled=false;
 }
 
-function _faTryDate(s){
-  if(!s)return'';
-  // ISO format
-  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
-  // Try JS parse with "2026" hint
-  const withYear=s.includes('202')?s:s+' 2026';
-  const d=new Date(withYear);
-  if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);
-  // "15-May" format
-  const m=/(\d{1,2})[-\/](\w+)/.exec(s);
-  if(m){const d2=new Date(m[2]+' '+m[1]+', 2026');if(!isNaN(d2.getTime()))return d2.toISOString().slice(0,10)}
-  return'';
-}
-
-function _faPasteVenueChanged(){
-  document.querySelectorAll('._faPasteVenueSelect').forEach(sel=>{
-    const raw=sel.dataset.raw;if(raw)window._faPasteVenueMap[raw]=sel.value||'';
-  });
-  // Recheck matches per venue
-  const map=window._faPasteVenueMap||{};
-  const _existSkuVenue={};// sku|venue → {qty}
-  FA_DEMAND.forEach(d=>{_existSkuVenue[d.sku+'|'+d.venue]=d.qty});
-  const items=window._faPasteItems||[];
-  const rawVenues=[...new Set(items.map(i=>i.venue))];
-  for(const rv of rawVenues){
-    const resolved=map[rv]||'';
-    const group=items.filter(i=>i.venue===rv);
-    const card=document.querySelector('._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');
-    if(!card)continue;
-    const cardDiv=card.closest('div[style*="margin-bottom"]');if(!cardDiv)continue;
-    const infoEl=cardDiv.querySelector('._faMatchInfo');
-    const ovrLabel=cardDiv.querySelector('._faOvrLabel');
-    if(!resolved){
-      if(infoEl)infoEl.innerHTML='';
-      if(ovrLabel)ovrLabel.style.display='none';
-      continue;
-    }
-    // Count: exact match (same qty), qty diff, new
-    let exact=0,qtyDiff=0,newItems=0;
-    for(const it of group){
-      const k=it.sku+'|'+resolved;
-      if(_existSkuVenue[k]!==undefined){
-        if(_existSkuVenue[k]===it.qty)exact++;else qtyDiff++;
-      } else newItems++;
-    }
-    // Info text
-    let info=[];
-    if(newItems)info.push('<span style="color:var(--gn)">'+newItems+' new</span>');
-    if(exact)info.push('<span style="color:var(--tt)">'+exact+' same</span>');
-    if(qtyDiff)info.push('<span style="color:var(--pu)">'+qtyDiff+' qty diff</span>');
-    if(infoEl)infoEl.innerHTML=info.join(' · ');
-    // Show overwrite checkbox only when there are existing items (exact or qty diff)
-    if(ovrLabel)ovrLabel.style.display=(exact+qtyDiff>0)?'flex':'none';
-  }
-}
-
+// ── Step 3: Confirm and add ──
 function _faConfirmPaste(){
-  if(!window._faPasteItems){alert('Run Preview first.');return}
-  _faPasteVenueChanged();
-  const map=window._faPasteVenueMap||{};
-  // Read per-venue dates
-  const dateMap={};
-  document.querySelectorAll('._faPasteDateInput').forEach(inp=>{if(inp.dataset.raw&&inp.value)dateMap[inp.dataset.raw]=inp.value});
-  // Read overwrite checkboxes
-  const ovrVenues=new Set();
-  document.querySelectorAll('._faPasteOvrAllow:checked').forEach(cb=>{ovrVenues.add(cb.dataset.raw)});
-
+  const P=window._faPaste;if(!P||!P.items.length){alert('Run Preview first.');return}
+  const exist={};FA_DEMAND.forEach(d=>{exist[d.sku+'|'+d.venue]=true});
   let added=0,skipped=0,overwritten=0;
-  // Group pasted items by raw venue
-  const byRawVenue={};
-  for(const it of window._faPasteItems){if(!byRawVenue[it.venue])byRawVenue[it.venue]=[];byRawVenue[it.venue].push(it)}
-
-  for(const rv in byRawVenue){
-    const resolved=map[rv];
-    if(!resolved){skipped+=byRawVenue[rv].length;continue}
-    const biDate=dateMap[rv]||'';
-    const group=byRawVenue[rv];
-    // If overwrite checked: remove all existing demand for SKUs in this group at this venue, then add all
-    if(ovrVenues.has(rv)){
-      const pasteSKUs=new Set(group.map(i=>i.sku));
-      const before=FA_DEMAND.length;
-      FA_DEMAND=FA_DEMAND.filter(d=>!(d.venue===resolved&&pasteSKUs.has(d.sku)));
-      overwritten+=before-FA_DEMAND.length;
-    }
-    for(const it of group){
-      FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:resolved,fa:it.fa,qty:it.qty,biDate:biDate||it.biDate||'',note:'',created:new Date().toISOString()});
-      added++;
-    }
+  const byVenue={};for(const it of P.items){if(!byVenue[it.venue])byVenue[it.venue]=[];byVenue[it.venue].push(it)}
+  for(const rv in byVenue){
+    const mapped=P.venueMap[rv];if(!mapped){skipped+=byVenue[rv].length;continue}
+    const bi=P.dateMap[rv]||'';const grp=byVenue[rv];
+    const doOvr=P.ovrMap[rv]!==undefined?P.ovrMap[rv]:false;
+    if(doOvr){const skus=new Set(grp.map(i=>i.sku));const b=FA_DEMAND.length;FA_DEMAND=FA_DEMAND.filter(d=>!(d.venue===mapped&&skus.has(d.sku)));overwritten+=b-FA_DEMAND.length}
+    else{const existSet=new Set(FA_DEMAND.filter(d=>d.venue===mapped).map(d=>d.sku));const before=grp.length;grp.splice(0,grp.length,...grp.filter(i=>!existSet.has(i.sku)));skipped+=before-grp.length}
+    for(const it of grp){FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:mapped,fa:it.fa,qty:it.qty,biDate:bi||it.biDate||'',note:'',created:new Date().toISOString()});added++}
   }
-  window._faPasteItems=null;window._faPasteVenueMap=null;
-  document.getElementById('faModal').innerHTML='';
+  window._faPaste=null;document.getElementById('faModal').innerHTML='';
   FA_saveDebounced();FA_render();
-  console.log('[FA] Paste: added '+added+', overwritten '+overwritten+', venue-skipped '+skipped);
+  console.log('[FA] Paste: added '+added+', overwritten '+overwritten+', skipped '+skipped);
 }
 
 function FA_renderDemand(){
