@@ -805,57 +805,37 @@ async function _faPasteAiPallets(rawVenue,btn){
     const isAsm=!!asmMap[rawVenue+'|'+i.sku];
     return i.name+' × '+i.qty+(isAsm?' [ASSEMBLED - no packaging, bare item]':'');
   }).join('\n');
-  const sys=`You are an expert logistics pallet estimation specialist working for the FIFA World Cup 2026™ ground transport operation in North America.
+  const sys=`You are an expert logistics pallet estimation specialist for the FIFA World Cup 2026™.
 
-YOUR TASK: Given a list of items with quantities, estimate the total pallet spaces needed for shipping.
+TASK: Estimate total standard pallet spaces needed for a list of items with quantities.
 
-LOGISTICS CONTEXT:
-- Operation: FIFA World Cup 2026, venues across USA, Canada, Mexico
-- Shipping: Dallas central warehouse → satellite warehouses → last-mile to venues
-- Items: FA (Functional Area) equipment for event operations — accreditation, media, broadcast, VIP, team facilities
-- Items may include: TVs, monitors, printers, IT hardware, AV equipment, furniture, signage, office supplies, medical equipment, massage/physio equipment, catering equipment, or anything else needed at tournament venues
+CONTEXT: FIFA World Cup 2026 venue operations across USA, Canada, Mexico. Items ship from Dallas warehouse to venues. Equipment is for Functional Areas: accreditation, media, broadcast, VIP hospitality, medical, team operations, and more.
 
-PALLET SPECIFICATION:
-- Standard pallet: 48×40 inches (122×102cm), max stack height 60 inches (152cm)
-- Trucks hold up to 26 pallets
+PALLET: Standard 48×40 inches (122×102cm). Max stack height 60 inches (152cm). Trucks hold 26 pallets.
 
-YOUR APPROACH — for each item:
-1. IDENTIFY the specific product from its name. Use your knowledge of real products, brands, and models. The name describes the actual item — read it carefully.
-2. ESTIMATE the boxed/packaged dimensions (L×W×H in cm). Consider:
-   - Is this a known brand/model? Use real-world box dimensions from your knowledge.
-   - If unknown, estimate from the product category and description.
-   - Items marked [ASSEMBLED] ship bare (no box) — estimate the physical footprint of the bare item. These are bulkier and cannot have items stacked on top.
-3. CALCULATE how many fit per pallet:
-   - Can they stack? Heavy/fragile items (TVs, monitors, furniture) = single layer only.
-   - Light sturdy boxes (printers, small electronics) can stack 2-3 layers within 152cm height.
-   - Consider orientation: tall items may stand upright, flat items lay down.
-4. COMPUTE pallets: quantity ÷ items-per-pallet. Use exact decimals, NO ceiling rounding.
+FOR EACH ITEM:
+1. IDENTIFY the product. Use the exact name given — research what this product actually is. Consider brand, model, typical use in major sporting events.
+2. DETERMINE its shipping dimensions. Use your knowledge of real product packaging. If you know the specific product, use its actual box size. If unsure, estimate conservatively from the product category.
+3. CALCULATE how many fit per pallet considering: orientation (upright/flat/stacked), fragility (can items stack on top?), box shape, and weight.
+4. COMPUTE: quantity ÷ items-per-pallet = pallet spaces. Use exact decimals, NO rounding per item.
+5. Items marked [ASSEMBLED] have no packaging — ship bare/wrapped. Estimate physical footprint. Cannot stack anything on top.
 
-IMPORTANT RULES:
-- TVs: reused from FIFA Club World Cup 2025 (FCWC25), in original retail boxes. Place VERTICALLY (upright). Cannot stack. 55"+ TVs = 1 per pallet (box exceeds pallet). 75"+ = DOUBLE pallet (2 spaces).
-- Event printers (Zebra, Magicard, HID Fargo, Evolis): these are CARD PRINTERS for accreditation, NOT office printers. Desktop-sized (~40×25×25cm boxed).
-- "ACR" in venue name = Accreditation Centre context.
-- Furniture (tables, desks, massage tables, chairs): estimate actual product dimensions. Flat-pack = more per pallet. Assembled/built = 1-2 per pallet typically.
-- When unsure about a product, state your assumption in reasoning.
-- Round UP slightly for safety margin — better to reserve 0.5 pallet extra than arrive short.
+Round the FINAL total up slightly for safety — better to over-reserve than arrive short.
 
-OUTPUT FORMAT — return ONLY valid JSON:
-{"pallets": number, "reasoning": "detailed per-item breakdown"}
+OUTPUT — ONLY valid JSON:
+{"pallets": number, "reasoning": "per-item breakdown"}
 
-Reasoning MUST contain:
-- One line per item: product identification, estimated box size, items per pallet, calculation
-- Final line: sum of all = total
-- Use \\n for line breaks
+Reasoning format (use \\n for line breaks):
+- One line per item: what it is, estimated box size, how many per pallet, math
+- Last line: sum = total
+- Example: "Samsung 55\\" TV x5: ~140×85×18cm box, upright 1/pallet → 5/1 = 5.0\\nZebra ZC350 x3: ~45×30×25cm, stack 2 high = 16/pallet → 3/16 = 0.19\\nTotal: 5.0 + 0.19 = 5.19 pallets"
 
-Example reasoning:
-"Zebra ZC350 Card Printer x3: ~45×30×25cm boxed, stackable 2 high, ~16/pallet → 3/16 = 0.19 plt\\nSamsung 55\\" TV x5: ~140×85×18cm boxed, upright, 1/pallet → 5/1 = 5.0 plt\\nTV Floor Stand x2: ~150×20×20cm boxed, lay flat, ~6/pallet → 2/6 = 0.33 plt\\nTotal: 0.19 + 5.0 + 0.33 = 5.52 pallets"
-
-CRITICAL: "pallets" value MUST exactly equal the arithmetic sum shown in reasoning. Verify before responding.`;
+CRITICAL: The "pallets" number MUST equal the sum in reasoning. Verify arithmetic.`;
   const mapped=P.venueMap[rawVenue]||rawVenue;
-  const usr='Estimate total pallet spaces needed for this shipment to '+mapped+':\n\n'+itemList+'\n\nCalculate per item, then sum. Return JSON only.';
+  const usr='Estimate total pallet spaces for this shipment to '+mapped+':\n\n'+itemList+'\n\nFor each item, identify the actual product and its real packaging dimensions. If unsure, search for similar products to find typical box sizes. Calculate per item, sum total. Return JSON only.';
   try{
     let text='';
-    if(provider==='gemini'){const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}]})});const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.[0]?.text||''}
+    if(provider==='gemini'){const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}],tools:[{google_search:{}}]})});const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||''}
     else if(provider==='anthropic'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:[{role:'user',content:usr}]})});const j=await r.json();text=j?.content?.[0]?.text||''}
     else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:1200})});const j=await r.json();text=j?.choices?.[0]?.message?.content||''}
     const match=text.match(/"pallets"\s*:\s*([\d.]+)/);
