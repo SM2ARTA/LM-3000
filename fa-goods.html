@@ -477,6 +477,8 @@ function FA_parseNom(file){
       const srcCol=hdrs.find(h=>hl(h).includes('source'))||hdrs.find(h=>hl(h).includes('supplier'));
       const pqCol=hdrs.find(h=>h.toLowerCase().includes('pallet')&&h.toLowerCase().includes('quantity')&&h.toLowerCase().includes('disassembled'))||hdrs.find(h=>hl(h).includes('disqty'))||hdrs.find(h=>hl(h).includes('palletqty')||hl(h)==='pq');
       const psCol=hdrs.find(h=>h.toLowerCase().includes('pallet')&&h.toLowerCase().includes('spaces')&&h.toLowerCase().includes('disassembled'))||hdrs.find(h=>hl(h).includes('disspc'))||hdrs.find(h=>hl(h).includes('palletspc')||hl(h)==='ps');
+      const pqACol=hdrs.find(h=>h.toLowerCase().includes('pallet')&&h.toLowerCase().includes('quantity')&&h.toLowerCase().includes('assembled')&&!h.toLowerCase().includes('dis'))||hdrs.find(h=>hl(h)==='pqa');
+      const psACol=hdrs.find(h=>h.toLowerCase().includes('pallet')&&h.toLowerCase().includes('spaces')&&h.toLowerCase().includes('assembled')&&!h.toLowerCase().includes('dis'))||hdrs.find(h=>hl(h)==='psa');
       const ppuCol=hdrs.find(h=>hl(h)==='ppu'||hl(h).includes('piecesper')||hl(h).includes('perunit')||h.toLowerCase().includes('pieces per'));
       const hsCol=hdrs.find(h=>hl(h)==='hscode'||h.toLowerCase().includes('hs code'));
       const countryCol=hdrs.find(h=>h.toLowerCase().includes('country of origin'));
@@ -489,16 +491,22 @@ function FA_parseNom(file){
       for(const row of rows){
         const sku=String(row[skuCol]||'').trim();
         if(!sku||sku.toLowerCase()==='total')continue;
+        const existing=FA_NOM[sku];
+        const isManual=existing&&existing._manual;
         FA_NOM[sku]={
           name:String(row[nameCol]||'').trim(),
           uom:uomCol?String(row[uomCol]||'').trim():'Each',
           src:srcCol?String(row[srcCol]||'').trim():'',
-          pq:pqCol?parseFloat(row[pqCol])||0:0,
-          ps:psCol?parseFloat(row[psCol])||0:0,
+          // Preserve manual pq/ps if _manual flag set
+          pq:isManual&&existing.pq?(existing.pq):(pqCol?parseFloat(row[pqCol])||0:0),
+          ps:isManual&&existing.ps?(existing.ps):(psCol?parseFloat(row[psCol])||0:0),
+          pqA:pqACol?parseFloat(row[pqACol])||0:(existing?.pqA||0),
+          psA:psACol?parseFloat(row[psACol])||0:(existing?.psA||0),
           ppu:ppuCol?parseFloat(row[ppuCol])||1:1,
           price:priceCol?parseFloat(String(row[priceCol]||'').replace(/[,$]/g,''))||0:0,
           hsCode:hsCol?String(row[hsCol]||'').trim():'',
-          country:countryCol?String(row[countryCol]||'').trim():''
+          country:countryCol?String(row[countryCol]||'').trim():'',
+          _manual:isManual||false
         };
         count++;
       }
@@ -552,10 +560,10 @@ function FA_renderNom(){
   const skus=Object.keys(FA_NOM).sort();
   document.getElementById('nomCount').textContent=skus.length+' SKUs';
   if(!skus.length){document.getElementById('nomTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No nomenclature loaded. Upload a file or add SKUs manually.</div>';return}
-  let h='<table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th>UoM</th><th style="text-align:right">Plt Qty</th><th style="text-align:right">Plt Spc</th><th style="text-align:right">Price</th><th></th></tr></thead><tbody>';
+  let h='<table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th>UoM</th><th style="text-align:right" title="Disassembled: Pallet Qty">PQ</th><th style="text-align:right" title="Disassembled: Pallet Space">PS</th><th style="text-align:right" title="Assembled: Pallet Qty">PQ(A)</th><th style="text-align:right" title="Assembled: Pallet Space">PS(A)</th><th style="text-align:right">Price</th><th></th></tr></thead><tbody>';
   for(const sku of skus){
     const n=FA_NOM[sku];
-    h+=`<tr data-search="${sku} ${n.name} ${n.src}"><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src}</td><td>${n.uom}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td>${_faIsViewer()?'':'<td><button class="rbtn" onclick="FA_deleteNom(\''+sku+'\')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td>'}</tr>`;
+    h+=`<tr data-search="${sku} ${n.name} ${n.src}"><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src}</td><td>${n.uom}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.pqA||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.psA||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td>${_faIsViewer()?'':'<td><button class="rbtn" onclick="FA_deleteNom(\''+sku+'\')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td>'}</tr>`;
   }
   h+='</tbody></table>';
   document.getElementById('nomTable').innerHTML=h;
@@ -774,33 +782,36 @@ function _faRenderPasteCards(){
     if(hasOld)h+=`<label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer"><input type="checkbox" ${ovr?'checked':''} onchange="window._faPaste.ovrMap['${e}']=this.checked"> Overwrite ${nSame+nDiff} existing</label>`;
     // Per-item pallet calculation from NOM (pq/ps)
     if(!P.asmMap)P.asmMap={};
-    if(!P.pltOvr)P.pltOvr={};// manual pallet overrides: "venue|sku" → number
+    if(!P.pqOvr)P.pqOvr={};// manual pq overrides: "sku" → number
+    if(!P.psOvr)P.psOvr={};// manual ps overrides: "sku" → number
     const nom=window._faML3KNom||{};
     let grpTotal=0;
-    h+=`<div style="font-size:10px;max-height:200px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="color:var(--ts);border-bottom:1px solid var(--bd)"><th style="width:16px" title="Assembled">A</th><th style="text-align:left">SKU</th><th style="text-align:left">Name</th><th style="text-align:right">Qty</th><th style="text-align:right">PQ</th><th style="text-align:right">PS</th><th style="text-align:right;min-width:50px">Pallets</th><th></th></tr></thead><tbody>`;
+    h+=`<div style="font-size:10px;max-height:200px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="color:var(--ts);border-bottom:1px solid var(--bd)"><th style="width:16px" title="Assembled">A</th><th style="text-align:left">SKU</th><th style="text-align:left">Name</th><th style="text-align:right">Qty</th><th style="text-align:right;min-width:38px">PQ</th><th style="text-align:right;min-width:38px">PS</th><th style="text-align:right">Pallets</th></tr></thead><tbody>`;
     for(const it of grp){
       const asmKey=rv+'|'+it.sku;
       const isAsm=!!P.asmMap[asmKey];
       const n=nom[it.sku]||{};
-      const pq=isAsm?(n.pqA||n.pq||0):(n.pq||0);
-      const ps=isAsm?(n.psA||n.ps||0):(n.ps||0);
-      const hasNom=pq>0&&ps>0;
-      const calcPlt=hasNom?Math.round((it.qty/pq)*ps*100)/100:0;
-      const ovrKey=rv+'|'+it.sku;
-      const manualPlt=P.pltOvr[ovrKey];
-      const effectivePlt=manualPlt!==undefined?manualPlt:calcPlt;
-      grpTotal+=effectivePlt;
+      const nomPq=isAsm?(n.pqA||0):(n.pq||0);
+      const nomPs=isAsm?(n.psA||0):(n.ps||0);
+      // Manual PQ/PS override (per SKU, shared across venues)
+      const pq=P.pqOvr[it.sku]!==undefined?P.pqOvr[it.sku]:nomPq;
+      const ps=P.psOvr[it.sku]!==undefined?P.psOvr[it.sku]:nomPs;
+      const hasData=pq>0&&ps>0;
+      const calcPlt=hasData?Math.round((it.qty/pq)*ps*100)/100:0;
+      grpTotal+=calcPlt;
+      const pqIsOvr=P.pqOvr[it.sku]!==undefined;
+      const psIsOvr=P.psOvr[it.sku]!==undefined;
       const ex=mapped?exist[it.sku+'|'+mapped]:undefined;
       const mark=ex===undefined?'':(ex===it.qty?' <span style="color:var(--tt)">=</span>':' <span style="color:var(--pu)">was '+ex+'</span>');
+      const _inp='width:36px;font-size:10px;font-family:var(--fm);text-align:right;border-radius:3px;padding:1px 2px;';
       h+=`<tr style="border-bottom:1px solid var(--bl)">`;
-      h+=`<td><input type="checkbox" ${isAsm?'checked':''} onchange="window._faPaste.asmMap['${asmKey.replace(/'/g,"\\'")}']=this.checked;_faRenderPasteCards()" style="margin:0" title="Assembled"></td>`;
+      h+=`<td><input type="checkbox" ${isAsm?'checked':''} onchange="window._faPaste.asmMap['${asmKey.replace(/'/g,"\\'")}']=this.checked;_faRenderPasteCards()" style="margin:0" title="Assembled (use pqA/psA)"></td>`;
       h+=`<td class="mono" style="color:var(--cy)">${it.sku}</td>`;
-      h+=`<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px">${it.name}${mark}</td>`;
+      h+=`<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">${it.name}${mark}</td>`;
       h+=`<td class="mono" style="text-align:right">${it.qty}</td>`;
-      h+=`<td class="mono" style="text-align:right;color:${hasNom?'var(--ts)':'var(--rd)'}">${pq||'—'}</td>`;
-      h+=`<td class="mono" style="text-align:right;color:${hasNom?'var(--ts)':'var(--rd)'}">${ps||'—'}</td>`;
-      h+=`<td style="text-align:right"><input type="number" value="${effectivePlt}" min="0" step="0.1" style="width:50px;font-size:10px;font-family:var(--fm);text-align:right;border:1px solid ${manualPlt!==undefined?'var(--pu)':hasNom?'var(--bd)':'var(--rd)'};border-radius:3px;padding:1px 3px;color:${manualPlt!==undefined?'var(--pu)':hasNom?'var(--tp)':'var(--rd)'}" onchange="window._faPaste.pltOvr['${ovrKey.replace(/'/g,"\\'")}']=parseFloat(this.value)||0;_faRenderPasteCards()" title="${hasNom?'Calc: '+it.qty+'/'+pq+'×'+ps+'='+calcPlt:'No NOM data — manual input required'}"></td>`;
-      h+=`<td style="width:12px">${manualPlt!==undefined?'<span onclick="delete window._faPaste.pltOvr[\''+ovrKey.replace(/'/g,"\\'")+'\'];_faRenderPasteCards()" style="cursor:pointer;color:var(--tt);font-size:12px" title="Reset to calculated">↻</span>':''}</td>`;
+      h+=`<td><input type="number" value="${pq||''}" min="0" step="1" style="${_inp}border:1px solid ${pqIsOvr?'var(--pu)':hasData?'var(--bd)':'var(--rd)'};color:${pqIsOvr?'var(--pu)':hasData?'var(--tp)':'var(--rd)'}" onchange="window._faPaste.pqOvr['${it.sku}']=parseFloat(this.value)||0;_faRenderPasteCards()" placeholder="—"></td>`;
+      h+=`<td><input type="number" value="${ps||''}" min="0" step="0.1" style="${_inp}border:1px solid ${psIsOvr?'var(--pu)':hasData?'var(--bd)':'var(--rd)'};color:${psIsOvr?'var(--pu)':hasData?'var(--tp)':'var(--rd)'}" onchange="window._faPaste.psOvr['${it.sku}']=parseFloat(this.value)||0;_faRenderPasteCards()" placeholder="—"></td>`;
+      h+=`<td class="mono fw6" style="text-align:right;color:${hasData?'var(--ac)':'var(--rd)'}">${hasData?calcPlt:'—'}</td>`;
       h+=`</tr>`;
     }
     h+=`</tbody></table></div>`;
@@ -823,18 +834,27 @@ function _faConfirmPaste(){
     const doOvr=P.ovrMap[rv]!==undefined?P.ovrMap[rv]:false;
     if(doOvr){const skus=new Set(grp.map(i=>i.sku));const b=FA_DEMAND.length;FA_DEMAND=FA_DEMAND.filter(d=>!(d.venue===mapped&&skus.has(d.sku)));overwritten+=b-FA_DEMAND.length}
     else{const existSet=new Set(FA_DEMAND.filter(d=>d.venue===mapped).map(d=>d.sku));const before=grp.length;grp.splice(0,grp.length,...grp.filter(i=>!existSet.has(i.sku)));skipped+=before-grp.length}
-    const nom=window._faML3KNom||{};
     for(const it of grp){
       const asmKey=rv+'|'+it.sku;const isAsm=!!P.asmMap?.[asmKey];
-      const ovrKey=rv+'|'+it.sku;const manualPlt=P.pltOvr?.[ovrKey];
       FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:mapped,fa:it.fa,qty:it.qty,biDate:bi||it.biDate||'',note:'',
         _asm:isAsm||undefined,
-        _pltOvr:manualPlt!==undefined?manualPlt:undefined,
         created:new Date().toISOString()});
       added++;
     }
   }
+  // Save manual PQ/PS overrides to FA_NOM
+  const pqOvr=P.pqOvr||{};const psOvr=P.psOvr||{};
+  let nomChanged=false;
+  for(const sku in pqOvr){
+    if(!FA_NOM[sku])FA_NOM[sku]={name:P.items.find(i=>i.sku===sku)?.name||sku,src:'',uom:'Each',pq:0,ps:0,pqA:0,psA:0,price:0};
+    FA_NOM[sku].pq=pqOvr[sku];FA_NOM[sku]._manual=true;nomChanged=true;
+  }
+  for(const sku in psOvr){
+    if(!FA_NOM[sku])FA_NOM[sku]={name:P.items.find(i=>i.sku===sku)?.name||sku,src:'',uom:'Each',pq:0,ps:0,pqA:0,psA:0,price:0};
+    FA_NOM[sku].ps=psOvr[sku];FA_NOM[sku]._manual=true;nomChanged=true;
+  }
   window._faPaste=null;document.getElementById('faModal').innerHTML='';
+  if(nomChanged)FA_saveNom();
   FA_saveDebounced();FA_render();
   console.log('[FA] Paste: added '+added+', overwritten '+overwritten+', skipped '+skipped);
 }
@@ -1070,16 +1090,16 @@ function FA_saveGroupEdit(id){
 // Compute group pallets from demand items + NOM pq/ps
 function FA_computeGroupPallets(g){
   if(!g||!g.items)return 0;
-  const nom=window._faML3KNom||{};
+  const ml3kNom=window._faML3KNom||{};
   let total=0;
   for(const did of g.items){
     const d=FA_DEMAND.find(x=>x.id===did);if(!d)continue;
-    // Manual override takes priority
-    if(d._pltOvr!==undefined){total+=d._pltOvr;continue}
-    const n=nom[d.sku]||{};
+    // Look up pq/ps: FA_NOM first (has manual overrides), then ML3K NOM
+    const fn=FA_NOM[d.sku]||{};
+    const mn=ml3kNom[d.sku]||{};
     const isAsm=!!d._asm;
-    const pq=isAsm?(n.pqA||n.pq||0):(n.pq||0);
-    const ps=isAsm?(n.psA||n.ps||0):(n.ps||0);
+    const pq=isAsm?(fn.pqA||mn.pqA||fn.pq||mn.pq||0):(fn.pq||mn.pq||0);
+    const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
     if(pq>0&&ps>0)total+=(d.qty/pq)*ps;
   }
   return Math.round(total*100)/100;
