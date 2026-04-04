@@ -824,11 +824,15 @@ function _faParsePaste(){
     if(group.length>5)preview+=`<div style="color:var(--tt)">...+${group.length-5} more</div>`;
     preview+=`</div></div>`;
 
-    // Auto-select best guess and trigger change detection
-    if(bestGuess)setTimeout(()=>{const sel=document.querySelector('select._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');if(sel){sel.value=bestGuess;_faPasteVenueChanged()}},0);
   }
 
   document.getElementById('_faPastePreview').innerHTML=preview;
+  // Auto-select best guesses AFTER DOM is rendered, then run detection once
+  for(const rv of rawVenues){
+    const bg=window._faPasteVenueMap[rv];
+    if(bg){const sel=document.querySelector('select._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');if(sel)sel.value=bg}
+  }
+  _faPasteVenueChanged();// single detection pass after all selects set
   const addBtn=document.getElementById('_faPasteAddBtn');if(addBtn)addBtn.disabled=!items.length;
 }
 
