@@ -717,7 +717,7 @@ function _faParsePaste(){
   const isMatrix=hdr.length>=4&&hasNumbers;
 
   const items=[];
-  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue));
 
   if(isMatrix){
     // Matrix: find venue columns — keep raw header text as venue name (mapping step resolves)
@@ -748,7 +748,7 @@ function _faParsePaste(){
           const qty=parseInt(row[vc.col]);
           if(!qty||qty<=0)continue;
           const biDate=vc.biDate||defaultDate;
-          const key=sku+'|'+vc.venue+'|'+qty;
+          const key=sku+'|'+vc.venue;
           items.push({sku,name,venue:vc.venue,fa,qty,biDate,dup:_existing.has(key)});
         }
       }
@@ -796,7 +796,7 @@ function _faParsePaste(){
     window._faPasteVenueMap[rv]=bestGuess;
 
     // Count duplicates
-    const dupCount=bestGuess?group.filter(i=>_existing.has(i.sku+'|'+bestGuess+'|'+i.qty)).length:0;
+    const dupCount=bestGuess?group.filter(i=>_existing.has(i.sku+'|'+bestGuess)).length:0;
     const newCount=group.length-dupCount;
 
     preview+=`<div style="margin-bottom:10px;padding:10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">
@@ -849,13 +849,13 @@ function _faPasteVenueChanged(){
   });
   // Recheck dups with resolved venues and update badges
   const map=window._faPasteVenueMap||{};
-  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue));
   const items=window._faPasteItems||[];
   const rawVenues=[...new Set(items.map(i=>i.venue))];
   for(const rv of rawVenues){
     const resolved=map[rv]||'';
     const group=items.filter(i=>i.venue===rv);
-    const dupCount=resolved?group.filter(i=>_existing.has(i.sku+'|'+resolved+'|'+i.qty)).length:0;
+    const dupCount=resolved?group.filter(i=>_existing.has(i.sku+'|'+resolved)).length:0;
     // Update dup badge in card
     const card=document.querySelector('._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');
     if(!card)continue;
@@ -884,7 +884,7 @@ function _faConfirmPaste(){
   // Read venue selections
   _faPasteVenueChanged();
   const map=window._faPasteVenueMap||{};
-  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue));
   // Read duplicate-allow checkboxes
   const dupAllow=new Set();
   document.querySelectorAll('._faPasteDupAllow:checked').forEach(cb=>{dupAllow.add(cb.dataset.raw)});
@@ -893,7 +893,7 @@ function _faConfirmPaste(){
   for(const it of window._faPasteItems){
     const resolved=map[it.venue];
     if(!resolved){skipped++;continue}// venue skipped
-    const key=it.sku+'|'+resolved+'|'+it.qty;
+    const key=it.sku+'|'+resolved;
     if(_existing.has(key)&&!dupAllow.has(it.venue)){dupSkipped++;continue}// duplicate
     FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:resolved,fa:it.fa,qty:it.qty,biDate:it.biDate,note:'',created:new Date().toISOString()});
     _existing.add(key);// prevent intra-paste duplicates
