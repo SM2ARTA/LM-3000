@@ -803,7 +803,7 @@ function _faParsePaste(){
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:12px;font-weight:700;color:var(--tp)">"${rv}"</span>
         <span class="bg bg-gy">${group.length} items</span>
-        ${dupCount?'<span class="bg bg-or">'+dupCount+' dup</span>':''}
+        ${dupCount?'<span class="_faDupBadge bg bg-or">'+dupCount+' dup</span>':''}
       </div>
       <div class="form-row" style="margin-bottom:4px">
         <span class="form-label" style="font-size:10px">Map to →</span>
@@ -811,7 +811,7 @@ function _faParsePaste(){
           <option value="">— skip this venue —</option>${venueOpts}
         </select>
       </div>
-      ${dupCount?'<div style="margin-top:4px"><label style="font-size:10px;color:var(--or);display:flex;align-items:center;gap:4px"><input type="checkbox" class="_faPasteDupAllow" data-raw="'+rv.replace(/"/g,'&quot;')+'""> Add duplicates anyway ('+dupCount+')</label></div>':''}
+      ${dupCount?'<div class="_faDupChkDiv" style="margin-top:4px"><label style="font-size:10px;color:var(--or);display:flex;align-items:center;gap:4px"><input type="checkbox" class="_faPasteDupAllow" data-raw="'+rv.replace(/"/g,'&quot;')+'""> Add duplicates anyway ('+dupCount+')</label></div>':''}
       <div style="margin-top:6px;font-size:10px;color:var(--ts)">`;
     // Show items summary
     for(const it of group.slice(0,5)){
@@ -847,6 +847,36 @@ function _faPasteVenueChanged(){
   document.querySelectorAll('._faPasteVenueSelect').forEach(sel=>{
     const raw=sel.dataset.raw;if(raw)window._faPasteVenueMap[raw]=sel.value||'';
   });
+  // Recheck dups with resolved venues and update badges
+  const map=window._faPasteVenueMap||{};
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
+  const items=window._faPasteItems||[];
+  const rawVenues=[...new Set(items.map(i=>i.venue))];
+  for(const rv of rawVenues){
+    const resolved=map[rv]||'';
+    const group=items.filter(i=>i.venue===rv);
+    const dupCount=resolved?group.filter(i=>_existing.has(i.sku+'|'+resolved+'|'+i.qty)).length:0;
+    // Update dup badge in card
+    const card=document.querySelector('._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');
+    if(!card)continue;
+    const cardDiv=card.closest('div[style*="margin-bottom"]');if(!cardDiv)continue;
+    // Update dup badge
+    let dupBadge=cardDiv.querySelector('._faDupBadge');
+    if(dupCount>0){
+      if(!dupBadge){
+        const hdr=cardDiv.querySelector('div:first-child');
+        if(hdr){hdr.insertAdjacentHTML('beforeend',' <span class="_faDupBadge bg bg-or">'+dupCount+' dup</span>')}
+      } else dupBadge.textContent=dupCount+' dup';
+      // Show/update checkbox
+      let chkDiv=cardDiv.querySelector('._faDupChkDiv');
+      if(!chkDiv){
+        card.parentElement.insertAdjacentHTML('afterend','<div class="_faDupChkDiv" style="margin-top:4px"><label style="font-size:10px;color:var(--or);display:flex;align-items:center;gap:4px"><input type="checkbox" class="_faPasteDupAllow" data-raw="'+rv.replace(/"/g,'&quot;')+'"> Add duplicates anyway ('+dupCount+')</label></div>');
+      } else chkDiv.querySelector('label').innerHTML='<input type="checkbox" class="_faPasteDupAllow" data-raw="'+rv.replace(/"/g,'&quot;')+'"> Add duplicates anyway ('+dupCount+')';
+    } else {
+      if(dupBadge)dupBadge.remove();
+      const chkDiv=cardDiv.querySelector('._faDupChkDiv');if(chkDiv)chkDiv.remove();
+    }
+  }
 }
 
 function _faConfirmPaste(){
