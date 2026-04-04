@@ -7105,9 +7105,10 @@ function LP_exportAllCI(){
   // Summary sheet
   const summaryRows=[];
   for(const t of Object.values(trucks).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id)){
-    const agg=LP_aggregateTruck(t.items);
-    agg.forEach(it=>{it.qty=_lpEffQty(it.sku,it.qty)});
-    const totalPlt=t.items.reduce((s,r)=>s+(r.pallets||0),0);
+    let agg=LP_aggregateTruck(t.items);
+    agg.forEach(it=>{const ret=LP_returned[t.id]?.[it.sku]||0;it.qty=Math.max(0,_lpEffQty(it.sku,it.qty)-ret)});
+    agg=agg.filter(it=>it.qty>0);
+    const totalPlt=agg.reduce((s,it)=>s+it.pallets,0);
     const totalQty=agg.reduce((s,it)=>s+it.qty,0);
     let totalVal=0;
     for(const s of agg){totalVal+=(_lpCustNom(s.sku).unitPrice||0)*s.qty}
@@ -7119,8 +7120,9 @@ function LP_exportAllCI(){
 
   // Per-truck sheets
   for(const t of Object.values(trucks).sort((a,b)=>a.id-b.id)){
-    const agg=LP_aggregateTruck(t.items);
-    agg.forEach(it=>{it.qty=_lpEffQty(it.sku,it.qty)});
+    let agg=LP_aggregateTruck(t.items);
+    agg.forEach(it=>{const ret=LP_returned[t.id]?.[it.sku]||0;it.qty=Math.max(0,_lpEffQty(it.sku,it.qty)-ret)});
+    agg=agg.filter(it=>it.qty>0);
     const totalPlt=t.items.reduce((s,r)=>s+(r.pallets||0),0);
     let lineNo=0;
     const rows=agg.map(s=>{
@@ -7167,8 +7169,9 @@ function LP_exportPlan(){
   // Sheet 1: Full plan (aggregated by truck+SKU)
   const rows=[];
   for(const t of Object.values(truckMap).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id)){
-    const agg=LP_aggregateTruck(t.items);
-    agg.forEach(it=>{it.qty=_lpEffQty(it.sku,it.qty)});
+    let agg=LP_aggregateTruck(t.items);
+    agg.forEach(it=>{const ret=LP_returned[t.id]?.[it.sku]||0;it.qty=Math.max(0,_lpEffQty(it.sku,it.qty)-ret)});
+    agg=agg.filter(it=>it.qty>0);
     for(const s of agg){
       const n=LP_STATE.nomenclature[s.sku]||{};
       rows.push({'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'Arrival Date':LP_getArrivalDate(t.date,t.dest),'Transit Days':LP_getTransitDays(t.dest),'SKU':s.sku,'Name':s.name||n.name||'',
@@ -7187,8 +7190,8 @@ function LP_exportPlan(){
   // Sheet 2: Truck summary
   const tRows=Object.values(truckMap).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id).map(t=>{
     const agg=LP_aggregateTruck(t.items);
-    agg.forEach(it=>{it.qty=_lpEffQty(it.sku,it.qty)});
-    const plt=t.items.reduce((s,r)=>s+(r.pallets||0),0);
+    agg.forEach(it=>{const ret=LP_returned[t.id]?.[it.sku]||0;it.qty=Math.max(0,_lpEffQty(it.sku,it.qty)-ret)});
+    const plt=t.items.reduce((s,r)=>{const ret=LP_returned[t.id]?.[r.sku]||0;const eff=Math.max(0,(r.qty||0)-ret);return s+(r.qty>0?(r.pallets||0)*(eff/r.qty):0)},0);
     const qty=agg.reduce((s,it)=>s+it.qty,0);
     return{'Truck':('LP-'+t.id),'Date':t.date,'Destination':t.dest,'Arrival Date':LP_getArrivalDate(t.date,t.dest),'Transit Days':LP_getTransitDays(t.dest),'Pallets':+plt.toFixed(1),'Qty':qty,'SKUs':agg.length,'Utilization':Math.round((plt/LP_STATE.maxPallets)*100)+'%','Locked':LP_dispatched.has(t.id)?'Yes':''};
   });
@@ -7863,10 +7866,11 @@ function V26_showTruck(id){
 }
 function V26_exportTruck(id){
   const t=V26_allTrucks.find(x=>x.id===id);if(!t)return;
+  const _v26TrkId2=parseInt(String(t.id).replace(/\D/g,''))||0;
   const rows=t.items.filter(it=>(it.qty||0)>0).map(it=>{
-    const nom=NOM[it.sku]||{};
-    return{'Nomenclature code':it.sku,'Nomenclature name':nom.nm||it.name||it.sku,'Qty':_lpEffQty(it.sku,it.qty)};
-  });
+    const nom=NOM[it.sku]||{};const ret=LP_returned[_v26TrkId2]?.[it.sku]||0;
+    return{'Nomenclature code':it.sku,'Nomenclature name':nom.nm||it.name||it.sku,'Qty':Math.max(0,_lpEffQty(it.sku,it.qty)-ret)};
+  }).filter(it=>it.Qty>0);
   const wb=XLSX.utils.book_new();
   const hdr=[['Truck',t.id,'Destination',t.destDisplay,'Date',t.date,'Source',t.source]];
   const ws=XLSX.utils.aoa_to_sheet(hdr);
@@ -8002,9 +8006,10 @@ function V26_export(){
   const wb=XLSX.utils.book_new();
   const lmNom=NOM||{};const lpNom=LP_STATE.nomenclature||{};
   const getNom=sku=>{const lp=lpNom[sku]||{};const lm=lmNom[sku]||{};const co=LP_customsOverrides[sku]||{};const cn=_lpCustNom(sku);return{name:lm.nm||lp.name||sku,customsName:cn.customsName,pq:lm.pq||0,ps:lm.ps||0,src:lp.source||lm.src||'',uom:lm.uom||'pc',ppu:co.ppu||lp.ppu||lm.ppu||1,hsCode:cn.hsCode,country:cn.country,unitPrice:cn.unitPrice}};
-  
+  const _v26Ret=id=>{const n=parseInt(String(id).replace(/\D/g,''))||0;return LP_returned[n]||{}};
+
   // Sheet 1: All Trucks Summary
-  const summary=trucks.map(t=>({'Truck':t.id,'Date':t.date,'Source':t.source,'Destination':t.destDisplay,'SKUs':t.skus,'Qty':t.items.reduce((s,it)=>s+_lpEffQty(it.sku,it.qty),0),'Pallets':+t.pallets.toFixed(1)}));
+  const summary=trucks.map(t=>{const _r=_v26Ret(t.id);return{'Truck':t.id,'Date':t.date,'Source':t.source,'Destination':t.destDisplay,'SKUs':t.skus,'Qty':t.items.reduce((s,it)=>{const ret=_r[it.sku]||0;return s+Math.max(0,_lpEffQty(it.sku,it.qty)-ret)},0),'Pallets':+t.pallets.toFixed(1)}});
   const ws1=XLSX.utils.json_to_sheet(summary);
   ws1['!cols']=[{wch:10},{wch:12},{wch:12},{wch:24},{wch:6},{wch:10},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws1,'Trucks Summary');
@@ -8012,14 +8017,16 @@ function V26_export(){
   // Sheet 2: Full Truck Detail — every item on every truck
   const detailRows=[];
   trucks.forEach(t=>{
+    const _r=_v26Ret(t.id);
     t.items.forEach(it=>{
-      const n=getNom(it.sku);
+      const n=getNom(it.sku);const ret=_r[it.sku]||0;const effQty=Math.max(0,_lpEffQty(it.sku,it.qty)-ret);
+      if(effQty<=0)return;
       detailRows.push({
         'Truck':t.id,'Date':t.date,'Source':t.source,'Destination':t.destDisplay,
         'Nomenclature Code':it.sku,'Nomenclature Name':n.customsName||n.name,
-        'Qty':_lpEffQty(it.sku,it.qty),'Pallets':+it.pallets.toFixed(2),
+        'Qty':effQty,'Pallets':+it.pallets.toFixed(2),
         'HS Code':n.hsCode,'Country':n.country,
-        'Unit Price':n.unitPrice||'','Line Value':n.unitPrice?+(n.unitPrice*_lpEffQty(it.sku,it.qty)).toFixed(2):''
+        'Unit Price':n.unitPrice||'','Line Value':n.unitPrice?+(n.unitPrice*effQty).toFixed(2):''
       });
     });
     // Append manual items
@@ -8049,7 +8056,7 @@ function V26_export(){
           'Nomenclature Code':it.sku,'Nomenclature Name':n.customsName||n.name,
           'Qty':_lpEffQty(it.sku,it.qty),'Source':n.src
         });
-      });
+      });// CORT items don't have LP returns
     });
     const wsC=XLSX.utils.json_to_sheet(cortRows);
     wsC['!cols']=[{wch:10},{wch:12},{wch:24},{wch:20},{wch:36},{wch:8},{wch:10}];
@@ -8315,6 +8322,8 @@ async function masterBackupExport(){
     Object.entries(LP_destWhsDays).forEach(([k,v])=>rows.push({Setting:'Dest WHS Days: '+(CITY_ABBR[k]||k),Value:v}));
     // FA Groups (read-only — source of truth is fa-goods.html)
     if(LP_FA_GROUPS.length)rows.push({Setting:'FA Groups',Value:JSON.stringify(LP_FA_GROUPS)});
+    // LP returned items
+    if(Object.keys(LP_returned).length)rows.push({Setting:'Returned',Value:JSON.stringify(LP_returned)});
     const ws=XLSX.utils.json_to_sheet(rows);
     ws['!cols']=[{wch:40},{wch:60}];
     XLSX.utils.book_append_sheet(wb,ws,'LP Config');
@@ -8554,6 +8563,7 @@ async function masterBackupRestore(file){
         else if(s==='Exclude Staples')LP_excludeStaples=v==='true'
         else if(s.startsWith('Dest WHS Days: ')){const city=s.replace('Dest WHS Days: ','');const abbr=Object.entries(CITY_ABBR).find(([k,n])=>n===city);if(abbr)LP_destWhsDays[abbr[0]]=+v||0}
         else if(s==='FA Groups'&&v){try{LP_FA_GROUPS=JSON.parse(v)}catch(e){}}
+        else if(s==='Returned'&&v){try{LP_returned=JSON.parse(v)}catch(e){}}
       }
       log.push('LP Config restored');
     }
