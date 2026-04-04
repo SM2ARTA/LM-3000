@@ -772,6 +772,9 @@ function _faRenderPasteCards(){
     h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Map to</span><select style="flex:1;font-size:11px" onchange="window._faPaste.venueMap['${e}']=this.value;_faRenderPasteCards()"><option value="">— skip —</option>${opts.replace('value="'+mapped+'"','value="'+mapped+'" selected')}></select></div>`;
     h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">BI Date</span><input type="date" value="${dt}" style="font-size:11px;font-family:var(--fm)" onchange="window._faPaste.dateMap['${e}']=this.value"></div>`;
     if(hasOld)h+=`<label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer"><input type="checkbox" ${ovr?'checked':''} onchange="window._faPaste.ovrMap['${e}']=this.checked"> Overwrite ${nSame+nDiff} existing</label>`;
+    // Pallets input + AI suggest
+    const curPlt=P.palletMap?.[rv]||'';
+    h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Pallets</span><input type="number" value="${curPlt}" min="0" max="26" step="0.1" style="width:60px;font-size:11px;font-family:var(--fm);border:1px solid var(--bd);border-radius:4px;padding:2px 4px" onchange="if(!window._faPaste.palletMap)window._faPaste.palletMap={};window._faPaste.palletMap['${e}']=parseFloat(this.value)||0"><button onclick="event.stopPropagation();_faPasteAiPallets('${e}',this)" style="background:none;border:1px solid #A5F3FC;border-radius:4px;cursor:pointer;font-size:10px;color:var(--cy);padding:2px 6px" title="AI estimate based on item names">🤖 Suggest</button></div>`;
     // Items with qty diff annotations
     h+=`<div style="font-size:10px;color:var(--ts)">`;
     for(const it of grp.slice(0,5)){
@@ -784,6 +787,36 @@ function _faRenderPasteCards(){
   }
   document.getElementById('_faPastePreview').innerHTML=h;
   document.getElementById('_faPasteAddBtn').disabled=false;
+}
+
+// ── AI pallet estimation for paste venue card ──
+async function _faPasteAiPallets(rawVenue,btn){
+  const P=window._faPaste;if(!P)return;
+  const grp=P.items.filter(i=>i.venue===rawVenue);
+  if(!grp.length)return;
+  const provider=localStorage.getItem('hs-ai-provider')||'';
+  const key=localStorage.getItem('hs-ai-key')||'';
+  if(!provider||!key){alert('No AI configured. Set up in ML3K → HS Code → AI Settings.');return}
+  btn.textContent='⏳';btn.disabled=true;
+  const itemList=grp.map(i=>i.name+' × '+i.qty).join('\n');
+  const sys='You estimate pallet space for logistics. Standard pallet: 48×40 inches, max 60in high. Return ONLY JSON: {"pallets":number,"reasoning":"brief"}. Can be decimal (0.1 = small box on shared pallet).';
+  const usr='Estimate pallets for these FA/technology items shipping to a FIFA World Cup venue:\n\n'+itemList+'\n\nReturn JSON only.';
+  try{
+    let text='';
+    if(provider==='gemini'){const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}]})});const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.[0]?.text||''}
+    else if(provider==='anthropic'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:300,system:sys,messages:[{role:'user',content:usr}]})});const j=await r.json();text=j?.content?.[0]?.text||''}
+    else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:300})});const j=await r.json();text=j?.choices?.[0]?.message?.content||''}
+    const match=text.match(/\{[\s\S]*?"pallets"\s*:\s*([\d.]+)[\s\S]*?\}/);
+    if(match){
+      const pallets=parseFloat(match[1]);
+      const reasoning=text.match(/"reasoning"\s*:\s*"([^"]*)"/)?.[1]||'';
+      if(!P.palletMap)P.palletMap={};
+      P.palletMap[rawVenue]=pallets;
+      _faRenderPasteCards();// full rebuild shows updated value
+      if(reasoning)console.log('[FA AI] '+rawVenue+': '+pallets+' plt — '+reasoning);
+    } else alert('AI: '+text);
+  }catch(e){alert('AI error: '+e.message)}
+  btn.textContent='🤖 Suggest';btn.disabled=false;
 }
 
 // ── Step 3: Confirm and add ──
@@ -799,6 +832,15 @@ function _faConfirmPaste(){
     if(doOvr){const skus=new Set(grp.map(i=>i.sku));const b=FA_DEMAND.length;FA_DEMAND=FA_DEMAND.filter(d=>!(d.venue===mapped&&skus.has(d.sku)));overwritten+=b-FA_DEMAND.length}
     else{const existSet=new Set(FA_DEMAND.filter(d=>d.venue===mapped).map(d=>d.sku));const before=grp.length;grp.splice(0,grp.length,...grp.filter(i=>!existSet.has(i.sku)));skipped+=before-grp.length}
     for(const it of grp){FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:mapped,fa:it.fa,qty:it.qty,biDate:bi||it.biDate||'',note:'',created:new Date().toISOString()});added++}
+  }
+  // Apply pallet values to groups that match the added venues
+  const palletMap=P.palletMap||{};
+  for(const rv in palletMap){
+    const mapped=P.venueMap[rv];if(!mapped||!palletMap[rv])continue;
+    // Find groups for this venue and update pallets
+    for(const g of FA_GROUPS){
+      if(g.venue===mapped&&(g.pallets||0)===0){g.pallets=palletMap[rv]}
+    }
   }
   window._faPaste=null;document.getElementById('faModal').innerHTML='';
   FA_saveDebounced();FA_render();
