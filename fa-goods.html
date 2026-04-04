@@ -767,6 +767,12 @@ function _faRenderPasteCards(){
   const P=window._faPaste;if(!P||!P.items.length){document.getElementById('_faPastePreview').innerHTML='<div style="color:var(--tt);text-align:center;padding:20px">No items parsed.</div>';return}
   // Build existing demand lookup: sku|venue → qty
   const exist={};FA_DEMAND.forEach(d=>{exist[d.sku+'|'+d.venue]=d.qty});
+  // Build locked SKU+venue set (items in locked groups)
+  const lockedSV=new Set();
+  for(const g of FA_GROUPS){
+    if(!((g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))))continue;
+    for(const did of g.items||[]){const d=FA_DEMAND.find(x=>x.id===did);if(d)lockedSV.add(d.sku+'|'+d.venue)}
+  }
   const rawVenues=[...new Set(P.items.map(i=>i.venue))];
   const opts=FA_ML3K_VENUES.map(v=>'<option value="'+v.name+'">'+v.name+'</option>').join('');
   let h='<div style="font-size:11px;margin-bottom:6px"><b>'+P.items.length+'</b> items · <b>'+rawVenues.length+'</b> venues</div>';
@@ -775,14 +781,14 @@ function _faRenderPasteCards(){
     const mapped=P.venueMap[rv]||'';
     const dt=P.dateMap[rv]||'';
     // Count overlaps
-    let nNew=0,nSame=0,nDiff=0;
-    if(mapped)for(const it of grp){const k=it.sku+'|'+mapped;if(exist[k]===undefined)nNew++;else if(exist[k]===it.qty)nSame++;else nDiff++}
+    let nNew=0,nSame=0,nDiff=0,nLocked=0;
+    if(mapped)for(const it of grp){const k=it.sku+'|'+mapped;if(lockedSV.has(k)){nLocked++}else if(exist[k]===undefined)nNew++;else if(exist[k]===it.qty)nSame++;else nDiff++}
     const hasOld=nSame+nDiff>0;
     const ovr=P.ovrMap[rv]!==undefined?P.ovrMap[rv]:hasOld;// default checked when existing found
     const e=rv.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     h+=`<div style="margin-bottom:8px;padding:10px;background:var(--sf);border:1px solid ${hasOld?'var(--pu)':'var(--bd)'};border-radius:8px">`;
     h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><b>"${rv}"</b> <span class="bg bg-gy">${grp.length}</span>`;
-    if(mapped){if(nNew)h+=` <span class="bg bg-gn">${nNew} new</span>`;if(nSame)h+=` <span class="bg bg-gy">${nSame} same</span>`;if(nDiff)h+=` <span class="bg bg-pu">${nDiff} qty↕</span>`}
+    if(mapped){if(nNew)h+=` <span class="bg bg-gn">${nNew} new</span>`;if(nSame)h+=` <span class="bg bg-gy">${nSame} same</span>`;if(nDiff)h+=` <span class="bg bg-pu">${nDiff} qty↕</span>`;if(nLocked)h+=` <span class="bg bg-gn">🔒 ${nLocked} locked</span>`}
     h+=`</div>`;
     const dlId='_fpVDL'+rawVenues.indexOf(rv);
     h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Map to</span><input type="text" list="${dlId}" value="${mapped}" placeholder="— skip —" style="flex:1;font-size:11px;border:1px solid var(--bd);border-radius:4px;padding:4px 6px" onchange="window._faPaste.venueMap['${e}']=this.value;_faRenderPasteCards()" oninput="window._faPaste.venueMap['${e}']=this.value"><datalist id="${dlId}"><option value="">— skip —</option>${opts}</datalist></div>`;
@@ -809,10 +815,12 @@ function _faRenderPasteCards(){
       grpTotal+=calcPlt;
       const pqIsOvr=P.pqOvr[it.sku]!==undefined;
       const psIsOvr=P.psOvr[it.sku]!==undefined;
-      const ex=mapped?exist[it.sku+'|'+mapped]:undefined;
-      const mark=ex===undefined?'':(ex===it.qty?' <span style="color:var(--tt)">=</span>':' <span style="color:var(--pu)">was '+ex+'</span>');
+      const svKey=mapped?(it.sku+'|'+mapped):'';
+      const isItemLocked=svKey&&lockedSV.has(svKey);
+      const ex=mapped&&!isItemLocked?exist[it.sku+'|'+mapped]:undefined;
+      const mark=isItemLocked?' <span style="color:var(--gn)">🔒</span>':(ex===undefined?'':(ex===it.qty?' <span style="color:var(--tt)">=</span>':' <span style="color:var(--pu)">was '+ex+'</span>'));
       const _inp='width:36px;font-size:10px;font-family:var(--fm);text-align:right;border-radius:3px;padding:1px 2px;';
-      h+=`<tr style="border-bottom:1px solid var(--bl)">`;
+      h+=`<tr style="border-bottom:1px solid var(--bl);${isItemLocked?'opacity:0.5;':''}">`;
       h+=`<td><input type="checkbox" ${isAsm?'checked':''} onchange="window._faPaste.asmMap['${asmKey.replace(/'/g,"\\'")}']=this.checked;_faRenderPasteCards()" style="margin:0" title="Assembled (use pqA/psA)"></td>`;
       h+=`<td class="mono" style="color:var(--cy)">${it.sku}</td>`;
       h+=`<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">${it.name}${mark}</td>`;
