@@ -1357,8 +1357,8 @@ function FA_renderGroups(){
     <div class="kpi"><div class="kl">📐 Groups</div><div class="kv" style="color:var(--cy)">${FA_GROUPS.length}</div></div>
     <div class="kpi"><div class="kl">📦 Total Pallets</div><div class="kv" style="color:var(--ac)">${totalPlt}</div></div>
     <div class="kpi"><div class="kl">💰 Total Value</div><div class="kv" style="color:var(--pu)">$${totalVal.toLocaleString()}</div></div>
-    <div class="kpi"><div class="kl">📦 LP Assigned</div><div class="kv" style="color:#2563eb">${lpAssigned}${_lpLocked?' <span style="font-size:11px;color:var(--gn)">🔒${_lpLocked}</span>':''}</div></div>
-    <div class="kpi"><div class="kl">🚛 LM Assigned</div><div class="kv" style="color:var(--pu)">${lmAssigned}${_lmLocked?' <span style="font-size:11px;color:var(--gn)">🔒${_lmLocked}</span>':''}</div></div>
+    <div class="kpi"><div class="kl">📦 LP Assigned</div><div class="kv" style="color:#2563eb">${lpAssigned}${_lpLocked?` <span style="font-size:11px;color:var(--gn)">🔒${_lpLocked}</span>`:''}</div></div>
+    <div class="kpi"><div class="kl">🚛 LM Assigned</div><div class="kv" style="color:var(--pu)">${lmAssigned}${_lmLocked?` <span style="font-size:11px;color:var(--gn)">🔒${_lmLocked}</span>`:''}</div></div>
     <div class="kpi"><div class="kl">🔒 Locked</div><div class="kv" style="color:var(--gn)">${locked}</div></div>`;
   document.getElementById('grpCount').textContent=FA_GROUPS.length+' groups';
 
