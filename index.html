@@ -8668,7 +8668,7 @@ async function masterBackupRestore(file){
     alert('Restore failed: '+e.message);
   }
 }
-let NOM={},RW=[],VN=[],sel="",selCluster="",cv="dashboard",uf=[],VS={},CLUSTERS={};
+let NOM={},RW=[],VN=[],sel="",selCluster="",cv="forecast",uf=[],VS={},CLUSTERS={};
 let vCat="us";// "us","can","mex"
 let expCl={};// cluster name -> true if expanded
 let ROLE="";// "admin" or "viewer"
@@ -8873,7 +8873,7 @@ function enterApp(){
       FA_loadLinked().catch(()=>{})
     ]);
     // Now build venues and trucks AFTER all config is loaded
-    if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="dashboard";lmOk=true}}
+    if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="forecast";lmOk=true}}
     // Load LP data
     try{
       lpOk=await LP_loadFromSupabase();
@@ -8979,7 +8979,7 @@ async function loadSharedData(){
     if(!RW.length)throw new Error("No plan data.");
     LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
     _stpValidateVenues();numberAll();
-    sel="";cv="dashboard";
+    sel="";cv="forecast";
     document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
     document.getElementById("pov").style.display="none";
     document.getElementById("US").style.display="none";
@@ -11409,7 +11409,7 @@ function rTotals(){
   const bar=document.getElementById("totbar");
   if(bar)bar.style.display="flex";
 }
-function rT(){const icons={dashboard:'📊',demand:'📋',fagoods:'📐',trucks:'🚛',forecast:'📋',holds:'⏸',analysis:'🔍',pallets:'📦'};const labels={dashboard:'dashboard',demand:'demand',fagoods:'FA Goods',trucks:'trucks',forecast:'Forecast',holds:'holds',analysis:'analysis',pallets:'Pallets'};document.getElementById("tabs").innerHTML=["dashboard","demand","fagoods","trucks","forecast","holds","analysis","pallets"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${labels[t]||t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}${t==='fagoods'&&(LP_FA_GROUPS||[]).length>0?' <span style="background:#ECFEFF;color:#0891B2;font-size:8px;padding:0 4px;border-radius:3px;font-weight:600">'+(LP_FA_GROUPS||[]).length+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
+function rT(){const icons={forecast:'📋',dashboard:'📊',demand:'📋',fagoods:'📐',trucks:'🚛',holds:'⏸',analysis:'🔍',pallets:'📦'};const labels={forecast:'Forecast',dashboard:'dashboard',demand:'demand',fagoods:'FA Goods',trucks:'trucks',holds:'holds',analysis:'analysis',pallets:'Pallets'};document.getElementById("tabs").innerHTML=["forecast","dashboard","demand","fagoods","trucks","holds","analysis","pallets"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${labels[t]||t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}${t==='fagoods'&&(LP_FA_GROUPS||[]).length>0?' <span style="background:#ECFEFF;color:#0891B2;font-size:8px;padding:0 4px;border-radius:3px;font-weight:600">'+(LP_FA_GROUPS||[]).length+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
 function B(t,c,s){return`<span class="bg ${s?'bgs':''} bg-${c}">${t}</span>`}
 function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95?"var(--rd)":p>80?"var(--or)":"var(--ac)";return`<div class="bw"><div class="btr"><div class="bfl" style="width:${p}%;background:${c}"></div></div><span class="blb" style="color:${c}">${p}%</span></div>`}
 
@@ -16991,7 +16991,7 @@ async function goGenerate(){
     if(!Object.keys(NOM).length)throw new Error("No nomenclature data.");
     if(!RW.length)throw new Error("No plan data.");
     LM_injectAll();LM_applyNomOverrides();bV();if(!VN.length)throw new Error("No venues.");
-    numberAll();sel="";cv="dashboard";
+    numberAll();sel="";cv="forecast";
     document.getElementById("hm").textContent=`${VN.length} venues · ${RW.length.toLocaleString()} lines`;
 
     // LP processing now handled separately via Load Plan upload panel
