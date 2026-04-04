@@ -774,18 +774,49 @@ function _faParsePaste(){
   }
 
   window._faPasteItems=items;
-  const newItems=items.filter(i=>!i.dup);
-  const dupItems=items.filter(i=>i.dup);
-  let preview='<div style="font-size:11px;margin-bottom:6px"><b>'+newItems.length+'</b> new items'+(dupItems.length?' · <span style="color:var(--or)">'+dupItems.length+' duplicates (skipped)</span>':'')+'</div>';
-  if(newItems.length){
-    preview+='<table class="dtb" style="font-size:10px"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>Qty</th><th>Date</th></tr></thead><tbody>';
-    for(const it of newItems.slice(0,50)){
-      const _fmtD=it.biDate?new Date(it.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
-      preview+=`<tr><td class="mono fw6">${it.sku}</td><td>${it.name}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.venue}</td><td class="mono">${it.qty}</td><td>${_fmtD}</td></tr>`;
-    }
-    if(newItems.length>50)preview+='<tr><td colspan="5" style="color:var(--tt)">...and '+(newItems.length-50)+' more</td></tr>';
-    preview+='</tbody></table>';
+  window._faPasteVenueMap={};// raw venue → resolved venue
+
+  // Collect unique venues and check matches
+  const rawVenues=[...new Set(items.map(i=>i.venue))];
+  const unmatched=[];
+  for(const rv of rawVenues){
+    const exact=FA_ML3K_VENUES.find(v=>v.name===rv);
+    if(exact){window._faPasteVenueMap[rv]=rv;continue}
+    // Try fuzzy
+    const fuzzy=FA_ML3K_VENUES.find(v=>v.name.toLowerCase().includes(rv.toLowerCase())||rv.toLowerCase().includes(v.name.toLowerCase()));
+    if(fuzzy){window._faPasteVenueMap[rv]=fuzzy.name;continue}
+    unmatched.push(rv);
   }
+
+  let preview='';
+  // Show venue mapping for unmatched venues
+  if(unmatched.length){
+    const venueOpts=FA_ML3K_VENUES.map(v=>'<option value="'+v.name+'">'+v.name+'</option>').join('');
+    preview+='<div style="padding:8px 10px;background:var(--os);border:1px solid #F5D6B8;border-radius:6px;margin-bottom:8px;font-size:11px"><b>⚠ '+unmatched.length+' unmatched venue'+(unmatched.length>1?'s':'')+'</b> — select the correct venue:</div>';
+    for(const rv of unmatched){
+      const count=items.filter(i=>i.venue===rv).length;
+      // Best guess: longest common substring
+      let bestGuess='';let bestScore=0;
+      const rl=rv.toLowerCase();
+      for(const v of FA_ML3K_VENUES){
+        const vl=v.name.toLowerCase();
+        // Score by word overlap
+        const rWords=rl.split(/\s+/);const vWords=vl.split(/\s+/);
+        const overlap=rWords.filter(w=>w.length>2&&vWords.some(vw=>vw.includes(w)||w.includes(vw))).length;
+        if(overlap>bestScore){bestScore=overlap;bestGuess=v.name}
+      }
+      preview+=`<div class="form-row" style="margin-bottom:4px"><span style="font-size:10px;color:var(--or);min-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${rv}">"${rv}" <span style="color:var(--tt)">(${count})</span></span>
+        <select class="_faPasteVenueSelect" data-raw="${rv.replace(/"/g,'&quot;')}" style="flex:1;font-size:11px">
+          <option value="">— skip —</option>${venueOpts}
+        </select></div>`;
+      // Auto-select best guess
+      if(bestGuess)setTimeout(()=>{const sel=document.querySelector('select._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');if(sel)sel.value=bestGuess},0);
+    }
+    preview+='<div style="margin:8px 0 4px"><button class="rbtn" onclick="_faApplyVenueMap()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">✓ Apply & Preview Items</button></div>';
+  }
+
+  // Show items preview
+  preview+=_faBuildItemPreview(items);
   document.getElementById('_faPastePreview').innerHTML=preview;
 }
 
@@ -803,13 +834,55 @@ function _faTryDate(s){
   return'';
 }
 
-function _faConfirmPaste(){
-  const items=(window._faPasteItems||[]).filter(i=>!i.dup);
-  if(!items.length){alert('No new items to add. Run Preview first.');return}
+function _faBuildItemPreview(items){
+  // Recheck duplicates with current venue mapping
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
+  const map=window._faPasteVenueMap||{};
   for(const it of items){
-    FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:it.venue,fa:it.fa,qty:it.qty,biDate:it.biDate,note:'',created:new Date().toISOString()});
+    const resolved=map[it.venue]||it.venue;
+    it._resolved=resolved;
+    it.dup=_existing.has(it.sku+'|'+resolved+'|'+it.qty);
   }
-  window._faPasteItems=null;
+  const newItems=items.filter(i=>!i.dup&&i._resolved);
+  const dupItems=items.filter(i=>i.dup);
+  const skipped=items.filter(i=>!i._resolved&&!i.dup);
+  let h='<div id="_faPasteItemList" style="font-size:11px;margin-bottom:6px"><b>'+newItems.length+'</b> new items'+(dupItems.length?' · <span style="color:var(--or)">'+dupItems.length+' dup</span>':'')+(skipped.length?' · <span style="color:var(--tt)">'+skipped.length+' skipped (no venue)</span>':'')+'</div>';
+  if(newItems.length){
+    h+='<table class="dtb" style="font-size:10px"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>Qty</th><th>Date</th></tr></thead><tbody>';
+    for(const it of newItems.slice(0,50)){
+      const _fmtD=it.biDate?new Date(it.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+      h+=`<tr><td class="mono fw6">${it.sku}</td><td>${it.name}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${it._resolved}">${it._resolved}</td><td class="mono">${it.qty}</td><td>${_fmtD}</td></tr>`;
+    }
+    if(newItems.length>50)h+='<tr><td colspan="5" style="color:var(--tt)">...and '+(newItems.length-50)+' more</td></tr>';
+    h+='</tbody></table>';
+  }
+  return h;
+}
+
+function _faApplyVenueMap(){
+  document.querySelectorAll('._faPasteVenueSelect').forEach(sel=>{
+    const raw=sel.dataset.raw;const val=sel.value;
+    if(raw&&val)window._faPasteVenueMap[raw]=val;
+  });
+  // Update items with resolved venues
+  const items=window._faPasteItems||[];
+  const map=window._faPasteVenueMap||{};
+  for(const it of items){it._resolved=map[it.venue]||it.venue}
+  // Rebuild preview
+  const listEl=document.getElementById('_faPasteItemList');
+  if(listEl)listEl.outerHTML=_faBuildItemPreview(items);
+}
+
+function _faConfirmPaste(){
+  if(!window._faPasteItems){alert('Run Preview first.');return}
+  // Apply venue selections if not yet applied
+  _faApplyVenueMap();
+  const items=(window._faPasteItems||[]).filter(i=>!i.dup&&i._resolved);
+  if(!items.length){alert('No new items to add.');return}
+  for(const it of items){
+    FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:it._resolved,fa:it.fa,qty:it.qty,biDate:it.biDate,note:'',created:new Date().toISOString()});
+  }
+  window._faPasteItems=null;window._faPasteVenueMap=null;
   document.getElementById('faModal').innerHTML='';
   FA_saveDebounced();FA_render();
 }
