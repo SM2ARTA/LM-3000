@@ -691,9 +691,21 @@ function FA_deleteDemand(id){
   FA_saveDebounced();FA_render();
 }
 function FA_clearDemand(){
-  if(!confirm('Clear ALL FA demand lines? This cannot be undone.'))return;
-  if(!confirm('Are you sure? This will permanently delete all '+FA_DEMAND.length+' demand lines.'))return;
-  FA_DEMAND=[];FA_nextDemId=1;FA_saveDebounced();FA_render();
+  // Collect demand IDs protected by locked groups
+  const lockedDemIds=new Set();
+  for(const g of FA_GROUPS){if(g._locked){for(const did of g.items||[])lockedDemIds.add(did)}}
+  const protectedCount=lockedDemIds.size;
+  const clearCount=FA_DEMAND.length-protectedCount;
+  if(!clearCount){alert('All demand items are in locked groups. Nothing to clear.');return}
+  const msg=protectedCount
+    ?'Clear '+clearCount+' demand items?\n\n'+protectedCount+' items in locked groups will be preserved.'
+    :'Clear ALL '+clearCount+' demand items? This cannot be undone.';
+  if(!confirm(msg))return;
+  // Keep locked demand, remove everything else
+  FA_DEMAND=FA_DEMAND.filter(d=>lockedDemIds.has(d.id));
+  // Remove unlocked groups (their demand is gone)
+  FA_GROUPS=FA_GROUPS.filter(g=>g._locked);
+  FA_saveDebounced();FA_render();
 }
 
 // ── Paste Demand: parse tab-separated data from Excel ──
