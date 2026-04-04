@@ -992,15 +992,12 @@ function FA_buildGroups(){
   }
   FA_GROUPS=[...kept,...built];
   for(const g of FA_GROUPS){if(!g.sku)g.sku=_faGroupSku(g.fa,g.venue,g.id)}
-  // Auto-compute pallets from NOM for groups without manual pallets
+  // Auto-compute pallets from NOM for all non-locked, non-manual groups
   for(const g of FA_GROUPS){
-    if(!lockedGrpIds.has(g.id)){
-      const computed=FA_computeGroupPallets(g);
-      if(computed>0&&(g.pallets||0)===0)g.pallets=computed;
-      // If group has items with _pltOvr, always recompute (user set per-item values)
-      const hasOvr=g.items?.some(did=>{const d=FA_DEMAND.find(x=>x.id===did);return d&&d._pltOvr!==undefined});
-      if(hasOvr)g.pallets=computed;
-    }
+    if(lockedGrpIds.has(g.id))continue;
+    if(g._manualPallets)continue;// user set pallets directly on group — preserve
+    const computed=FA_computeGroupPallets(g);
+    if(computed>0)g.pallets=computed;
   }
 }
 
@@ -1183,7 +1180,9 @@ function FA_renderGroups(){
 }
 function FA_setGroupPallets(id,val){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
-  g.pallets=parseFloat(val)||0;FA_saveGroups();
+  g.pallets=parseFloat(val)||0;
+  g._manualPallets=true;// preserve on NOM update
+  FA_saveGroups();
 }
 function FA_filterGroups(){
   const q=(document.getElementById('grpSearch').value||'').toLowerCase();
