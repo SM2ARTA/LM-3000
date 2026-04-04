@@ -805,46 +805,52 @@ async function _faPasteAiPallets(rawVenue,btn){
     const isAsm=!!asmMap[rawVenue+'|'+i.sku];
     return i.name+' × '+i.qty+(isAsm?' [ASSEMBLED - no packaging, bare item]':'');
   }).join('\n');
-  const sys=`You are a logistics pallet estimation specialist for the FIFA World Cup 2026™ ground transport operation.
+  const sys=`You are an expert logistics pallet estimation specialist working for the FIFA World Cup 2026™ ground transport operation in North America.
 
-CONTEXT: We are shipping FA (Functional Area) technology equipment to tournament venues across USA, Canada, and Mexico. Items ship from a central Dallas warehouse to satellite warehouses, then last-mile to venues. Equipment includes TVs, printers, IT hardware, AV gear, furniture, and office supplies for operational areas (media centres, accreditation, VIP hospitality, broadcast compounds, team base camps).
+YOUR TASK: Given a list of items with quantities, estimate the total pallet spaces needed for shipping.
 
-STANDARD PALLET: 48×40 inches (1219×1016mm), max stack height 60 inches (1524mm). Trucks hold up to 26 pallets.
+LOGISTICS CONTEXT:
+- Operation: FIFA World Cup 2026, venues across USA, Canada, Mexico
+- Shipping: Dallas central warehouse → satellite warehouses → last-mile to venues
+- Items: FA (Functional Area) equipment for event operations — accreditation, media, broadcast, VIP, team facilities
+- Items may include: TVs, monitors, printers, IT hardware, AV equipment, furniture, signage, office supplies, medical equipment, massage/physio equipment, catering equipment, or anything else needed at tournament venues
 
-TV PALLETISATION RULES:
-- TVs are REUSED from FIFA Club World Cup 2025 (FCWC25) — IN ORIGINAL RETAIL BOXES but boxes may be worn/resealed.
-- TVs placed VERTICALLY (upright) on pallets. Do NOT stack TVs on top of each other.
-- KNOWN TV BOX DIMENSIONS (width × height × depth when upright):
-  · 32" TV: box ~82×52×14cm. Fits 2-3 side by side on a pallet.
-  · 43" TV: box ~105×65×15cm. Fits 2 side by side on one pallet (105+105=210cm > 122cm pallet, so actually 1 per pallet).
-  · 55" TV: box ~140×85×18cm. 1 TV PER PALLET. Box width (140cm) exceeds pallet length (122cm) — overhangs, requires full pallet.
-  · 65" TV: box ~155×95×20cm. 1 TV PER PALLET. Significant overhang.
-  · 75" TV: box ~180×110×22cm. DOUBLE PALLET (2 spaces). Too large for single pallet.
-  · 85" TV: box ~200×120×25cm. DOUBLE PALLET (2 spaces).
-  · 100"+: DOUBLE PALLET minimum, may need custom crating.
-- If TV size not in list above: calculate box width ≈ screen diagonal × 2.5cm + 15cm, box height ≈ screen diagonal × 1.5cm + 15cm. If box width > 120cm → 1 per pallet. If > 170cm → double pallet.
-- IMPORTANT: for 43" and larger, assume 1 TV = 1 pallet minimum. Do NOT fit multiple 43"+ TVs on one pallet.
+PALLET SPECIFICATION:
+- Standard pallet: 48×40 inches (122×102cm), max stack height 60 inches (152cm)
+- Trucks hold up to 26 pallets
 
-EQUIPMENT CONTEXT — typical FIFA Functional Area items:
-- This is EVENT TECHNOLOGY for accreditation centres, media centres, broadcast compounds, VIP hospitality, team operations.
-- "ACR" = Accreditation. Printers in ACR are CARD PRINTERS (Zebra, Magicard, HID Fargo, Evolis) — desktop-sized, ~40×25×25cm boxed. NOT large office printers.
-- "Big Printer" / "Zebra" in ACR context = large-format card printer (e.g., Zebra ZC350, Magicard Rio) — still desktop size, ~0.05–0.1 pallet each. 8–12 per pallet.
-- "Small Printer" / "Magicard Flex" = compact card printer, very small. 12–20 per pallet.
-- "Ribbon" = printer ribbon consumable — tiny boxes, negligible space unless 100+ units.
-- TV stands: commercial floor stands or wall mounts for digital signage. Boxed ~20×20×150cm. 4–6 per pallet (tall boxes laid horizontal).
-- Monitor arms, cables, small accessories: many per pallet (0.02–0.05 each).
-- Items marked [ASSEMBLED] ship without original packaging (bare/wrapped) — bulkier footprint, cannot stack other items on top.
-- Use the ACTUAL ITEM NAMES provided — they describe the specific product. Don't assume generic office equipment.
-- When in doubt, round UP — better to reserve slightly more space than arrive short.
+YOUR APPROACH — for each item:
+1. IDENTIFY the specific product from its name. Use your knowledge of real products, brands, and models. The name describes the actual item — read it carefully.
+2. ESTIMATE the boxed/packaged dimensions (L×W×H in cm). Consider:
+   - Is this a known brand/model? Use real-world box dimensions from your knowledge.
+   - If unknown, estimate from the product category and description.
+   - Items marked [ASSEMBLED] ship bare (no box) — estimate the physical footprint of the bare item. These are bulkier and cannot have items stacked on top.
+3. CALCULATE how many fit per pallet:
+   - Can they stack? Heavy/fragile items (TVs, monitors, furniture) = single layer only.
+   - Light sturdy boxes (printers, small electronics) can stack 2-3 layers within 152cm height.
+   - Consider orientation: tall items may stand upright, flat items lay down.
+4. COMPUTE pallets: quantity ÷ items-per-pallet. Use exact decimals, NO ceiling rounding.
 
-MATH RULES:
-- Do NOT use ceiling/rounding per item. Use exact fractions: 5 TVs at 1/pallet = 5.0 plt. 2 printers at 20/pallet = 0.1 plt.
-- Sum all item pallets for total. The "pallets" number MUST exactly equal this sum. Double-check arithmetic.
+IMPORTANT RULES:
+- TVs: reused from FIFA Club World Cup 2025 (FCWC25), in original retail boxes. Place VERTICALLY (upright). Cannot stack. 55"+ TVs = 1 per pallet (box exceeds pallet). 75"+ = DOUBLE pallet (2 spaces).
+- Event printers (Zebra, Magicard, HID Fargo, Evolis): these are CARD PRINTERS for accreditation, NOT office printers. Desktop-sized (~40×25×25cm boxed).
+- "ACR" in venue name = Accreditation Centre context.
+- Furniture (tables, desks, massage tables, chairs): estimate actual product dimensions. Flat-pack = more per pallet. Assembled/built = 1-2 per pallet typically.
+- When unsure about a product, state your assumption in reasoning.
+- Round UP slightly for safety margin — better to reserve 0.5 pallet extra than arrive short.
 
-Return ONLY valid JSON: {"pallets": number, "reasoning": "per-item breakdown"}
-Reasoning: one line per item type, then total. Use \\n for line breaks. Example:
-"TV 55\\" x5: 1 per pallet = 5.0 plt\\nCard Printer x2: 20 per pallet = 2/20 = 0.1 plt\\nTV Stand x1: 5 per pallet = 1/5 = 0.2 plt\\nTotal: 5.0 + 0.1 + 0.2 = 5.3 pallets"
-Show qty ÷ per-pallet = result for each. Sum must match.`;
+OUTPUT FORMAT — return ONLY valid JSON:
+{"pallets": number, "reasoning": "detailed per-item breakdown"}
+
+Reasoning MUST contain:
+- One line per item: product identification, estimated box size, items per pallet, calculation
+- Final line: sum of all = total
+- Use \\n for line breaks
+
+Example reasoning:
+"Zebra ZC350 Card Printer x3: ~45×30×25cm boxed, stackable 2 high, ~16/pallet → 3/16 = 0.19 plt\\nSamsung 55\\" TV x5: ~140×85×18cm boxed, upright, 1/pallet → 5/1 = 5.0 plt\\nTV Floor Stand x2: ~150×20×20cm boxed, lay flat, ~6/pallet → 2/6 = 0.33 plt\\nTotal: 0.19 + 5.0 + 0.33 = 5.52 pallets"
+
+CRITICAL: "pallets" value MUST exactly equal the arithmetic sum shown in reasoning. Verify before responding.`;
   const mapped=P.venueMap[rawVenue]||rawVenue;
   const usr='Estimate total pallet spaces needed for this shipment to '+mapped+':\n\n'+itemList+'\n\nCalculate per item, then sum. Return JSON only.';
   try{
