@@ -583,10 +583,16 @@ async function FA_loadLinked(){
     // Build item lookup by ID
     const itemById={};for(const it of items)itemById[it.id]=it;
     // Index by group truck assignments (source of truth for LP/LM linking)
+    // Use LP_FA_GROUPS pallets when available (recomputed with ML3K NOM — more accurate than fa-groups which may lack pq/ps)
+    const _lpFaByKey={};for(const fg of (LP_FA_GROUPS||[]))_lpFaByKey[fg.sku]=fg;
     for(const g of groups){
       const grpItems=(g.items||[]).map(id=>itemById[id]).filter(Boolean);
       const totalQty=grpItems.reduce((s,it)=>s+(it.qty||0),0);
-      const plt=g.pallets||0;const fa=g.fa||'FA';
+      const _lpFg=_lpFaByKey[g.sku];
+      // Pallets: prefer LP_FA_GROUPS (recomputed), then group saved value, then recompute from NOM
+      let plt=_lpFg?.pallets||g.pallets||0;
+      if(plt<=0&&grpItems.length){let _mr=0,_ut=0;for(const it of grpItems){const n=NOM[it.sku]||{};const pq=it._asm?(n.pqA||n.pq||0):(n.pq||0);const ps=it._asm?(n.psA||n.ps||0):(n.ps||0);if(pq>0&&ps>0){const raw=(it.qty/pq)*ps;if(it._mixed)_mr+=raw;else _ut+=Math.ceil(raw)}};plt=Math.ceil(_mr)+_ut}
+      const fa=g.fa||'FA';
       if(g.linkedLP){const k=g.linkedLP;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count+=grpItems.length;FA_LINKED[k].qty+=totalQty;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
       if(g.linkedLM){const k=g.linkedLM;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count+=grpItems.length;FA_LINKED[k].qty+=totalQty;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
       if(g.linkedKit){const k=g.linkedKit;if(!FA_LINKED[k])FA_LINKED[k]={count:0,qty:0,plt:0,fas:new Set()};FA_LINKED[k].count+=grpItems.length;FA_LINKED[k].qty+=totalQty;FA_LINKED[k].plt+=plt;FA_LINKED[k].fas.add(fa)}
@@ -596,7 +602,22 @@ async function FA_loadLinked(){
     if(Object.keys(FA_LINKED).length>3)console.log('[ML3K] FA linked:',Object.keys(FA_LINKED).length-3,'trucks/groups');
   }catch(e){console.warn('[ML3K] FA load error:',e)}
 }
-function _faHasKit(kitId){return FA_LINKED[kitId]||null}
+function _faHasKit(kitId){
+  // Check by kit ID (numeric), kit SKU, or FA_LINKED key
+  if(FA_LINKED[kitId])return FA_LINKED[kitId];
+  // Fallback: match kit SKU — linkedKit in FA Goods is typically the kit SKU
+  const kit=typeof LM_getKitById==='function'?LM_getKitById(kitId):null;
+  if(kit&&kit.sku&&FA_LINKED[kit.sku])return FA_LINKED[kit.sku];
+  // Fallback: scan LP_FA_GROUPS for linkedKit matching kitId or kit SKU
+  const kitSku=kit?.sku||'';
+  for(const g of (LP_FA_GROUPS||[])){
+    if(!g.linkedKit)continue;
+    if(g.linkedKit===String(kitId)||g.linkedKit===kitSku||(kit&&g.linkedKit===kit.id)){
+      return{count:(g.items||[]).length,qty:(g.items||[]).reduce((s,did)=>{const it=(FA_LINKED._items||[]).find(x=>x.id===did);return s+(it?.qty||0)},0),plt:g.pallets||0,fas:new Set([g.fa||'FA'])};
+    }
+  }
+  return null;
+}
 function _faVenueCount(venue){if(!FA_LINKED._byVenue)return null;return FA_LINKED._byVenue[venue]||null}
 function _faItemsForKit(kitId){
   // Kit IDs are volatile (change on strategy reapply). Match by:
@@ -5406,7 +5427,30 @@ async function LP_loadFaGoods(){
   try{
     const{data}=await SB.from('shared_state').select('value').eq('id','fa-groups').maybeSingle();
     if(data){const v=JSON.parse(data.value);LP_FA_GROUPS=v.items||[]}
+    // Recompute pallets from ML3K NOM for groups that have 0 pallets (FA Goods may lack NOM data)
+    _faRecomputePallets();
   }catch(e){console.warn('FA groups load:',e)}
+}
+// Recompute FA group pallets from ML3K NOM when FA Goods saved 0 (NOM not available in FA at build time)
+function _faRecomputePallets(){
+  const items=(FA_LINKED._items||[]);const itemById={};for(const it of items)itemById[it.id]=it;
+  for(const g of LP_FA_GROUPS){
+    if((g.pallets||0)>0)continue;// already has pallets
+    const grpItems=(g.items||[]).map(id=>itemById[id]).filter(Boolean);
+    if(!grpItems.length)continue;
+    let mixedRaw=0,unmixedTotal=0;
+    for(const it of grpItems){
+      const n=NOM[it.sku]||{};
+      const isAsm=!!it._asm;
+      const pq=isAsm?(n.pqA||n.pq||0):(n.pq||0);
+      const ps=isAsm?(n.psA||n.ps||0):(n.ps||0);
+      if(pq<=0||ps<=0)continue;
+      const raw=(it.qty/pq)*ps;
+      if(it._mixed)mixedRaw+=raw;else unmixedTotal+=Math.ceil(raw);
+    }
+    const computed=Math.ceil(mixedRaw)+unmixedTotal;
+    if(computed>0)g.pallets=computed;
+  }
 }
 
 // ── FA Goods tab renderer (read-only — data managed in FA Goods module) ──
