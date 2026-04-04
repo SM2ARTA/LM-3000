@@ -798,9 +798,9 @@ function _faRenderPasteCards(){
     for(const it of grp){
       const asmKey=rv+'|'+it.sku;
       const isAsm=!!P.asmMap[asmKey];
-      const n=nom[it.sku]||{};
-      const nomPq=isAsm?(n.pqA||0):(n.pq||0);
-      const nomPs=isAsm?(n.psA||0):(n.ps||0);
+      const mn=nom[it.sku]||{};const fn=FA_NOM[it.sku]||{};
+      const nomPq=isAsm?(fn.pqA||mn.pqA||0):(fn.pq||mn.pq||0);
+      const nomPs=isAsm?(fn.psA||mn.psA||0):(fn.ps||mn.ps||0);
       // Manual PQ/PS override (per SKU, shared across venues)
       const pq=P.pqOvr[it.sku]!==undefined?P.pqOvr[it.sku]:nomPq;
       const ps=P.psOvr[it.sku]!==undefined?P.psOvr[it.sku]:nomPs;
