@@ -821,6 +821,14 @@ function FA_editGroup(id){
   const lmOpts=relLM.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
   const relKits=_faKitsForVenue(g.venue);
   const kitOpts=relKits.map(k=>`<option value="${k.sku||k.id}">${k.sku||k.id} — ${k.venue} — ${k.type}${k.truckRef?' · 🚛 '+k.truckRef:''}</option>`).join('');
+  // Engine assignments (read-back from ML3K)
+  const asgn=FA_ASSIGNMENTS[g.id]||{};
+  const engLP=asgn.lp?asgn.lp.truckId:'';
+  const engLM=asgn.lm?asgn.lm.truckId:'';
+  const engLPDate=asgn.lp?_fmtD(asgn.lp.date):'';
+  const engLMDate=asgn.lm?_fmtD(asgn.lm.date):'';
+  const engLMBiK=asgn.lm?_fmtD(asgn.lm.biK):'';
+  const engLMLocked=asgn.lm&&asgn.lm.locked;
   // Items in this group
   const items=FA_DEMAND.filter(d=>g.items&&g.items.includes(d.id));
   let itemRows='';
@@ -834,15 +842,20 @@ function FA_editGroup(id){
     <div class="form-row"><span class="form-label">BI Date</span><input type="text" value="${_fmtD(g.biDate)}" style="width:160px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">SKU</span><input type="text" value="${g.sku}" class="mono" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
     <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">Capacity Reservation</div>
     <div class="form-row"><span class="form-label">Pallets</span><input type="number" id="_faGrpPlt" value="${g.pallets||0}" min="0" max="26" step="0.1" style="width:80px;font-family:var(--fm)"${isLocked?' readonly style="width:80px;font-family:var(--fm);background:var(--bg);color:var(--ts)"':''}></div>
+    ${(engLP||engLM)?`<div style="padding:6px 0;font-size:10px;font-weight:700;color:#0891B2;text-transform:uppercase;letter-spacing:0.5px">Engine Placement (from ML3K)</div>
+    <div style="padding:6px 10px;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:6px;font-size:11px;color:#0891B2;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px">
+      ${engLP?'<span><b>LP:</b> <span class="mono fw6">'+engLP+'</span> · '+engLPDate+'</span>':''}
+      ${engLM?'<span><b>LM:</b> <span class="mono fw6">'+engLM+'</span>'+(engLMLocked?' 🔒':'')+' · Dispatch: '+engLMDate+(engLMBiK?' · Delivery: '+engLMBiK:'')+'</span>':''}
+    </div>`:''}
     <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">① LP Truck (Dallas → Warehouse)</div>
     <div class="form-row"><span class="form-label">LP Truck</span>
-      <input type="text" id="_faGrpLP" value="${g.linkedLP||''}" list="_faGrpLPList" style="flex:1" placeholder="LP-42">
+      <input type="text" id="_faGrpLP" value="${g.linkedLP||''}" list="_faGrpLPList" style="flex:1" placeholder="${engLP||'LP-42'}">
       <datalist id="_faGrpLPList">${lpOpts}</datalist>
       <span style="font-size:9px;color:var(--tt)">${relLP.length} LP</span>
     </div>
     <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">② LM Truck (Warehouse → Venue)</div>
     <div class="form-row"><span class="form-label">LM Truck</span>
-      <input type="text" id="_faGrpLM" value="${g.linkedLM||''}" list="_faGrpLMList" style="flex:1" placeholder="LM Houston · LSR-001">
+      <input type="text" id="_faGrpLM" value="${g.linkedLM||''}" list="_faGrpLMList" style="flex:1" placeholder="${engLM||'LM Houston · LSR-001'}">
       <datalist id="_faGrpLMList">${lmOpts}</datalist>
       <span style="font-size:9px;color:var(--tt)">${relLM.length} LM</span>
     </div>
