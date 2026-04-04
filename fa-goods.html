@@ -511,7 +511,7 @@ function FA_parseNom(file){
         count++;
       }
       console.log('[FA NOM] Parsed '+count+' SKUs ('+Object.keys(FA_NOM).length+' total) from columns: sku='+skuCol+' name='+nameCol);
-      FA_save();
+      _faNomCache=null;FA_save();
       FA_render();
     }catch(err){alert('Failed to parse NOM: '+err.message)}
   };
@@ -547,38 +547,41 @@ function FA_addNomConfirm(){
 
 function FA_deleteNom(sku){
   if(!confirm('Delete SKU '+sku+'?'))return;
-  delete FA_NOM[sku];
+  delete FA_NOM[sku];_faNomCache=null;
   FA_saveDebounced();FA_render();
 }
 
 function FA_clearNom(){
   if(!confirm('Clear all FA nomenclature?'))return;
-  FA_NOM={};FA_saveDebounced();FA_render();
+  FA_NOM={};_faNomCache=null;FA_saveDebounced();FA_render();
 }
 
+// Cache sorted SKU list + search index
+let _faNomCache=null;
+function _faBuildNomCache(){
+  _faNomCache=Object.keys(FA_NOM).sort().map(sku=>{const n=FA_NOM[sku];return{sku,n,search:(sku+' '+n.name+' '+(n.src||'')).toLowerCase()}});
+}
 function FA_renderNom(){
-  const skus=Object.keys(FA_NOM).sort();
-  document.getElementById('nomCount').textContent=skus.length+' SKUs';
-  if(!skus.length){document.getElementById('nomTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No nomenclature loaded. Upload a file or add SKUs manually.</div>';return}
+  if(!_faNomCache)_faBuildNomCache();
+  const all=_faNomCache;
+  document.getElementById('nomCount').textContent=all.length+' SKUs';
+  if(!all.length){document.getElementById('nomTable').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">No nomenclature loaded. Upload a file or add SKUs manually.</div>';return}
+  const q=(document.getElementById('nomSearch')?.value||'').toLowerCase();
+  const filtered=q?all.filter(x=>x.search.includes(q)):all;
+  const MAX=100;
+  const show=filtered.slice(0,MAX);
   let h='<table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th>UoM</th><th style="text-align:right" title="Disassembled: Pallet Qty">PQ</th><th style="text-align:right" title="Disassembled: Pallet Space">PS</th><th style="text-align:right" title="Assembled: Pallet Qty">PQ(A)</th><th style="text-align:right" title="Assembled: Pallet Space">PS(A)</th><th style="text-align:right">Price</th><th></th></tr></thead><tbody>';
-  for(const sku of skus){
-    const n=FA_NOM[sku];
-    h+=`<tr data-search="${(sku+' '+n.name+' '+n.src).toLowerCase()}"><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src}</td><td>${n.uom}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.pqA||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.psA||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td>${_faIsViewer()?'':'<td><button class="rbtn" onclick="FA_deleteNom(\''+sku+'\')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td>'}</tr>`;
+  for(const{sku,n}of show){
+    h+=`<tr><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src||''}</td><td>${n.uom||'Each'}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.pqA||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.psA||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td>${_faIsViewer()?'':'<td><button class="rbtn" onclick="FA_deleteNom(\''+sku+'\')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td>'}</tr>`;
   }
   h+='</tbody></table>';
+  if(filtered.length>MAX)h+=`<div style="text-align:center;padding:8px;color:var(--tt);font-size:11px">Showing ${MAX} of ${filtered.length} matches. Type to narrow search.</div>`;
   document.getElementById('nomTable').innerHTML=h;
-  FA_filterNom();
 }
 let _faNomFilterTimer;
 function FA_filterNom(){
   clearTimeout(_faNomFilterTimer);
-  _faNomFilterTimer=setTimeout(()=>{
-    const q=(document.getElementById('nomSearch')?.value||'').toLowerCase();
-    const rows=document.querySelectorAll('#nomTable tbody tr');
-    for(let i=0;i<rows.length;i++){
-      rows[i].style.display=!q||rows[i].dataset.search.includes(q)?'':'none';
-    }
-  },200);
+  _faNomFilterTimer=setTimeout(FA_renderNom,150);
 }
 
 // ═══════════════════════════════════════════════════════════════
