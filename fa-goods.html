@@ -321,7 +321,7 @@ async function FA_loadML3K(){
     // Load main NOM for pallet estimates (pq/ps per SKU)
     const nomData=await FA_sbRead('fm-nom');
     window._faML3KNom={};
-    if(nomData&&typeof nomData==='object'){for(const sku in nomData){const n=nomData[sku];if(n.pq&&n.ps)window._faML3KNom[sku]={pq:n.pq,ps:n.ps}}}
+    if(nomData&&typeof nomData==='object'){for(const sku in nomData){const n=nomData[sku];if(n.pq||n.pqA)window._faML3KNom[sku]={pq:n.pq||0,ps:n.ps||0,pqA:n.pqA||0,psA:n.psA||0}}}
     console.log('[FA] ML3K lookup: '+FA_ML3K_VENUES.length+' venues, '+FA_ML3K_TRUCKS.length+' trucks, '+FA_ML3K_KITS.length+' kits, '+Object.keys(window._faML3KNom).length+' NOM pallet entries');
     // Load FA assignments (engine truck placements from ML3K)
     const assigns=await FA_sbRead('fa-assignments');
@@ -772,136 +772,43 @@ function _faRenderPasteCards(){
     h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Map to</span><select style="flex:1;font-size:11px" onchange="window._faPaste.venueMap['${e}']=this.value;_faRenderPasteCards()"><option value="">— skip —</option>${opts.replace('value="'+mapped+'"','value="'+mapped+'" selected')}></select></div>`;
     h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">BI Date</span><input type="date" value="${dt}" style="font-size:11px;font-family:var(--fm)" onchange="window._faPaste.dateMap['${e}']=this.value"></div>`;
     if(hasOld)h+=`<label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer"><input type="checkbox" ${ovr?'checked':''} onchange="window._faPaste.ovrMap['${e}']=this.checked"> Overwrite ${nSame+nDiff} existing</label>`;
-    // Pallets input + AI suggest
-    const curPlt=P.palletMap?.[rv]||'';
-    h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Pallets</span><input type="number" value="${curPlt}" min="0" max="26" step="0.1" style="width:60px;font-size:11px;font-family:var(--fm);border:1px solid var(--bd);border-radius:4px;padding:2px 4px" onchange="if(!window._faPaste.palletMap)window._faPaste.palletMap={};window._faPaste.palletMap['${e}']=parseFloat(this.value)||0"><button onclick="event.stopPropagation();_faPasteAiPallets('${e}',this)" style="background:none;border:1px solid #A5F3FC;border-radius:4px;cursor:pointer;font-size:10px;color:var(--cy);padding:2px 6px" title="AI estimate based on item names">🤖 Suggest</button></div>`;
-    // Items with assembly checkbox + qty diff
+    // Per-item pallet calculation from NOM (pq/ps)
     if(!P.asmMap)P.asmMap={};
-    h+=`<div style="font-size:10px;color:var(--ts);max-height:160px;overflow-y:auto">`;
+    if(!P.pltOvr)P.pltOvr={};// manual pallet overrides: "venue|sku" → number
+    const nom=window._faML3KNom||{};
+    let grpTotal=0;
+    h+=`<div style="font-size:10px;max-height:200px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="color:var(--ts);border-bottom:1px solid var(--bd)"><th style="width:16px" title="Assembled">A</th><th style="text-align:left">SKU</th><th style="text-align:left">Name</th><th style="text-align:right">Qty</th><th style="text-align:right">PQ</th><th style="text-align:right">PS</th><th style="text-align:right;min-width:50px">Pallets</th><th></th></tr></thead><tbody>`;
     for(const it of grp){
-      const ex=mapped?exist[it.sku+'|'+mapped]:undefined;
-      const mark=ex===undefined?'':(ex===it.qty?' <span style="color:var(--tt)">=</span>':' <span style="color:var(--pu)">was '+ex+'</span>');
       const asmKey=rv+'|'+it.sku;
       const isAsm=!!P.asmMap[asmKey];
-      h+=`<div style="display:flex;gap:4px;align-items:center"><input type="checkbox" ${isAsm?'checked':''} onchange="window._faPaste.asmMap['${asmKey.replace(/'/g,"\\'")}']=this.checked" title="Assembled (not in box)" style="margin:0;flex-shrink:0"><span class="mono" style="color:var(--cy);flex-shrink:0">${it.sku}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.name}</span><span class="mono fw6">${it.qty}</span>${mark}</div>`;
+      const n=nom[it.sku]||{};
+      const pq=isAsm?(n.pqA||n.pq||0):(n.pq||0);
+      const ps=isAsm?(n.psA||n.ps||0):(n.ps||0);
+      const hasNom=pq>0&&ps>0;
+      const calcPlt=hasNom?Math.round((it.qty/pq)*ps*100)/100:0;
+      const ovrKey=rv+'|'+it.sku;
+      const manualPlt=P.pltOvr[ovrKey];
+      const effectivePlt=manualPlt!==undefined?manualPlt:calcPlt;
+      grpTotal+=effectivePlt;
+      const ex=mapped?exist[it.sku+'|'+mapped]:undefined;
+      const mark=ex===undefined?'':(ex===it.qty?' <span style="color:var(--tt)">=</span>':' <span style="color:var(--pu)">was '+ex+'</span>');
+      h+=`<tr style="border-bottom:1px solid var(--bl)">`;
+      h+=`<td><input type="checkbox" ${isAsm?'checked':''} onchange="window._faPaste.asmMap['${asmKey.replace(/'/g,"\\'")}']=this.checked;_faRenderPasteCards()" style="margin:0" title="Assembled"></td>`;
+      h+=`<td class="mono" style="color:var(--cy)">${it.sku}</td>`;
+      h+=`<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px">${it.name}${mark}</td>`;
+      h+=`<td class="mono" style="text-align:right">${it.qty}</td>`;
+      h+=`<td class="mono" style="text-align:right;color:${hasNom?'var(--ts)':'var(--rd)'}">${pq||'—'}</td>`;
+      h+=`<td class="mono" style="text-align:right;color:${hasNom?'var(--ts)':'var(--rd)'}">${ps||'—'}</td>`;
+      h+=`<td style="text-align:right"><input type="number" value="${effectivePlt}" min="0" step="0.1" style="width:50px;font-size:10px;font-family:var(--fm);text-align:right;border:1px solid ${manualPlt!==undefined?'var(--pu)':hasNom?'var(--bd)':'var(--rd)'};border-radius:3px;padding:1px 3px;color:${manualPlt!==undefined?'var(--pu)':hasNom?'var(--tp)':'var(--rd)'}" onchange="window._faPaste.pltOvr['${ovrKey.replace(/'/g,"\\'")}']=parseFloat(this.value)||0;_faRenderPasteCards()" title="${hasNom?'Calc: '+it.qty+'/'+pq+'×'+ps+'='+calcPlt:'No NOM data — manual input required'}"></td>`;
+      h+=`<td style="width:12px">${manualPlt!==undefined?'<span onclick="delete window._faPaste.pltOvr[\''+ovrKey.replace(/'/g,"\\'")+'\'];_faRenderPasteCards()" style="cursor:pointer;color:var(--tt);font-size:12px" title="Reset to calculated">↻</span>':''}</td>`;
+      h+=`</tr>`;
     }
-    h+=`</div></div>`;
+    h+=`</tbody></table></div>`;
+    h+=`<div style="display:flex;justify-content:flex-end;margin-top:4px;font-size:11px;font-weight:700;color:var(--ac)">Total: ${Math.round(grpTotal*100)/100} plt</div>`;
+    h+=`</div>`;
   }
   document.getElementById('_faPastePreview').innerHTML=h;
   document.getElementById('_faPasteAddBtn').disabled=false;
-}
-
-// ── AI pallet estimation for paste venue card ──
-async function _faPasteAiPallets(rawVenue,btn){
-  const P=window._faPaste;if(!P)return;
-  const grp=P.items.filter(i=>i.venue===rawVenue);
-  if(!grp.length)return;
-  const provider=localStorage.getItem('hs-ai-provider')||'';
-  const key=localStorage.getItem('hs-ai-key')||'';
-  if(!provider||!key){alert('No AI configured. Set up in ML3K → HS Code → AI Settings.');return}
-  btn.textContent='⏳';btn.disabled=true;
-  const asmMap=P.asmMap||{};
-  const itemList=grp.map(i=>{
-    const isAsm=!!asmMap[rawVenue+'|'+i.sku];
-    return i.name+' × '+i.qty+(isAsm?' [ASSEMBLED - no packaging, bare item]':'');
-  }).join('\n');
-  const sys=`You are a Logistics Material Planning AI for FIFA World Cup 2026™ ground transport.
-Your output drives truck loading and warehouse planning. Accuracy is critical.
-
-PALLET: 48"×40" (122×102cm). Max stack height: 180cm including pallet. 1 pallet = 1 PALLET SPACE. Oversized item on double-wide base = 2 PALLET SPACES.
-
-CLASSIFICATION — assign each item exactly ONE category:
-A. STACKABLE — boxed, uniform shape, can safely stack multiple on a pallet
-B. UNBOXED — ONLY items tagged [ASSEMBLED] (no box, bare/wrapped). These have irregular shape but IDENTICAL unboxed items CAN be stacked/grouped together on a pallet. Estimate how many identical bare items fit per pallet based on the item's physical dimensions. Do NOT mix with different items.
-C. SMALL — desktop electronics, consumables, accessories. Combine onto shared pallets.
-D. FRAGILE — can palletize but limit stacking height. Reduce density.
-
-IMPORTANT: Items WITHOUT the [ASSEMBLED] tag are IN THEIR ORIGINAL BOX. Boxed items are Category A or C, NOT B. A boxed TV stand is stackable. A boxed printer is small. Only [ASSEMBLED] = Category B.
-
-PALLET SPACE SIZING — for each item, estimate the BOXED dimensions from your product knowledge:
-- Box fits within 122×102cm footprint → 1 pallet space. Calculate how many fit per pallet (layers × units per layer).
-- Box exceeds 122cm in any horizontal dimension but fits ~170cm → 1 pallet space with overhang (standard practice).
-- Box exceeds ~170cm in any dimension → 2 PALLET SPACES (double pallet). Example: 75"+ TVs, large tables, long signage.
-- [ASSEMBLED] items: estimate bare footprint. If >122cm → 2 spaces.
-
-CALCULATION METHOD — for each item:
-1. Identify the real product (use brand/model knowledge)
-2. Estimate boxed dimensions (L×W×H cm)
-3. Consider ALL possible orientations: flat, upright, on-side. Pick the orientation that fits the most units per pallet while remaining safe and practical. Example: a tall narrow box (120×30×70cm) laid flat fits 1 per pallet, but stood upright (30×70 footprint) could fit 4-6 per pallet within height limits.
-4. Calculate units per pallet: floor(pallet_length ÷ item_dim1) × floor(pallet_width ÷ item_dim2) × stackable_layers. Pallet = 122×102cm. Show this math explicitly.
-5. Pallet spaces = qty ÷ units_per_pallet (exact decimal)
-6. If item box exceeds ~170cm in ALL orientations → double pallet (2 spaces per unit)
-
-THEN: Sum all per-item pallet spaces to get total.
-
-ARITHMETIC — THIS IS THE MOST IMPORTANT RULE:
-Step 1: Write out each item's pallet spaces as a number.
-Step 2: Add them: A + B + C + D = TOTAL.
-Step 3: The "pallets" field in your JSON MUST equal this TOTAL exactly.
-Step 4: Before responding, RE-READ your breakdown. Re-add the numbers. If the sum differs from "pallets", FIX IT.
-DO NOT return a response where "pallets" differs from the sum shown in TOTAL line. This is a hard requirement.
-
-OUTPUT — return ONLY valid JSON:
-{"pallets": [total pallet spaces], "reasoning": "BREAKDOWN:\\n- [Item] x[qty]: [X] pallet spaces ([Cat X], [boxed dims], [units/pallet], [math])\\n- ...\\n\\nTOTAL: [X + Y + Z] = [total] pallet spaces\\n\\nPACKING LOGIC:\\n- [2-3 lines on key decisions]"}
-
-Use \\n for line breaks. Show the addition in TOTAL line.
-
-RULES:
-- NEVER classify boxed items as UNBOXED. Only [ASSEMBLED] tag = Cat B.
-- NEVER default to 1-per-pallet without calculating. Always estimate real density — even unboxed items can group together.
-- ALWAYS round up the final total for safety margin.
-- If you don't know a product, state your assumption. Don't hallucinate dimensions.`;
-  const mapped=P.venueMap[rawVenue]||rawVenue;
-  const usr='Estimate total pallet spaces for this shipment to '+mapped+':\n\n'+itemList+'\n\nFor each item, identify the actual product and its real packaging dimensions. If unsure, search for similar products to find typical box sizes. Calculate per item, sum total. Return JSON only.';
-  try{
-    let text='';
-    if(provider==='gemini'){const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}],tools:[{google_search:{}}]})});const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||''}
-    else if(provider==='anthropic'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:[{role:'user',content:usr}]})});const j=await r.json();text=j?.content?.[0]?.text||''}
-    else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:1200})});const j=await r.json();text=j?.choices?.[0]?.message?.content||''}
-    console.log('[FA AI raw]',text);
-    const match=text.match(/"pallets"\s*:\s*([\d.]+)/)||text.match(/"palletSpaces"\s*:\s*([\d.]+)/);
-    if(match){
-      let pallets=parseFloat(match[1]);
-      let reasoning='';
-      const rMatch=text.match(/"reasoning"\s*:\s*"([\s\S]*?)"\s*\}/);
-      if(rMatch)reasoning=rMatch[1];
-      // Auto-correct from reasoning total
-      // Auto-correct: parse per-item pallet numbers from breakdown and sum them ourselves
-      const lineMatches=[...reasoning.matchAll(/:\s*([\d.]+)\s*pallet\s*space/gi)];
-      if(lineMatches.length){
-        const jsSum=Math.round(lineMatches.reduce((s,m)=>s+parseFloat(m[1]),0)*100)/100;
-        if(jsSum>0&&jsSum!==pallets){console.log('[FA AI] JS recalc:',lineMatches.map(m=>parseFloat(m[1])).join('+'),'=',jsSum,'(AI said',pallets+')');pallets=jsSum}
-      } else {
-        // Fallback: parse from TOTAL line
-        const totalMatch=reasoning.match(/TOTAL[^=]*=\s*([\d.]+)/i)||reasoning.match(/=\s*([\d.]+)\s*pallet/i);
-        if(totalMatch){const v=parseFloat(totalMatch[1]);if(v>0&&v!==pallets){console.log('[FA AI] Correcting from',pallets,'to',v);pallets=v}}
-      }
-      if(!reasoning){
-        const afterPallets=text.split(/"pallets"[^,}]+/)[1]||'';
-        reasoning=afterPallets.replace(/[{}",]/g,' ').replace(/reasoning\s*:/gi,'').trim();
-      }
-      if(!P.palletMap)P.palletMap={};
-      P.palletMap[rawVenue]=pallets;
-      _faRenderPasteCards();
-      // Show reasoning dialog
-      const rv=rawVenue;const mapped=P.venueMap[rv]||rv;
-      const items=grp.map(i=>i.name+' × '+i.qty).join('\n');
-      const h=`<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:var(--sf);border:2px solid #A5F3FC;border-radius:12px;padding:20px;max-width:600px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0;font-size:14px;color:#0891B2">🤖 AI Pallet Estimate</h3><button onclick="this.closest('div[style*=position]').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts)">✕</button></div>
-        <div style="font-size:11px;color:var(--ts);margin-bottom:8px">${mapped}</div>
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:12px;background:#ECFEFF;border-radius:8px;border:1px solid #A5F3FC">
-          <span style="font-size:28px;font-weight:800;color:#0891B2;font-family:var(--fm)">${pallets}</span>
-          <span style="font-size:12px;color:#0891B2;font-weight:600">pallet spaces</span>
-        </div>
-        <div style="font-size:12px;color:var(--tp);line-height:1.7;padding:12px;background:var(--bg);border-radius:6px;max-height:350px;overflow-y:auto;white-space:pre-wrap;font-family:var(--fm)">${reasoning.replace(/\\n/g,'\n')}</div>
-        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
-          <button class="mbtn" onclick="this.closest('div[style*=position]').remove()">Close</button>
-        </div>
-      </div>`;
-      const wrap=document.createElement('div');wrap.innerHTML=h;document.body.appendChild(wrap.firstChild);
-    } else alert('AI response:\n'+text);
-  }catch(e){alert('AI error: '+e.message)}
-  btn.textContent='🤖 Suggest';btn.disabled=false;
 }
 
 // ── Step 3: Confirm and add ──
@@ -916,15 +823,15 @@ function _faConfirmPaste(){
     const doOvr=P.ovrMap[rv]!==undefined?P.ovrMap[rv]:false;
     if(doOvr){const skus=new Set(grp.map(i=>i.sku));const b=FA_DEMAND.length;FA_DEMAND=FA_DEMAND.filter(d=>!(d.venue===mapped&&skus.has(d.sku)));overwritten+=b-FA_DEMAND.length}
     else{const existSet=new Set(FA_DEMAND.filter(d=>d.venue===mapped).map(d=>d.sku));const before=grp.length;grp.splice(0,grp.length,...grp.filter(i=>!existSet.has(i.sku)));skipped+=before-grp.length}
-    for(const it of grp){FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:mapped,fa:it.fa,qty:it.qty,biDate:bi||it.biDate||'',note:'',created:new Date().toISOString()});added++}
-  }
-  // Apply pallet values to groups that match the added venues
-  const palletMap=P.palletMap||{};
-  for(const rv in palletMap){
-    const mapped=P.venueMap[rv];if(!mapped||!palletMap[rv])continue;
-    // Find groups for this venue and update pallets
-    for(const g of FA_GROUPS){
-      if(g.venue===mapped&&(g.pallets||0)===0){g.pallets=palletMap[rv]}
+    const nom=window._faML3KNom||{};
+    for(const it of grp){
+      const asmKey=rv+'|'+it.sku;const isAsm=!!P.asmMap?.[asmKey];
+      const ovrKey=rv+'|'+it.sku;const manualPlt=P.pltOvr?.[ovrKey];
+      FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:mapped,fa:it.fa,qty:it.qty,biDate:bi||it.biDate||'',note:'',
+        _asm:isAsm||undefined,
+        _pltOvr:manualPlt!==undefined?manualPlt:undefined,
+        created:new Date().toISOString()});
+      added++;
     }
   }
   window._faPaste=null;document.getElementById('faModal').innerHTML='';
@@ -1056,8 +963,17 @@ function FA_buildGroups(){
     delete oldOpen[key];
   }
   FA_GROUPS=[...kept,...built];
-  // Regenerate SKUs for new groups that didn't have one
   for(const g of FA_GROUPS){if(!g.sku)g.sku=_faGroupSku(g.fa,g.venue,g.id)}
+  // Auto-compute pallets from NOM for groups without manual pallets
+  for(const g of FA_GROUPS){
+    if(!lockedGrpIds.has(g.id)){
+      const computed=FA_computeGroupPallets(g);
+      if(computed>0&&(g.pallets||0)===0)g.pallets=computed;
+      // If group has items with _pltOvr, always recompute (user set per-item values)
+      const hasOvr=g.items?.some(did=>{const d=FA_DEMAND.find(x=>x.id===did);return d&&d._pltOvr!==undefined});
+      if(hasOvr)g.pallets=computed;
+    }
+  }
 }
 
 // Regenerate groups (user-triggered)
@@ -1151,6 +1067,24 @@ function FA_saveGroupEdit(id){
   FA_saveGroups();FA_render();
 }
 
+// Compute group pallets from demand items + NOM pq/ps
+function FA_computeGroupPallets(g){
+  if(!g||!g.items)return 0;
+  const nom=window._faML3KNom||{};
+  let total=0;
+  for(const did of g.items){
+    const d=FA_DEMAND.find(x=>x.id===did);if(!d)continue;
+    // Manual override takes priority
+    if(d._pltOvr!==undefined){total+=d._pltOvr;continue}
+    const n=nom[d.sku]||{};
+    const isAsm=!!d._asm;
+    const pq=isAsm?(n.pqA||n.pq||0):(n.pq||0);
+    const ps=isAsm?(n.psA||n.ps||0):(n.ps||0);
+    if(pq>0&&ps>0)total+=(d.qty/pq)*ps;
+  }
+  return Math.round(total*100)/100;
+}
+
 // Render Delivery Groups tab
 function FA_renderGroups(){
   // Auto-build groups if none exist but demand does
@@ -1222,42 +1156,6 @@ function FA_renderGroups(){
 function FA_setGroupPallets(id,val){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
   g.pallets=parseFloat(val)||0;FA_saveGroups();
-}
-async function FA_aiPallets(id,btn){
-  const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
-  const items=FA_DEMAND.filter(d=>g.items&&g.items.includes(d.id));
-  if(!items.length)return alert('No items in this group');
-  const provider=localStorage.getItem('hs-ai-provider')||'';
-  const key=localStorage.getItem('hs-ai-key')||'';
-  if(!provider||!key){alert('No AI provider configured. Set up in ML3K → HS Code → AI Settings.');return}
-  btn.textContent='⏳';btn.disabled=true;
-  const itemList=items.map(i=>i.name+' × '+i.qty).join('\n');
-  const sys='You estimate pallet space for logistics shipments. A standard pallet is 48×40 inches, max height 60 inches. Return ONLY a JSON object: {"pallets": number, "reasoning": "brief explanation"}. Number can be decimal (e.g. 0.5 for half pallet).';
-  const usr='Estimate pallet space needed for these items being shipped to a FIFA World Cup venue:\n\n'+itemList+'\n\nConsider typical packaging dimensions for these products. Return JSON only.';
-  try{
-    let text='';
-    if(provider==='gemini'){
-      const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}]})});
-      const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.[0]?.text||'';
-    } else if(provider==='anthropic'){
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:[{role:'user',content:usr}]})});
-      const j=await r.json();text=j?.content?.[0]?.text||'';
-    } else if(provider==='openai'){
-      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:1200})});
-      const j=await r.json();text=j?.choices?.[0]?.message?.content||'';
-    }
-    // Parse JSON from response
-    const match=text.match(/\{[\s\S]*?"pallets"\s*:\s*([\d.]+)[\s\S]*?\}/);
-    if(match){
-      const pallets=parseFloat(match[1]);
-      const reasoning=text.match(/"reasoning"\s*:\s*"([^"]*)"/)?.[1]||'';
-      const input=btn.parentElement.querySelector('input[type="number"]');
-      if(input&&confirm('AI suggests '+pallets+' pallets'+(reasoning?'\n\n'+reasoning:'')+'\n\nApply?')){
-        input.value=pallets;g.pallets=pallets;FA_saveGroups();
-      }
-    } else {alert('AI response:\n'+text)}
-  }catch(e){alert('AI error: '+e.message)}
-  btn.textContent='🤖';btn.disabled=false;
 }
 function FA_filterGroups(){
   const q=(document.getElementById('grpSearch').value||'').toLowerCase();
