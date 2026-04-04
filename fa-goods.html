@@ -717,7 +717,7 @@ function _faParsePaste(){
   const isMatrix=hdr.length>=4&&hasNumbers;
 
   const items=[];
-  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue));
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
 
   if(isMatrix){
     // Matrix: find venue columns — keep raw header text as venue name (mapping step resolves)
@@ -748,7 +748,7 @@ function _faParsePaste(){
           const qty=parseInt(row[vc.col]);
           if(!qty||qty<=0)continue;
           const biDate=vc.biDate||defaultDate;
-          const key=sku+'|'+vc.venue;
+          const key=sku+'|'+vc.venue+'|'+qty;
           items.push({sku,name,venue:vc.venue,fa,qty,biDate,dup:_existing.has(key)});
         }
       }
@@ -795,15 +795,20 @@ function _faParsePaste(){
     }
     window._faPasteVenueMap[rv]=bestGuess;
 
-    // Count duplicates
-    const dupCount=bestGuess?group.filter(i=>_existing.has(i.sku+'|'+bestGuess)).length:0;
-    const newCount=group.length-dupCount;
+    // Count exact dups (same sku+venue+qty) and sku-venue matches (different qty = overwrite candidates)
+    const _existSkuVenue=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue));
+    const dupCount=bestGuess?group.filter(i=>_existing.has(i.sku+'|'+bestGuess+'|'+i.qty)).length:0;
+    const overwriteCount=bestGuess?group.filter(i=>!_existing.has(i.sku+'|'+bestGuess+'|'+i.qty)&&_existSkuVenue.has(i.sku+'|'+bestGuess)).length:0;
+    // Get BI date from ML3K venue data or group items
+    const _venueBi=FA_ML3K_VENUES.find(v=>v.name===bestGuess)?.biDate||'';
+    const groupDate=group[0]?.biDate||'';
 
     preview+=`<div style="margin-bottom:10px;padding:10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:12px;font-weight:700;color:var(--tp)">"${rv}"</span>
         <span class="bg bg-gy">${group.length} items</span>
         ${dupCount?'<span class="_faDupBadge bg bg-or">'+dupCount+' dup</span>':''}
+        ${overwriteCount?'<span class="_faOvrBadge bg bg-pu">'+overwriteCount+' qty diff</span>':''}
       </div>
       <div class="form-row" style="margin-bottom:4px">
         <span class="form-label" style="font-size:10px">Map to →</span>
@@ -811,7 +816,12 @@ function _faParsePaste(){
           <option value="">— skip this venue —</option>${venueOpts}
         </select>
       </div>
+      <div class="form-row" style="margin-bottom:4px">
+        <span class="form-label" style="font-size:10px">BI Date</span>
+        <input type="date" class="_faPasteDateInput" data-raw="${rv.replace(/"/g,'&quot;')}" value="${groupDate||_venueBi||''}" style="font-size:11px;font-family:var(--fm)">
+      </div>
       ${dupCount?'<div class="_faDupChkDiv" style="margin-top:4px"><label style="font-size:10px;color:var(--or);display:flex;align-items:center;gap:4px"><input type="checkbox" class="_faPasteDupAllow" data-raw="'+rv.replace(/"/g,'&quot;')+'""> Add duplicates anyway ('+dupCount+')</label></div>':''}
+      ${overwriteCount?'<div class="_faOvrChkDiv" style="margin-top:4px"><label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px"><input type="checkbox" class="_faPasteOvrAllow" data-raw="'+rv.replace(/"/g,'&quot;')+'" checked> Overwrite existing qty ('+overwriteCount+')</label></div>':''}
       <div style="margin-top:6px;font-size:10px;color:var(--ts)">`;
     // Show items summary
     for(const it of group.slice(0,5)){
@@ -849,13 +859,13 @@ function _faPasteVenueChanged(){
   });
   // Recheck dups with resolved venues and update badges
   const map=window._faPasteVenueMap||{};
-  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue));
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
   const items=window._faPasteItems||[];
   const rawVenues=[...new Set(items.map(i=>i.venue))];
   for(const rv of rawVenues){
     const resolved=map[rv]||'';
     const group=items.filter(i=>i.venue===rv);
-    const dupCount=resolved?group.filter(i=>_existing.has(i.sku+'|'+resolved)).length:0;
+    const dupCount=resolved?group.filter(i=>_existing.has(i.sku+'|'+resolved+'|'+i.qty)).length:0;
     // Update dup badge in card
     const card=document.querySelector('._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');
     if(!card)continue;
@@ -881,28 +891,49 @@ function _faPasteVenueChanged(){
 
 function _faConfirmPaste(){
   if(!window._faPasteItems){alert('Run Preview first.');return}
-  // Read venue selections
   _faPasteVenueChanged();
   const map=window._faPasteVenueMap||{};
-  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue));
-  // Read duplicate-allow checkboxes
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
+  const _existBySkuVenue={};// sku|venue → demand index
+  FA_DEMAND.forEach((d,i)=>{_existBySkuVenue[d.sku+'|'+d.venue]=i});
+  // Read per-venue dates
+  const dateMap={};
+  document.querySelectorAll('._faPasteDateInput').forEach(inp=>{if(inp.dataset.raw&&inp.value)dateMap[inp.dataset.raw]=inp.value});
+  // Read checkboxes
   const dupAllow=new Set();
   document.querySelectorAll('._faPasteDupAllow:checked').forEach(cb=>{dupAllow.add(cb.dataset.raw)});
+  const ovrAllow=new Set();
+  document.querySelectorAll('._faPasteOvrAllow:checked').forEach(cb=>{ovrAllow.add(cb.dataset.raw)});
 
-  let added=0,skipped=0,dupSkipped=0;
+  let added=0,skipped=0,dupSkipped=0,overwritten=0;
   for(const it of window._faPasteItems){
     const resolved=map[it.venue];
-    if(!resolved){skipped++;continue}// venue skipped
-    const key=it.sku+'|'+resolved;
-    if(_existing.has(key)&&!dupAllow.has(it.venue)){dupSkipped++;continue}// duplicate
-    FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:resolved,fa:it.fa,qty:it.qty,biDate:it.biDate,note:'',created:new Date().toISOString()});
-    _existing.add(key);// prevent intra-paste duplicates
+    if(!resolved){skipped++;continue}
+    const biDate=dateMap[it.venue]||it.biDate||'';
+    const key=it.sku+'|'+resolved+'|'+it.qty;
+    const skuVenueKey=it.sku+'|'+resolved;
+    // Exact dup (same qty)
+    if(_existing.has(key)){
+      if(!dupAllow.has(it.venue)){dupSkipped++;continue}
+    }
+    // SKU+venue exists with different qty → overwrite
+    if(_existBySkuVenue[skuVenueKey]!==undefined&&!_existing.has(key)){
+      if(ovrAllow.has(it.venue)){
+        const idx=_existBySkuVenue[skuVenueKey];
+        FA_DEMAND[idx].qty=it.qty;
+        if(biDate)FA_DEMAND[idx].biDate=biDate;
+        overwritten++;continue;
+      } else {dupSkipped++;continue}
+    }
+    FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:resolved,fa:it.fa,qty:it.qty,biDate,note:'',created:new Date().toISOString()});
+    _existing.add(key);
+    _existBySkuVenue[skuVenueKey]=FA_DEMAND.length-1;
     added++;
   }
   window._faPasteItems=null;window._faPasteVenueMap=null;
   document.getElementById('faModal').innerHTML='';
   FA_saveDebounced();FA_render();
-  if(added)console.log('[FA] Paste: added '+added+', skipped '+skipped+' (no venue), dup-skipped '+dupSkipped);
+  console.log('[FA] Paste: added '+added+', overwritten '+overwritten+', dup-skipped '+dupSkipped+', venue-skipped '+skipped);
 }
 
 function FA_renderDemand(){
