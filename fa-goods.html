@@ -563,17 +563,22 @@ function FA_renderNom(){
   let h='<table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th>Source</th><th>UoM</th><th style="text-align:right" title="Disassembled: Pallet Qty">PQ</th><th style="text-align:right" title="Disassembled: Pallet Space">PS</th><th style="text-align:right" title="Assembled: Pallet Qty">PQ(A)</th><th style="text-align:right" title="Assembled: Pallet Space">PS(A)</th><th style="text-align:right">Price</th><th></th></tr></thead><tbody>';
   for(const sku of skus){
     const n=FA_NOM[sku];
-    h+=`<tr data-search="${sku} ${n.name} ${n.src}"><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src}</td><td>${n.uom}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.pqA||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.psA||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td>${_faIsViewer()?'':'<td><button class="rbtn" onclick="FA_deleteNom(\''+sku+'\')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td>'}</tr>`;
+    h+=`<tr data-search="${(sku+' '+n.name+' '+n.src).toLowerCase()}"><td class="mono fw6">${sku}</td><td>${n.name}</td><td>${n.src}</td><td>${n.uom}</td><td class="mono" style="text-align:right">${n.pq||'—'}</td><td class="mono" style="text-align:right">${n.ps||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.pqA||'—'}</td><td class="mono" style="text-align:right;color:var(--or)">${n.psA||'—'}</td><td class="mono" style="text-align:right">${n.price?'$'+n.price.toFixed(2):'—'}</td>${_faIsViewer()?'':'<td><button class="rbtn" onclick="FA_deleteNom(\''+sku+'\')" style="color:var(--rd);border-color:var(--rs);padding:2px 6px;font-size:10px">✕</button></td>'}</tr>`;
   }
   h+='</tbody></table>';
   document.getElementById('nomTable').innerHTML=h;
   FA_filterNom();
 }
+let _faNomFilterTimer;
 function FA_filterNom(){
-  const q=(document.getElementById('nomSearch').value||'').toLowerCase();
-  document.querySelectorAll('#nomTable tbody tr').forEach(r=>{
-    r.style.display=!q||r.getAttribute('data-search').toLowerCase().includes(q)?'':'none';
-  });
+  clearTimeout(_faNomFilterTimer);
+  _faNomFilterTimer=setTimeout(()=>{
+    const q=(document.getElementById('nomSearch')?.value||'').toLowerCase();
+    const rows=document.querySelectorAll('#nomTable tbody tr');
+    for(let i=0;i<rows.length;i++){
+      rows[i].style.display=!q||rows[i].dataset.search.includes(q)?'':'none';
+    }
+  },200);
 }
 
 // ═══════════════════════════════════════════════════════════════
