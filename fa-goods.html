@@ -189,8 +189,14 @@ body.viewer .fa-admin{display:none!important}
           <button class="rbtn fa-admin" onclick="FA_regenGroups()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">⟳ Regenerate</button>
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
         <input type="text" id="grpSearch" placeholder="Search venue, FA, SKU..." oninput="FA_filterGroups()" style="flex:1;min-width:200px">
+        <label style="font-size:10px;color:var(--ts);white-space:nowrap">Sort by</label>
+        <select id="grpSort" onchange="_faGrpSort=this.value;FA_renderGroups()" style="font-size:11px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;color:var(--tp);background:#fff">
+          <option value="biDate">FA BI Date</option>
+          <option value="dispatch">Dispatch</option>
+          <option value="venue">Venue</option>
+        </select>
       </div>
       <div id="grpTable" style="flex:1;overflow-y:auto"></div>
     </div>
@@ -1341,6 +1347,7 @@ function FA_autoSplit(){
   }
 }
 
+let _faGrpSort='biDate';// 'biDate','dispatch','venue'
 // Render Delivery Groups tab
 function FA_renderGroups(){
   // Auto-build groups if none exist but demand does
@@ -1372,17 +1379,29 @@ function FA_renderGroups(){
   const _lmTruckMap={};for(const t of FA_ML3K_TRUCKS){_lmTruckMap[t.id]=t}
   // Fuzzy LM truck lookup (linkedLM may include LSR suffix not in truck ID)
   const _lmFind=ref=>{if(!ref)return null;if(_lmTruckMap[ref])return _lmTruckMap[ref];for(const t of FA_ML3K_TRUCKS){if(ref.includes(t.id)||t.id.includes(ref))return t}return null}
-  let h='<table class="dtb"><thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th>Dispatch</th><th>Delivery</th><th style="text-align:right">Items</th><th style="text-align:center">Pallets</th><th style="text-align:right">Value</th><th>LP Truck</th><th>LM Truck</th><th>Kit</th><th>Status</th></tr></thead><tbody>';
-  const sorted=[...FA_GROUPS].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue));
-  for(const g of sorted){
+  // Precompute dispatch/delivery per group for sorting
+  const _grpData=FA_GROUPS.map(g=>{
     const asgn=FA_ASSIGNMENTS[g.sku]||{};
-    const isLocked=!!g._locked;
-    // LP: manual link or engine assignment
     const lpRef=g.linkedLP||(asgn.lp?asgn.lp.truckId:null);
+    const lpDate=g.linkedLP&&_lpTruckMap[g.linkedLP]?_lpTruckMap[g.linkedLP].date:(asgn.lp?asgn.lp.date:null);
+    const lmT=_lmFind(g.linkedLM);
+    const lmDate=lmT?lmT.date:(asgn.lm?asgn.lm.date:null);
+    const dispDate=lpDate&&lmDate?(lpDate<lmDate?lpDate:lmDate):lpDate||lmDate;
+    const delDate=lmT?(lmT.biDate||lmT.date):(asgn.lm?asgn.lm.biK:null);
+    return{g,asgn,lpRef,lmT,dispDate,delDate};
+  });
+  const _s=_faGrpSort||'biDate';
+  _grpData.sort((a,b)=>{
+    if(_s==='dispatch')return(a.dispDate||'9').localeCompare(b.dispDate||'9')||(a.g.venue||'').localeCompare(b.g.venue||'');
+    if(_s==='venue')return(a.g.venue||'').localeCompare(b.g.venue||'')||(a.g.biDate||'9').localeCompare(b.g.biDate||'9');
+    return(a.g.biDate||'9').localeCompare(b.g.biDate||'9')||(a.g.venue||'').localeCompare(b.g.venue||'');
+  });
+  let h='<table class="dtb"><thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th>Dispatch</th><th>Delivery</th><th style="text-align:right">Items</th><th style="text-align:center">Pallets</th><th style="text-align:right">Value</th><th>LP Truck</th><th>LM Truck</th><th>Kit</th><th>Status</th></tr></thead><tbody>';
+  for(const{g,asgn,lpRef,lmT,dispDate,delDate} of _grpData){
+    const isLocked=!!g._locked;
     const lpIsEngine=!g.linkedLP&&asgn.lp;
     const lpLocked=!!(asgn.lp&&asgn.lp.locked);
     const lpDisp=lpRef?'<span class="bg" style="background:'+(lpLocked?'var(--gs);color:var(--gn);border:1px solid #B8DFCA':lpIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'#EFF6FF;color:#2563eb;border:1px solid #BFDBFE')+'">'+lpRef+(lpLocked?' 🔒':'')+'</span>':'<span style="color:var(--tt)">—</span>';
-    // LM: manual link or engine assignment
     const lmRef=g.linkedLM||(asgn.lm?asgn.lm.truckId:null);
     const lmIsEngine=!g.linkedLM&&asgn.lm;
     const lmLocked=!!(asgn.lm&&asgn.lm.locked);
@@ -1391,13 +1410,6 @@ function FA_renderGroups(){
     const kitDisp=g.linkedKit?'<span class="bg bg-gn">📦 '+g.linkedKit+'</span>':'<span style="color:var(--tt)">—</span>';
     const hasAsgn=lpRef||lmRef;
     const statusBadge=isLocked?'<span class="bg bg-gn">🔒 Locked</span>':hasAsgn?'<span class="bg bg-cy">On Truck</span>':g.pallets>0?'<span class="bg bg-or">Pallets set</span>':'<span class="bg bg-gy">Open</span>';
-    // Dispatch: earliest of LP or LM truck date (manual or engine)
-    const lpDate=g.linkedLP&&_lpTruckMap[g.linkedLP]?_lpTruckMap[g.linkedLP].date:(asgn.lp?asgn.lp.date:null);
-    const lmT=_lmFind(g.linkedLM);
-    const lmDate=lmT?lmT.date:(asgn.lm?asgn.lm.date:null);
-    const dispDate=lpDate&&lmDate?(lpDate<lmDate?lpDate:lmDate):lpDate||lmDate;
-    // Delivery: LM biK (manual or engine)
-    const delDate=lmT?(lmT.biDate||lmT.date):(asgn.lm?asgn.lm.biK:null);
     h+=`<tr data-search="${g.sku} ${g.venue} ${g.fa} ${lpRef||''} ${lmRef||''} ${g.linkedKit||''}" style="cursor:pointer" onclick="FA_editGroup(${g.id})">
       <td class="mono fw6" style="color:var(--cy)">${g.sku}</td>
       <td>${g.venue}</td>
@@ -1415,6 +1427,7 @@ function FA_renderGroups(){
   }
   h+='</tbody></table>';
   document.getElementById('grpTable').innerHTML=h;
+  const _sortEl=document.getElementById('grpSort');if(_sortEl)_sortEl.value=_faGrpSort||'biDate';
   FA_filterGroups();
 }
 function FA_filterGroups(){
