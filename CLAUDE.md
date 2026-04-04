@@ -96,6 +96,7 @@ Every scrollable module container must have explicit `padding-bottom` that accou
 - `LP_TRANSIT_DEFAULTS` — `{TOR:7,VAN:7,CDMX:7,GDL:7,MTY:7,KC:1,HOU:1,NY:3}` — migration: if TOR/VAN is 5 (old default), auto-upgraded to 7
 - `LP_DEST_WHS_DEFAULTS` — all destinations default to 3 days satellite warehouse processing
 - `LP_customsOverrides` — `{sku: {hsCode, country, price, customsName, hsConfirmed}}` — customs data overrides per SKU
+- `LP_returned` — `{truckId: {sku: returnedQty}}` — items returned from locked LP trucks to demand pool
 
 ## Bottom Support Bar (`#global-supp-bar`)
 Fixed bar at `bottom:0`, `z-index:65`, `height:44px`. Always visible on desktop.
@@ -286,8 +287,8 @@ Four reset functions exist — any new state must be added to all that apply:
 - [ ] `doSoftResetLP` — decide: clear or preserve? Add comment to the "preserved" list in code
 
 **LP Supabase keys** (saved by `LP_saveToSupabase()`): `lp-config`, `lp-nom`, `lp-demand`, `lp-arrivals`, `lp-plan`, `lp-truck-state`
-**`lp-truck-state` contains**: dispatched, contDateOverrides, lsrNumbers, palletOverrides, customsOverrides, excludeStaples, arrivedConts, transitDays, holds, lockedRows, stockSkus, stockReportName, destWhsDays
-**`doSoftResetLP` preserves**: all LP_* globals + `lockedRows` + `customsOverrides` + manual arrivals (`_manual:true` entries in `LP_STATE.arrivals`) — both fixed 2026-03-15
+**`lp-truck-state` contains**: dispatched, contDateOverrides, lsrNumbers, palletOverrides, customsOverrides, excludeStaples, arrivedConts, transitDays, holds, lockedRows, stockSkus, stockReportName, destWhsDays, returned
+**`doSoftResetLP` preserves**: all LP_* globals + `lockedRows` + `customsOverrides` + `returned` + manual arrivals (`_manual:true` entries in `LP_STATE.arrivals`) — both fixed 2026-03-15
 **Manual arrivals**: pushed into `LP_STATE.arrivals` with `_manual:true` by `LP_addArrivalItem()`. `LP_STATE.manualArrivals` is unused/dead code.
 **LM/shared Supabase keys** (saved by `saveSharedData()` + dedicated fns): `fm-nom`, `fm-rw`, `fm-vs`, `fm-excl`, `fm-excl-ovr`, `fm-stock`, `fm-lm-dispatch`, `fm-manual-items`, `fm-lm-demand-adj`, `fm-lm-nom-ovr`, `fm-cluster-ta`, `fm-lm-manual-demand`, `fm-lm-kits`, `fm-lm-stp-deliveries`, `fm-dist-overrides`, `fm-pallet-cfg`
 **Other Supabase keys**: `hs-ai-config` (AI provider + API key, saved by `_hsSetAI`, loaded by `_hsLoadAIConfig` on startup)
@@ -537,13 +538,15 @@ Locked LM trucks are fully immutable — same as LP locked trucks. They are neve
 
 **Architecture** (same pattern as LP):
 1. **On lock**: `LM_toggleDispatchTruck()` deep-copies the truck into `LM_lockedSnapshots[fp]`
-2. **On rebuild**: `numberAll()` deducts locked demand from pool before `build()`, then injects locked snapshots into PLAN_CACHE after build
-3. **Kit rename**: Skips locked trucks (`if(trk._locked)return`) — their kit SKUs are frozen at lock time
-4. **On unlock**: Snapshot deleted, demand returns to pool on next rebuild
+2. **On date change**: `LM_changeDate()` creates snapshot if none exists — ensures truck survives kit strategy reapply and other rebuilds
+3. **On rebuild**: `numberAll()` deducts locked demand from pool before `build()`, then injects locked snapshots into PLAN_CACHE after build
+4. **Kit rename**: Skips locked trucks (`if(trk._locked)return`) — their kit SKUs are frozen at lock time
+5. **On unlock**: Snapshot deleted, returns cleared, demand returns to pool on next rebuild via `numberAll()`
 
 **Data structures**:
-- `LM_lockedSnapshots` — `{fingerprint: {items, dd, dKey, destLabel, destDisplay, pallets, pcs, _isStepB, _locked}}`
-- Items include `_kitId` and `_kitNom` for NOM reconstruction
+- `LM_lockedSnapshots` — `{fingerprint: {items, dd, dKey, destLabel, destDisplay, pallets, pcs, _isStepB, _locked, _returned:{}}}`
+- Items include `_kitId`, `_kitNom`, `_pq`, `_ps` for NOM reconstruction and pallet recalculation
+- `_returned` — `{sku: returnedQty}` — tracks items returned from locked truck to demand pool
 - Supabase key: `fm-lm-dispatch` stores `{dispatched:[], dateOverrides:{}, lsrNumbers:{}, lockedSnapshots:{}}`
 
 **Fingerprint stability**:
@@ -561,9 +564,22 @@ Locked LM trucks are fully immutable — same as LP locked trucks. They are neve
 - Truck ID (`LM-N`) — renumbered globally by date, but FP is content-based
 - `destDisplay` — display label, not used in FP
 
+**Return to Demand (LM)**:
+- `LM_returnItem(fp, sku, truckIdx)` — partial qty return from locked truck to demand pool
+- `_returned` map inside `LM_lockedSnapshots[fp]` — no separate global needed
+- Demand deduction: per-date uses original `loadQty` (prevents duplicate trucks), global uses effective qty (returned items re-enter pool)
+- Pallet recalc on injection from effective qty using frozen `_pq`/`_ps`
+- Modal shows ~~original~~ effective qty with ↩N trace
+- Export (Kit + All tabs) uses effective qty
+- Unlock triggers `numberAll()` (full rebuild)
+- Modal reopens by fingerprint after rebuild (index may change)
+
 **Demand deduction in `build()`**:
-- `window._lmBuildLockedDemand` set by `numberAll()` before each `build()` call
+- `window._lmBuildLockedDemand` set by `numberAll()` before each `build()` call — uses effective qty (original - returned)
+- `window._lmLockedDemandByDate` set by `numberAll()` — uses ORIGINAL `loadQty` to zero out per-date agg (prevents duplicate trucks)
+- Per-date deduction runs BEFORE `effQty<=0 continue` guard (returned items still zero their date slot)
 - `build()` deducts from pool after initialization: `pool[sku].remaining -= lockedQty`
+- `if(qty<=0)continue` before top-up logic prevents pure top-up loads on locked dates
 - Unlocked trucks get remaining demand only — no double-counting
 
 **NOM reconstruction**:
@@ -575,6 +591,19 @@ Locked LM trucks are fully immutable — same as LP locked trucks. They are neve
 - Never rebuild or modify locked truck items in any code path
 - Any new FP-keyed map must be added to the migration block in `numberAll()`
 - `LM_lockedSnapshots` must be included in: undo, reset, backup, save/load (same as `LM_dispatched`)
+
+### LP Return to Demand
+- `LP_returned` — `{truckId: {sku: returnedQty}}` — additive metadata in `lp-truck-state`
+- `LP_returnItem(truckId, sku)` — prompt for qty, double confirm, then `LP_regenerate()` — returned qty re-enters demand pool
+- `LP_cleanupReturns()` — removes orphaned returns for trucks no longer dispatched, called after each regeneration
+- **LP_regenerate**: subtracts returned qty from locked consumption (`consumedDemand`/`consumedStock`), so returned items re-enter the demand pool
+- **Stock waterfall**: effective qty used for deduction (original - returned)
+- **Truck card**: pallets/qty computed from effective qty; Ready filter uses `readyCount` (stock-ready any fill)
+- **OOR/CI/single-truck exports**: effective qty, filter out fully returned items
+- **Modal**: shows ~~original~~ effective qty with ↩N trace; ↩ return button per SKU on dispatched trucks
+- **Unlock**: `delete LP_returned[truckId]` + `LP_regenerate()` — returned items already in pool, no orphans
+- **Persistence**: all 4 save paths include `returned:LP_returned`; both load paths restore; undo snapshot includes `lp_returned`
+- **Resets**: hard resets (`doSystemReset`, `doResetLP`, `goGenerateLP`) clear to `{}`; soft reset preserves
 
 ### LP Supabase Keys
 `lp-config`, `lp-nom`, `lp-demand`, `lp-demand-raw`, `lp-arrivals`, `lp-plan`, `lp-truck-state`
@@ -1035,3 +1064,59 @@ _stat(label, value, color, sub?)  // Outlook-safe table-based card
 | `.B .Ba` | amber rgba | LOW stock, pending |
 | `.B .Br` | red rgba | PEND, NO STK |
 | `.B .Bc` | cyan rgba | READY |
+
+## FA Goods (`fa-goods.html`)
+
+### Overview
+Standalone module for managing Functional Area (FA) delivery groups — furniture, fixtures, and equipment items that are planned externally and injected into ML3K as capacity reservations. Connects to the same Supabase backend as `index.html`.
+
+### Mixed Palletization
+- Per-item `_mixed` checkbox on demand items (default: unchecked = unmixed)
+- **Mixed items**: sum raw pallets → `Math.ceil(sum)` (share pallets)
+- **Unmixed items**: `Math.ceil(rawPlt)` each individually (own pallets)
+- `FA_computeGroupPallets(g)` — splits items into mixed/unmixed buckets, applies rules
+- Visual: cyan color + `↗` indicator for mixed items; mixed breakdown in totals
+- Paste preview includes M column; confirmed paste carries `_mixed` to demand items
+
+### Cargo Value
+- `FA_computeGroupValue(g)` — sums `price × qty` from `FA_NOM` first, then ML3K NOM fallback
+- Displayed in: groups table, group edit modal KPIs, LP FA tab (cards + KPIs + Other Venues table), LM FA tab (table + KPI)
+- LP/LM truck cards: cargo value uses FA group value for FA SKUs (`NOM[sku]._fa` detection)
+- LM forecast tables: `_fcCargo`/`_fcCargo2` include FA group value
+
+### Capacity Splitting
+- `FA_splitGroup(g, cap)` — bin-packs items into sub-groups that fit within capacity
+- Mixed items are indivisible (one block); unmixed items distributed largest-first
+- `FA_autoSplit()` — auto-runs after `FA_buildGroups()`; uses `Math.min(FA_LP_MAX_PLT, FA_getLmCap(venue, date))`
+- Creates real child groups with suffix (e.g., `FA-TEC-NY-G48a`, `G48b`); parent removed
+- Children are independent — own SKU, own pallet count, own LP/LM assignment
+- Locked groups are never split
+- SKU suffix stripping on merge: `.replace(/[a-z]+$/,'')` prevents suffix accumulation (G48a → G48ab)
+
+### Constraint Loading from ML3K
+- `FA_LP_MAX_PLT` — LP truck capacity (default 26), loaded from `lp-config`
+- `FA_LM_TC` — per-venue LM truck capacity, loaded from `fm-vs` (venue settings)
+- `FA_getLmCap(venue, date)` — respects per-date overrides (`dateOverrides[date].tc`)
+- `FA_LM_DEFAULT_TC` — hardcoded defaults per stadium/venue
+- Constraints reloaded on `FA_sync()` → `FA_loadML3K()` → `FA_buildGroups()` (rebuild + re-split)
+
+### Assignment Keys
+- Keyed by SKU (not group ID) for stability across rebuilds: `FA_ASSIGNMENTS[g.sku]`
+- `_saveFaAssignments()` in `index.html` writes `{sku: {lp, lm}}` to `fa-assignments` Supabase key
+- LM FA tab uses `faOnTruck[it.sku]` (not `faOnTruck[it._faGroup]`)
+
+### Group Pallets (Read-Only)
+- Manual pallet editing removed — pallets always computed from NOM via `FA_computeGroupPallets()`
+- Group edit modal shows computed pallets as read-only with constraint info (LP cap, LM cap)
+- `FA_setGroupPallets()` removed; `_manualPallets` flag retired
+
+### Paste Preview
+- Duplicate column header disambiguation: `_hdrCount`/`_hdrSeen` — uses sub-row text to differentiate (e.g., "Dallas — IBC", "Dallas — Stadium")
+- Auto-regenerates groups after paste: `FA_buildGroups(); FA_saveGroups()` in `_faConfirmPaste()`
+- Mixed (M) column alongside Assembled (A) column in item table
+
+### LP/LM Integration
+- `_lpFaDemandRows()` — each FA group → one demand row: `qty:1, effQty:1, palletQty:1, palletSpc:g.pallets`
+- `_faItemsForTruck(truckId, dest, lsr)` — resolves FA group items for truck display; handles both linked groups and engine-injected FA SKUs on LP/LM trucks
+- LP engine-injected lookup: scans `LP_STATE.generatedPlan` for FA SKUs on LP trucks
+- `seenSkus` Set prevents duplicate resolution across linked + engine paths

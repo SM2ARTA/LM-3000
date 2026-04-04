@@ -257,11 +257,26 @@ let _faKitTruckMap={}; // kitId → truck ref (from locked snapshots)
 let _faLockedTrucks=new Set(); // set of locked truck refs (LP dispatched + LM locked)
 let _faLockedLP=new Set(); // set of dispatched LP truck IDs
 let FA_ASSIGNMENTS={}; // groupId -> {lp:{truckId,date,dest}, lm:{truckId,date,dest,biK,locked}}
+// Capacity constraints from ML3K
+let FA_LP_MAX_PLT=26; // LP truck capacity (pallets)
+let FA_LM_TC={};      // venue → LM truck capacity (pallets)
+const FA_LM_DEFAULT_TC={"Seattle Stadium":12,"Vancouver Stadium":12,"Guadalajara Stadium":12,"Mexico City Stadium":12,"Monterrey Stadium":12,"San Francisco Bay Area Stadium":26,"Los Angeles Stadium":26,"Los Angeles - Rose Bowl Stadium":26,"Houston Stadium":26,"Dallas Stadium":26,"Kansas City Stadium":26,"Atlanta Stadium":26,"Miami Stadium":26,"Boston Stadium":26,"Philadelphia Stadium":26,"New York / New Jersey Stadium":26,"Toronto Stadium":26,"International Broadcast Centre":26,"International Broadcast Coordination Centre":26};
+// Get LM truck capacity for venue, optionally on a specific date (dateOverrides)
+function FA_getLmCap(venue,date){
+  const vs=FA_LM_TC[venue]||{};
+  // Per-date override: VS[venue].dateOverrides[date].tc
+  if(date&&vs.dateOverrides&&vs.dateOverrides[date]&&vs.dateOverrides[date].tc)return Math.max(1,vs.dateOverrides[date].tc);
+  return Math.max(1,vs.tc||FA_LM_DEFAULT_TC[venue]||12);
+}
 async function FA_loadML3K(){
   try{
-    const[rw,lpPlan,lmDisp,lmKits]=await Promise.all([
-      FA_sbRead('fm-rw'),FA_sbRead('lp-plan'),FA_sbRead('fm-lm-dispatch'),FA_sbRead('fm-lm-kits')
+    const[rw,lpPlan,lmDisp,lmKits,lpCfg,lmVs]=await Promise.all([
+      FA_sbRead('fm-rw'),FA_sbRead('lp-plan'),FA_sbRead('fm-lm-dispatch'),FA_sbRead('fm-lm-kits'),
+      FA_sbRead('lp-config'),FA_sbRead('fm-vs')
     ]);
+    // Load capacity constraints
+    if(lpCfg&&lpCfg.maxPallets)FA_LP_MAX_PLT=lpCfg.maxPallets;
+    if(lmVs&&typeof lmVs==='object')FA_LM_TC=lmVs;// venue settings with .tc override
     // Extract unique venues + earliest BI date from RW
     if(rw&&Array.isArray(rw)){
       const vmap={};
@@ -321,7 +336,7 @@ async function FA_loadML3K(){
     // Load main NOM for pallet estimates (pq/ps per SKU)
     const nomData=await FA_sbRead('fm-nom');
     window._faML3KNom={};
-    if(nomData&&typeof nomData==='object'){for(const sku in nomData){const n=nomData[sku];if(n.pq||n.pqA)window._faML3KNom[sku]={pq:n.pq||0,ps:n.ps||0,pqA:n.pqA||0,psA:n.psA||0}}}
+    if(nomData&&typeof nomData==='object'){for(const sku in nomData){const n=nomData[sku];if(n.pq||n.pqA||n.price)window._faML3KNom[sku]={pq:n.pq||0,ps:n.ps||0,pqA:n.pqA||0,psA:n.psA||0,price:n.price||0}}}
     console.log('[FA] ML3K lookup: '+FA_ML3K_VENUES.length+' venues, '+FA_ML3K_TRUCKS.length+' trucks, '+FA_ML3K_KITS.length+' kits, '+Object.keys(window._faML3KNom).length+' NOM pallet entries');
     // Load FA assignments (engine truck placements from ML3K)
     const assigns=await FA_sbRead('fa-assignments');
@@ -747,7 +762,16 @@ function _faParsePaste(){
   const isMatrix=hdr.length>=4&&dRows.some(r=>r.slice(2).some(c=>/^\d+$/.test(c||'')));
   const items=[];
   if(isMatrix){
-    const vc=[];for(let c=2;c<hdr.length;c++){if(hdr[c]&&!/^\d+$/.test(hdr[c]))vc.push({col:c,venue:hdr[c],biDate:''})}
+    // Detect duplicate column headers and disambiguate with sub-header row
+    const _hdrCount={};for(let c=2;c<hdr.length;c++){const h=hdr[c];if(h&&!/^\d+$/.test(h)){_hdrCount[h]=(_hdrCount[h]||0)+1}}
+    const _hdrSeen={};
+    const vc=[];for(let c=2;c<hdr.length;c++){if(!hdr[c]||/^\d+$/.test(hdr[c]))continue;let vn=hdr[c];
+      if(_hdrCount[vn]>1){// duplicate column header — use sub-row to disambiguate
+        _hdrSeen[vn]=(_hdrSeen[vn]||0)+1;
+        const sub=lines[1]&&lines[1][c]?lines[1][c].trim():'';
+        vn=sub?vn+' — '+sub:vn+' ('+_hdrSeen[vn]+')';
+      }
+      vc.push({col:c,venue:vn,biDate:''})}
     for(let r=1;r<Math.min(5,lines.length);r++){const row=lines[r];if(!row)continue;for(const v of vc){const d=_faTryDate(row[v.col]);if(d)v.biDate=d}}
     const ds=lines.findIndex((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
     if(ds>=0)for(let r=ds;r<lines.length;r++){const row=lines[r];if(!row||!row[0])continue;const sku=row[0],nm=row[1]||FA_NOM[sku]?.name||sku;for(const v of vc){const q=parseInt(row[v.col]);if(q>0)items.push({sku,name:nm,venue:v.venue,fa,qty:q,biDate:v.biDate||dd})}}
@@ -810,23 +834,24 @@ function _faRenderPasteCards(){
     if(hasOld)h+=`<label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer"><input type="checkbox" ${ovr?'checked':''} onchange="window._faPaste.ovrMap['${e}']=this.checked"> Overwrite ${nSame+nDiff} existing</label>`;
     // Per-item pallet calculation from NOM (pq/ps)
     if(!P.asmMap)P.asmMap={};
+    if(!P.mixMap)P.mixMap={};
     if(!P.pqOvr)P.pqOvr={};// manual pq overrides: "sku" → number
     if(!P.psOvr)P.psOvr={};// manual ps overrides: "sku" → number
     const nom=window._faML3KNom||{};
-    let grpTotal=0;
-    h+=`<div style="font-size:10px;max-height:200px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="color:var(--ts);border-bottom:1px solid var(--bd)"><th style="width:16px" title="Assembled">A</th><th style="text-align:left">SKU</th><th style="text-align:left">Name</th><th style="text-align:right">Qty</th><th style="text-align:right;min-width:38px">PQ</th><th style="text-align:right;min-width:38px">PS</th><th style="text-align:right">Pallets</th></tr></thead><tbody>`;
+    h+=`<div style="font-size:10px;max-height:200px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="color:var(--ts);border-bottom:1px solid var(--bd)"><th style="width:16px" title="Assembled">A</th><th style="width:16px" title="Mixed (share pallet)">M</th><th style="text-align:left">SKU</th><th style="text-align:left">Name</th><th style="text-align:right">Qty</th><th style="text-align:right;min-width:38px">PQ</th><th style="text-align:right;min-width:38px">PS</th><th style="text-align:right">Pallets</th></tr></thead><tbody>`;
+    let mixedRaw=0,unmixedSum=0;
     for(const it of grp){
-      const asmKey=rv+'|'+it.sku;
-      const isAsm=!!P.asmMap[asmKey];
+      const asmKey=rv+'|'+it.sku;const mixKey=rv+'|'+it.sku;
+      const isAsm=!!P.asmMap[asmKey];const isMixed=!!P.mixMap[mixKey];
       const mn=nom[it.sku]||{};const fn=FA_NOM[it.sku]||{};
       const nomPq=isAsm?(fn.pqA||mn.pqA||0):(fn.pq||mn.pq||0);
       const nomPs=isAsm?(fn.psA||mn.psA||0):(fn.ps||mn.ps||0);
-      // Manual PQ/PS override (per SKU, shared across venues)
       const pq=P.pqOvr[it.sku]!==undefined?P.pqOvr[it.sku]:nomPq;
       const ps=P.psOvr[it.sku]!==undefined?P.psOvr[it.sku]:nomPs;
       const hasData=pq>0&&ps>0;
-      const calcPlt=hasData?Math.round((it.qty/pq)*ps*100)/100:0;
-      grpTotal+=calcPlt;
+      const rawPlt=hasData?(it.qty/pq)*ps:0;
+      const dispPlt=rawPlt>0?Math.round(rawPlt*100)/100:0;
+      if(rawPlt>0){if(isMixed)mixedRaw+=rawPlt;else unmixedSum+=Math.ceil(rawPlt)}
       const pqIsOvr=P.pqOvr[it.sku]!==undefined;
       const psIsOvr=P.psOvr[it.sku]!==undefined;
       const svKey=mapped?(it.sku+'|'+mapped):'';
@@ -836,16 +861,20 @@ function _faRenderPasteCards(){
       const _inp='width:36px;font-size:10px;font-family:var(--fm);text-align:right;border-radius:3px;padding:1px 2px;';
       h+=`<tr style="border-bottom:1px solid var(--bl);${isItemLocked?'opacity:0.5;':''}">`;
       h+=`<td><input type="checkbox" ${isAsm?'checked':''} onchange="window._faPaste.asmMap['${asmKey.replace(/'/g,"\\'")}']=this.checked;_faRenderPasteCards()" style="margin:0" title="Assembled (use pqA/psA)"></td>`;
+      h+=`<td><input type="checkbox" ${isMixed?'checked':''} onchange="window._faPaste.mixMap['${mixKey.replace(/'/g,"\\'")}']=this.checked;_faRenderPasteCards()" style="margin:0" title="Mixed (share pallet)"></td>`;
       h+=`<td class="mono" style="color:var(--cy)">${it.sku}</td>`;
       h+=`<td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">${it.name}${mark}</td>`;
       h+=`<td class="mono" style="text-align:right">${it.qty}</td>`;
       h+=`<td><input type="number" value="${pq||''}" min="0" step="1" style="${_inp}border:1px solid ${pqIsOvr?'var(--pu)':hasData?'var(--bd)':'var(--rd)'};color:${pqIsOvr?'var(--pu)':hasData?'var(--tp)':'var(--rd)'}" onchange="window._faPaste.pqOvr['${it.sku}']=parseFloat(this.value)||0;_faRenderPasteCards()" placeholder="—"></td>`;
       h+=`<td><input type="number" value="${ps||''}" min="0" step="0.1" style="${_inp}border:1px solid ${psIsOvr?'var(--pu)':hasData?'var(--bd)':'var(--rd)'};color:${psIsOvr?'var(--pu)':hasData?'var(--tp)':'var(--rd)'}" onchange="window._faPaste.psOvr['${it.sku}']=parseFloat(this.value)||0;_faRenderPasteCards()" placeholder="—"></td>`;
-      h+=`<td class="mono fw6" style="text-align:right;color:${hasData?'var(--ac)':'var(--rd)'}">${hasData?calcPlt:'—'}</td>`;
+      const pltColor=!hasData?'var(--rd)':isMixed?'var(--cy)':'var(--ac)';
+      const pltDisp=!hasData?'—':isMixed?dispPlt+' ↗':Math.ceil(rawPlt);
+      h+=`<td class="mono fw6" style="text-align:right;color:${pltColor}">${pltDisp}</td>`;
       h+=`</tr>`;
     }
+    const grpTotal=(mixedRaw>0?Math.ceil(mixedRaw):0)+unmixedSum;
     h+=`</tbody></table></div>`;
-    h+=`<div style="display:flex;justify-content:flex-end;margin-top:4px;font-size:11px;font-weight:700;color:var(--ac)">Total: ${Math.round(grpTotal*100)/100} plt</div>`;
+    h+=`<div style="display:flex;justify-content:flex-end;margin-top:4px;font-size:11px;font-weight:700;color:var(--ac)">Total: ${grpTotal} plt${mixedRaw>0?' <span style="color:var(--cy);font-weight:400;font-size:10px">(mixed: '+Math.round(mixedRaw*100)/100+' → ⌈'+Math.ceil(mixedRaw)+'⌉)</span>':''}</div>`;
     h+=`</div>`;
   }
   document.getElementById('_faPastePreview').innerHTML=h;
@@ -881,9 +910,11 @@ function _faConfirmPaste(){
     }
     else{const existSet=new Set(FA_DEMAND.filter(d=>d.venue===mapped).map(d=>d.sku));const before=grp.length;grp.splice(0,grp.length,...grp.filter(i=>!existSet.has(i.sku)));skipped+=before-grp.length}
     for(const it of grp){
-      const asmKey=rv+'|'+it.sku;const isAsm=!!P.asmMap?.[asmKey];
+      const asmKey=rv+'|'+it.sku;const mixKey=rv+'|'+it.sku;
+      const isAsm=!!P.asmMap?.[asmKey];const isMixed=!!P.mixMap?.[mixKey];
       FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:mapped,fa:it.fa,qty:it.qty,biDate:bi||it.biDate||'',note:'',
         _asm:isAsm||undefined,
+        _mixed:isMixed||undefined,
         created:new Date().toISOString()});
       added++;
     }
@@ -901,6 +932,7 @@ function _faConfirmPaste(){
   }
   window._faPaste=null;document.getElementById('faModal').innerHTML='';
   if(nomChanged){_faNomCache=null;FA_sbWrite('fa-nom',FA_NOM).catch(e=>console.warn('FA NOM save:',e))}
+  FA_buildGroups();FA_saveGroups();
   FA_saveDebounced();FA_render();
   console.log('[FA] Paste: added '+added+', overwritten '+overwritten+', skipped '+skipped);
 }
@@ -1000,12 +1032,13 @@ function FA_buildGroups(){
     if(!newGroups[key])newGroups[key]={venue:d.venue,biDate:d.biDate,fa:d.fa||'',items:[]};
     newGroups[key].items.push(d.id);
   }
-  // Merge with existing open groups (preserve pallets + truck assignments if key matches)
-  const oldOpen={};// key → group (for preserving manual pallets)
+  // Merge split children: multiple groups may share same key (venue|biDate|fa).
+  // Keep the FIRST (original parent or first child) for ID/SKU preservation.
+  const oldOpen={};// key → group (first match per key)
   for(const g of FA_GROUPS){
     if(lockedGrpIds.has(g.id))continue;
     const key=(g.venue||'')+'|'+(g.biDate||'')+'|'+(g.fa||'');
-    oldOpen[key]=g;
+    if(!oldOpen[key])oldOpen[key]=g;// keep first — split children are merged back
   }
   const built=[];
   for(const[key,ng] of Object.entries(newGroups)){
@@ -1016,7 +1049,7 @@ function FA_buildGroups(){
       venue:ng.venue,
       biDate:ng.biDate,
       fa:ng.fa,
-      sku:old?.sku||_faGroupSku(ng.fa,ng.venue,old?.id||(_faGroupNextId-1)),
+      sku:(old?.sku||'').replace(/[a-z]+$/,'')||_faGroupSku(ng.fa,ng.venue,old?.id||(_faGroupNextId-1)),
       pallets:old?.pallets||0,
       items:ng.items,
       linkedLP:old?.linkedLP||null,
@@ -1028,13 +1061,15 @@ function FA_buildGroups(){
   }
   FA_GROUPS=[...kept,...built];
   for(const g of FA_GROUPS){if(!g.sku)g.sku=_faGroupSku(g.fa,g.venue,g.id)}
-  // Auto-compute pallets from NOM for all non-locked, non-manual groups
+  // Auto-compute pallets and value from NOM for all non-locked groups
   for(const g of FA_GROUPS){
     if(lockedGrpIds.has(g.id))continue;
-    if(g._manualPallets)continue;// user set pallets directly on group — preserve
     const computed=FA_computeGroupPallets(g);
     if(computed>0)g.pallets=computed;
+    g.value=FA_computeGroupValue(g);
   }
+  // Auto-split groups that exceed LP or LM truck capacity
+  FA_autoSplit();
 }
 
 // Regenerate groups (user-triggered)
@@ -1056,7 +1091,7 @@ function FA_editGroup(id){
   const relKits=_faKitsForVenue(g.venue);
   const kitOpts=relKits.map(k=>`<option value="${k.sku||k.id}">${k.sku||k.id} — ${k.venue} — ${k.type}${k.truckRef?' · 🚛 '+k.truckRef:''}</option>`).join('');
   // Engine assignments (read-back from ML3K)
-  const asgn=FA_ASSIGNMENTS[g.id]||{};
+  const asgn=FA_ASSIGNMENTS[g.sku]||{};
   const engLP=asgn.lp?asgn.lp.truckId:'';
   const engLM=asgn.lm?asgn.lm.truckId:'';
   const engLPDate=asgn.lp?_fmtD(asgn.lp.date):'';
@@ -1066,17 +1101,20 @@ function FA_editGroup(id){
   // Items in this group
   const items=FA_DEMAND.filter(d=>g.items&&g.items.includes(d.id));
   const ml3kNom=window._faML3KNom||{};
-  let itemRows='';let compTotal=0;
+  let itemRows='';let mixedRaw=0,unmixedTotal=0;
   for(const d of items){
     const fn=FA_NOM[d.sku]||{};const mn=ml3kNom[d.sku]||{};
-    const isAsm=!!d._asm;
+    const isAsm=!!d._asm;const isMixed=!!d._mixed;
     const pq=isAsm?(fn.pqA||mn.pqA||fn.pq||mn.pq||0):(fn.pq||mn.pq||0);
     const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
-    const plt=pq>0&&ps>0?Math.round((d.qty/pq)*ps*100)/100:0;
-    compTotal+=plt;
-    itemRows+=`<tr><td><input type="checkbox" ${isAsm?'checked':''} onchange="FA_toggleItemAsm(${d.id},this.checked,${g.id})" ${isLocked?'disabled':''}></td><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td class="mono" style="text-align:right">${d.qty}</td><td class="mono" style="text-align:right;color:${pq?'var(--ts)':'var(--rd)'}">${pq||'—'}</td><td class="mono" style="text-align:right;color:${ps?'var(--ts)':'var(--rd)'}">${ps||'—'}</td><td class="mono fw6" style="text-align:right;color:var(--ac)">${plt||'—'}</td></tr>`;
+    const rawPlt=pq>0&&ps>0?(d.qty/pq)*ps:0;
+    const dispPlt=rawPlt>0?Math.round(rawPlt*100)/100:0;
+    if(rawPlt>0){if(isMixed)mixedRaw+=rawPlt;else unmixedTotal+=Math.ceil(rawPlt)}
+    const pltColor=rawPlt<=0?'var(--rd)':isMixed?'var(--cy)':'var(--ac)';
+    const pltDisp=rawPlt<=0?'—':isMixed?dispPlt+' ↗':Math.ceil(rawPlt);
+    itemRows+=`<tr><td><input type="checkbox" ${isAsm?'checked':''} onchange="FA_toggleItemAsm(${d.id},this.checked,${g.id})" ${isLocked?'disabled':''}></td><td><input type="checkbox" ${isMixed?'checked':''} onchange="FA_toggleItemMixed(${d.id},this.checked,${g.id})" ${isLocked?'disabled':''}></td><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td class="mono" style="text-align:right">${d.qty}</td><td class="mono" style="text-align:right;color:${pq?'var(--ts)':'var(--rd)'}">${pq||'—'}</td><td class="mono" style="text-align:right;color:${ps?'var(--ts)':'var(--rd)'}">${ps||'—'}</td><td class="mono fw6" style="text-align:right;color:${pltColor}">${pltDisp}</td></tr>`;
   }
-  compTotal=Math.round(compTotal*100)/100;
+  const compTotal=(mixedRaw>0?Math.ceil(mixedRaw):0)+unmixedTotal;
   const h=`<div class="modal-ov">
     <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Group: ${g.sku}</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
     <div style="padding:6px 10px;background:${isLocked?'var(--gs)':'var(--bg)'};border:1px solid ${isLocked?'#B8DFCA':'var(--bd)'};border-radius:6px;font-size:11px;color:${isLocked?'var(--gn)':'var(--ts)'};margin-bottom:10px;display:flex;align-items:center;gap:8px">
@@ -1088,7 +1126,7 @@ function FA_editGroup(id){
     <div class="form-row"><span class="form-label">FA</span><input type="text" value="${g.fa}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
     <div class="form-row"><span class="form-label">BI Date</span><input type="text" value="${_fmtD(g.biDate)}" style="width:160px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">SKU</span><input type="text" value="${g.sku}" class="mono" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
     <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">Capacity Reservation</div>
-    <div class="form-row"><span class="form-label">Pallets</span><input type="number" id="_faGrpPlt" value="${g.pallets||0}" min="0" max="26" step="0.1" style="width:80px;font-family:var(--fm)"${isLocked?' readonly style="width:80px;font-family:var(--fm);background:var(--bg);color:var(--ts)"':''}></div>
+    <div class="form-row"><span class="form-label">Pallets</span><span class="mono fw6" style="font-size:14px;color:var(--ac)">${g.pallets||0}</span><span style="font-size:9px;color:var(--tt);margin-left:6px">computed from NOM · LP: ${FA_LP_MAX_PLT} plt · LM: ${FA_getLmCap(g.venue,g.biDate)} plt</span></div>
     ${(engLP||engLM)?`<div style="padding:6px 0;font-size:10px;font-weight:700;color:#0891B2;text-transform:uppercase;letter-spacing:0.5px">Engine Placement (from ML3K)</div>
     <div style="padding:6px 10px;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:6px;font-size:11px;color:#0891B2;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px">
       ${engLP?'<span><b>LP:</b> <span class="mono fw6">'+engLP+'</span> · '+engLPDate+'</span>':''}
@@ -1111,8 +1149,8 @@ function FA_editGroup(id){
       <datalist id="_faGrpKitList">${kitOpts}</datalist>
       <span style="font-size:9px;color:var(--tt)">${relKits.length} kits</span>
     </div>
-    <div style="padding:8px 0 4px;display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Items (${items.length})</span>${!isLocked?'<button class="rbtn" onclick="FA_recomputeGrpPlt('+g.id+')" style="font-size:9px;padding:2px 8px;background:var(--cs);color:var(--cy);border-color:#A5F3FC">↻ Recompute pallets</button>':''}<span style="font-size:10px;color:var(--ac);font-weight:600;margin-left:auto">Computed: ${compTotal} plt</span></div>
-    <div style="max-height:200px;overflow-y:auto"><table class="dtb"><thead><tr><th style="width:16px" title="Assembled">A</th><th>SKU</th><th>Name</th><th style="text-align:right">Qty</th><th style="text-align:right">PQ</th><th style="text-align:right">PS</th><th style="text-align:right">Pallets</th></tr></thead><tbody>${itemRows}</tbody></table></div>
+    <div style="padding:8px 0 4px;display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Items (${items.length})</span>${!isLocked?'<button class="rbtn" onclick="FA_recomputeGrpPlt('+g.id+')" style="font-size:9px;padding:2px 8px;background:var(--cs);color:var(--cy);border-color:#A5F3FC">↻ Recompute pallets</button>':''}<span style="font-size:10px;color:var(--ac);font-weight:600;margin-left:auto">Computed: ${compTotal} plt${mixedRaw>0?' <span style="color:var(--cy);font-weight:400;font-size:9px">(mixed: '+Math.round(mixedRaw*100)/100+' → ⌈'+Math.ceil(mixedRaw)+'⌉)</span>':''}</span></div>
+    <div style="max-height:200px;overflow-y:auto"><table class="dtb"><thead><tr><th style="width:16px" title="Assembled">A</th><th style="width:16px" title="Mixed (share pallet)">M</th><th>SKU</th><th>Name</th><th style="text-align:right">Qty</th><th style="text-align:right">PQ</th><th style="text-align:right">PS</th><th style="text-align:right">Pallets</th></tr></thead><tbody>${itemRows}</tbody></table></div>
     <div class="modal-actions"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveGroupEdit(${id})">Save</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
@@ -1144,14 +1182,22 @@ function FA_toggleItemAsm(demId,checked,grpId){
   const d=FA_DEMAND.find(x=>x.id===demId);if(!d)return;
   d._asm=checked||undefined;
   FA_saveDebounced();
-  // Refresh modal
+  document.getElementById('faModal').innerHTML='';
+  FA_editGroup(grpId);
+}
+function FA_toggleItemMixed(demId,checked,grpId){
+  const g=FA_GROUPS.find(x=>x.id===grpId);
+  if(g&&g._locked)return;// locked group — immutable
+  const d=FA_DEMAND.find(x=>x.id===demId);if(!d)return;
+  d._mixed=checked||undefined;
+  FA_saveDebounced();
   document.getElementById('faModal').innerHTML='';
   FA_editGroup(grpId);
 }
 function FA_recomputeGrpPlt(grpId){
   const g=FA_GROUPS.find(x=>x.id===grpId);if(!g||g._locked)return;
   g.pallets=FA_computeGroupPallets(g);
-  g._manualPallets=false;// allow future auto-recompute
+  FA_autoSplit();// re-split after pallet recompute
   FA_saveGroups();
   document.getElementById('faModal').innerHTML='';
   FA_editGroup(grpId);
@@ -1159,7 +1205,6 @@ function FA_recomputeGrpPlt(grpId){
 function FA_saveGroupEdit(id){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
   if(g._locked){document.getElementById('faModal').innerHTML='';return}// immutable
-  g.pallets=parseFloat(document.getElementById('_faGrpPlt').value)||0;
   g.linkedLP=document.getElementById('_faGrpLP').value.trim()||null;
   g.linkedLM=document.getElementById('_faGrpLM').value.trim()||null;
   g.linkedKit=document.getElementById('_faGrpKit').value.trim()||null;
@@ -1168,21 +1213,131 @@ function FA_saveGroupEdit(id){
 }
 
 // Compute group pallets from demand items + NOM pq/ps
+// Mixed items: sum raw pallets then ceil group total
+// Unmixed items: ceil each item individually
 function FA_computeGroupPallets(g){
   if(!g||!g.items)return 0;
   const ml3kNom=window._faML3KNom||{};
-  let total=0;
+  let mixedRaw=0,unmixedTotal=0;
   for(const did of g.items){
     const d=FA_DEMAND.find(x=>x.id===did);if(!d)continue;
-    // Look up pq/ps: FA_NOM first (has manual overrides), then ML3K NOM
     const fn=FA_NOM[d.sku]||{};
     const mn=ml3kNom[d.sku]||{};
     const isAsm=!!d._asm;
     const pq=isAsm?(fn.pqA||mn.pqA||fn.pq||mn.pq||0):(fn.pq||mn.pq||0);
     const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
-    if(pq>0&&ps>0)total+=(d.qty/pq)*ps;
+    if(pq<=0||ps<=0)continue;
+    const raw=(d.qty/pq)*ps;
+    if(d._mixed)mixedRaw+=raw;
+    else unmixedTotal+=Math.ceil(raw);
+  }
+  return Math.round((Math.ceil(mixedRaw)+unmixedTotal)*100)/100;
+}
+
+// Compute group cargo value from demand items × price (FA_NOM first, then ML3K NOM fallback)
+function FA_computeGroupValue(g){
+  if(!g||!g.items)return 0;
+  const ml3kNom=window._faML3KNom||{};
+  let total=0;
+  for(const did of g.items){
+    const d=FA_DEMAND.find(x=>x.id===did);if(!d)continue;
+    const fn=FA_NOM[d.sku]||{};
+    const mn=ml3kNom[d.sku]||{};
+    const price=fn.price||mn.price||0;
+    total+=price*(d.qty||0);
   }
   return Math.round(total*100)/100;
+}
+
+// Compute per-item pallet value (raw, before rounding)
+function _faItemPallets(d){
+  const ml3kNom=window._faML3KNom||{};
+  const fn=FA_NOM[d.sku]||{};const mn=ml3kNom[d.sku]||{};
+  const isAsm=!!d._asm;
+  const pq=isAsm?(fn.pqA||mn.pqA||fn.pq||mn.pq||0):(fn.pq||mn.pq||0);
+  const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
+  return(pq>0&&ps>0)?(d.qty/pq)*ps:0;
+}
+
+// Split a group into sub-groups that fit within capacity.
+// Returns array of {items:[], pallets} — items are demand IDs.
+// Mixed items stay together (indivisible shared pallet block).
+// Unmixed items are distributed largest-first (bin-pack).
+function FA_splitGroup(g, cap){
+  if(!g||!g.items||!g.items.length||cap<=0)return[{items:g?g.items||[]:[],pallets:g?g.pallets||0:0}];
+  // Separate mixed vs unmixed items
+  const mixed=[],unmixed=[];
+  for(const did of g.items){
+    const d=FA_DEMAND.find(x=>x.id===did);if(!d)continue;
+    const plt=_faItemPallets(d);
+    if(d._mixed)mixed.push({did,plt});
+    else unmixed.push({did,plt:Math.ceil(plt)});
+  }
+  // Mixed block is indivisible — ceil of sum
+  const mixedPlt=mixed.length?Math.ceil(mixed.reduce((s,m)=>s+m.plt,0)):0;
+  const mixedDids=mixed.map(m=>m.did);
+  // Sort unmixed by pallets descending for greedy packing
+  unmixed.sort((a,b)=>b.plt-a.plt);
+  // If mixed block alone exceeds cap, it's one oversized sub-group (can't split further)
+  if(mixedPlt>cap){
+    return[{items:[...mixedDids,...unmixed.map(u=>u.did)],pallets:mixedPlt+unmixed.reduce((s,u)=>s+u.plt,0)}];
+  }
+  // Bin-pack: start first sub-group with mixed block
+  const subs=[];
+  let cur={items:[...mixedDids],plt:mixedPlt};
+  for(const u of unmixed){
+    if(u.plt<=0){cur.items.push(u.did);continue}// zero-pallet items go in current
+    if(cur.plt+u.plt>cap&&cur.items.length>0){
+      // Close current sub-group, start new one
+      subs.push({items:cur.items,pallets:cur.plt});
+      cur={items:[],plt:0};
+    }
+    cur.items.push(u.did);
+    cur.plt+=u.plt;
+  }
+  if(cur.items.length)subs.push({items:cur.items,pallets:cur.plt});
+  // If nothing was produced (all zero-pallet items), return single group
+  if(!subs.length)subs.push({items:g.items.slice(),pallets:0});
+  return subs;
+}
+
+// Auto-split oversized groups into real child groups in FA_GROUPS.
+// Uses min(LP cap, LM cap) so each child fits both engines.
+// Called after FA_buildGroups which already merged everything by venue|biDate|fa.
+// Locked groups are never touched.
+function FA_autoSplit(){
+  const toAdd=[];
+  const toRemoveIds=new Set();
+  for(const g of FA_GROUPS){
+    if(g._locked)continue;
+    const c=Math.min(FA_LP_MAX_PLT, FA_getLmCap(g.venue, g.biDate));
+    if((g.pallets||0)<=c)continue;// fits in one truck
+    const subs=FA_splitGroup(g,c);
+    if(subs.length<=1)continue;// can't split further
+    // Replace parent with real child groups
+    for(let i=0;i<subs.length;i++){
+      const s=subs[i];
+      const suffix=String.fromCharCode(97+i);// a, b, c...
+      const child={
+        id:_faGroupNextId++,
+        venue:g.venue,
+        biDate:g.biDate,
+        fa:g.fa,
+        sku:g.sku+suffix,
+        pallets:s.pallets,
+        items:s.items,
+        linkedLP:null,linkedLM:null,linkedKit:null,
+        created:new Date().toISOString()
+      };
+      child.value=FA_computeGroupValue(child);
+      toAdd.push(child);
+    }
+    toRemoveIds.add(g.id);
+  }
+  if(toRemoveIds.size||toAdd.length){
+    FA_GROUPS=FA_GROUPS.filter(g=>!toRemoveIds.has(g.id));
+    FA_GROUPS.push(...toAdd);
+  }
 }
 
 // Render Delivery Groups tab
@@ -1193,9 +1348,11 @@ function FA_renderGroups(){
   const lpAssigned=FA_GROUPS.filter(g=>g.linkedLP).length;
   const lmAssigned=FA_GROUPS.filter(g=>g.linkedLM).length;
   const locked=FA_GROUPS.filter(g=>g._locked).length;
+  const totalVal=Math.round(FA_GROUPS.reduce((s,g)=>s+(g.value||0),0));
   document.getElementById('grpKpis').innerHTML=`
     <div class="kpi"><div class="kl">📐 Groups</div><div class="kv" style="color:var(--cy)">${FA_GROUPS.length}</div></div>
     <div class="kpi"><div class="kl">📦 Total Pallets</div><div class="kv" style="color:var(--ac)">${totalPlt}</div></div>
+    <div class="kpi"><div class="kl">💰 Total Value</div><div class="kv" style="color:var(--pu)">$${totalVal.toLocaleString()}</div></div>
     <div class="kpi"><div class="kl">📦 LP Assigned</div><div class="kv" style="color:#2563eb">${lpAssigned}</div></div>
     <div class="kpi"><div class="kl">🚛 LM Assigned</div><div class="kv" style="color:var(--pu)">${lmAssigned}</div></div>
     <div class="kpi"><div class="kl">🔒 Locked</div><div class="kv" style="color:var(--gn)">${locked}</div></div>`;
@@ -1211,10 +1368,10 @@ function FA_renderGroups(){
   const _lmTruckMap={};for(const t of FA_ML3K_TRUCKS){_lmTruckMap[t.id]=t}
   // Fuzzy LM truck lookup (linkedLM may include LSR suffix not in truck ID)
   const _lmFind=ref=>{if(!ref)return null;if(_lmTruckMap[ref])return _lmTruckMap[ref];for(const t of FA_ML3K_TRUCKS){if(ref.includes(t.id)||t.id.includes(ref))return t}return null}
-  let h='<table class="dtb"><thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th>Dispatch</th><th>Delivery</th><th style="text-align:right">Items</th><th style="text-align:center">Pallets</th><th>LP Truck</th><th>LM Truck</th><th>Kit</th><th>Status</th></tr></thead><tbody>';
+  let h='<table class="dtb"><thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th>Dispatch</th><th>Delivery</th><th style="text-align:right">Items</th><th style="text-align:center">Pallets</th><th style="text-align:right">Value</th><th>LP Truck</th><th>LM Truck</th><th>Kit</th><th>Status</th></tr></thead><tbody>';
   const sorted=[...FA_GROUPS].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue));
   for(const g of sorted){
-    const asgn=FA_ASSIGNMENTS[g.id]||{};
+    const asgn=FA_ASSIGNMENTS[g.sku]||{};
     const isLocked=!!g._locked;
     // LP: manual link or engine assignment
     const lpRef=g.linkedLP||(asgn.lp?asgn.lp.truckId:null);
@@ -1243,7 +1400,8 @@ function FA_renderGroups(){
       <td>${dispDate?_fmtD(dispDate):'<span style="color:var(--tt)">—</span>'}</td>
       <td>${delDate?_fmtD(delDate):'<span style="color:var(--tt)">—</span>'}</td>
       <td class="mono" style="text-align:right">${(g.items||[]).length}</td>
-      <td style="text-align:center" onclick="event.stopPropagation()"><input type="number" value="${g.pallets||0}" min="0" max="26" step="0.1" style="width:50px;font-family:var(--fm);font-size:11px;text-align:center;border:1px solid ${g.pallets>0?'var(--ac)':'var(--bd)'};border-radius:4px;padding:2px;color:${g.pallets>0?'var(--ac)':'var(--tt)'}" onchange="FA_setGroupPallets(${g.id},this.value)" ${isLocked?'readonly':''}></td>
+      <td class="mono fw6" style="text-align:center;color:${g.pallets>0?'var(--ac)':'var(--tt)'}">${g.pallets||0}</td>
+      <td class="mono" style="text-align:right;color:${g.value?'var(--pu)':'var(--tt)'}">${g.value?'$'+Math.round(g.value).toLocaleString():'—'}</td>
       <td>${lpDisp}</td>
       <td>${lmDisp}</td>
       <td>${kitDisp}</td>
@@ -1252,13 +1410,6 @@ function FA_renderGroups(){
   h+='</tbody></table>';
   document.getElementById('grpTable').innerHTML=h;
   FA_filterGroups();
-}
-function FA_setGroupPallets(id,val){
-  const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
-  if(g._locked)return;// locked groups are immutable
-  g.pallets=parseFloat(val)||0;
-  g._manualPallets=true;
-  FA_saveGroups();
 }
 function FA_filterGroups(){
   const q=(document.getElementById('grpSearch').value||'').toLowerCase();
@@ -1384,6 +1535,12 @@ async function FA_sync(){
       if(match){console.log('[FA] Kit migrate: '+g.linkedKit+' → '+match.sku+' ('+g.venue+')');g.linkedKit=match.sku;migrated=true}
     }
     if(migrated&&!_faIsViewer())FA_save();
+  }
+  // Rebuild groups with fresh constraints (pallets recomputed + auto-split)
+  if(FA_GROUPS.length&&!_faIsViewer()){
+    FA_buildGroups();
+    FA_saveGroups();
+    console.log('[FA] Groups rebuilt after sync (LP cap: '+FA_LP_MAX_PLT+')');
   }
   if(btn){btn.disabled=false;btn.textContent='⟳ Sync'}
   FA_render();
