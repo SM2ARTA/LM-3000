@@ -857,34 +857,46 @@ function _faPasteVenueChanged(){
   document.querySelectorAll('._faPasteVenueSelect').forEach(sel=>{
     const raw=sel.dataset.raw;if(raw)window._faPasteVenueMap[raw]=sel.value||'';
   });
-  // Recheck dups with resolved venues and update badges
+  // Recheck dups + overwrite candidates with resolved venues
   const map=window._faPasteVenueMap||{};
   const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
+  const _existSkuVenue=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue));
   const items=window._faPasteItems||[];
   const rawVenues=[...new Set(items.map(i=>i.venue))];
+  const esc=s=>s.replace(/"/g,'&quot;');
   for(const rv of rawVenues){
     const resolved=map[rv]||'';
     const group=items.filter(i=>i.venue===rv);
     const dupCount=resolved?group.filter(i=>_existing.has(i.sku+'|'+resolved+'|'+i.qty)).length:0;
-    // Update dup badge in card
-    const card=document.querySelector('._faPasteVenueSelect[data-raw="'+rv.replace(/"/g,'&quot;')+'"]');
+    const ovrCount=resolved?group.filter(i=>!_existing.has(i.sku+'|'+resolved+'|'+i.qty)&&_existSkuVenue.has(i.sku+'|'+resolved)).length:0;
+    const card=document.querySelector('._faPasteVenueSelect[data-raw="'+esc(rv)+'"]');
     if(!card)continue;
     const cardDiv=card.closest('div[style*="margin-bottom"]');if(!cardDiv)continue;
-    // Update dup badge
+    // Update dup badge + checkbox
     let dupBadge=cardDiv.querySelector('._faDupBadge');
     if(dupCount>0){
-      if(!dupBadge){
-        const hdr=cardDiv.querySelector('div:first-child');
-        if(hdr){hdr.insertAdjacentHTML('beforeend',' <span class="_faDupBadge bg bg-or">'+dupCount+' dup</span>')}
-      } else dupBadge.textContent=dupCount+' dup';
-      // Show/update checkbox
+      if(!dupBadge){const hdr=cardDiv.querySelector('div:first-child');if(hdr)hdr.insertAdjacentHTML('beforeend',' <span class="_faDupBadge bg bg-or">'+dupCount+' dup</span>')}
+      else dupBadge.textContent=dupCount+' dup';
       let chkDiv=cardDiv.querySelector('._faDupChkDiv');
-      if(!chkDiv){
-        card.parentElement.insertAdjacentHTML('afterend','<div class="_faDupChkDiv" style="margin-top:4px"><label style="font-size:10px;color:var(--or);display:flex;align-items:center;gap:4px"><input type="checkbox" class="_faPasteDupAllow" data-raw="'+rv.replace(/"/g,'&quot;')+'"> Add duplicates anyway ('+dupCount+')</label></div>');
-      } else chkDiv.querySelector('label').innerHTML='<input type="checkbox" class="_faPasteDupAllow" data-raw="'+rv.replace(/"/g,'&quot;')+'"> Add duplicates anyway ('+dupCount+')';
+      if(!chkDiv)cardDiv.querySelector('._faPasteDateInput').parentElement.insertAdjacentHTML('afterend','<div class="_faDupChkDiv" style="margin-top:4px"><label style="font-size:10px;color:var(--or);display:flex;align-items:center;gap:4px"><input type="checkbox" class="_faPasteDupAllow" data-raw="'+esc(rv)+'"> Add duplicates anyway ('+dupCount+')</label></div>');
+      else chkDiv.querySelector('label').innerHTML='<input type="checkbox" class="_faPasteDupAllow" data-raw="'+esc(rv)+'"> Add duplicates anyway ('+dupCount+')';
     } else {
       if(dupBadge)dupBadge.remove();
       const chkDiv=cardDiv.querySelector('._faDupChkDiv');if(chkDiv)chkDiv.remove();
+    }
+    // Update overwrite badge + checkbox
+    let ovrBadge=cardDiv.querySelector('._faOvrBadge');
+    if(ovrCount>0){
+      if(!ovrBadge){const hdr=cardDiv.querySelector('div:first-child');if(hdr)hdr.insertAdjacentHTML('beforeend',' <span class="_faOvrBadge bg bg-pu">'+ovrCount+' qty diff</span>')}
+      else ovrBadge.textContent=ovrCount+' qty diff';
+      let ovrDiv=cardDiv.querySelector('._faOvrChkDiv');
+      if(!ovrDiv){
+        const after=cardDiv.querySelector('._faDupChkDiv')||cardDiv.querySelector('._faPasteDateInput').parentElement;
+        after.insertAdjacentHTML('afterend','<div class="_faOvrChkDiv" style="margin-top:4px"><label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px"><input type="checkbox" class="_faPasteOvrAllow" data-raw="'+esc(rv)+'" checked> Overwrite existing qty ('+ovrCount+')</label></div>');
+      } else ovrDiv.querySelector('label').innerHTML='<input type="checkbox" class="_faPasteOvrAllow" data-raw="'+esc(rv)+'" checked> Overwrite existing qty ('+ovrCount+')';
+    } else {
+      if(ovrBadge)ovrBadge.remove();
+      const ovrDiv=cardDiv.querySelector('._faOvrChkDiv');if(ovrDiv)ovrDiv.remove();
     }
   }
 }
