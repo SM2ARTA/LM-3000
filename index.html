@@ -11248,7 +11248,8 @@ function rVL(){
       staVenues.sort((a,b)=>{const da=_getDisp(a.name)||'9999';const db=_getDisp(b.name)||'9999';if(da!==db)return da<db?-1:1;return b.ep-a.ep});
       for(const v of staVenues){
         const sdd=_dispFmt(_getDisp(v.name));
-        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}${v.hasStp?' <span style="background:#EF6C00;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">🏪 STP</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${sdd?' · 🚛 '+sdd:''}</div></div>`;
+        const _vFa=_faVenueCount(v.name);const _vFaEng=(LP_FA_GROUPS||[]).filter(g=>g.venue===v.name&&(g.pallets||0)>0).length;
+        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}${v.hasStp?' <span style="background:#EF6C00;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">🏪 STP</span>':''}${(_vFa||_vFaEng)?' <span style="background:#ECFEFF;color:#0891B2;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0;border:1px solid #A5F3FC">📐 FA</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${sdd?' · 🚛 '+sdd:''}</div></div>`;
       }
     }
   }
@@ -11273,7 +11274,8 @@ function rVL(){
       for(const v of groups[cl]){
         const vbi=_safeFmt(v.earlyBI);
         const vdd=_dispFmt(_getDisp(v.name));
-        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}${v.hasStp?' <span style="background:#EF6C00;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">🏪 STP</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${vdd?' · 🚛 '+vdd:(vbi?' · BI: '+vbi:'')}</div></div>`;
+        const _vFa2=_faVenueCount(v.name);const _vFaEng2=(LP_FA_GROUPS||[]).filter(g=>g.venue===v.name&&(g.pallets||0)>0).length;
+        html+=`<div class="vi ${sel===v.name?'on':''}" onclick="selV('${v.name.replace(/'/g,"\\'")}')"><div class="vn" style="padding-left:12px"><span class="vn-txt">${v.name}</span>${v.hasCort?' <span style="background:#E31837;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">CORT</span>':''}${v.hasStp?' <span style="background:#EF6C00;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0">🏪 STP</span>':''}${(_vFa2||_vFaEng2)?' <span style="background:#ECFEFF;color:#0891B2;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.3px;flex-shrink:0;border:1px solid #A5F3FC">📐 FA</span>':''}</div><div class="vm" style="padding-left:12px">${v.plt} plt · ${v.ln} ln${vdd?' · 🚛 '+vdd:(vbi?' · BI: '+vbi:'')}</div></div>`;
       }
     }
   }
@@ -14155,12 +14157,16 @@ function LM_renderFAGoods(el){
 
   // Table
   html+='<div style="flex:1;overflow-y:auto"><table class="lp-tbl" style="width:100%;font-size:11px">';
-  html+='<thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th style="text-align:center">Items</th><th style="text-align:center">Pallets</th><th>LM Truck</th><th>Dispatch</th><th>Status</th></tr></thead><tbody>';
+  html+='<thead><tr><th>SKU</th><th>Venue</th><th>FA</th><th>FA BI Date</th><th style="text-align:center">Items</th><th style="text-align:center">Pallets</th><th>LM Truck</th><th>Dispatch</th><th>Delivery</th><th>Status</th></tr></thead><tbody>';
   for(const g of sorted){
     const tk=faOnTruck[g.id];
     const hasTruck=!!tk;
-    const isLate=hasTruck&&g.biDate&&tk.biK&&tk.biK>g.biDate;
-    const statusBadge=!hasTruck?(g.pallets>0?'<span class="bg bgs bg-or">Pending</span>':'<span class="bg bgs bg-gy">0 plt</span>'):(isLate?'<span class="bg bgs bg-rd">Late</span>':(tk.faTruck?'<span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">FA Truck</span>':'<span class="bg bgs bg-gn">On Truck</span>'));
+    const deliveryDate=hasTruck?tk.biK:'';
+    const isLate=hasTruck&&g.biDate&&deliveryDate&&deliveryDate>g.biDate;
+    const isOnTime=hasTruck&&g.biDate&&deliveryDate&&deliveryDate<=g.biDate;
+    const daysOff=hasTruck&&g.biDate&&deliveryDate?Math.round((new Date(deliveryDate+'T12:00:00')-new Date(g.biDate+'T12:00:00'))/86400000):null;
+    const timeBadge=isLate?'<span class="bg bgs bg-rd" style="font-size:9px">'+Math.abs(daysOff)+'d late</span>':(isOnTime&&daysOff!==null?(daysOff===0?'<span class="bg bgs bg-gn" style="font-size:9px">On time</span>':'<span class="bg bgs bg-gn" style="font-size:9px">'+Math.abs(daysOff)+'d early</span>'):'');
+    const statusBadge=!hasTruck?(g.pallets>0?'<span class="bg bgs bg-or">Pending</span>':'<span class="bg bgs bg-gy">0 plt</span>'):(tk.faTruck?'<span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📐 FA Truck</span>':'<span class="bg bgs bg-gn">On Truck</span>');
     html+='<tr>';
     html+='<td class="mono" style="font-size:10px;color:#0891B2">'+g.sku+'</td>';
     html+='<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(g.venue||'')+'">'+(g.venue||'—')+'</td>';
@@ -14170,6 +14176,7 @@ function LM_renderFAGoods(el){
     html+='<td class="mono" style="text-align:center">'+(g.pallets||0)+'</td>';
     html+='<td>'+(hasTruck?'<span class="mono fw6" style="color:'+(tk.faTruck?'#0891B2':'var(--gn)')+'">'+tk.truckId+'</span>'+(tk.locked?' 🔒':''):'—')+'</td>';
     html+='<td>'+_fmtD(tk?.dd)+'</td>';
+    html+='<td>'+_fmtD(deliveryDate)+' '+timeBadge+'</td>';
     html+='<td>'+statusBadge+'</td>';
     html+='</tr>';
   }
