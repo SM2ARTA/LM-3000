@@ -848,8 +848,8 @@ IF UNSURE: choose conservative (2 pallet spaces) OR flag "REVIEW REQUIRED".
 9. CONSERVATIVE PLANNING: Prioritize real-world feasibility, operational simplicity, safe loading. NEVER over-optimize. ALWAYS round UP. DO NOT compress unrealistically.
 
 10. OUTPUT FORMAT — return ONLY valid JSON:
-{"handlingUnits": number, "palletSpaces": number, "reasoning": "TOTAL HANDLING UNITS: X\\nTOTAL PALLET SPACES: Y\\n\\nBREAKDOWN:\\n- [Item]: HU: X, Spaces: Y (reason)\\n...\\nPACKING LOGIC:\\n- [max 3-4 lines, key decisions]"}
-Use \\n for line breaks.
+{"pallets": number, "reasoning": "BREAKDOWN:\\n- [Item] x[qty]: [X] pallet spaces ([classification], [reason])\\n- ...\\n\\nTOTAL: [sum] = [X] pallet spaces\\n\\nPACKING LOGIC:\\n- [max 3-4 lines, key decisions]"}
+Use \\n for line breaks. The "pallets" field = total pallet SPACES (transport footprint).
 
 11. VALIDATION: NON-STACKABLE items must not exceed 1 HU unless clearly oversized. Pallet spaces >= handling units. Never assign 2 HU for single normal item without justification.
 
@@ -864,23 +864,15 @@ CRITICAL: palletSpaces value MUST match the sum of per-item spaces in reasoning.
     else if(provider==='anthropic'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:[{role:'user',content:usr}]})});const j=await r.json();text=j?.content?.[0]?.text||''}
     else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:1200})});const j=await r.json();text=j?.choices?.[0]?.message?.content||''}
     console.log('[FA AI raw]',text);
-    // Try new format (palletSpaces) then old (pallets)
-    const matchSpaces=text.match(/"palletSpaces"\s*:\s*([\d.]+)/);
-    const matchPallets=text.match(/"pallets"\s*:\s*([\d.]+)/);
-    const matchHU=text.match(/"handlingUnits"\s*:\s*([\d.]+)/);
-    const match=matchSpaces||matchPallets;
+    const match=text.match(/"pallets"\s*:\s*([\d.]+)/)||text.match(/"palletSpaces"\s*:\s*([\d.]+)/);
     if(match){
       let pallets=parseFloat(match[1]);
-      const hu=matchHU?parseFloat(matchHU[1]):pallets;
-      // Extract reasoning
       let reasoning='';
-      const rMatch=text.match(/"reasoning"\s*:\s*"([\s\S]*?)"\s*\}/);;
+      const rMatch=text.match(/"reasoning"\s*:\s*"([\s\S]*?)"\s*\}/);
       if(rMatch)reasoning=rMatch[1];
-      // Auto-correct: if reasoning has "TOTAL PALLET SPACES: X" use that
-      const totalSp=reasoning.match(/TOTAL PALLET SPACES:\s*([\d.]+)/i);
-      if(totalSp){const v=parseFloat(totalSp[1]);if(v>0&&v!==pallets){console.log('[FA AI] Correcting spaces from',pallets,'to',v);pallets=v}}
-      // Fallback: "Total: ... = X"
-      if(!totalSp){const totalMatch=reasoning.match(/[Tt]otal[^=]*=\s*([\d.]+)/);if(totalMatch){const v=parseFloat(totalMatch[1]);if(v>0&&v!==pallets){console.log('[FA AI] Correcting from',pallets,'to',v);pallets=v}}}
+      // Auto-correct from reasoning total
+      const totalMatch=reasoning.match(/TOTAL[:\s]*([\d.]+)\s*pallet/i)||reasoning.match(/[Tt]otal[^=]*=\s*([\d.]+)/);
+      if(totalMatch){const v=parseFloat(totalMatch[1]);if(v>0&&v!==pallets){console.log('[FA AI] Correcting from',pallets,'to',v);pallets=v}}
       else{
         // Fallback: extract everything after pallets line
         const afterPallets=text.split(/"pallets"[^,}]+/)[1]||'';
@@ -895,9 +887,9 @@ CRITICAL: palletSpaces value MUST match the sum of per-item spaces in reasoning.
       const h=`<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:var(--sf);border:2px solid #A5F3FC;border-radius:12px;padding:20px;max-width:600px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0;font-size:14px;color:#0891B2">🤖 AI Pallet Estimate</h3><button onclick="this.closest('div[style*=position]').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts)">✕</button></div>
         <div style="font-size:11px;color:var(--ts);margin-bottom:8px">${mapped}</div>
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;padding:12px;background:#ECFEFF;border-radius:8px;border:1px solid #A5F3FC">
-          <div style="text-align:center"><span style="font-size:28px;font-weight:800;color:#0891B2;font-family:var(--fm)">${pallets}</span><div style="font-size:10px;color:#0891B2;font-weight:600">pallet spaces</div></div>
-          ${hu!==pallets?'<div style="text-align:center"><span style="font-size:20px;font-weight:700;color:var(--ts);font-family:var(--fm)">'+hu+'</span><div style="font-size:10px;color:var(--ts)">handling units</div></div>':''}
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:12px;background:#ECFEFF;border-radius:8px;border:1px solid #A5F3FC">
+          <span style="font-size:28px;font-weight:800;color:#0891B2;font-family:var(--fm)">${pallets}</span>
+          <span style="font-size:12px;color:#0891B2;font-weight:600">pallet spaces</span>
         </div>
         <div style="font-size:12px;color:var(--tp);line-height:1.7;padding:12px;background:var(--bg);border-radius:6px;max-height:350px;overflow-y:auto;white-space:pre-wrap;font-family:var(--fm)">${reasoning.replace(/\\n/g,'\n')}</div>
         <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
