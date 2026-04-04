@@ -842,26 +842,34 @@ Use \\n for line breaks in reasoning.`;
   try{
     let text='';
     if(provider==='gemini'){const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}]})});const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.[0]?.text||''}
-    else if(provider==='anthropic'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:800,system:sys,messages:[{role:'user',content:usr}]})});const j=await r.json();text=j?.content?.[0]?.text||''}
-    else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:800})});const j=await r.json();text=j?.choices?.[0]?.message?.content||''}
-    const match=text.match(/\{[\s\S]*?"pallets"\s*:\s*([\d.]+)[\s\S]*?\}/);
+    else if(provider==='anthropic'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:[{role:'user',content:usr}]})});const j=await r.json();text=j?.content?.[0]?.text||''}
+    else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:1200})});const j=await r.json();text=j?.choices?.[0]?.message?.content||''}
+    const match=text.match(/"pallets"\s*:\s*([\d.]+)/);
     if(match){
       const pallets=parseFloat(match[1]);
-      const reasoning=text.match(/"reasoning"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/)?.[1]||text.replace(/.*\{.*\}.*/s,'').trim()||'';
+      // Extract reasoning: everything after "reasoning": "..." — handle escaped quotes and multiline
+      let reasoning='';
+      const rMatch=text.match(/"reasoning"\s*:\s*"([\s\S]*?)"\s*\}/);
+      if(rMatch)reasoning=rMatch[1];
+      else{
+        // Fallback: extract everything after pallets line
+        const afterPallets=text.split(/"pallets"[^,}]+/)[1]||'';
+        reasoning=afterPallets.replace(/[{}",]/g,' ').replace(/reasoning\s*:/gi,'').trim();
+      }
       if(!P.palletMap)P.palletMap={};
       P.palletMap[rawVenue]=pallets;
       _faRenderPasteCards();
       // Show reasoning dialog
       const rv=rawVenue;const mapped=P.venueMap[rv]||rv;
       const items=grp.map(i=>i.name+' × '+i.qty).join('\n');
-      const h=`<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:var(--sf);border:2px solid #A5F3FC;border-radius:12px;padding:20px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      const h=`<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:var(--sf);border:2px solid #A5F3FC;border-radius:12px;padding:20px;max-width:600px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0;font-size:14px;color:#0891B2">🤖 AI Pallet Estimate</h3><button onclick="this.closest('div[style*=position]').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts)">✕</button></div>
         <div style="font-size:11px;color:var(--ts);margin-bottom:8px">${mapped}</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:12px;background:#ECFEFF;border-radius:8px;border:1px solid #A5F3FC">
           <span style="font-size:28px;font-weight:800;color:#0891B2;font-family:var(--fm)">${pallets}</span>
           <span style="font-size:12px;color:#0891B2;font-weight:600">pallets estimated</span>
         </div>
-        <div style="font-size:11px;color:var(--tp);line-height:1.6;padding:10px;background:var(--bg);border-radius:6px;max-height:200px;overflow-y:auto;white-space:pre-wrap">${reasoning.replace(/\\n/g,'\n')}</div>
+        <div style="font-size:12px;color:var(--tp);line-height:1.7;padding:12px;background:var(--bg);border-radius:6px;max-height:350px;overflow-y:auto;white-space:pre-wrap;font-family:var(--fm)">${reasoning.replace(/\\n/g,'\n')}</div>
         <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
           <button class="mbtn" onclick="this.closest('div[style*=position]').remove()">Close</button>
         </div>
@@ -1207,10 +1215,10 @@ async function FA_aiPallets(id,btn){
       const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}]})});
       const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.[0]?.text||'';
     } else if(provider==='anthropic'){
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:800,system:sys,messages:[{role:'user',content:usr}]})});
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:[{role:'user',content:usr}]})});
       const j=await r.json();text=j?.content?.[0]?.text||'';
     } else if(provider==='openai'){
-      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:800})});
+      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:1200})});
       const j=await r.json();text=j?.choices?.[0]?.message?.content||'';
     }
     // Parse JSON from response
