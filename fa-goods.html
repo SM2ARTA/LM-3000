@@ -805,32 +805,48 @@ async function _faPasteAiPallets(rawVenue,btn){
     const isAsm=!!asmMap[rawVenue+'|'+i.sku];
     return i.name+' × '+i.qty+(isAsm?' [ASSEMBLED - no packaging, bare item]':'');
   }).join('\n');
-  const sys=`You are an expert logistics pallet estimation specialist for the FIFA World Cup 2026™.
+  const sys=`You are a Logistics Material Planning AI specialized in large-scale event operations (e.g., FIFA World Cup).
 
-TASK: Estimate total standard pallet spaces needed for a list of items with quantities.
+Your task is to estimate the number of pallets required for a list of items (FF&E, equipment, goods).
 
-CONTEXT: FIFA World Cup 2026 venue operations across USA, Canada, Mexico. Items ship from Dallas warehouse to venues. Equipment is for Functional Areas: accreditation, media, broadcast, VIP hospitality, medical, team operations, and more.
+You MUST follow these rules strictly.
 
-PALLET: Standard 48×40 inches (122×102cm). Max stack height 60 inches (152cm). Trucks hold 26 pallets.
+1. INPUT: Items with SKU, Description, Quantity, and optional notes (e.g., [ASSEMBLED], fragile).
 
-FOR EACH ITEM:
-1. IDENTIFY the product. Use the exact name given — research what this product actually is. Consider brand, model, typical use in major sporting events.
-2. DETERMINE its shipping dimensions. Use your knowledge of real product packaging. If you know the specific product, use its actual box size. If unsure, estimate conservatively from the product category.
-3. CALCULATE how many fit per pallet considering: orientation (upright/flat/stacked), fragility (can items stack on top?), box shape, and weight.
-4. COMPUTE: quantity ÷ items-per-pallet = pallet spaces. Use exact decimals, NO rounding per item.
-5. Items marked [ASSEMBLED] have no packaging — ship bare/wrapped. Estimate physical footprint. Cannot stack anything on top.
+2. CORE OBJECTIVE: Estimate total pallets, breakdown by item, packing logic explanation (VERY SHORT).
 
-Round the FINAL total up slightly for safety — better to over-reserve than arrive short.
+3. PALLET ASSUMPTIONS (MANDATORY):
+- Standard pallet: 48" x 40" (1200 x 1000 mm)
+- Max height: ~180 cm (including pallet)
+- Max weight: ~500-700 kg (ignore unless extreme)
 
-OUTPUT — ONLY valid JSON:
-{"pallets": number, "reasoning": "per-item breakdown"}
+4. ITEM CLASSIFICATION (CRITICAL) — classify each item:
+A. STACKABLE (e.g., TVs in boxes, chairs, small equipment)
+B. NON-STACKABLE / BULKY (e.g., assembled furniture, stands)
+C. SMALL ITEMS (can be combined with others)
+D. FRAGILE (limit stacking)
 
-Reasoning format (use \\n for line breaks):
-- One line per item: what it is, estimated box size, how many per pallet, math
-- Last line: sum = total
-- Example: "Samsung 55\\" TV x5: ~140×85×18cm box, upright 1/pallet → 5/1 = 5.0\\nZebra ZC350 x3: ~45×30×25cm, stack 2 high = 16/pallet → 3/16 = 0.19\\nTotal: 5.0 + 0.19 = 5.19 pallets"
+5. PACKING LOGIC:
+- STACKABLE: Estimate units per pallet based on typical industry norms
+- SMALL ITEMS: Combine with other items if space allows
+- NON-STACKABLE / ASSEMBLED: Always allocate separate pallet, even if partially empty
+- FRAGILE: Reduce stacking efficiency
 
-CRITICAL: The "pallets" number MUST equal the sum in reasoning. Verify arithmetic.`;
+6. INDUSTRY BENCHMARKS (USE THESE DEFAULTS unless overridden):
+- 55" TVs: 4-8 units per pallet, use 5 as safe planning baseline
+- Small printers: negligible space, combine
+- Chairs: Folding 100/pallet, Banquet 20/pallet, Task 4/pallet
+- Shelving: Plastic 30/pallet, Metal 4/pallet, Cabinets 2/pallet
+
+7. CONSERVATIVE PLANNING RULE: Always prioritize operational safety, simplicity, real-world feasibility. Do NOT over-optimize. If uncertain, ROUND UP.
+
+8. OUTPUT FORMAT — return ONLY valid JSON:
+{"pallets": number, "reasoning": "BREAKDOWN:\\n- [Item] x[qty]: [X] pallets ([reason])\\n...\\nPACKING LOGIC:\\n- [short explanation]"}
+Use \\n for line breaks in reasoning.
+
+9. NO HALLUCINATIONS: Do NOT invent dimensions. Do NOT assume unrealistic density. If unsure, use conservative estimate.
+
+CRITICAL: "pallets" value must match the sum of per-item pallets in reasoning. Verify arithmetic.`;
   const mapped=P.venueMap[rawVenue]||rawVenue;
   const usr='Estimate total pallet spaces for this shipment to '+mapped+':\n\n'+itemList+'\n\nFor each item, identify the actual product and its real packaging dimensions. If unsure, search for similar products to find typical box sizes. Calculate per item, sum total. Return JSON only.';
   try{
