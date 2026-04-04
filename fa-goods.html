@@ -1053,8 +1053,18 @@ function FA_editGroup(id){
   const engLMLocked=asgn.lm&&asgn.lm.locked;
   // Items in this group
   const items=FA_DEMAND.filter(d=>g.items&&g.items.includes(d.id));
-  let itemRows='';
-  for(const d of items){itemRows+=`<tr><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td class="mono" style="text-align:right">${d.qty}</td></tr>`}
+  const ml3kNom=window._faML3KNom||{};
+  let itemRows='';let compTotal=0;
+  for(const d of items){
+    const fn=FA_NOM[d.sku]||{};const mn=ml3kNom[d.sku]||{};
+    const isAsm=!!d._asm;
+    const pq=isAsm?(fn.pqA||mn.pqA||fn.pq||mn.pq||0):(fn.pq||mn.pq||0);
+    const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
+    const plt=pq>0&&ps>0?Math.round((d.qty/pq)*ps*100)/100:0;
+    compTotal+=plt;
+    itemRows+=`<tr><td><input type="checkbox" ${isAsm?'checked':''} onchange="FA_toggleItemAsm(${d.id},this.checked,${g.id})" ${isLocked?'disabled':''}></td><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td class="mono" style="text-align:right">${d.qty}</td><td class="mono" style="text-align:right;color:${pq?'var(--ts)':'var(--rd)'}">${pq||'—'}</td><td class="mono" style="text-align:right;color:${ps?'var(--ts)':'var(--rd)'}">${ps||'—'}</td><td class="mono fw6" style="text-align:right;color:var(--ac)">${plt||'—'}</td></tr>`;
+  }
+  compTotal=Math.round(compTotal*100)/100;
   const h=`<div class="modal-ov">
     <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Group: ${g.sku}</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
     ${isLocked?'<div style="padding:6px 10px;background:var(--gs);border:1px solid #B8DFCA;border-radius:6px;font-size:11px;color:var(--gn);margin-bottom:10px">🔒 This group is locked — assigned truck is dispatched. Data is immutable.</div>':''}
@@ -1086,8 +1096,8 @@ function FA_editGroup(id){
       <datalist id="_faGrpKitList">${kitOpts}</datalist>
       <span style="font-size:9px;color:var(--tt)">${relKits.length} kits</span>
     </div>
-    <div style="padding:8px 0 4px;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Items (${items.length})</div>
-    <div style="max-height:200px;overflow-y:auto"><table class="dtb"><thead><tr><th>SKU</th><th>Name</th><th style="text-align:right">Qty</th></tr></thead><tbody>${itemRows}</tbody></table></div>
+    <div style="padding:8px 0 4px;display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Items (${items.length})</span>${!isLocked?'<button class="rbtn" onclick="FA_recomputeGrpPlt('+g.id+')" style="font-size:9px;padding:2px 8px;background:var(--cs);color:var(--cy);border-color:#A5F3FC">↻ Recompute pallets</button>':''}<span style="font-size:10px;color:var(--ac);font-weight:600;margin-left:auto">Computed: ${compTotal} plt</span></div>
+    <div style="max-height:200px;overflow-y:auto"><table class="dtb"><thead><tr><th style="width:16px" title="Assembled">A</th><th>SKU</th><th>Name</th><th style="text-align:right">Qty</th><th style="text-align:right">PQ</th><th style="text-align:right">PS</th><th style="text-align:right">Pallets</th></tr></thead><tbody>${itemRows}</tbody></table></div>
     <div class="modal-actions"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveGroupEdit(${id})">Save</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
@@ -1105,6 +1115,22 @@ function FA_grpKitAutoLM(){
   // Unlocked kit → find first LM truck matching kit venue
   const lmTrucks=_faTrucksForVenue(kit.venue);
   if(lmTrucks.length===1)lmEl.value=lmTrucks[0].id;// auto-fill only if exactly 1 match
+}
+function FA_toggleItemAsm(demId,checked,grpId){
+  const d=FA_DEMAND.find(x=>x.id===demId);if(!d)return;
+  d._asm=checked||undefined;
+  FA_saveDebounced();
+  // Refresh modal
+  document.getElementById('faModal').innerHTML='';
+  FA_editGroup(grpId);
+}
+function FA_recomputeGrpPlt(grpId){
+  const g=FA_GROUPS.find(x=>x.id===grpId);if(!g)return;
+  g.pallets=FA_computeGroupPallets(g);
+  g._manualPallets=false;// allow future auto-recompute
+  FA_saveGroups();
+  document.getElementById('faModal').innerHTML='';
+  FA_editGroup(grpId);
 }
 function FA_saveGroupEdit(id){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
