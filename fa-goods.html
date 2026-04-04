@@ -678,24 +678,24 @@ function FA_clearDemand(){
 
 // ── Paste Demand: parse tab-separated data from Excel ──
 function FA_showPasteDemand(){
-  const venueOpts=FA_ML3K_VENUES.map(v=>`<option value="${v.name}">`).join('');
   const h=`<div class="modal-ov">
-    <div class="modal" style="max-width:680px"><div style="display:flex;justify-content:space-between;align-items:center"><h3>📋 Paste Demand</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
-    <div style="font-size:11px;color:var(--ts);margin-bottom:8px">Paste tab-separated data from Excel. Two formats supported:</div>
-    <div style="display:flex;gap:12px;margin-bottom:10px">
-      <div style="flex:1;padding:8px;background:var(--bg);border-radius:6px;font-size:10px">
-        <div style="font-weight:700;margin-bottom:4px">Matrix (venues as columns)</div>
-        <div style="color:var(--ts);font-family:var(--fm);font-size:9px">Row 1: [blank] [blank] Venue1 Venue2...<br>Row 2: (optional type/date rows)<br>Row 3+: SKU Name Qty1 Qty2...</div>
+    <div class="modal" style="max-width:1100px;height:85vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0"><h3>📋 Paste Demand</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-shrink:0;flex-wrap:wrap">
+      <span class="form-label" style="font-size:10px">FA Area</span><input type="text" id="_faPasteFa" value="TEC" style="width:80px">
+      <span class="form-label" style="font-size:10px">Default Date</span><input type="date" id="_faPasteDate" value="" style="width:130px">
+      <button class="rbtn" onclick="_faParsePaste()" style="background:var(--cs);color:var(--cy);border-color:#A5F3FC">👁 Preview</button>
+    </div>
+    <div style="display:flex;gap:12px;flex:1;min-height:0">
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div style="font-size:10px;font-weight:700;color:var(--ts);margin-bottom:4px">PASTE FROM EXCEL</div>
+        <textarea id="_faPasteArea" style="flex:1;width:100%;font-family:var(--fm);font-size:11px;padding:8px;border:1px solid var(--bd);border-radius:6px;resize:none" placeholder="Paste from Excel here (Ctrl+V)...&#10;&#10;Supports:&#10;• Matrix: venues as columns, SKUs as rows&#10;• Rows: SKU  Name  Venue  Qty  Date"></textarea>
       </div>
-      <div style="flex:1;padding:8px;background:var(--bg);border-radius:6px;font-size:10px">
-        <div style="font-weight:700;margin-bottom:4px">Rows (one item per line)</div>
-        <div style="color:var(--ts);font-family:var(--fm);font-size:9px">SKU Name Venue Qty Date<br>or: SKU Venue Qty</div>
+      <div id="_faPastePreview" style="flex:1;overflow-y:auto;min-width:0;padding:2px">
+        <div style="color:var(--tt);font-size:11px;padding:20px;text-align:center">Paste data and click <b>👁 Preview</b></div>
       </div>
     </div>
-    <div class="form-row"><span class="form-label">FA Area</span><input type="text" id="_faPasteFa" value="TEC" style="width:100px"><span class="form-label">Default Date</span><input type="date" id="_faPasteDate" value="" style="width:140px"></div>
-    <textarea id="_faPasteArea" style="width:100%;height:200px;font-family:var(--fm);font-size:11px;padding:8px;border:1px solid var(--bd);border-radius:6px;resize:vertical" placeholder="Paste from Excel here (Ctrl+V)..."></textarea>
-    <div id="_faPastePreview" style="margin-top:8px;max-height:180px;overflow-y:auto"></div>
-    <div class="modal-actions"><button class="rbtn" onclick="_faParsePaste()" style="background:var(--cs);color:var(--cy);border-color:#A5F3FC">👁 Preview</button><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="_faConfirmPaste()">Add Items</button></div>
+    <div class="modal-actions" style="flex-shrink:0"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="_faConfirmPaste()">Add Items</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
   document.getElementById('_faPasteArea').focus();
@@ -765,11 +765,8 @@ function _faParsePaste(){
       else if(row.length>=3){sku=row[0];venue=row[1];qty=parseInt(row[2]);name=FA_NOM[sku]?.name||sku;biDate=defaultDate}
       else continue;
       if(!sku||!venue||!qty||qty<=0)continue;
-      // Try to match venue name
-      const vMatch=FA_ML3K_VENUES.find(v=>v.name===venue||v.name.toLowerCase().includes(venue.toLowerCase()));
-      if(vMatch)venue=vMatch.name;
-      const key=sku+'|'+venue+'|'+qty;
-      items.push({sku,name:name||sku,venue,fa,qty,biDate:biDate||'',dup:_existing.has(key)});
+      // Keep raw venue name — mapping step handles resolution
+      items.push({sku,name:name||sku,venue,fa,qty,biDate:biDate||'',dup:false});
     }
   }
 
