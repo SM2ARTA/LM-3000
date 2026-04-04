@@ -695,7 +695,7 @@ function FA_showPasteDemand(){
         <div style="color:var(--tt);font-size:11px;padding:20px;text-align:center">Paste data and click <b>👁 Preview</b></div>
       </div>
     </div>
-    <div class="modal-actions" style="flex-shrink:0"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="_faConfirmPaste()">Add Items</button></div>
+    <div class="modal-actions" style="flex-shrink:0"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" id="_faPasteAddBtn" disabled onclick="_faConfirmPaste()">Add Items</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
   document.getElementById('_faPasteArea').focus();
@@ -709,24 +709,22 @@ function _faParsePaste(){
   const lines=raw.split('\n').map(l=>l.split('\t').map(c=>c.trim()));
   if(!lines.length)return;
 
-  // Detect format: if first row has >3 columns and columns 3+ look like venue names → matrix
+  // Detect format: matrix if first row has 4+ columns and data rows have numbers in columns 3+
+  // Row format if columns are: SKU, Name, Venue, Qty (narrow)
   const hdr=lines[0];
-  const isMatrix=hdr.length>=3&&FA_ML3K_VENUES.some(v=>hdr.some(c=>c&&v.name.toLowerCase().includes(c.toLowerCase())));
+  const dataRows=lines.filter((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
+  const hasNumbers=dataRows.some(r=>r.slice(2).some(c=>c&&/^\d+$/.test(c.trim())));
+  const isMatrix=hdr.length>=4&&hasNumbers;
 
   const items=[];
   const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
 
   if(isMatrix){
-    // Matrix: find venue columns by matching header cells to venue names
+    // Matrix: find venue columns — keep raw header text as venue name (mapping step resolves)
     const venueCols=[];// [{col, venue, biDate}]
     for(let c=2;c<hdr.length;c++){
-      const cell=hdr[c];if(!cell)continue;
-      // Match venue by city name
-      const match=FA_ML3K_VENUES.find(v=>{
-        const cl=cell.toLowerCase(),vl=v.name.toLowerCase();
-        return vl.includes(cl)||cl.includes(vl.split(' ')[0]);
-      });
-      if(match)venueCols.push({col:c,venue:match.name,biDate:''});
+      const cell=hdr[c];if(!cell||/^\d+$/.test(cell))continue;// skip pure numbers
+      venueCols.push({col:c,venue:cell,biDate:''});
     }
     // Check row 2-3 for dates (Delivery Date row)
     for(let r=1;r<Math.min(4,lines.length);r++){
@@ -827,6 +825,7 @@ function _faParsePaste(){
   }
 
   document.getElementById('_faPastePreview').innerHTML=preview;
+  const addBtn=document.getElementById('_faPasteAddBtn');if(addBtn)addBtn.disabled=!items.length;
 }
 
 function _faTryDate(s){
