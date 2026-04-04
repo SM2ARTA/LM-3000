@@ -828,13 +828,18 @@ CALCULATION METHOD — for each item:
 1. Identify the real product (use brand/model knowledge)
 2. Estimate boxed dimensions (L×W×H cm)
 3. Consider ALL possible orientations: flat, upright, on-side. Pick the orientation that fits the most units per pallet while remaining safe and practical. Example: a tall narrow box (120×30×70cm) laid flat fits 1 per pallet, but stood upright (30×70 footprint) could fit 4-6 per pallet within height limits.
-4. Calculate units per pallet: (pallet_area ÷ item_footprint_in_chosen_orientation) × stackable_layers
+4. Calculate units per pallet: floor(pallet_length ÷ item_dim1) × floor(pallet_width ÷ item_dim2) × stackable_layers. Pallet = 122×102cm. Show this math explicitly.
 5. Pallet spaces = qty ÷ units_per_pallet (exact decimal)
 6. If item box exceeds ~170cm in ALL orientations → double pallet (2 spaces per unit)
 
-THEN: Sum all per-item pallet spaces. This sum = "pallets" in output.
+THEN: Sum all per-item pallet spaces to get total.
 
-ARITHMETIC CHECK: After calculating, verify your sum. Add each item's spaces together. The total MUST match. If it doesn't, fix it before responding.
+ARITHMETIC — THIS IS THE MOST IMPORTANT RULE:
+Step 1: Write out each item's pallet spaces as a number.
+Step 2: Add them: A + B + C + D = TOTAL.
+Step 3: The "pallets" field in your JSON MUST equal this TOTAL exactly.
+Step 4: Before responding, RE-READ your breakdown. Re-add the numbers. If the sum differs from "pallets", FIX IT.
+DO NOT return a response where "pallets" differs from the sum shown in TOTAL line. This is a hard requirement.
 
 OUTPUT — return ONLY valid JSON:
 {"pallets": [total pallet spaces], "reasoning": "BREAKDOWN:\\n- [Item] x[qty]: [X] pallet spaces ([Cat X], [boxed dims], [units/pallet], [math])\\n- ...\\n\\nTOTAL: [X + Y + Z] = [total] pallet spaces\\n\\nPACKING LOGIC:\\n- [2-3 lines on key decisions]"}
