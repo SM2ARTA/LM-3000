@@ -827,9 +827,10 @@ PALLET SPACE SIZING — for each item, estimate the BOXED dimensions from your p
 CALCULATION METHOD — for each item:
 1. Identify the real product (use brand/model knowledge)
 2. Estimate boxed dimensions (L×W×H cm)
-3. Calculate units per pallet: floor area fit × stackable layers
-4. Pallet spaces = qty ÷ units_per_pallet (exact decimal)
-5. If item needs double pallet: spaces = qty × 2
+3. Consider ALL possible orientations: flat, upright, on-side. Pick the orientation that fits the most units per pallet while remaining safe and practical. Example: a tall narrow box (120×30×70cm) laid flat fits 1 per pallet, but stood upright (30×70 footprint) could fit 4-6 per pallet within height limits.
+4. Calculate units per pallet: (pallet_area ÷ item_footprint_in_chosen_orientation) × stackable_layers
+5. Pallet spaces = qty ÷ units_per_pallet (exact decimal)
+6. If item box exceeds ~170cm in ALL orientations → double pallet (2 spaces per unit)
 
 THEN: Sum all per-item pallet spaces. This sum = "pallets" in output.
 
