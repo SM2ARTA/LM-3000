@@ -10931,7 +10931,7 @@ function _saveFaAssignments(){
     for(const r of (LP_STATE.generatedPlan||[])){
       if(!r.sku||!r.sku.startsWith('FA-')||!r.sku.includes('-G'))continue;
       if(!assigns[r.sku])assigns[r.sku]={};
-      assigns[r.sku].lp={truckId:'LP-'+r.truckId,date:r.date||'',dest:r.destination||''};
+      assigns[r.sku].lp={truckId:'LP-'+r.truckId,date:r.date||'',dest:r.destination||'',locked:LP_dispatched.has(r.truckId)};
     }
     if(!Object.keys(assigns).length)return;
     SB.from('shared_state').upsert({id:'fa-assignments',value:JSON.stringify(assigns),updated_at:new Date().toISOString()}).then(()=>{}).catch(e=>console.warn('FA assigns save:',e));

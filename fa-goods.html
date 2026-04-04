@@ -1097,7 +1097,8 @@ function FA_editGroup(id){
   const engLPDate=asgn.lp?_fmtD(asgn.lp.date):'';
   const engLMDate=asgn.lm?_fmtD(asgn.lm.date):'';
   const engLMBiK=asgn.lm?_fmtD(asgn.lm.biK):'';
-  const engLMLocked=asgn.lm&&asgn.lm.locked;
+  const engLPLocked=!!(asgn.lp&&asgn.lp.locked);
+  const engLMLocked=!!(asgn.lm&&asgn.lm.locked);
   // Items in this group
   const items=FA_DEMAND.filter(d=>g.items&&g.items.includes(d.id));
   const ml3kNom=window._faML3KNom||{};
@@ -1129,7 +1130,7 @@ function FA_editGroup(id){
     <div class="form-row"><span class="form-label">Pallets</span><span class="mono fw6" style="font-size:14px;color:var(--ac)">${g.pallets||0}</span><span style="font-size:9px;color:var(--tt);margin-left:6px">computed from NOM · LP: ${FA_LP_MAX_PLT} plt · LM: ${FA_getLmCap(g.venue,g.biDate)} plt</span></div>
     ${(engLP||engLM)?`<div style="padding:6px 0;font-size:10px;font-weight:700;color:#0891B2;text-transform:uppercase;letter-spacing:0.5px">Engine Placement (from ML3K)</div>
     <div style="padding:6px 10px;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:6px;font-size:11px;color:#0891B2;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px">
-      ${engLP?'<span><b>LP:</b> <span class="mono fw6">'+engLP+'</span> · '+engLPDate+'</span>':''}
+      ${engLP?'<span><b>LP:</b> <span class="mono fw6">'+engLP+'</span>'+(engLPLocked?' 🔒':'')+' · '+engLPDate+'</span>':''}
       ${engLM?'<span><b>LM:</b> <span class="mono fw6">'+engLM+'</span>'+(engLMLocked?' 🔒':'')+' · Dispatch: '+engLMDate+(engLMBiK?' · Delivery: '+engLMBiK:'')+'</span>':''}
     </div>`:''}
     <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">① LP Truck (Dallas → Warehouse)</div>
@@ -1348,13 +1349,16 @@ function FA_renderGroups(){
   const lpAssigned=FA_GROUPS.filter(g=>g.linkedLP).length;
   const lmAssigned=FA_GROUPS.filter(g=>g.linkedLM).length;
   const locked=FA_GROUPS.filter(g=>g._locked).length;
+  // Count groups where LP or LM trucks are locked in ML3K (via assignments)
+  const _lpLocked=FA_GROUPS.filter(g=>{const a=FA_ASSIGNMENTS[g.sku];return a&&a.lp&&a.lp.locked}).length;
+  const _lmLocked=FA_GROUPS.filter(g=>{const a=FA_ASSIGNMENTS[g.sku];return a&&a.lm&&a.lm.locked}).length;
   const totalVal=Math.round(FA_GROUPS.reduce((s,g)=>s+(g.value||0),0));
   document.getElementById('grpKpis').innerHTML=`
     <div class="kpi"><div class="kl">📐 Groups</div><div class="kv" style="color:var(--cy)">${FA_GROUPS.length}</div></div>
     <div class="kpi"><div class="kl">📦 Total Pallets</div><div class="kv" style="color:var(--ac)">${totalPlt}</div></div>
     <div class="kpi"><div class="kl">💰 Total Value</div><div class="kv" style="color:var(--pu)">$${totalVal.toLocaleString()}</div></div>
-    <div class="kpi"><div class="kl">📦 LP Assigned</div><div class="kv" style="color:#2563eb">${lpAssigned}</div></div>
-    <div class="kpi"><div class="kl">🚛 LM Assigned</div><div class="kv" style="color:var(--pu)">${lmAssigned}</div></div>
+    <div class="kpi"><div class="kl">📦 LP Assigned</div><div class="kv" style="color:#2563eb">${lpAssigned}${_lpLocked?' <span style="font-size:11px;color:var(--gn)">🔒${_lpLocked}</span>':''}</div></div>
+    <div class="kpi"><div class="kl">🚛 LM Assigned</div><div class="kv" style="color:var(--pu)">${lmAssigned}${_lmLocked?' <span style="font-size:11px;color:var(--gn)">🔒${_lmLocked}</span>':''}</div></div>
     <div class="kpi"><div class="kl">🔒 Locked</div><div class="kv" style="color:var(--gn)">${locked}</div></div>`;
   document.getElementById('grpCount').textContent=FA_GROUPS.length+' groups';
 
@@ -1376,12 +1380,14 @@ function FA_renderGroups(){
     // LP: manual link or engine assignment
     const lpRef=g.linkedLP||(asgn.lp?asgn.lp.truckId:null);
     const lpIsEngine=!g.linkedLP&&asgn.lp;
-    const lpDisp=lpRef?'<span class="bg" style="background:'+(lpIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'#EFF6FF;color:#2563eb;border:1px solid #BFDBFE')+'">'+lpRef+'</span>':'<span style="color:var(--tt)">—</span>';
+    const lpLocked=!!(asgn.lp&&asgn.lp.locked);
+    const lpDisp=lpRef?'<span class="bg" style="background:'+(lpLocked?'var(--gs);color:var(--gn);border:1px solid #B8DFCA':lpIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'#EFF6FF;color:#2563eb;border:1px solid #BFDBFE')+'">'+lpRef+(lpLocked?' 🔒':'')+'</span>':'<span style="color:var(--tt)">—</span>';
     // LM: manual link or engine assignment
     const lmRef=g.linkedLM||(asgn.lm?asgn.lm.truckId:null);
     const lmIsEngine=!g.linkedLM&&asgn.lm;
+    const lmLocked=!!(asgn.lm&&asgn.lm.locked);
     const isFaTruck=asgn.lm&&asgn.lm.faTruck;
-    const lmDisp=lmRef?'<span class="bg" style="background:'+(lmIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'var(--ps);color:var(--pu);border:1px solid #D4C5FE')+'">'+lmRef+'</span>'+(isFaTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''):'<span style="color:var(--tt)">—</span>';
+    const lmDisp=lmRef?'<span class="bg" style="background:'+(lmLocked?'var(--gs);color:var(--gn);border:1px solid #B8DFCA':lmIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'var(--ps);color:var(--pu);border:1px solid #D4C5FE')+'">'+lmRef+(lmLocked?' 🔒':'')+'</span>'+(isFaTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''):'<span style="color:var(--tt)">—</span>';
     const kitDisp=g.linkedKit?'<span class="bg bg-gn">📦 '+g.linkedKit+'</span>':'<span style="color:var(--tt)">—</span>';
     const hasAsgn=lpRef||lmRef;
     const statusBadge=isLocked?'<span class="bg bg-gn">🔒 Locked</span>':hasAsgn?'<span class="bg bg-cy">On Truck</span>':g.pallets>0?'<span class="bg bg-or">Pallets set</span>':'<span class="bg bg-gy">Open</span>';
