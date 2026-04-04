@@ -812,7 +812,7 @@ PALLET: 48"×40" (122×102cm). Max stack height: 180cm including pallet. 1 palle
 
 CLASSIFICATION — assign each item exactly ONE category:
 A. STACKABLE — boxed, uniform shape, can safely stack multiple on a pallet
-B. NON-STACKABLE — ONLY items tagged [ASSEMBLED] (no box, bare/wrapped, irregular). Allocate 1 dedicated pallet space per item. NEVER combine with others.
+B. UNBOXED — ONLY items tagged [ASSEMBLED] (no box, bare/wrapped). These have irregular shape but IDENTICAL unboxed items CAN be stacked/grouped together on a pallet. Estimate how many identical bare items fit per pallet based on the item's physical dimensions. Do NOT mix with different items.
 C. SMALL — desktop electronics, consumables, accessories. Combine onto shared pallets.
 D. FRAGILE — can palletize but limit stacking height. Reduce density.
 
@@ -842,8 +842,8 @@ OUTPUT — return ONLY valid JSON:
 Use \\n for line breaks. Show the addition in TOTAL line.
 
 RULES:
-- NEVER classify boxed items as NON-STACKABLE. Only [ASSEMBLED] = Cat B.
-- NEVER allocate 1 pallet per item for small/medium boxed goods. Use real packing density.
+- NEVER classify boxed items as UNBOXED. Only [ASSEMBLED] tag = Cat B.
+- NEVER default to 1-per-pallet without calculating. Always estimate real density — even unboxed items can group together.
 - ALWAYS round up the final total for safety margin.
 - If you don't know a product, state your assumption. Don't hallucinate dimensions.`;
   const mapped=P.venueMap[rawVenue]||rawVenue;
