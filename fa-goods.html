@@ -1140,7 +1140,7 @@ function FA_computeGroupPallets(g){
 function FA_renderGroups(){
   // Auto-build groups if none exist but demand does
   if(!FA_GROUPS.length&&FA_DEMAND.length)FA_buildGroups();
-  const totalPlt=FA_GROUPS.reduce((s,g)=>s+(g.pallets||0),0);
+  const totalPlt=Math.round(FA_GROUPS.reduce((s,g)=>s+(g.pallets||0),0)*100)/100;
   const lpAssigned=FA_GROUPS.filter(g=>g.linkedLP).length;
   const lmAssigned=FA_GROUPS.filter(g=>g.linkedLM).length;
   const locked=FA_GROUPS.filter(g=>(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))).length;
