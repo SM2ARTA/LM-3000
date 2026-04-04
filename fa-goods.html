@@ -866,8 +866,16 @@ RULES:
       const rMatch=text.match(/"reasoning"\s*:\s*"([\s\S]*?)"\s*\}/);
       if(rMatch)reasoning=rMatch[1];
       // Auto-correct from reasoning total
-      const totalMatch=reasoning.match(/TOTAL[:\s]*([\d.]+)\s*pallet/i)||reasoning.match(/[Tt]otal[^=]*=\s*([\d.]+)/);
-      if(totalMatch){const v=parseFloat(totalMatch[1]);if(v>0&&v!==pallets){console.log('[FA AI] Correcting from',pallets,'to',v);pallets=v}}
+      // Auto-correct: parse per-item pallet numbers from breakdown and sum them ourselves
+      const lineMatches=[...reasoning.matchAll(/:\s*([\d.]+)\s*pallet\s*space/gi)];
+      if(lineMatches.length){
+        const jsSum=Math.round(lineMatches.reduce((s,m)=>s+parseFloat(m[1]),0)*100)/100;
+        if(jsSum>0&&jsSum!==pallets){console.log('[FA AI] JS recalc:',lineMatches.map(m=>parseFloat(m[1])).join('+'),'=',jsSum,'(AI said',pallets+')');pallets=jsSum}
+      } else {
+        // Fallback: parse from TOTAL line
+        const totalMatch=reasoning.match(/TOTAL[^=]*=\s*([\d.]+)/i)||reasoning.match(/=\s*([\d.]+)\s*pallet/i);
+        if(totalMatch){const v=parseFloat(totalMatch[1]);if(v>0&&v!==pallets){console.log('[FA AI] Correcting from',pallets,'to',v);pallets=v}}
+      }
       else{
         // Fallback: extract everything after pallets line
         const afterPallets=text.split(/"pallets"[^,}]+/)[1]||'';
