@@ -685,6 +685,8 @@ function FA_saveDemandEdit(id){
   FA_saveDebounced();FA_render();
 }
 function FA_deleteDemand(id){
+  // Block if item belongs to a locked group
+  for(const g of FA_GROUPS){if(g._locked&&g.items&&g.items.includes(id)){alert('This item is in a locked group ('+g.sku+'). Unlock the group first.');return}}
   if(!confirm('Delete demand line #'+id+'?'))return;
   FA_DEMAND=FA_DEMAND.filter(x=>x.id!==id);
   document.getElementById('faModal').innerHTML='';
@@ -1137,6 +1139,8 @@ function FA_toggleGroupLock(grpId,checked){
   FA_editGroup(grpId);
 }
 function FA_toggleItemAsm(demId,checked,grpId){
+  const g=FA_GROUPS.find(x=>x.id===grpId);
+  if(g&&g._locked)return;// locked group — immutable
   const d=FA_DEMAND.find(x=>x.id===demId);if(!d)return;
   d._asm=checked||undefined;
   FA_saveDebounced();
@@ -1145,7 +1149,7 @@ function FA_toggleItemAsm(demId,checked,grpId){
   FA_editGroup(grpId);
 }
 function FA_recomputeGrpPlt(grpId){
-  const g=FA_GROUPS.find(x=>x.id===grpId);if(!g)return;
+  const g=FA_GROUPS.find(x=>x.id===grpId);if(!g||g._locked)return;
   g.pallets=FA_computeGroupPallets(g);
   g._manualPallets=false;// allow future auto-recompute
   FA_saveGroups();
