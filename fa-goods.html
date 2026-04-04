@@ -833,8 +833,10 @@ EQUIPMENT CONTEXT — typical FIFA Functional Area items:
 - Use the ACTUAL ITEM NAMES provided — they describe the specific product. Don't assume generic office equipment.
 - When in doubt, round UP — better to reserve slightly more space than arrive short.
 
-Return ONLY valid JSON: {"pallets": number, "reasoning": "brief explanation of calculation"}
-Number can be decimal (e.g., 0.3 = small items sharing a pallet). Be specific in reasoning.`;
+Return ONLY valid JSON: {"pallets": number, "reasoning": "detailed per-item breakdown"}
+Number can be decimal (e.g., 0.3 = small items sharing a pallet).
+Reasoning MUST show per-item calculation, e.g.: "TV 55\\" x5 = 5 plt (1 per unit, single layer)\\nCard Printer x2 = 0.2 plt (10 fit per pallet)\\nTV Stand x1 = 0.2 plt\\nTotal: 5.4 pallets"
+Use \\n for line breaks in reasoning.`;
   const mapped=P.venueMap[rawVenue]||rawVenue;
   const usr='Estimate total pallet spaces needed for this shipment to '+mapped+':\n\n'+itemList+'\n\nCalculate per item, then sum. Return JSON only.';
   try{
@@ -845,12 +847,27 @@ Number can be decimal (e.g., 0.3 = small items sharing a pallet). Be specific in
     const match=text.match(/\{[\s\S]*?"pallets"\s*:\s*([\d.]+)[\s\S]*?\}/);
     if(match){
       const pallets=parseFloat(match[1]);
-      const reasoning=text.match(/"reasoning"\s*:\s*"([^"]*)"/)?.[1]||'';
+      const reasoning=text.match(/"reasoning"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/)?.[1]||text.replace(/.*\{.*\}.*/s,'').trim()||'';
       if(!P.palletMap)P.palletMap={};
       P.palletMap[rawVenue]=pallets;
-      _faRenderPasteCards();// full rebuild shows updated value
-      if(reasoning)console.log('[FA AI] '+rawVenue+': '+pallets+' plt — '+reasoning);
-    } else alert('AI: '+text);
+      _faRenderPasteCards();
+      // Show reasoning dialog
+      const rv=rawVenue;const mapped=P.venueMap[rv]||rv;
+      const items=grp.map(i=>i.name+' × '+i.qty).join('\n');
+      const h=`<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:var(--sf);border:2px solid #A5F3FC;border-radius:12px;padding:20px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0;font-size:14px;color:#0891B2">🤖 AI Pallet Estimate</h3><button onclick="this.closest('div[style*=position]').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts)">✕</button></div>
+        <div style="font-size:11px;color:var(--ts);margin-bottom:8px">${mapped}</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:12px;background:#ECFEFF;border-radius:8px;border:1px solid #A5F3FC">
+          <span style="font-size:28px;font-weight:800;color:#0891B2;font-family:var(--fm)">${pallets}</span>
+          <span style="font-size:12px;color:#0891B2;font-weight:600">pallets estimated</span>
+        </div>
+        <div style="font-size:11px;color:var(--tp);line-height:1.6;padding:10px;background:var(--bg);border-radius:6px;max-height:200px;overflow-y:auto;white-space:pre-wrap">${reasoning.replace(/\\n/g,'\n')}</div>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+          <button class="mbtn" onclick="this.closest('div[style*=position]').remove()">Close</button>
+        </div>
+      </div>`;
+      const wrap=document.createElement('div');wrap.innerHTML=h;document.body.appendChild(wrap.firstChild);
+    } else alert('AI response:\n'+text);
   }catch(e){alert('AI error: '+e.message)}
   btn.textContent='🤖 Suggest';btn.disabled=false;
 }
