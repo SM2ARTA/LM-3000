@@ -779,7 +779,6 @@ function _faParsePaste(){
   // Group by raw venue, find best match for each
   const rawVenues=[...new Set(items.map(i=>i.venue))];
   const venueOpts=FA_ML3K_VENUES.map(v=>'<option value="'+v.name+'">'+v.name+'</option>').join('');
-  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
 
   let preview='<div style="font-size:11px;margin-bottom:8px"><b>'+items.length+'</b> items across <b>'+rawVenues.length+'</b> venues. Map each venue below:</div>';
 
