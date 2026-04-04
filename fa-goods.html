@@ -840,7 +840,14 @@ function _faConfirmPaste(){
     const mapped=P.venueMap[rv];if(!mapped){skipped+=byVenue[rv].length;continue}
     const bi=P.dateMap[rv]||'';const grp=byVenue[rv];
     const doOvr=P.ovrMap[rv]!==undefined?P.ovrMap[rv]:false;
-    if(doOvr){const skus=new Set(grp.map(i=>i.sku));const b=FA_DEMAND.length;FA_DEMAND=FA_DEMAND.filter(d=>!(d.venue===mapped&&skus.has(d.sku)));overwritten+=b-FA_DEMAND.length}
+    if(doOvr){
+      // Protect demand items in locked groups from overwrite
+      const lockedDemIds=new Set();
+      for(const g of FA_GROUPS){if((g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))){for(const did of g.items||[])lockedDemIds.add(did)}}
+      const skus=new Set(grp.map(i=>i.sku));const b=FA_DEMAND.length;
+      FA_DEMAND=FA_DEMAND.filter(d=>lockedDemIds.has(d.id)||!(d.venue===mapped&&skus.has(d.sku)));
+      overwritten+=b-FA_DEMAND.length;
+    }
     else{const existSet=new Set(FA_DEMAND.filter(d=>d.venue===mapped).map(d=>d.sku));const before=grp.length;grp.splice(0,grp.length,...grp.filter(i=>!existSet.has(i.sku)));skipped+=before-grp.length}
     for(const it of grp){
       const asmKey=rv+'|'+it.sku;const isAsm=!!P.asmMap?.[asmKey];
@@ -1084,6 +1091,8 @@ function FA_grpKitAutoLM(){
 }
 function FA_saveGroupEdit(id){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
+  const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM));
+  if(isLocked){document.getElementById('faModal').innerHTML='';return}// immutable
   g.pallets=parseFloat(document.getElementById('_faGrpPlt').value)||0;
   g.linkedLP=document.getElementById('_faGrpLP').value.trim()||null;
   g.linkedLM=document.getElementById('_faGrpLM').value.trim()||null;
@@ -1180,8 +1189,10 @@ function FA_renderGroups(){
 }
 function FA_setGroupPallets(id,val){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
+  // Locked groups are immutable — may be backing locked LM/LP trucks
+  if((g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM)))return;
   g.pallets=parseFloat(val)||0;
-  g._manualPallets=true;// preserve on NOM update
+  g._manualPallets=true;
   FA_saveGroups();
 }
 function FA_filterGroups(){
