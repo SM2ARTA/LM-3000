@@ -703,8 +703,7 @@ function FA_showPasteDemand(){
     <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0"><h3>📋 Paste Demand</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
     <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-shrink:0;flex-wrap:wrap">
       <span class="form-label" style="font-size:10px">FA Area</span><input type="text" id="_faPasteFa" value="TEC" style="width:80px">
-      <span class="form-label" style="font-size:10px">Default Date</span><input type="date" id="_faPasteDate" value="" style="width:130px">
-      <button class="rbtn" onclick="_faParsePaste()" style="background:var(--cs);color:var(--cy);border-color:#A5F3FC">👁 Preview</button>
+      <button class="mbtn mbtn-primary" onclick="_faParsePaste()" style="padding:6px 16px;font-size:11px">👁 Preview</button>
     </div>
     <div style="display:flex;gap:12px;flex:1;min-height:0">
       <div style="flex:1;display:flex;flex-direction:column;min-width:0">
@@ -726,7 +725,7 @@ function _faParsePaste(){
   const raw=document.getElementById('_faPasteArea').value;
   if(!raw.trim()){document.getElementById('_faPastePreview').innerHTML='<div style="color:var(--tt);padding:20px;text-align:center">Paste data then click Preview.</div>';return}
   const fa=document.getElementById('_faPasteFa').value.trim()||'TEC';
-  const dd=document.getElementById('_faPasteDate').value||'';
+  const dd='';
   const lines=raw.split('\n').map(l=>l.split('\t').map(c=>c.trim()));
   if(!lines.length)return;
   const hdr=lines[0];
@@ -785,7 +784,8 @@ function _faRenderPasteCards(){
     h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><b>"${rv}"</b> <span class="bg bg-gy">${grp.length}</span>`;
     if(mapped){if(nNew)h+=` <span class="bg bg-gn">${nNew} new</span>`;if(nSame)h+=` <span class="bg bg-gy">${nSame} same</span>`;if(nDiff)h+=` <span class="bg bg-pu">${nDiff} qty↕</span>`}
     h+=`</div>`;
-    h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Map to</span><select style="flex:1;font-size:11px" onchange="window._faPaste.venueMap['${e}']=this.value;_faRenderPasteCards()"><option value="">— skip —</option>${opts.replace('value="'+mapped+'"','value="'+mapped+'" selected')}></select></div>`;
+    const dlId='_fpVDL'+rawVenues.indexOf(rv);
+    h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Map to</span><input type="text" list="${dlId}" value="${mapped}" placeholder="— skip —" style="flex:1;font-size:11px;border:1px solid var(--bd);border-radius:4px;padding:4px 6px" onchange="window._faPaste.venueMap['${e}']=this.value;_faRenderPasteCards()" oninput="window._faPaste.venueMap['${e}']=this.value"><datalist id="${dlId}"><option value="">— skip —</option>${opts}</datalist></div>`;
     h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">BI Date</span><input type="date" value="${dt}" style="font-size:11px;font-family:var(--fm)" onchange="window._faPaste.dateMap['${e}']=this.value"></div>`;
     if(hasOld)h+=`<label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer"><input type="checkbox" ${ovr?'checked':''} onchange="window._faPaste.ovrMap['${e}']=this.checked"> Overwrite ${nSame+nDiff} existing</label>`;
     // Per-item pallet calculation from NOM (pq/ps)
