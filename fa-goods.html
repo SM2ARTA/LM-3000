@@ -767,10 +767,10 @@ function _faRenderPasteCards(){
   const P=window._faPaste;if(!P||!P.items.length){document.getElementById('_faPastePreview').innerHTML='<div style="color:var(--tt);text-align:center;padding:20px">No items parsed.</div>';return}
   // Build existing demand lookup: sku|venue → qty
   const exist={};FA_DEMAND.forEach(d=>{exist[d.sku+'|'+d.venue]=d.qty});
-  // Build locked SKU+venue set (items in locked groups)
+  // Build locked SKU+venue set (items in user-locked groups)
   const lockedSV=new Set();
   for(const g of FA_GROUPS){
-    if(!((g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))))continue;
+    if(!g._locked)continue;
     for(const did of g.items||[]){const d=FA_DEMAND.find(x=>x.id===did);if(d)lockedSV.add(d.sku+'|'+d.venue)}
   }
   const rawVenues=[...new Set(P.items.map(i=>i.venue))];
@@ -860,7 +860,7 @@ function _faConfirmPaste(){
     if(doOvr){
       // Protect demand items in locked groups from overwrite
       const lockedDemIds=new Set();
-      for(const g of FA_GROUPS){if((g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))){for(const did of g.items||[])lockedDemIds.add(did)}}
+      for(const g of FA_GROUPS){if(g._locked){for(const did of g.items||[])lockedDemIds.add(did)}}
       const skus=new Set(grp.map(i=>i.sku));const b=FA_DEMAND.length;
       FA_DEMAND=FA_DEMAND.filter(d=>lockedDemIds.has(d.id)||!(d.venue===mapped&&skus.has(d.sku)));
       overwritten+=b-FA_DEMAND.length;
@@ -970,11 +970,9 @@ function _faGroupSku(fa,venue,id){
 
 // Auto-generate groups from demand. Preserves existing locked groups.
 function FA_buildGroups(){
-  // Index locked groups (assigned to locked truck) — these are immutable
+  // Index locked groups (user-locked) — these are immutable
   const lockedGrpIds=new Set();
-  for(const g of FA_GROUPS){
-    if((g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM)))lockedGrpIds.add(g.id);
-  }
+  for(const g of FA_GROUPS){if(g._locked)lockedGrpIds.add(g.id)}
   // Collect demand IDs already in locked groups
   const lockedDemIds=new Set();
   for(const g of FA_GROUPS){if(lockedGrpIds.has(g.id)){for(const did of g.items||[])lockedDemIds.add(did)}}
@@ -1035,7 +1033,7 @@ function FA_regenGroups(){
 // Edit group (pallets + truck assignments)
 function FA_editGroup(id){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
-  const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM));
+  const isLocked=!!g._locked;
   const _fmtD=dt=>{if(!dt)return'';try{return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return dt}};
   const relLP=_faLPTrucksForVenue(g.venue);
   const lpOpts=relLP.map(t=>`<option value="${t.id}">${t.id} · ${_fmtD(t.date)} → ${t.dest}${_faIsLocked(t.id)?' 🔒':''}</option>`).join('');
@@ -1067,7 +1065,10 @@ function FA_editGroup(id){
   compTotal=Math.round(compTotal*100)/100;
   const h=`<div class="modal-ov">
     <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Group: ${g.sku}</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
-    ${isLocked?'<div style="padding:6px 10px;background:var(--gs);border:1px solid #B8DFCA;border-radius:6px;font-size:11px;color:var(--gn);margin-bottom:10px">🔒 This group is locked — assigned truck is dispatched. Data is immutable.</div>':''}
+    <div style="padding:6px 10px;background:${isLocked?'var(--gs)':'var(--bg)'};border:1px solid ${isLocked?'#B8DFCA':'var(--bd)'};border-radius:6px;font-size:11px;color:${isLocked?'var(--gn)':'var(--ts)'};margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" ${isLocked?'checked':''} onchange="FA_toggleGroupLock(${g.id},this.checked)"> <b>${isLocked?'🔒 Locked':'🔓 Unlocked'}</b></label>
+      <span style="font-size:10px">${isLocked?'— immutable to regeneration, overwrite, and pallet recompute':'— click to lock'}</span>
+    </div>
     <div style="padding:6px 0 4px;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Group Info</div>
     <div class="form-row"><span class="form-label">Venue</span><input type="text" value="${g.venue}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
     <div class="form-row"><span class="form-label">FA</span><input type="text" value="${g.fa}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
@@ -1116,6 +1117,13 @@ function FA_grpKitAutoLM(){
   const lmTrucks=_faTrucksForVenue(kit.venue);
   if(lmTrucks.length===1)lmEl.value=lmTrucks[0].id;// auto-fill only if exactly 1 match
 }
+function FA_toggleGroupLock(grpId,checked){
+  const g=FA_GROUPS.find(x=>x.id===grpId);if(!g)return;
+  g._locked=checked||undefined;
+  FA_saveGroups();
+  document.getElementById('faModal').innerHTML='';
+  FA_editGroup(grpId);
+}
 function FA_toggleItemAsm(demId,checked,grpId){
   const d=FA_DEMAND.find(x=>x.id===demId);if(!d)return;
   d._asm=checked||undefined;
@@ -1134,8 +1142,7 @@ function FA_recomputeGrpPlt(grpId){
 }
 function FA_saveGroupEdit(id){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
-  const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM));
-  if(isLocked){document.getElementById('faModal').innerHTML='';return}// immutable
+  if(g._locked){document.getElementById('faModal').innerHTML='';return}// immutable
   g.pallets=parseFloat(document.getElementById('_faGrpPlt').value)||0;
   g.linkedLP=document.getElementById('_faGrpLP').value.trim()||null;
   g.linkedLM=document.getElementById('_faGrpLM').value.trim()||null;
@@ -1169,7 +1176,7 @@ function FA_renderGroups(){
   const totalPlt=Math.round(FA_GROUPS.reduce((s,g)=>s+(g.pallets||0),0)*100)/100;
   const lpAssigned=FA_GROUPS.filter(g=>g.linkedLP).length;
   const lmAssigned=FA_GROUPS.filter(g=>g.linkedLM).length;
-  const locked=FA_GROUPS.filter(g=>(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))).length;
+  const locked=FA_GROUPS.filter(g=>g._locked).length;
   document.getElementById('grpKpis').innerHTML=`
     <div class="kpi"><div class="kl">📐 Groups</div><div class="kv" style="color:var(--cy)">${FA_GROUPS.length}</div></div>
     <div class="kpi"><div class="kl">📦 Total Pallets</div><div class="kv" style="color:var(--ac)">${totalPlt}</div></div>
@@ -1192,16 +1199,16 @@ function FA_renderGroups(){
   const sorted=[...FA_GROUPS].sort((a,b)=>((a.biDate||'9').localeCompare(b.biDate||'9'))||(a.venue||'').localeCompare(b.venue));
   for(const g of sorted){
     const asgn=FA_ASSIGNMENTS[g.id]||{};
-    const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM))||(asgn.lm&&asgn.lm.locked);
+    const isLocked=!!g._locked;
     // LP: manual link or engine assignment
     const lpRef=g.linkedLP||(asgn.lp?asgn.lp.truckId:null);
     const lpIsEngine=!g.linkedLP&&asgn.lp;
-    const lpDisp=lpRef?'<span class="bg" style="background:'+(lpIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'#EFF6FF;color:#2563eb;border:1px solid #BFDBFE')+'">'+lpRef+'</span>'+(g.linkedLP&&_faIsLocked(g.linkedLP)?' 🔒':''):'<span style="color:var(--tt)">—</span>';
+    const lpDisp=lpRef?'<span class="bg" style="background:'+(lpIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'#EFF6FF;color:#2563eb;border:1px solid #BFDBFE')+'">'+lpRef+'</span>':'<span style="color:var(--tt)">—</span>';
     // LM: manual link or engine assignment
     const lmRef=g.linkedLM||(asgn.lm?asgn.lm.truckId:null);
     const lmIsEngine=!g.linkedLM&&asgn.lm;
     const isFaTruck=asgn.lm&&asgn.lm.faTruck;
-    const lmDisp=lmRef?'<span class="bg" style="background:'+(lmIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'var(--ps);color:var(--pu);border:1px solid #D4C5FE')+'">'+lmRef+'</span>'+(isFaTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':'')+(asgn.lm&&asgn.lm.locked?' 🔒':(g.linkedLM&&_faIsLocked(g.linkedLM)?' 🔒':'')):'<span style="color:var(--tt)">—</span>';
+    const lmDisp=lmRef?'<span class="bg" style="background:'+(lmIsEngine?'#ECFEFF;color:#0891B2;border:1px solid #A5F3FC':'var(--ps);color:var(--pu);border:1px solid #D4C5FE')+'">'+lmRef+'</span>'+(isFaTruck?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''):'<span style="color:var(--tt)">—</span>';
     const kitDisp=g.linkedKit?'<span class="bg bg-gn">📦 '+g.linkedKit+'</span>':'<span style="color:var(--tt)">—</span>';
     const hasAsgn=lpRef||lmRef;
     const statusBadge=isLocked?'<span class="bg bg-gn">🔒 Locked</span>':hasAsgn?'<span class="bg bg-cy">On Truck</span>':g.pallets>0?'<span class="bg bg-or">Pallets set</span>':'<span class="bg bg-gy">Open</span>';
@@ -1232,8 +1239,7 @@ function FA_renderGroups(){
 }
 function FA_setGroupPallets(id,val){
   const g=FA_GROUPS.find(x=>x.id===id);if(!g)return;
-  // Locked groups are immutable — may be backing locked LM/LP trucks
-  if((g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM)))return;
+  if(g._locked)return;// locked groups are immutable
   g.pallets=parseFloat(val)||0;
   g._manualPallets=true;
   FA_saveGroups();
@@ -1331,8 +1337,7 @@ async function FA_exportAll(){
       const lpDate=lpT?lpT.date:null;const lmDate=lmT?lmT.date:null;
       const dispatch=lpDate&&lmDate?(lpDate<lmDate?lpDate:lmDate):lpDate||lmDate||'';
       const delivery=lmT?(lmT.biDate||lmT.date):'';
-      const isLocked=(g.linkedLP&&_faIsLocked(g.linkedLP))||(g.linkedLM&&_faIsLocked(g.linkedLM));
-      const status=isLocked?'Locked':g.linkedLP||g.linkedLM?'Assigned':g.pallets>0?'Pallets set':'Open';
+      const status=g._locked?'Locked':(g.linkedLP||g.linkedLM?'Assigned':g.pallets>0?'Pallets set':'Open');
       ws3.addRow({sku:g.sku,venue:g.venue,fa:g.fa,biDate:g.biDate||'',dispatch,delivery,pallets:g.pallets||0,items:(g.items||[]).length,lp:g.linkedLP||'',lm:g.linkedLM||'',kit:g.linkedKit||'',status})
     }
     ws3.views=[{state:'frozen',ySplit:1}];ws3.autoFilter={from:'A1',to:'L1'};
