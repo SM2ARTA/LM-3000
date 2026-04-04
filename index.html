@@ -11409,7 +11409,7 @@ function rTotals(){
   const bar=document.getElementById("totbar");
   if(bar)bar.style.display="flex";
 }
-function rT(){const icons={dashboard:'📊',demand:'📋',fagoods:'📐',trucks:'🚛',holds:'⏸',analysis:'🔍',pallets:'📦'};const labels={dashboard:'dashboard',demand:'demand',fagoods:'FA Goods',trucks:'trucks',holds:'holds',analysis:'analysis',pallets:'Pallets'};document.getElementById("tabs").innerHTML=["dashboard","demand","fagoods","trucks","holds","analysis","pallets"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${labels[t]||t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}${t==='fagoods'&&(LP_FA_GROUPS||[]).length>0?' <span style="background:#ECFEFF;color:#0891B2;font-size:8px;padding:0 4px;border-radius:3px;font-weight:600">'+(LP_FA_GROUPS||[]).length+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
+function rT(){const icons={dashboard:'📊',demand:'📋',fagoods:'📐',trucks:'🚛',forecast:'📋',holds:'⏸',analysis:'🔍',pallets:'📦'};const labels={dashboard:'dashboard',demand:'demand',fagoods:'FA Goods',trucks:'trucks',forecast:'Forecast',holds:'holds',analysis:'analysis',pallets:'Pallets'};document.getElementById("tabs").innerHTML=["dashboard","demand","fagoods","trucks","forecast","holds","analysis","pallets"].map(t=>`<button class="tbtn ${cv===t?'on':''}" onclick="sV('${t}')">${icons[t]} ${labels[t]||t}${t==='holds'&&LM_holds.size>0?' <span style="background:var(--or);color:#fff;font-size:8px;padding:0 4px;border-radius:3px;font-weight:700">'+LM_holds.size+'</span>':''}${t==='fagoods'&&(LP_FA_GROUPS||[]).length>0?' <span style="background:#ECFEFF;color:#0891B2;font-size:8px;padding:0 4px;border-radius:3px;font-weight:600">'+(LP_FA_GROUPS||[]).length+'</span>':''}</button>`).join("");if(typeof lmNavSync==="function")lmNavSync()}
 function B(t,c,s){return`<span class="bg ${s?'bgs':''} bg-${c}">${t}</span>`}
 function PB(v,mx){const p=mx>0?Math.min(100,Math.round(v/mx*100)):0;const c=p>95?"var(--rd)":p>80?"var(--or)":"var(--ac)";return`<div class="bw"><div class="btr"><div class="bfl" style="width:${p}%;background:${c}"></div></div><span class="blb" style="color:${c}">${p}%</span></div>`}
 
@@ -14332,6 +14332,129 @@ function LM_renderFAGoods(el){
   el.innerHTML=html;
 }
 
+// ── LM FORECAST TAB ──
+let _fcCountryFilter='all';// 'all','usa','can','mex'
+function LM_renderForecast(el){
+  if(!Object.keys(PLAN_CACHE).length){el.innerHTML='<div class="lp-empty">No plan data. Generate from Dashboard first.</div>';return}
+  const allRows=[];const _seen=new Set();
+  // Helpers
+  const _weekOf=d=>{const dt=new Date(d+'T12:00:00');const day=dt.getDay();const mon=new Date(dt);mon.setDate(mon.getDate()-((day+6)%7));return mon.toISOString().slice(0,10)};
+  const _weekEnd=ws=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
+  const _fmtWk=d=>{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
+  const _fmtD=d=>{if(!d)return'—';return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})};
+  // Build rows for a label
+  const _addTrucks=(label,P,country,dispLocOverride)=>{
+    if(!P||!P.allT)return;
+    let firstBI=CLUSTERS[label]?.earlyBI?dk(CLUSTERS[label].earlyBI):null;
+    if(!firstBI){const vn=VN.find(v=>v.name===label);if(vn&&vn.bi)firstBI=dk(vn.bi)}
+    if(!firstBI&&P.bi)firstBI=P.bi;
+    const _hasCort=(()=>{if(CORT_CACHE[label])return true;const clV=CLUSTERS[label]?.venues;if(clV)for(const v of clV){if(CORT_CACHE[v])return true}return false})();
+    const _vt=LM_vtMap[label]||(CLUSTERS[label]?.venues?.[0]?LM_vtMap[CLUSTERS[label].venues[0]]:'');
+    const _dispLoc=dispLocOverride||(LM_isLPFed(label)?'LP Warehouse':'Dallas');
+    const _clLabel=CLUSTERS[label]?clDisp(label):'';
+    const _lpA=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
+    const _isStd=isStadium(label)||(CLUSTERS[label]?.venues?.some(v=>isStadium(v)));
+    const vtype=CLUSTERS[label]?'cluster':(_isStd?'stadium':'other');
+    for(const t of P.allT){
+      if(LM_excluded.has(t.id)||_seen.has(t.id))continue;if(!t.dd)continue;_seen.add(t.id);
+      let fnKits=0,osKits=0,plt=0,asmCount=0,lateCount=0;const _ns=[];
+      for(const it of t.items){plt+=(it.loadPlt||0);if(it.sku.startsWith('FNKIT'))fnKits++;else if(it.sku.startsWith('OSKIT'))osKits++;const n=NOM[it.sku];if(n&&!n._kitNom&&LM_isAssembled(it.sku,_vt,country))asmCount++;const src=(n?.src||'').toUpperCase();if(!src.startsWith('STP')&&!src.startsWith('CT'))_ns.push(it)}
+      plt=Math.round(plt*10)/10;
+      const disp=t.dd;
+      if(_lpA.length&&disp&&Object.keys(LP_ARRIVAL_MAP).length){lateCount=_ns.filter(it=>!LM_kitArrivedOnTime(it.sku,_lpA,disp)).length}else if(STOCK_SKUS.size>0){lateCount=_ns.filter(it=>!LM_kitInStock(it.sku)).length}
+      const tl=label;const _dalDirect=tl==='Dallas Stadium'||tl==='International Broadcast Centre'||vcIsIBC(tl);
+      const transit=gLT(tl)+(LM_isLPFed(tl)||_dalDirect?0:gLT2(tl));
+      const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
+      const tBI=t.origBiK||t.biK||firstBI||null;
+      const buffer=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
+      const cargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
+      const _lsr=LM_getLsr(t);const _fa=_faMatchTruck(t.id,clDisp(label),_lsr);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
+      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:(_fa?.count||0)+_faEng,faTruck:!!t._faTruck});
+    }
+  };
+  // USA trucks
+  for(const cl in CLUSTERS){if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;_addTrucks(cl,PLAN_CACHE[cl],'USA')}
+  VN.filter(v=>isStadium(v.name)&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>_addTrucks(v.name,PLAN_CACHE[v.name],'USA'));
+  VN.filter(v=>!isStadium(v.name)&&(!v.cluster||vcIsRegion(v.cluster))&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>_addTrucks(v.name,PLAN_CACHE[v.name],'USA'));
+  // CAN trucks
+  VN.filter(v=>vcIsCAN(v.cluster)).forEach(v=>{const _cl=(v.cluster||'').replace(/^CAN\s*/i,'').split(/\s*\/\s*/)[0].trim();_addTrucks(v.name,PLAN_CACHE[v.name],'CAN',_cl?_cl+' Warehouse':'Canada Warehouse')});
+  // MEX trucks
+  VN.filter(v=>vcIsMEX(v.cluster)).forEach(v=>{const _cl=(v.cluster||'').replace(/^MEX\s*/i,'').split(/\s*\/\s*/)[0].trim();_addTrucks(v.name,PLAN_CACHE[v.name],'MEX',_cl?_cl+' Warehouse':'Mexico Warehouse')});
+  allRows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
+  // Apply country filter
+  const filtered=_fcCountryFilter==='all'?allRows:allRows.filter(r=>r.country===_fcCountryFilter.toUpperCase());
+  // KPIs
+  const totalT=filtered.length,totalPlt=filtered.reduce((s,r)=>s+r.plt,0);
+  const totalFn=filtered.reduce((s,r)=>s+r.fnKits,0),totalOs=filtered.reduce((s,r)=>s+r.osKits,0);
+  const totalAsm=filtered.reduce((s,r)=>s+(r.asmCount||0),0),totalLate=filtered.reduce((s,r)=>s+(r.lateCount||0),0);
+  const cntUSA=allRows.filter(r=>r.country==='USA').length,cntCAN=allRows.filter(r=>r.country==='CAN').length,cntMEX=allRows.filter(r=>r.country==='MEX').length;
+  // Country chip builder
+  const _cChip=(id,label,cnt,flag)=>{const on=_fcCountryFilter===id;return`<button onclick="_fcCountryFilter='${id}';LM_renderForecast(document.getElementById('mn'))" style="padding:4px 14px;border-radius:16px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`};
+  let h='<div class="fin" style="padding:16px">';
+  h+=`<h2 style="font-size:16px;font-weight:700;margin:0 0 4px">📋 LM Truck Forecast</h2>`;
+  h+=`<p style="font-size:10px;color:var(--tt);margin:0 0 12px">All LM trucks across all countries — grouped by dispatch week</p>`;
+  // Country chips
+  h+=`<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">`;
+  h+=_cChip('all','All',allRows.length,'🌍');
+  if(cntUSA)h+=_cChip('usa','USA',cntUSA,'🇺🇸');
+  if(cntCAN)h+=_cChip('can','Canada',cntCAN,'🇨🇦');
+  if(cntMEX)h+=_cChip('mex','Mexico',cntMEX,'🇲🇽');
+  h+=`</div>`;
+  // KPI summary
+  h+=`<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center">`;
+  h+=`<span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${totalT} trucks</span>`;
+  h+=`<span class="bg bgs bg-gy">${Math.round(totalPlt)} plt</span>`;
+  if(totalFn)h+=`<span class="bg bgs" style="background:var(--gs);color:var(--gn)">${totalFn} FF&E kits</span>`;
+  if(totalOs)h+=`<span class="bg bgs" style="background:var(--os);color:var(--or)">${totalOs} STP kits</span>`;
+  if(totalAsm)h+=`<span class="bg bgs bg-pu">🔧 ${totalAsm} asm</span>`;
+  if(totalLate)h+=`<span class="bg bgs bg-rd">⚠ ${totalLate} late</span>`;
+  h+=`</div>`;
+  if(!filtered.length){h+='<div class="emp">No trucks for selected country.</div></div>';el.innerHTML=h;return}
+  // Group by week
+  const byWeek={};for(const r of filtered){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
+  const weeks=Object.keys(byWeek).sort();
+  for(const wk of weeks){
+    const rows=byWeek[wk];
+    const wP=rows.reduce((s,r)=>s+r.plt,0),wFn=rows.reduce((s,r)=>s+r.fnKits,0),wOs=rows.reduce((s,r)=>s+r.osKits,0),wAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0),wLate=rows.reduce((s,r)=>s+(r.lateCount||0),0);
+    const wStp=rows.filter(r=>r.isCort).length;
+    h+=`<div style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:11px;font-weight:700;color:var(--tp);border:1px solid var(--bd)">
+      <span>📅 ${_fmtWk(wk)} — ${_fmtWk(_weekEnd(wk))}</span>
+      <span class="bg bgs bg-bl" style="font-weight:600">${rows.length} trucks</span>
+      <span class="bg bgs bg-gy">${Math.round(wP*10)/10} plt</span>
+      ${wFn?'<span class="bg bgs bg-gn">'+wFn+' FF&E</span>':''}
+      ${wOs?'<span class="bg bgs bg-or">'+wOs+' STP</span>':''}
+      ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
+      ${wLate?'<span class="bg bgs bg-rd">⚠ '+wLate+' late</span>':''}
+    </div>
+    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th></tr></thead><tbody>`;
+    for(const r of rows){
+      const bufColor=r.buffer!=null?(r.buffer>=7?'var(--gn)':r.buffer>=3?'var(--or)':'var(--rd)'):'var(--tt)';
+      h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
+        <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
+        <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':''}</td>
+        <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
+        <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
+        <td>${_fmtD(r.disp)}</td>
+        <td class="mono" style="text-align:center">${r.transit}d</td>
+        <td style="color:var(--gn);font-weight:600">${_fmtD(r.arrDate)}</td>
+        <td style="font-weight:600">${_fmtD(r.firstBI)}</td>
+        <td style="text-align:center;font-weight:700;color:${bufColor}">${r.buffer!=null?r.buffer+'d':'—'}</td>
+        <td class="mono" style="text-align:right">${r.plt}</td>
+        <td style="text-align:center">${r.fnKits||'—'}</td>
+        <td style="text-align:center">${r.osKits||'—'}</td>
+        <td style="text-align:center;color:var(--pu);font-weight:600">${r.asmCount>0?'🔧 '+r.asmCount:'—'}</td>
+        <td class="mono" style="text-align:right;color:var(--pu);font-weight:600">${r.cargo>0?'$'+Math.round(r.cargo).toLocaleString():'—'}</td>
+        <td style="text-align:center;font-weight:600;color:${r.faCount>0?'#0891B2':'var(--tt)'}">${r.faCount>0?'📦 '+r.faCount:'—'}</td>
+        <td style="text-align:center;font-weight:600;color:${r.lateCount>0?'var(--rd)':'var(--tt)'}">${r.lateCount>0?'⚠ '+r.lateCount:'—'}</td>
+      </tr>`;
+    }
+    h+=`</tbody></table></div>`;
+  }
+  h+=`</div>`;
+  el.innerHTML=h;
+}
+
 // ── LM DEMAND TAB ──
 function LM_renderDemand(el){
   if(!RW.length){el.innerHTML='<div class="lp-empty">No demand data loaded.</div>';return}
@@ -14857,6 +14980,9 @@ if(cv==="fagoods"){LM_renderFAGoods(el);return}
 
 // ── DEMAND VIEW ──
 if(cv==="demand"){LM_renderDemand(el);return}
+
+// ── FORECAST VIEW ──
+if(cv==="forecast"){LM_renderForecast(el);return}
 
 // ── DASHBOARD VIEW ──
 if(cv==="dashboard"){
@@ -15643,238 +15769,6 @@ if(cv==="dashboard"){
     }
   }
 
-  // ── USA LM Truck Forecast (All Venues only) ──
-  if(!isFiltered&&!isRegion&&!isClusterOv){
-    // Gather ALL USA LM trucks: clusters, stadiums, and individual venues
-    const _cortFcRows=[];
-    const _fcSeen=new Set();// track truck IDs to avoid duplicates
-    // Helper: add trucks from a PLAN_CACHE entry
-    const _fcAddTrucks=(label,P,transitLabel)=>{
-      if(!P||!P.allT)return;
-      // First bump-in: from CLUSTERS if cluster, else from VN or PLAN_CACHE
-      let firstBI=CLUSTERS[label]?.earlyBI?dk(CLUSTERS[label].earlyBI):null;
-      if(!firstBI){const vn=VN.find(v=>v.name===label);if(vn&&vn.bi)firstBI=dk(vn.bi)}
-      if(!firstBI&&P.bi)firstBI=P.bi;
-      // CORT detection: cluster has CORT if any member venue has CORT deliveries
-      const _hasCort=(()=>{if(CORT_CACHE[label])return true;const clV=CLUSTERS[label]?.venues;if(clV)for(const v of clV){if(CORT_CACHE[v])return true}return false})();
-      // Venue type + country for assembly detection
-      const _fcVt=LM_vtMap[label]||(CLUSTERS[label]?.venues?.[0]?LM_vtMap[CLUSTERS[label].venues[0]]:'');
-      const _fcCountry='USA';
-      // Dispatch location: LP-fed → "LP Warehouse", everything else → "Dallas"
-      const _fcDispLoc=LM_isLPFed(label)?'LP Warehouse':'Dallas';
-      // Cluster label for CORT destinations
-      const _fcClusterLabel=CLUSTERS[label]?clDisp(label):'';
-      // LP abbreviations for arrival checking
-      const _fcLpAbbrs=LM_isLPFed(label)?LM_getLPDestAbbrs(label):[];
-      for(const t of P.allT){
-        if(LM_excluded.has(t.id)||_fcSeen.has(t.id))continue;
-        if(!t.dd)continue;
-        _fcSeen.add(t.id);
-        let fnKits=0,osKits=0,plt=0,asmCount=0,lateCount=0;
-        const _nonStp=[];
-        for(const it of t.items){
-          plt+=(it.loadPlt||0);
-          if(it.sku.startsWith('FNKIT'))fnKits++;
-          else if(it.sku.startsWith('OSKIT'))osKits++;
-          const n=NOM[it.sku];
-          if(n&&!n._kitNom&&LM_isAssembled(it.sku,_fcVt,_fcCountry))asmCount++;
-          // Track non-STP items for late check
-          const src=(n?.src||'').toUpperCase();
-          if(!src.startsWith('STP')&&!src.startsWith('CT'))_nonStp.push(it);
-        }
-        plt=Math.round(plt*10)/10;
-        const disp=t.dd;
-        // Late count: items not arrived by dispatch date
-        if(_fcLpAbbrs.length&&disp&&Object.keys(LP_ARRIVAL_MAP).length){
-          lateCount=_nonStp.filter(it=>!LM_kitArrivedOnTime(it.sku,_fcLpAbbrs,disp)).length;
-        }else if(STOCK_SKUS.size>0){
-          lateCount=_nonStp.filter(it=>!LM_kitInStock(it.sku)).length;
-        }
-        const tl=transitLabel||label;
-        const _fcDalDirect=tl==='Dallas Stadium'||tl==='International Broadcast Centre'||vcIsIBC(tl);
-        const transit=gLT(tl)+(LM_isLPFed(tl)||_fcDalDirect?0:gLT2(tl));
-        const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
-        const daysAtCort=firstBI&&arrDate?Math.round((new Date(firstBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
-        const _fcCargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
-        const _fcLsr=LM_getLsr(t);const _fcFa=_faMatchTruck(t.id,clDisp(label),_fcLsr);const _fcFaEng=t.items?t.items.filter(i=>i._fa).length:0;
-        _cortFcRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI,daysAtCort,lsr:_fcLsr,isCort:_hasCort,asmCount,dispLoc:_fcDispLoc,clusterLabel:_fcClusterLabel,lateCount,vtype:window._fcVtype||'other',cargo:_fcCargo,faCount:(_fcFa?.count||0)+_fcFaEng,faTruck:!!t._faTruck});
-      }
-    };
-    // 1. USA cluster trucks (Step A)
-    window._fcVtype='cluster';
-    for(const cl in CLUSTERS){
-      if(vcIsCAN(cl)||vcIsMEX(cl)||vcIsRegion(cl))continue;
-      _fcAddTrucks(cl,PLAN_CACHE[cl]);
-    }
-    // 2. USA stadium/IBC trucks
-    window._fcVtype='stadium';
-    VN.filter(v=>isStadium(v.name)&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
-      _fcAddTrucks(v.name,PLAN_CACHE[v.name]);
-    });
-    // 3. USA individual non-stadium venues (Step C — no cluster or region cluster)
-    window._fcVtype='other';
-    VN.filter(v=>!isStadium(v.name)&&(!v.cluster||vcIsRegion(v.cluster))&&!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).forEach(v=>{
-      _fcAddTrucks(v.name,PLAN_CACHE[v.name]);
-    });
-    window._fcVtype=null;
-    if(_cortFcRows.length>0){
-      _cortFcRows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
-      // Group by ISO week
-      const _weekOf=d=>{const dt=new Date(d+'T12:00:00');const day=dt.getDay();const mon=new Date(dt);mon.setDate(mon.getDate()-((day+6)%7));return mon.toISOString().slice(0,10)};
-      const _weekEnd=ws=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
-      const _fmtWk=d=>{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
-      const byWeek={};
-      for(const r of _cortFcRows){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
-      const weeks=Object.keys(byWeek).sort();
-      const totalTrucks=_cortFcRows.length;const totalPlt=_cortFcRows.reduce((s,r)=>s+r.plt,0);
-      const totalFn=_cortFcRows.reduce((s,r)=>s+r.fnKits,0);const totalOs=_cortFcRows.reduce((s,r)=>s+r.osKits,0);
-      const totalAsm=_cortFcRows.reduce((s,r)=>s+(r.asmCount||0),0);const totalLate=_cortFcRows.reduce((s,r)=>s+(r.lateCount||0),0);
-      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">🚛 USA LM Truck Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${totalTrucks} trucks</span> <span class="bg bgs bg-gy">${Math.round(totalPlt)} plt</span> <span class="bg bgs" style="background:var(--gs);color:var(--gn)">${totalFn} FF&E kits</span> <span class="bg bgs" style="background:var(--os);color:var(--or)">${totalOs} STP kits</span>${totalAsm?` <span class="bg bgs" style="background:var(--ps);color:var(--pu)">🔧 ${totalAsm} asm</span>`:''}${totalLate?` <span class="bg bgs bg-rd">⚠ ${totalLate} late</span>`:''}</summary>
-      <p style="font-size:10px;color:var(--tt);margin:0 0 4px">All USA LM trucks (clusters, stadiums, individual venues) — grouped by dispatch week</p>`;
-      // Filter chips
-      const _fcTypes={cluster:0,stadium:0,other:0};_cortFcRows.forEach(r=>_fcTypes[r.vtype]=((_fcTypes[r.vtype])||0)+1);
-      if(!window._usaFcFilter)window._usaFcFilter='all';
-      if(!window._usaFcApply)window._usaFcApply=function(id,btn){window._usaFcFilter=id;document.querySelectorAll('.ufc-wk').forEach(el=>{el.style.display=(id==='all'||el.dataset.vtype===id)?'':'none'});document.querySelectorAll('.ufc-chip').forEach(b=>{b.style.borderColor='var(--bd)';b.style.background='#fff';b.style.color='var(--ts)'});btn.style.borderColor='var(--ac)';btn.style.background='var(--as)';btn.style.color='var(--ac)'};
-      const _fcChip=(id,label,cnt)=>`<button onclick="event.stopPropagation();_usaFcApply('${id}',this)" class="ufc-chip" style="padding:3px 10px;border-radius:12px;border:1px solid ${window._usaFcFilter===id?'var(--ac)':'var(--bd)'};background:${window._usaFcFilter===id?'var(--as)':'#fff'};color:${window._usaFcFilter===id?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`;
-      h+=`<div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
-        ${_fcChip('all','All',_cortFcRows.length)}
-        ${_fcTypes.cluster?_fcChip('cluster','Clusters',_fcTypes.cluster):''}
-        ${_fcTypes.stadium?_fcChip('stadium','Stadiums',_fcTypes.stadium):''}
-        ${_fcTypes.other?_fcChip('other','Other',_fcTypes.other):''}
-      </div>`;
-      for(const wk of weeks){
-        const rows=byWeek[wk];
-        const wkPlt=rows.reduce((s,r)=>s+r.plt,0);const wkFn=rows.reduce((s,r)=>s+r.fnKits,0);const wkOs=rows.reduce((s,r)=>s+r.osKits,0);const wkAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0);const wkLate=rows.reduce((s,r)=>s+(r.lateCount||0),0);
-        h+=`<div style="margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:11px;font-weight:700;color:var(--tp);border:1px solid var(--bd)">
-          <span>📅 ${_fmtWk(wk)} — ${_fmtWk(_weekEnd(wk))}</span>
-          <span class="bg bgs bg-bl" style="font-weight:600">${rows.length} trucks</span>
-          <span class="bg bgs bg-gy">${Math.round(wkPlt*10)/10} plt</span>
-          ${wkFn?'<span class="bg bgs bg-gn">'+wkFn+' FF&E</span>':''}
-          ${wkOs?'<span class="bg bgs bg-or">'+wkOs+' STP</span>':''}
-          ${wkAsm?'<span class="bg bgs bg-pu">🔧 '+wkAsm+' asm</span>':''}
-          ${wkLate?'<span class="bg bgs bg-rd">⚠ '+wkLate+' late</span>':''}
-        </div>
-        <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th></tr></thead><tbody>`;
-        for(const r of rows){
-          const dd=new Date(r.disp+'T12:00:00');const ad=new Date(r.arrDate+'T12:00:00');
-          const dStr=dd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-          const aStr=ad.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-          const biStr=r.firstBI?new Date(r.firstBI+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'—';
-          const dacColor=r.daysAtCort!=null?(r.daysAtCort>=7?'var(--gn)':r.daysAtCort>=3?'var(--or)':'var(--rd)'):'var(--tt)';
-          const _fcHide=window._usaFcFilter&&window._usaFcFilter!=='all'&&r.vtype!==window._usaFcFilter;
-          h+=`<tr class="ufc-wk" data-vtype="${r.vtype}"${_fcHide?' style="display:none"':r.dispatched?' style="background:var(--gs)"':''}>
-            <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
-            <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':''}</td>
-            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
-            <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
-            <td>${dStr}</td>
-            <td class="mono" style="text-align:center">${r.transit}d</td>
-            <td style="color:var(--gn);font-weight:600">${aStr}</td>
-            <td style="font-weight:600">${biStr}</td>
-            <td style="text-align:center;font-weight:700;color:${dacColor}">${r.daysAtCort!=null?r.daysAtCort+'d':'—'}</td>
-            <td class="mono" style="text-align:right">${r.plt}</td>
-            <td style="text-align:center">${r.fnKits||'—'}</td>
-            <td style="text-align:center">${r.osKits||'—'}</td>
-            <td style="text-align:center;color:var(--pu);font-weight:600">${r.asmCount>0?'🔧 '+r.asmCount:'—'}</td>
-            <td class="mono" style="text-align:right;color:var(--pu);font-weight:600">${r.cargo>0?'$'+Math.round(r.cargo).toLocaleString():'—'}</td>
-            <td style="text-align:center;font-weight:600;color:${r.faCount>0?'#0891B2':'var(--tt)'}">${r.faCount>0?'📦 '+r.faCount:'—'}</td>
-            <td style="text-align:center;font-weight:600;color:${r.lateCount>0?'var(--rd)':'var(--tt)'}">${r.lateCount>0?'⚠ '+r.lateCount:'—'}</td>
-          </tr>`;
-        }
-        h+=`</tbody></table></div>`;
-      }
-      h+=`</details>`;
-    }
-  }
-
-  // ── CAN / MEX LM Truck Forecasts (region overview OR All Venues) ──
-  if(!isFiltered&&!isClusterOv){
-    const _intlFc=(country,flag,filterFn)=>{
-      const _rows=[];const _seen=new Set();
-      VN.filter(v=>filterFn(v.cluster)).forEach(v=>{
-        const P=PLAN_CACHE[v.name];if(!P||!P.allT)return;
-        const vt=LM_vtMap[v.name]||'';
-        const _lpA=LM_isLPFed(v.name)?LM_getLPDestAbbrs(v.name):[];
-        // Dispatch location: derive city from cluster name (e.g., "CAN Toronto" → "Toronto Warehouse")
-        const _clCity=(v.cluster||'').replace(/^(CAN|MEX)\s*/i,'').split(/\s*\/\s*/)[0].trim();
-        const _dispLoc=_clCity?_clCity+' Warehouse':country+' Warehouse';
-        for(const t of P.allT){
-          if(LM_excluded.has(t.id)||_seen.has(t.id))continue;if(!t.dd)continue;_seen.add(t.id);
-          let fnKits=0,osKits=0,plt=0,asmCount=0,lateCount=0;
-          const _ns=[];
-          for(const it of t.items){plt+=(it.loadPlt||0);if(it.sku.startsWith('FNKIT'))fnKits++;else if(it.sku.startsWith('OSKIT'))osKits++;const n=NOM[it.sku];if(n&&!n._kitNom&&LM_isAssembled(it.sku,vt,country))asmCount++;const src=(n?.src||'').toUpperCase();if(!src.startsWith('STP')&&!src.startsWith('CT'))_ns.push(it)}
-          plt=Math.round(plt*10)/10;
-          const disp=t.dd;const transit=gLT(v.name);
-          if(_lpA.length&&disp&&Object.keys(LP_ARRIVAL_MAP).length){lateCount=_ns.filter(it=>!LM_kitArrivedOnTime(it.sku,_lpA,disp)).length}else if(STOCK_SKUS.size>0){lateCount=_ns.filter(it=>!LM_kitInStock(it.sku)).length}
-          const arrDate=LP_addDays?LP_addDays(disp,transit):disp;
-          // Per-truck bump-in (from truck data, not venue-level)
-          const tBI=t.origBiK||t.biK||null;
-          const daysBeforeBI=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
-          const _fcCargo2=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
-          const _fcLsr2=LM_getLsr(t);const _fcFa2=_faMatchTruck(t.id,v.name,_fcLsr2);const _fcFaEng2=t.items?t.items.filter(i=>i._fa).length:0;
-          _rows.push({dest:v.name,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,daysBeforeBI,lsr:_fcLsr2,asmCount,lateCount,dispLoc:_dispLoc,cargo:_fcCargo2,faCount:(_fcFa2?.count||0)+_fcFaEng2,faTruck:!!t._faTruck});
-        }
-      });
-      if(!_rows.length)return;
-      _rows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
-      const _weekOf=d=>{const dt=new Date(d+'T12:00:00');const day=dt.getDay();const mon=new Date(dt);mon.setDate(mon.getDate()-((day+6)%7));return mon.toISOString().slice(0,10)};
-      const _weekEnd=ws=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
-      const _fmtWk=d=>{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
-      const byWeek={};for(const r of _rows){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
-      const weeks=Object.keys(byWeek).sort();
-      const tT=_rows.length,tP=_rows.reduce((s,r)=>s+r.plt,0),tFn=_rows.reduce((s,r)=>s+r.fnKits,0),tOs=_rows.reduce((s,r)=>s+r.osKits,0),tAsm=_rows.reduce((s,r)=>s+(r.asmCount||0),0),tLate=_rows.reduce((s,r)=>s+(r.lateCount||0),0);
-      h+=`<details class="csf fin" style="margin-top:16px"><summary class="sti" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px">${flag} ${country} LM Truck Forecast <span class="bg bgs" style="background:#FFF8F8;color:#E31837;border:1px solid #F5C6C7">${tT} trucks</span> <span class="bg bgs bg-gy">${Math.round(tP)} plt</span> ${tFn?'<span class="bg bgs" style="background:var(--gs);color:var(--gn)">'+tFn+' FF&E kits</span>':''}${tOs?' <span class="bg bgs" style="background:var(--os);color:var(--or)">'+tOs+' STP kits</span>':''}${tAsm?' <span class="bg bgs bg-pu">🔧 '+tAsm+' asm</span>':''}${tLate?' <span class="bg bgs bg-rd">⚠ '+tLate+' late</span>':''}</summary>
-      <p style="font-size:10px;color:var(--tt);margin:0 0 8px">All ${country} LM trucks — grouped by dispatch week</p>`;
-      for(const wk of weeks){
-        const rows=byWeek[wk];
-        const wP=rows.reduce((s,r)=>s+r.plt,0),wFn=rows.reduce((s,r)=>s+r.fnKits,0),wOs=rows.reduce((s,r)=>s+r.osKits,0),wAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0),wLate=rows.reduce((s,r)=>s+(r.lateCount||0),0);
-        h+=`<div style="margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:11px;font-weight:700;color:var(--tp);border:1px solid var(--bd)">
-          <span>📅 ${_fmtWk(wk)} — ${_fmtWk(_weekEnd(wk))}</span>
-          <span class="bg bgs bg-bl" style="font-weight:600">${rows.length} trucks</span>
-          <span class="bg bgs bg-gy">${Math.round(wP*10)/10} plt</span>
-          ${wFn?'<span class="bg bgs bg-gn">'+wFn+' FF&E</span>':''}
-          ${wOs?'<span class="bg bgs bg-or">'+wOs+' STP</span>':''}
-          ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
-          ${wLate?'<span class="bg bgs bg-rd">⚠ '+wLate+' late</span>':''}
-        </div>
-        <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th></tr></thead><tbody>`;
-        for(const r of rows){
-          const dd=new Date(r.disp+'T12:00:00'),ad=new Date(r.arrDate+'T12:00:00');
-          const dStr=dd.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-          const aStr=ad.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-          const biStr=r.firstBI?new Date(r.firstBI+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'—';
-          const bufColor=r.daysBeforeBI!=null?(r.daysBeforeBI>=7?'var(--gn)':r.daysBeforeBI>=3?'var(--or)':'var(--rd)'):'var(--tt)';
-          h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
-            <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
-            <td style="font-size:11px;font-weight:600">${r.dest}</td>
-            <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
-            <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
-            <td>${dStr}</td>
-            <td class="mono" style="text-align:center">${r.transit}d</td>
-            <td style="color:var(--gn);font-weight:600">${aStr}</td>
-            <td style="font-weight:600">${biStr}</td>
-            <td style="text-align:center;font-weight:700;color:${bufColor}">${r.daysBeforeBI!=null?r.daysBeforeBI+'d':'—'}</td>
-            <td class="mono" style="text-align:right">${r.plt}</td>
-            <td style="text-align:center">${r.fnKits||'—'}</td>
-            <td style="text-align:center">${r.osKits||'—'}</td>
-            <td style="text-align:center;color:var(--pu);font-weight:600">${r.asmCount>0?'🔧 '+r.asmCount:'—'}</td>
-            <td class="mono" style="text-align:right;color:var(--pu);font-weight:600">${r.cargo>0?'$'+Math.round(r.cargo).toLocaleString():'—'}</td>
-            <td style="text-align:center;font-weight:600;color:${r.faCount>0?'#0891B2':'var(--tt)'}">${r.faCount>0?'📦 '+r.faCount:'—'}</td>
-            <td style="text-align:center;font-weight:600;color:${r.lateCount>0?'var(--rd)':'var(--tt)'}">${r.lateCount>0?'⚠ '+r.lateCount:'—'}</td>
-          </tr>`;
-        }
-        h+=`</tbody></table></div>`;
-      }
-      h+=`</details>`;
-    };
-    // CAN forecast — Canada Overview only
-    if(isRegion&&regionCat==='can')_intlFc('Canada','🇨🇦',cl=>vcIsCAN(cl));
-    // MEX forecast — Mexico Overview only
-    if(isRegion&&regionCat==='mex')_intlFc('Mexico','🇲🇽',cl=>vcIsMEX(cl));
-  }
-
   // ── Venue/Cluster summary ──
   _dashCalMap=calMap;// save for day-detail popup
   // Save filter context so showDayDetail only shows trucks for current view
@@ -15899,7 +15793,7 @@ if(cv==="dashboard"){
 }
 
 if(!sel||(sel&&(sel.startsWith('__region_')||sel.startsWith('__cluster_')))){
-  if(cv!=="dashboard"){
+  if(cv!=="dashboard"&&cv!=="forecast"){
     if(sel&&(sel.startsWith('__region_')||sel.startsWith('__cluster_'))){cv="dashboard";rT();rMain();return}
     // Auto-select first venue for non-dashboard views
     if(VN.length>0){sel=VN[0].name;rVL()}
