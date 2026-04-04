@@ -862,7 +862,7 @@ function _faConfirmPaste(){
     FA_NOM[sku].ps=psOvr[sku];FA_NOM[sku]._manual=true;nomChanged=true;
   }
   window._faPaste=null;document.getElementById('faModal').innerHTML='';
-  if(nomChanged)FA_saveNom();
+  if(nomChanged){_faNomCache=null;FA_sbWrite('fa-nom',FA_NOM).catch(e=>console.warn('FA NOM save:',e))}
   FA_saveDebounced();FA_render();
   console.log('[FA] Paste: added '+added+', overwritten '+overwritten+', skipped '+skipped);
 }
