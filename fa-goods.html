@@ -876,8 +876,7 @@ RULES:
         const totalMatch=reasoning.match(/TOTAL[^=]*=\s*([\d.]+)/i)||reasoning.match(/=\s*([\d.]+)\s*pallet/i);
         if(totalMatch){const v=parseFloat(totalMatch[1]);if(v>0&&v!==pallets){console.log('[FA AI] Correcting from',pallets,'to',v);pallets=v}}
       }
-      else{
-        // Fallback: extract everything after pallets line
+      if(!reasoning){
         const afterPallets=text.split(/"pallets"[^,}]+/)[1]||'';
         reasoning=afterPallets.replace(/[{}",]/g,' ').replace(/reasoning\s*:/gi,'').trim();
       }
