@@ -6055,7 +6055,7 @@ function LP_computeLateArrivals(){
   if(typeof PLAN_CACHE!=='undefined'&&typeof build==='function'&&typeof LM_getLPDestAbbrs==='function'){
     for(const v of (VN||[])){
       if(!LM_getLPDestAbbrs(v.name).length)continue;
-      if(!PLAN_CACHE[v.name])try{window._lmBuildLockedDemand=(window._lmLockedDemandByLabel||{})[v.name]||{};PLAN_CACHE[v.name]=build(v.name)}catch(e){}
+      if(!PLAN_CACHE[v.name])try{window._lmBuildLockedDemand=(window._lmLockedDemandByLabel||{})[v.name]||{};PLAN_CACHE[v.name]=build(v.name);_lmInjectLockedIntoCache(v.name)}catch(e){}
     }
     LM_applyDateOverrides();// apply any manual LM date overrides to freshly built cache
   }
@@ -10613,6 +10613,25 @@ function vcIsRegion(cl){return cl&&/\b(RGS|RGN|RGE|RGW|RGC)\b/i.test(cl);}
 // ── GLOBAL NUMBERING: build all venues once, assign T-xxx and C-xxx globally ──
 let PLAN_CACHE={};// venue/cluster name -> build result
 let CORT_CACHE={};// venue name -> cortDeliveries (with global C-N IDs)
+// ── IMMUTABILITY HARDENING: inject locked snapshots into a PLAN_CACHE entry built outside numberAll() ──
+// Used by lazy build paths (LP late arrivals, venue detail render) to ensure locked trucks
+// aren't lost when PLAN_CACHE[label] is rebuilt directly via build() instead of numberAll().
+function _lmInjectLockedIntoCache(label){
+  const P=PLAN_CACHE[label];if(!P)return;
+  for(const fp in LM_lockedSnapshots){
+    if(!LM_dispatched.has(fp))continue;
+    const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
+    if((snap.destLabel||'')!==label)continue;
+    // Check if already injected (avoid duplicates on repeat calls)
+    if(P.allT&&P.allT.some(t=>t._locked&&LM_fp(t)===fp))continue;
+    const trk=JSON.parse(JSON.stringify(snap));
+    trk._locked=true;
+    const dateOvr=LM_dateOverrides[fp];
+    if(dateOvr){trk.dd=dateOvr;trk.dKey=dateOvr}
+    if(!P.allT)P.allT=[];
+    P.allT.push(trk);
+  }
+}
 function numberAll(){
   PLAN_CACHE={};
   CORT_CACHE={};
@@ -10623,8 +10642,8 @@ function numberAll(){
   // ── Locked truck protection: compute demand deductions from snapshots ──
   // Locked trucks are NOT rebuilt — their snapshot data is injected after build.
   // build() deducts locked demand from pool so unlocked trucks get remaining demand only.
-  // Clean up orphaned snapshots (not in LM_dispatched)
-  for(const fp in LM_lockedSnapshots){if(!LM_dispatched.has(fp)){console.warn('[numberAll] Removing orphaned snapshot:',fp);delete LM_lockedSnapshots[fp]}}
+  // NOTE: Orphan cleanup moved to AFTER FP migration (line ~10884) to prevent deleting
+  // snapshots whose FP format hasn't been migrated yet. See IMMUTABILITY HARDENING comment.
   const _lockedByLabel={};// label -> [{fp, snap}]
   const _lockedDemandByLabel={};// label -> {sku: qty}
   const _lockedTrucksByDate={};// label -> {dateKey: count} — locked truck count per date for capacity check
@@ -10882,6 +10901,12 @@ function numberAll(){
       MI_save();// saves MANUAL_ITEMS (fm-manual-items)
     }
   }
+
+  // ── IMMUTABILITY HARDENING: Orphan cleanup runs AFTER FP migration ──
+  // Previously this ran before migration, which could delete snapshots whose FP
+  // hadn't been migrated from old format (raw SKU names) to new format (KIT:{kitId}).
+  // Now migration fixes FP keys first, then cleanup catches genuinely orphaned snapshots.
+  for(const fp in LM_lockedSnapshots){if(!LM_dispatched.has(fp)){console.warn('[numberAll] Removing orphaned snapshot:',fp);delete LM_lockedSnapshots[fp]}}
 
   // Auto-exclude Step B (individual cluster venue) trucks by default on every re-number
   // First clear ALL LM-N IDs (they change on re-number), then re-add Step B ones fresh
@@ -15890,7 +15915,7 @@ const displayName=isClusterSel?clDisp(selCluster):sel;
 rConstraints();
 const cacheKey=isClusterSel?selCluster:sel;
 const _lpFedAbbrs=LM_isLPFed(cacheKey)?LM_getLPDestAbbrs(cacheKey):[];
-const P=PLAN_CACHE[cacheKey]||(()=>{window._lmBuildLockedDemand=(window._lmLockedDemandByLabel||{})[cacheKey]||{};const _p=isClusterSel?build(sel,clusterVenues):build(sel);PLAN_CACHE[cacheKey]=_p;return _p})();
+const P=PLAN_CACHE[cacheKey]||(()=>{window._lmBuildLockedDemand=(window._lmLockedDemandByLabel||{})[cacheKey]||{};const _p=isClusterSel?build(sel,clusterVenues):build(sel);PLAN_CACHE[cacheKey]=_p;_lmInjectLockedIntoCache(cacheKey);return PLAN_CACHE[cacheKey]})();
 LP=P;
 // Use globally-numbered CORT from CORT_CACHE (set by numberAll)
 const venueName=isClusterSel?null:sel;
