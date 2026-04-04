@@ -813,14 +813,17 @@ STANDARD PALLET: 48×40 inches (1219×1016mm), max stack height 60 inches (1524m
 
 TV PALLETISATION RULES:
 - TVs are REUSED from FIFA Club World Cup 2025 (FCWC25) — IN ORIGINAL RETAIL BOXES but boxes may be worn/resealed.
-- TVs are placed VERTICALLY (upright) on pallets, NOT laid flat. This is standard for TV logistics.
-- Multiple TVs can stand side by side on one pallet if width allows. Do NOT stack TVs on top of each other.
-- TV 32"–43" (box ~110×65×15cm): 3–6 per pallet standing upright side by side.
-- TV 55" (box ~140×85×18cm): 2–3 per pallet standing upright.
-- TV 65" (box ~155×95×20cm): 1–2 per pallet. Box height exceeds pallet width when upright but fits within 60" height limit.
-- TV 75" (box ~180×110×22cm): 1 per pallet. Box too tall for standard pallet — DOUBLE PALLET (2 spaces) if upright exceeds 60".
-- TV 85" (box ~200×120×25cm): DOUBLE PALLET (2 pallet spaces).
-- TV 100"+: DOUBLE PALLET minimum. May need custom crating.
+- TVs placed VERTICALLY (upright) on pallets. Do NOT stack TVs on top of each other.
+- KNOWN TV BOX DIMENSIONS (width × height × depth when upright):
+  · 32" TV: box ~82×52×14cm. Fits 2-3 side by side on a pallet.
+  · 43" TV: box ~105×65×15cm. Fits 2 side by side on one pallet (105+105=210cm > 122cm pallet, so actually 1 per pallet).
+  · 55" TV: box ~140×85×18cm. 1 TV PER PALLET. Box width (140cm) exceeds pallet length (122cm) — overhangs, requires full pallet.
+  · 65" TV: box ~155×95×20cm. 1 TV PER PALLET. Significant overhang.
+  · 75" TV: box ~180×110×22cm. DOUBLE PALLET (2 spaces). Too large for single pallet.
+  · 85" TV: box ~200×120×25cm. DOUBLE PALLET (2 spaces).
+  · 100"+: DOUBLE PALLET minimum, may need custom crating.
+- If TV size not in list above: calculate box width ≈ screen diagonal × 2.5cm + 15cm, box height ≈ screen diagonal × 1.5cm + 15cm. If box width > 120cm → 1 per pallet. If > 170cm → double pallet.
+- IMPORTANT: for 43" and larger, assume 1 TV = 1 pallet minimum. Do NOT fit multiple 43"+ TVs on one pallet.
 
 EQUIPMENT CONTEXT — typical FIFA Functional Area items:
 - This is EVENT TECHNOLOGY for accreditation centres, media centres, broadcast compounds, VIP hospitality, team operations.
@@ -834,12 +837,14 @@ EQUIPMENT CONTEXT — typical FIFA Functional Area items:
 - Use the ACTUAL ITEM NAMES provided — they describe the specific product. Don't assume generic office equipment.
 - When in doubt, round UP — better to reserve slightly more space than arrive short.
 
-CRITICAL: The "pallets" number in your response MUST exactly equal the sum of all per-item pallet values. Double-check your arithmetic before responding.
+MATH RULES:
+- Do NOT use ceiling/rounding per item. Use exact fractions: 5 TVs at 1/pallet = 5.0 plt. 2 printers at 20/pallet = 0.1 plt.
+- Sum all item pallets for total. The "pallets" number MUST exactly equal this sum. Double-check arithmetic.
 
 Return ONLY valid JSON: {"pallets": number, "reasoning": "per-item breakdown"}
-Reasoning format — one line per item, then total. Use \\n for line breaks. Example:
-"TV 55\\" x5: 2 per pallet → ceil(5/2) = 3 plt\\nCard Printer x2: 10 per pallet → 0.2 plt\\nTV Stand x1: 5 per pallet → 0.2 plt\\nTotal: 3 + 0.2 + 0.2 = 3.4 pallets"
-Show the math: items ÷ per-pallet = pallets. Sum must match "pallets" field.`;
+Reasoning: one line per item type, then total. Use \\n for line breaks. Example:
+"TV 55\\" x5: 1 per pallet = 5.0 plt\\nCard Printer x2: 20 per pallet = 2/20 = 0.1 plt\\nTV Stand x1: 5 per pallet = 1/5 = 0.2 plt\\nTotal: 5.0 + 0.1 + 0.2 = 5.3 pallets"
+Show qty ÷ per-pallet = result for each. Sum must match.`;
   const mapped=P.venueMap[rawVenue]||rawVenue;
   const usr='Estimate total pallet spaces needed for this shipment to '+mapped+':\n\n'+itemList+'\n\nCalculate per item, then sum. Return JSON only.';
   try{
