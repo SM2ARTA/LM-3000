@@ -10626,6 +10626,13 @@ function _lmInjectLockedIntoCache(label){
     if(P.allT&&P.allT.some(t=>t._locked&&LM_fp(t)===fp))continue;
     const trk=JSON.parse(JSON.stringify(snap));
     trk._locked=true;
+    // Recalculate pallets/pcs if items were returned (mirrors numberAll injection)
+    const _trkRet=snap._returned||{};
+    if(Object.keys(_trkRet).length){
+      let ePlt=0,ePcs=0;
+      for(const it of trk.items){const ret=_trkRet[it.sku]||0;const effQ=Math.max(0,(it.loadQty||0)-ret);const pq=it._pq||NOM[it.sku]?.pq||1;const ps=it._ps||NOM[it.sku]?.ps||0;ePlt+=pq>0&&ps>0?(effQ/pq)*ps:0;ePcs+=effQ}
+      trk.pallets=Math.round(ePlt*100)/100;trk.pcs=ePcs;
+    }
     const dateOvr=LM_dateOverrides[fp];
     if(dateOvr){trk.dd=dateOvr;trk.dKey=dateOvr}
     if(!P.allT)P.allT=[];
@@ -10652,6 +10659,7 @@ function numberAll(){
   window._lmLockedTrucksByDate=_lockedTrucksByDate;// expose for capacity check in build()
   window._lmLockedDemandByDate=_lockedDemandByDate;// expose for early path deduction in build()
   for(const fp in LM_lockedSnapshots){
+    if(!LM_dispatched.has(fp))continue;// skip orphaned snapshots (cleaned up after FP migration below)
     const snap=LM_lockedSnapshots[fp];if(!snap||!snap.items)continue;
     const label=snap.destLabel||'';
     if(!_lockedByLabel[label])_lockedByLabel[label]=[];
