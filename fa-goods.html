@@ -854,13 +854,17 @@ CRITICAL: "pallets" value must match the sum of per-item pallets in reasoning. V
     if(provider==='gemini'){const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}],tools:[{google_search:{}}]})});const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||''}
     else if(provider==='anthropic'){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:[{role:'user',content:usr}]})});const j=await r.json();text=j?.content?.[0]?.text||''}
     else if(provider==='openai'){const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],max_tokens:1200})});const j=await r.json();text=j?.choices?.[0]?.message?.content||''}
+    console.log('[FA AI raw]',text);
     const match=text.match(/"pallets"\s*:\s*([\d.]+)/);
     if(match){
-      const pallets=parseFloat(match[1]);
-      // Extract reasoning: everything after "reasoning": "..." — handle escaped quotes and multiline
+      let pallets=parseFloat(match[1]);
+      // Extract reasoning
       let reasoning='';
       const rMatch=text.match(/"reasoning"\s*:\s*"([\s\S]*?)"\s*\}/);
       if(rMatch)reasoning=rMatch[1];
+      // Auto-correct: if reasoning has a "Total: ... = X" line, use that number instead
+      const totalMatch=reasoning.match(/[Tt]otal[^=]*=\s*([\d.]+)/);
+      if(totalMatch){const computed=parseFloat(totalMatch[1]);if(computed>0&&computed!==pallets){console.log('[FA AI] Correcting pallets from',pallets,'to',computed,'(from reasoning)');pallets=computed}}
       else{
         // Fallback: extract everything after pallets line
         const afterPallets=text.split(/"pallets"[^,}]+/)[1]||'';
