@@ -790,7 +790,8 @@ function _faRenderPasteCards(){
     h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><b>"${rv}"</b> <span class="bg bg-gy">${grp.length}</span>`;
     if(mapped){if(nNew)h+=` <span class="bg bg-gn">${nNew} new</span>`;if(nSame)h+=` <span class="bg bg-gy">${nSame} same</span>`;if(nDiff)h+=` <span class="bg bg-pu">${nDiff} qty↕</span>`;if(nLocked)h+=` <span class="bg bg-gn">🔒 ${nLocked} locked</span>`}
     h+=`</div>`;
-    h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Map to</span><select style="flex:1;font-size:11px" onchange="window._faPaste.venueMap['${e}']=this.value;_faRenderPasteCards()"><option value="">— skip —</option>${opts.replace('value="'+mapped.replace(/"/g,'&quot;')+'"','value="'+mapped.replace(/"/g,'&quot;')+'" selected')}</select></div>`;
+    const selId='_fpVS'+rawVenues.indexOf(rv);
+    h+=`<div style="display:flex;gap:4px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Map to</span><div style="flex:1;position:relative"><input type="text" placeholder="Search venue..." style="width:100%;font-size:10px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px 4px 0 0;border-bottom:none" oninput="_faPasteFilterVenue('${selId}',this.value)"><select id="${selId}" size="1" style="width:100%;font-size:11px;border-radius:0 0 4px 4px" onchange="window._faPaste.venueMap['${e}']=this.value;_faRenderPasteCards()"><option value="">— skip —</option>${opts.replace('value="'+mapped.replace(/"/g,'&quot;')+'"','value="'+mapped.replace(/"/g,'&quot;')+'" selected')}</select></div></div>`;
     h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">BI Date</span><input type="date" value="${dt}" style="font-size:11px;font-family:var(--fm)" onchange="window._faPaste.dateMap['${e}']=this.value"></div>`;
     if(hasOld)h+=`<label style="font-size:10px;color:var(--pu);display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer"><input type="checkbox" ${ovr?'checked':''} onchange="window._faPaste.ovrMap['${e}']=this.checked"> Overwrite ${nSame+nDiff} existing</label>`;
     // Per-item pallet calculation from NOM (pq/ps)
@@ -835,6 +836,15 @@ function _faRenderPasteCards(){
   }
   document.getElementById('_faPastePreview').innerHTML=h;
   document.getElementById('_faPasteAddBtn').disabled=false;
+}
+
+function _faPasteFilterVenue(selId,q){
+  const sel=document.getElementById(selId);if(!sel)return;
+  const ql=q.toLowerCase();
+  for(const opt of sel.options){
+    if(!opt.value){opt.style.display='';continue}// keep "skip"
+    opt.style.display=opt.text.toLowerCase().includes(ql)?'':'none';
+  }
 }
 
 // ── Step 3: Confirm and add ──
