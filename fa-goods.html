@@ -775,14 +775,16 @@ function _faRenderPasteCards(){
     // Pallets input + AI suggest
     const curPlt=P.palletMap?.[rv]||'';
     h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><span style="font-size:10px;color:var(--ts);min-width:50px">Pallets</span><input type="number" value="${curPlt}" min="0" max="26" step="0.1" style="width:60px;font-size:11px;font-family:var(--fm);border:1px solid var(--bd);border-radius:4px;padding:2px 4px" onchange="if(!window._faPaste.palletMap)window._faPaste.palletMap={};window._faPaste.palletMap['${e}']=parseFloat(this.value)||0"><button onclick="event.stopPropagation();_faPasteAiPallets('${e}',this)" style="background:none;border:1px solid #A5F3FC;border-radius:4px;cursor:pointer;font-size:10px;color:var(--cy);padding:2px 6px" title="AI estimate based on item names">🤖 Suggest</button></div>`;
-    // Items with qty diff annotations
-    h+=`<div style="font-size:10px;color:var(--ts)">`;
-    for(const it of grp.slice(0,5)){
+    // Items with assembly checkbox + qty diff
+    if(!P.asmMap)P.asmMap={};
+    h+=`<div style="font-size:10px;color:var(--ts);max-height:160px;overflow-y:auto">`;
+    for(const it of grp){
       const ex=mapped?exist[it.sku+'|'+mapped]:undefined;
       const mark=ex===undefined?'':(ex===it.qty?' <span style="color:var(--tt)">=</span>':' <span style="color:var(--pu)">was '+ex+'</span>');
-      h+=`<div style="display:flex;gap:6px"><span class="mono" style="color:var(--cy)">${it.sku}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.name}</span><span class="mono fw6">${it.qty}</span>${mark}</div>`;
+      const asmKey=rv+'|'+it.sku;
+      const isAsm=!!P.asmMap[asmKey];
+      h+=`<div style="display:flex;gap:4px;align-items:center"><input type="checkbox" ${isAsm?'checked':''} onchange="window._faPaste.asmMap['${asmKey.replace(/'/g,"\\'")}']=this.checked" title="Assembled (not in box)" style="margin:0;flex-shrink:0"><span class="mono" style="color:var(--cy);flex-shrink:0">${it.sku}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.name}</span><span class="mono fw6">${it.qty}</span>${mark}</div>`;
     }
-    if(grp.length>5)h+=`<div style="color:var(--tt)">...+${grp.length-5} more</div>`;
     h+=`</div></div>`;
   }
   document.getElementById('_faPastePreview').innerHTML=h;
@@ -798,9 +800,21 @@ async function _faPasteAiPallets(rawVenue,btn){
   const key=localStorage.getItem('hs-ai-key')||'';
   if(!provider||!key){alert('No AI configured. Set up in ML3K → HS Code → AI Settings.');return}
   btn.textContent='⏳';btn.disabled=true;
-  const itemList=grp.map(i=>i.name+' × '+i.qty).join('\n');
-  const sys='You estimate pallet space for logistics. Standard pallet: 48×40 inches, max 60in high. Return ONLY JSON: {"pallets":number,"reasoning":"brief"}. Can be decimal (0.1 = small box on shared pallet).';
-  const usr='Estimate pallets for these FA/technology items shipping to a FIFA World Cup venue:\n\n'+itemList+'\n\nReturn JSON only.';
+  const asmMap=P.asmMap||{};
+  const itemList=grp.map(i=>{
+    const isAsm=!!asmMap[rawVenue+'|'+i.sku];
+    return i.name+' × '+i.qty+(isAsm?' [ASSEMBLED - no packaging, bare item]':'');
+  }).join('\n');
+  const sys=`You estimate pallet space for logistics shipments. Standard pallet: 48×40 inches (1.2×1.0m), max height 60in.
+RULES:
+- TVs are SECOND-HAND from previous event — NOT in retail boxes. Wrapped in protective foam/blanket only.
+- TVs CANNOT be stacked in layers — single layer only, laid flat on pallet.
+- TV 55" and larger: each TV takes ~1 pallet space. TV 75"+ or 85"+: assume DOUBLE pallet (2 spaces per unit).
+- TV 43" and smaller: 2-4 can share a pallet depending on size.
+- Items marked [ASSEMBLED] ship bare (no box) — bulkier, cannot stack.
+- Small items (printers, stands, cables): multiple can share a pallet.
+Return ONLY JSON: {"pallets":number,"reasoning":"brief"}. Decimal ok (0.1 = small box on shared pallet).`;
+  const usr='Estimate pallets for these FA/technology items:\n\n'+itemList+'\n\nReturn JSON only.';
   try{
     let text='';
     if(provider==='gemini'){const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{parts:[{text:usr}]}]})});const j=await r.json();text=j?.candidates?.[0]?.content?.parts?.[0]?.text||''}
