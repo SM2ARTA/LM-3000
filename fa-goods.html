@@ -805,57 +805,46 @@ async function _faPasteAiPallets(rawVenue,btn){
     const isAsm=!!asmMap[rawVenue+'|'+i.sku];
     return i.name+' × '+i.qty+(isAsm?' [ASSEMBLED - no packaging, bare item]':'');
   }).join('\n');
-  const sys=`You are a Logistics Material Planning AI specialized in large-scale event operations (e.g., FIFA World Cup).
-Your task is to estimate pallet requirements for a list of items (FF&E, equipment, goods).
-Your output will be used for transport planning, warehouse allocation, and truck loading. Accuracy and consistency are critical.
+  const sys=`You are a Logistics Material Planning AI for FIFA World Cup 2026™ ground transport.
+Your output drives truck loading and warehouse planning. Accuracy is critical.
 
-1. INPUT
-Items with SKU, Description, Quantity, and optional notes.
-SPECIAL: If an item contains [ASSEMBLED - no packaging, bare item], it is NOT in original packaging, is bulkier/irregular, MUST be classified as NON-STACKABLE (Category B), and MUST NOT be combined with other items.
+PALLET: 48"×40" (122×102cm). Max stack height: 180cm including pallet. 1 pallet = 1 PALLET SPACE. Oversized item on double-wide base = 2 PALLET SPACES.
 
-2. CORE OBJECTIVE
-Estimate: (1) TOTAL HANDLING UNITS (physical pallets/bases), (2) TOTAL PALLET SPACES (transport planning). Plus breakdown by item and very short packing logic.
+CLASSIFICATION — assign each item exactly ONE category:
+A. STACKABLE — boxed, uniform shape, can safely stack multiple on a pallet
+B. NON-STACKABLE — ONLY items tagged [ASSEMBLED] (no box, bare/wrapped, irregular). Allocate 1 dedicated pallet space per item. NEVER combine with others.
+C. SMALL — desktop electronics, consumables, accessories. Combine onto shared pallets.
+D. FRAGILE — can palletize but limit stacking height. Reduce density.
 
-3. PALLET DEFINITIONS (CRITICAL)
-Standard pallet footprint = 1 PALLET SPACE. Double pallet footprint = 2 PALLET SPACES. Planning is based on PALLET SPACES, not only physical pallets.
+IMPORTANT: Items WITHOUT the [ASSEMBLED] tag are IN THEIR ORIGINAL BOX. Boxed items are Category A or C, NOT B. A boxed TV stand is stackable. A boxed printer is small. Only [ASSEMBLED] = Category B.
 
-4. ITEM CLASSIFICATION (MANDATORY) — classify each into ONE:
-A. STACKABLE (boxed, uniform, safely stacked)
-B. NON-STACKABLE (assembled, irregular, fragile, or marked [ASSEMBLED])
-C. SMALL ITEMS (combinable, negligible footprint)
-D. FRAGILE (limited stacking, reduced efficiency)
+PALLET SPACE SIZING — for each item, estimate the BOXED dimensions from your product knowledge:
+- Box fits within 122×102cm footprint → 1 pallet space. Calculate how many fit per pallet (layers × units per layer).
+- Box exceeds 122cm in any horizontal dimension but fits ~170cm → 1 pallet space with overhang (standard practice).
+- Box exceeds ~170cm in any dimension → 2 PALLET SPACES (double pallet). Example: 75"+ TVs, large tables, long signage.
+- [ASSEMBLED] items: estimate bare footprint. If >122cm → 2 spaces.
 
-5. PACKING LOGIC RULES
-STACKABLE: Use industry benchmarks for units per pallet.
-SMALL ITEMS: Combine with others if space allows, no dedicated pallet unless necessary.
-NON-STACKABLE: MUST be allocated separate pallet space(s), default 1, NEVER combine.
-FRAGILE: Reduce efficiency; if uncertain treat as non-stackable.
+CALCULATION METHOD — for each item:
+1. Identify the real product (use brand/model knowledge)
+2. Estimate boxed dimensions (L×W×H cm)
+3. Calculate units per pallet: floor area fit × stackable layers
+4. Pallet spaces = qty ÷ units_per_pallet (exact decimal)
+5. If item needs double pallet: spaces = qty × 2
 
-6. PALLET SPACE RULE (CRITICAL)
-Estimate PALLET SPACES (transport footprint):
-- Fits standard pallet → 1 pallet space
-- Exceeds pallet footprint (long/oversized) → 2 pallet spaces
-- Clearly oversized beyond that → may exceed 2 (rare, justify)
-DOUBLE PALLET CASES: long items (large TVs, long tables, wide stands), items that cannot overhang, assembled items with large footprint.
-IF UNSURE: choose conservative (2 pallet spaces) OR flag "REVIEW REQUIRED".
+THEN: Sum all per-item pallet spaces. This sum = "pallets" in output.
 
-7. HANDLING UNIT RULE
-1 handling unit = 1 physical pallet or base. May occupy 1 or 2 pallet spaces. MUST distinguish handling units vs pallet spaces.
+ARITHMETIC CHECK: After calculating, verify your sum. Add each item's spaces together. The total MUST match. If it doesn't, fix it before responding.
 
-8. INDUSTRY BENCHMARKS (defaults unless overridden):
-55" TVs (boxed): 4-8/pallet, use 5 safe baseline. Small printers: negligible, combine. Chairs: Folding 100, Banquet 20, Task 4 per pallet. Shelving: Plastic 30, Metal 4, Cabinets 2 per pallet.
+OUTPUT — return ONLY valid JSON:
+{"pallets": [total pallet spaces], "reasoning": "BREAKDOWN:\\n- [Item] x[qty]: [X] pallet spaces ([Cat X], [boxed dims], [units/pallet], [math])\\n- ...\\n\\nTOTAL: [X + Y + Z] = [total] pallet spaces\\n\\nPACKING LOGIC:\\n- [2-3 lines on key decisions]"}
 
-9. CONSERVATIVE PLANNING: Prioritize real-world feasibility, operational simplicity, safe loading. NEVER over-optimize. ALWAYS round UP. DO NOT compress unrealistically.
+Use \\n for line breaks. Show the addition in TOTAL line.
 
-10. OUTPUT FORMAT — return ONLY valid JSON:
-{"pallets": number, "reasoning": "BREAKDOWN:\\n- [Item] x[qty]: [X] pallet spaces ([classification], [reason])\\n- ...\\n\\nTOTAL: [sum] = [X] pallet spaces\\n\\nPACKING LOGIC:\\n- [max 3-4 lines, key decisions]"}
-Use \\n for line breaks. The "pallets" field = total pallet SPACES (transport footprint).
-
-11. VALIDATION: NON-STACKABLE items must not exceed 1 HU unless clearly oversized. Pallet spaces >= handling units. Never assign 2 HU for single normal item without justification.
-
-12. NO HALLUCINATION: Do NOT invent dimensions. Do NOT assume unrealistic density. If uncertain → conservative or flag for review.
-
-CRITICAL: palletSpaces value MUST match the sum of per-item spaces in reasoning. Verify arithmetic before responding.`;
+RULES:
+- NEVER classify boxed items as NON-STACKABLE. Only [ASSEMBLED] = Cat B.
+- NEVER allocate 1 pallet per item for small/medium boxed goods. Use real packing density.
+- ALWAYS round up the final total for safety margin.
+- If you don't know a product, state your assumption. Don't hallucinate dimensions.`;
   const mapped=P.venueMap[rawVenue]||rawVenue;
   const usr='Estimate total pallet spaces for this shipment to '+mapped+':\n\n'+itemList+'\n\nFor each item, identify the actual product and its real packaging dimensions. If unsure, search for similar products to find typical box sizes. Calculate per item, sum total. Return JSON only.';
   try{
