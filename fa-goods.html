@@ -1159,7 +1159,7 @@ function FA_renderGroups(){
       <td>${dispDate?_fmtD(dispDate):'<span style="color:var(--tt)">—</span>'}</td>
       <td>${delDate?_fmtD(delDate):'<span style="color:var(--tt)">—</span>'}</td>
       <td class="mono" style="text-align:right">${(g.items||[]).length}</td>
-      <td style="text-align:center" onclick="event.stopPropagation()"><input type="number" value="${g.pallets||0}" min="0" max="26" step="0.1" style="width:50px;font-family:var(--fm);font-size:11px;text-align:center;border:1px solid ${g.pallets>0?'var(--ac)':'var(--bd)'};border-radius:4px;padding:2px;color:${g.pallets>0?'var(--ac)':'var(--tt)'}" onchange="FA_setGroupPallets(${g.id},this.value)" ${isLocked?'readonly':''}><button onclick="event.stopPropagation();FA_aiPallets(${g.id},this)" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--cy)" title="AI estimate">🤖</button></td>
+      <td style="text-align:center" onclick="event.stopPropagation()"><input type="number" value="${g.pallets||0}" min="0" max="26" step="0.1" style="width:50px;font-family:var(--fm);font-size:11px;text-align:center;border:1px solid ${g.pallets>0?'var(--ac)':'var(--bd)'};border-radius:4px;padding:2px;color:${g.pallets>0?'var(--ac)':'var(--tt)'}" onchange="FA_setGroupPallets(${g.id},this.value)" ${isLocked?'readonly':''}></td>
       <td>${lpDisp}</td>
       <td>${lmDisp}</td>
       <td>${kitDisp}</td>
