@@ -10505,16 +10505,18 @@ function numberAll(){
       PLAN_CACHE[label]=P;
       // Post-tag FA items on trucks (flags for rendering — demand was injected in build())
       if(P.allT)for(const t of P.allT){
-        let hasFa=false;
+        let hasFaScheduled=false;
         for(const it of t.items||[]){
           if(it.sku&&it.sku.startsWith('FA-')&&it.sku.includes('-G')){
             it._fa=true;
             const g=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);
             if(g)it._faGroup=g.id;
-            hasFa=true;
+            // FA item was scheduled demand (not a top-up) → it triggered this truck
+            if(!it.topUp||it.sched>0)hasFaScheduled=true;
           }
         }
-        if(hasFa&&t.items.every(it=>it._fa))t._faTruck=true;
+        // Truck created specifically for FA: has scheduled FA item (engine created truck for FA biDate)
+        if(hasFaScheduled)t._faTruck=true;
       }
       const dispLabel=clDisp(label);
       P.days.forEach(d=>{d.trucks.forEach(t=>{allTrucks.push({dateK:d.dKey,ref:t,label:label,dispLabel:dispLabel})})});
