@@ -1120,7 +1120,7 @@ function FA_grpKitAutoLM(){
 function FA_toggleGroupLock(grpId,checked){
   const g=FA_GROUPS.find(x=>x.id===grpId);if(!g)return;
   g._locked=checked||undefined;
-  FA_saveGroups();
+  FA_saveGroups();FA_renderGroups();
   document.getElementById('faModal').innerHTML='';
   FA_editGroup(grpId);
 }
