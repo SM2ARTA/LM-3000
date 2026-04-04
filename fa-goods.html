@@ -158,7 +158,8 @@ body.viewer .fa-admin{display:none!important}
           <span class="bg bg-gy" id="demCount">0 items</span>
         </div>
         <div style="display:flex;gap:6px">
-          <button class="rbtn fa-admin" onclick="FA_showAddDemand()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">+ Add Demand</button>
+          <button class="rbtn fa-admin" onclick="FA_showPasteDemand()" style="background:var(--cs);color:var(--cy);border-color:#A5F3FC">📋 Paste</button>
+          <button class="rbtn fa-admin" onclick="FA_showAddDemand()" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA">+ Add</button>
           <button class="rbtn fa-admin" onclick="FA_clearDemand()" style="background:var(--rs);color:var(--rd);border-color:#F5C6C7">✕ Clear</button>
         </div>
       </div>
@@ -673,6 +674,144 @@ function FA_clearDemand(){
   if(!confirm('Clear ALL FA demand lines? This cannot be undone.'))return;
   if(!confirm('Are you sure? This will permanently delete all '+FA_DEMAND.length+' demand lines.'))return;
   FA_DEMAND=[];FA_nextDemId=1;FA_saveDebounced();FA_render();
+}
+
+// ── Paste Demand: parse tab-separated data from Excel ──
+function FA_showPasteDemand(){
+  const venueOpts=FA_ML3K_VENUES.map(v=>`<option value="${v.name}">`).join('');
+  const h=`<div class="modal-ov">
+    <div class="modal" style="max-width:680px"><div style="display:flex;justify-content:space-between;align-items:center"><h3>📋 Paste Demand</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
+    <div style="font-size:11px;color:var(--ts);margin-bottom:8px">Paste tab-separated data from Excel. Two formats supported:</div>
+    <div style="display:flex;gap:12px;margin-bottom:10px">
+      <div style="flex:1;padding:8px;background:var(--bg);border-radius:6px;font-size:10px">
+        <div style="font-weight:700;margin-bottom:4px">Matrix (venues as columns)</div>
+        <div style="color:var(--ts);font-family:var(--fm);font-size:9px">Row 1: [blank] [blank] Venue1 Venue2...<br>Row 2: (optional type/date rows)<br>Row 3+: SKU Name Qty1 Qty2...</div>
+      </div>
+      <div style="flex:1;padding:8px;background:var(--bg);border-radius:6px;font-size:10px">
+        <div style="font-weight:700;margin-bottom:4px">Rows (one item per line)</div>
+        <div style="color:var(--ts);font-family:var(--fm);font-size:9px">SKU Name Venue Qty Date<br>or: SKU Venue Qty</div>
+      </div>
+    </div>
+    <div class="form-row"><span class="form-label">FA Area</span><input type="text" id="_faPasteFa" value="TEC" style="width:100px"><span class="form-label">Default Date</span><input type="date" id="_faPasteDate" value="" style="width:140px"></div>
+    <textarea id="_faPasteArea" style="width:100%;height:200px;font-family:var(--fm);font-size:11px;padding:8px;border:1px solid var(--bd);border-radius:6px;resize:vertical" placeholder="Paste from Excel here (Ctrl+V)..."></textarea>
+    <div id="_faPastePreview" style="margin-top:8px;max-height:180px;overflow-y:auto"></div>
+    <div class="modal-actions"><button class="rbtn" onclick="_faParsePaste()" style="background:var(--cs);color:var(--cy);border-color:#A5F3FC">👁 Preview</button><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="_faConfirmPaste()">Add Items</button></div>
+    </div></div>`;
+  document.getElementById('faModal').innerHTML=h;
+  document.getElementById('_faPasteArea').focus();
+}
+
+function _faParsePaste(){
+  const raw=document.getElementById('_faPasteArea').value;
+  if(!raw.trim()){document.getElementById('_faPastePreview').innerHTML='<div style="color:var(--tt);font-size:11px">Nothing to parse.</div>';return}
+  const fa=document.getElementById('_faPasteFa').value.trim()||'TEC';
+  const defaultDate=document.getElementById('_faPasteDate').value||'';
+  const lines=raw.split('\n').map(l=>l.split('\t').map(c=>c.trim()));
+  if(!lines.length)return;
+
+  // Detect format: if first row has >3 columns and columns 3+ look like venue names → matrix
+  const hdr=lines[0];
+  const isMatrix=hdr.length>=3&&FA_ML3K_VENUES.some(v=>hdr.some(c=>c&&v.name.toLowerCase().includes(c.toLowerCase())));
+
+  const items=[];
+  const _existing=new Set(FA_DEMAND.map(d=>d.sku+'|'+d.venue+'|'+d.qty));
+
+  if(isMatrix){
+    // Matrix: find venue columns by matching header cells to venue names
+    const venueCols=[];// [{col, venue, biDate}]
+    for(let c=2;c<hdr.length;c++){
+      const cell=hdr[c];if(!cell)continue;
+      // Match venue by city name
+      const match=FA_ML3K_VENUES.find(v=>{
+        const cl=cell.toLowerCase(),vl=v.name.toLowerCase();
+        return vl.includes(cl)||cl.includes(vl.split(' ')[0]);
+      });
+      if(match)venueCols.push({col:c,venue:match.name,biDate:''});
+    }
+    // Check row 2-3 for dates (Delivery Date row)
+    for(let r=1;r<Math.min(4,lines.length);r++){
+      const row=lines[r];if(!row)continue;
+      const hasDate=venueCols.some(vc=>row[vc.col]&&/\d/.test(row[vc.col]));
+      if(hasDate){
+        for(const vc of venueCols){
+          const cell=row[vc.col];if(!cell)continue;
+          // Try parse date: "15-May", "May 15", "2026-05-15", etc.
+          const d=_faTryDate(cell);if(d)vc.biDate=d;
+        }
+      }
+    }
+    // Data rows: start after header+metadata rows
+    const dataStart=lines.findIndex((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
+    if(dataStart>=0){
+      for(let r=dataStart;r<lines.length;r++){
+        const row=lines[r];if(!row||!row[0])continue;
+        const sku=row[0];const name=row[1]||FA_NOM[sku]?.name||sku;
+        for(const vc of venueCols){
+          const qty=parseInt(row[vc.col]);
+          if(!qty||qty<=0)continue;
+          const biDate=vc.biDate||defaultDate;
+          const key=sku+'|'+vc.venue+'|'+qty;
+          items.push({sku,name,venue:vc.venue,fa,qty,biDate,dup:_existing.has(key)});
+        }
+      }
+    }
+  } else {
+    // Row format: each line is SKU, Name?, Venue, Qty, Date?
+    for(const row of lines){
+      if(!row||!row[0]||row[0].toLowerCase()==='sku')continue;
+      let sku,name,venue,qty,biDate;
+      if(row.length>=5){sku=row[0];name=row[1];venue=row[2];qty=parseInt(row[3]);biDate=_faTryDate(row[4])||defaultDate}
+      else if(row.length>=4){sku=row[0];name=row[1];venue=row[2];qty=parseInt(row[3]);biDate=defaultDate}
+      else if(row.length>=3){sku=row[0];venue=row[1];qty=parseInt(row[2]);name=FA_NOM[sku]?.name||sku;biDate=defaultDate}
+      else continue;
+      if(!sku||!venue||!qty||qty<=0)continue;
+      // Try to match venue name
+      const vMatch=FA_ML3K_VENUES.find(v=>v.name===venue||v.name.toLowerCase().includes(venue.toLowerCase()));
+      if(vMatch)venue=vMatch.name;
+      const key=sku+'|'+venue+'|'+qty;
+      items.push({sku,name:name||sku,venue,fa,qty,biDate:biDate||'',dup:_existing.has(key)});
+    }
+  }
+
+  window._faPasteItems=items;
+  const newItems=items.filter(i=>!i.dup);
+  const dupItems=items.filter(i=>i.dup);
+  let preview='<div style="font-size:11px;margin-bottom:6px"><b>'+newItems.length+'</b> new items'+(dupItems.length?' · <span style="color:var(--or)">'+dupItems.length+' duplicates (skipped)</span>':'')+'</div>';
+  if(newItems.length){
+    preview+='<table class="dtb" style="font-size:10px"><thead><tr><th>SKU</th><th>Name</th><th>Venue</th><th>Qty</th><th>Date</th></tr></thead><tbody>';
+    for(const it of newItems.slice(0,50)){
+      const _fmtD=it.biDate?new Date(it.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'—';
+      preview+=`<tr><td class="mono fw6">${it.sku}</td><td>${it.name}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.venue}</td><td class="mono">${it.qty}</td><td>${_fmtD}</td></tr>`;
+    }
+    if(newItems.length>50)preview+='<tr><td colspan="5" style="color:var(--tt)">...and '+(newItems.length-50)+' more</td></tr>';
+    preview+='</tbody></table>';
+  }
+  document.getElementById('_faPastePreview').innerHTML=preview;
+}
+
+function _faTryDate(s){
+  if(!s)return'';
+  // ISO format
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  // Try JS parse with "2026" hint
+  const withYear=s.includes('202')?s:s+' 2026';
+  const d=new Date(withYear);
+  if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);
+  // "15-May" format
+  const m=/(\d{1,2})[-\/](\w+)/.exec(s);
+  if(m){const d2=new Date(m[2]+' '+m[1]+', 2026');if(!isNaN(d2.getTime()))return d2.toISOString().slice(0,10)}
+  return'';
+}
+
+function _faConfirmPaste(){
+  const items=(window._faPasteItems||[]).filter(i=>!i.dup);
+  if(!items.length){alert('No new items to add. Run Preview first.');return}
+  for(const it of items){
+    FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:it.venue,fa:it.fa,qty:it.qty,biDate:it.biDate,note:'',created:new Date().toISOString()});
+  }
+  window._faPasteItems=null;
+  document.getElementById('faModal').innerHTML='';
+  FA_saveDebounced();FA_render();
 }
 
 function FA_renderDemand(){
