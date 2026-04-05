@@ -903,12 +903,12 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const _faVenues=[...new Set(_faItems.map(i=>i.venue))];
     const _faTrucks=[...new Set(_faItems.map(i=>i.linkedTruck).filter(Boolean))];
 
-    // Group by dispatch date — use same forecast window as Outbounds (_fcAllDays)
+    // Group by dispatch week (all dates, not limited to forecast window)
     const _faByDate={};
     for(const it of _faResolved){const d=it.dispDate||'unscheduled';if(!_faByDate[d])_faByDate[d]=[];_faByDate[d].push(it)}
     const _faUnscheduled=_faByDate['unscheduled']||[];
-
-    const _faWinLabel=_fcAllDays.length?fD(_fcAllDays[0])+' &#8211; '+fD(_fcAllDays[_fcAllDays.length-1]):'';
+    const _faDates=Object.keys(_faByDate).filter(d=>d!=='unscheduled').sort();
+    const _faWinLabel=_faDates.length?fD(_faDates[0])+' &#8211; '+fD(_faDates[_faDates.length-1]):'';
     html+=_sec('&#128230;','FA Goods &#8212; Forecast'+(_faWinLabel?' ('+_faWinLabel+')':''),'#0891B2');
     html+='<tr><td style="padding:0 32px 20px">';
     // KPI chips
@@ -945,16 +945,12 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
       r+='<td style="'+_b+';font-size:10px">'+truckDisp+(truckDisp&&kitDisp?' ':'')+kitDisp+'</td>';
       r+='</tr>';_faIdx++;return r;
     };
-    for(const d of _fcAllDays){
+    for(const d of _faDates){
       const items=_faByDate[d]||[];
-      const dow=new Date(d+'T12:00:00').getDay();const isWknd=dow===0||dow===6;
-      const dayLabel=fD(d)+(isWknd?' <span style="font-size:9px;color:#999">(weekend)</span>':'');
-      if(items.length===0){
-        html+='<tr><td colspan="7" bgcolor="#F9F9FB" style="padding:5px 10px;font-size:11px;color:#BBB;border-bottom:1px solid #E8E8ED">'+dayLabel+' &#8212; <span style="font-style:italic">No FA dispatches</span></td></tr>';
-      }else{
-        items.sort((a,b)=>(a.venue||'').localeCompare(b.venue));
-        items.forEach((it,j)=>{html+=_faRow(it,j===0?'<span style="font-weight:700">'+dayLabel+'</span>':'')});
-      }
+      if(!items.length)continue;
+      const dayLabel=fD(d);
+      items.sort((a,b)=>(a.venue||'').localeCompare(b.venue));
+      items.forEach((it,j)=>{html+=_faRow(it,j===0?'<span style="font-weight:700">'+dayLabel+'</span>':'')});
     }
     // Unscheduled items (no linked truck date)
     if(_faUnscheduled.length){
