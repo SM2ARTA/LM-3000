@@ -13669,9 +13669,12 @@ async function generateDailyDigest(){
     for(const t of _lmTruckList){if(t.dest&&!_digestData.destNames[t.dest])_digestData.destNames[t.dest]=clDisp(t.dest)}
   }
   // FA Goods: resolve groups with truck assignments from engine + manual links
-  // Load fresh FA demand items from Supabase if FA_LINKED._items is stale/empty
+  // Fresh-load FA groups + demand from Supabase to ensure digest has current data
   {
-    const _faGroups=LP_FA_GROUPS||FA_LINKED._groups||[];
+    let _faGroups=LP_FA_GROUPS.length?LP_FA_GROUPS:(FA_LINKED._groups||[]);
+    if(!_faGroups.length&&SB){
+      try{const _r=await SB.from('shared_state').select('value').eq('id','fa-groups').maybeSingle();if(_r?.data){const v=JSON.parse(_r.data.value);_faGroups=v.items||[];if(_faGroups.length)LP_FA_GROUPS=_faGroups}}catch(e){}
+    }
     let _faDemItems=FA_LINKED._items||[];
     if(!_faDemItems.length&&SB){
       try{const _r=await SB.from('shared_state').select('value').eq('id','fa-demand').maybeSingle();if(_r?.data)_faDemItems=JSON.parse(_r.data.value).items||[]}catch(e){}
