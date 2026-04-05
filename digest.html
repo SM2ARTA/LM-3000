@@ -961,7 +961,6 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faLockedPlt+' plt</td><td style="width:8px"></td>';
     html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faLockedQty+' qty</td><td style="width:8px"></td>';
     html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faLockedVenues.length+' venues</td><td style="width:8px"></td>';
-    if(_faLockedVal)html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">$'+Math.round(_faLockedVal).toLocaleString()+'</td>';
     html+='</tr></table>';
     if(!_faTruckList.length){
       html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr><td style="padding:12px;font-size:12px;color:#999;text-align:center">No locked FA trucks yet</td></tr></table>';
@@ -969,7 +968,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
       // Table grouped by truck
       html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
       const _fh='padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2';
-      html+='<tr bgcolor="#E0F7FA"><td style="'+_fh+'">TRUCK</td><td style="'+_fh+'">DISPATCH</td><td style="'+_fh+'">VENUE</td><td style="'+_fh+'">FA</td><td style="'+_fh+'">DELIVERY</td><td style="'+_fh+';text-align:right">ITEMS</td><td style="'+_fh+';text-align:right">PALLETS</td><td style="'+_fh+';text-align:right">VALUE</td><td style="'+_fh+'">KIT</td></tr>';
+      html+='<tr bgcolor="#E0F7FA"><td style="'+_fh+'">TRUCK</td><td style="'+_fh+'">DISPATCH</td><td style="'+_fh+'">VENUE</td><td style="'+_fh+'">FA</td><td style="'+_fh+'">DELIVERY</td><td style="'+_fh+';text-align:right">ITEMS</td><td style="'+_fh+';text-align:right">PALLETS</td><td style="'+_fh+'">KIT</td></tr>';
       let _faIdx2=0;
       for(const t of _faTruckList){
         for(const g of t.groups){
@@ -985,7 +984,6 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
           html+='<td style="'+_b+';font-size:10px;font-weight:600;color:#12804A">'+(_vBi?fD(_vBi):'—')+'</td>';
           html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right">'+(g.items||0)+'</td>';
           html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right;color:#CF5D5D">'+(g.pallets||0)+'</td>';
-          html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right;color:#6E3FF3">'+(g.value?'$'+Math.round(g.value).toLocaleString():'—')+'</td>';
           html+='<td style="'+_b+';font-size:10px;color:#12804A;font-weight:600">'+(g.kit||'—')+'</td>';
           html+='</tr>';_faIdx2++;
         }
