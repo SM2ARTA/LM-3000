@@ -8948,7 +8948,8 @@ function enterApp(){
       LM_loadNomOverrides().catch(()=>{}),
       LM_loadClusterTA().catch(()=>{}),
       _hsLoadAIConfig().catch(()=>{}),
-      FA_loadLinked().catch(()=>{})
+      FA_loadLinked().catch(()=>{}),
+      (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data)_fcLeadMap=JSON.parse(data.value)||{}}catch(e){}})()
     ]);
     // Now build venues and trucks AFTER all config is loaded
     if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="forecast";lmOk=true}}
@@ -9104,7 +9105,7 @@ async function syncLM(){
     if(nomV)NOM=nomV;if(rwV){RW=rwV;_rwEnrichEffQty()}if(vsV)VS=vsV;
     if(exV)LM_excluded=new Set(exV);if(eoV)LM_excludeUserOvr=eoV;
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),MI_load().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadClusterTA().catch(()=>{})]);
-    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{}),FA_loadLinked().catch(()=>{})]);
+    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{}),FA_loadLinked().catch(()=>{}),(async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data)_fcLeadMap=JSON.parse(data.value)||{}}catch(e){}})()]);
     LM_injectAll();LM_applyNomOverrides();bV();numberAll();
     rT();rVL();rMain();applyRole();
   });
@@ -14446,6 +14447,25 @@ function LM_renderFAGoods(el){
 
 // ── LM FORECAST TAB ──
 let _fcCountryFilter='all';// 'all','usa','can','mex'
+const _FC_STAFF=['Ashley','Kyli','Yael','Brittany'];
+let _fcLeadMap={};// truckId → staffName (persisted)
+function _fcControl(truckId,lead){
+  // Deterministic pseudo-random control that never matches lead
+  let h=0;for(let i=0;i<truckId.length;i++)h=(h*31+truckId.charCodeAt(i))>>>0;
+  const others=_FC_STAFF.filter(n=>n!==lead);
+  return others[h%others.length];
+}
+function _fcSetLead(truckId,val){
+  if(ROLE==='viewer')return;
+  if(val)_fcLeadMap[truckId]=val;else delete _fcLeadMap[truckId];
+  // Debounced save
+  clearTimeout(window._fcLeadTimer);
+  window._fcLeadTimer=setTimeout(()=>{
+    if(!SB)return;
+    SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify(_fcLeadMap),updated_at:new Date().toISOString()}).catch(e=>console.warn('FC leads save:',e));
+  },1500);
+  LM_renderForecast(document.getElementById('mn'));
+}
 function LM_renderForecast(el){
   if(!Object.keys(PLAN_CACHE).length){el.innerHTML='<div class="lp-empty">No plan data. Generate from Dashboard first.</div>';return}
   const allRows=[];const _seen=new Set();
@@ -14539,7 +14559,7 @@ function LM_renderForecast(el){
       ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
       ${wLate?'<span class="bg bgs bg-rd">⚠ '+wLate+' late</span>':''}
     </div>
-    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th></tr></thead><tbody>`;
+    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Control</th></tr></thead><tbody>`;
     for(const r of rows){
       const bufColor=r.buffer!=null?(r.buffer>=7?'var(--gn)':r.buffer>=3?'var(--or)':'var(--rd)'):'var(--tt)';
       h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
@@ -14559,6 +14579,8 @@ function LM_renderForecast(el){
         <td class="mono" style="text-align:right;color:var(--pu);font-weight:600">${r.cargo>0?'$'+Math.round(r.cargo).toLocaleString():'—'}</td>
         <td style="text-align:center;font-weight:600;color:${r.faCount>0?'#0891B2':'var(--tt)'}">${r.faCount>0?'📦 '+r.faCount:'—'}</td>
         <td style="text-align:center;font-weight:600;color:${r.lateCount>0?'var(--rd)':'var(--tt)'}">${r.lateCount>0?'⚠ '+r.lateCount:'—'}</td>
+        <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${_fcLeadMap[r.truckId]?'var(--gn)':'var(--bd)'};border-radius:4px;color:${_fcLeadMap[r.truckId]?'var(--gn)':'var(--tt)'};background:#fff;min-width:70px" onchange="_fcSetLead('${r.truckId}',this.value)"><option value="">—</option>${_FC_STAFF.map(n=>`<option value="${n}"${_fcLeadMap[r.truckId]===n?' selected':''}>${n}</option>`).join('')}</select>`:`<span style="font-size:10px;color:${_fcLeadMap[r.truckId]?'var(--gn)':'var(--tt)'}">${_fcLeadMap[r.truckId]||'—'}</span>`}</td>
+        <td style="font-size:10px;color:${_fcLeadMap[r.truckId]?'var(--pu)':'var(--tt)'}">${_fcLeadMap[r.truckId]?_fcControl(r.truckId,_fcLeadMap[r.truckId]):'—'}</td>
       </tr>`;
     }
     h+=`</tbody></table></div>`;
