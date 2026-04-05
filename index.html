@@ -14535,8 +14535,8 @@ function LM_renderForecast(el){
       const tBI=t.origBiK||t.biK||firstBI||null;
       const buffer=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
       const cargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
-      const _lsr=LM_getLsr(t);const _fa=_faMatchTruck(t.id,clDisp(label),_lsr);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
-      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:(_fa?.count||0)+_faEng,faTruck:!!t._faTruck});
+      const _lsr=LM_getLsr(t);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
+      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck});
     }
   };
   // USA trucks
