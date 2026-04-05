@@ -13668,14 +13668,29 @@ async function generateDailyDigest(){
     for(const t of _digestData.generatedPlan){if(t.destination&&!_digestData.destNames[t.destination])_digestData.destNames[t.destination]=clDisp(t.destination)}
     for(const t of _lmTruckList){if(t.dest&&!_digestData.destNames[t.dest])_digestData.destNames[t.dest]=clDisp(t.dest)}
   }
-  // FA Goods items (use cached data — refreshed on Sync/load)
-  _digestData.faItems=(FA_LINKED._items||[]).filter(it=>it.linkedLP||it.linkedTruck||it.linkedKit);
-  // If no cached data, try fresh load
-  if(!_digestData.faItems.length){
-    try{
-      const _faR=await SB.from('shared_state').select('value').eq('id','fa-demand').maybeSingle();
-      if(_faR?.data){const _faD=JSON.parse(_faR.data.value);_digestData.faItems=(_faD.items||[]).filter(it=>it.linkedLP||it.linkedTruck||it.linkedKit)}
-    }catch(e){}
+  // FA Goods: resolve groups → items with truck/kit assignments
+  // Sources: manual links (linkedLP/LM/Kit on group) + engine placement (PLAN_CACHE + LP plan)
+  {
+    const _faGroups=LP_FA_GROUPS||FA_LINKED._groups||[];
+    const _faItems=FA_LINKED._items||[];const _faById={};for(const it of _faItems)_faById[it.id]=it;
+    // Build engine assignment map from PLAN_CACHE + LP plan (same logic as _saveFaAssignments)
+    const _engAsgn={};
+    for(const label in PLAN_CACHE){const P=PLAN_CACHE[label];if(!P)continue;for(const t of P.allT||[]){for(const it of t.items||[]){if(it._fa&&it.sku){_engAsgn[it.sku]={lm:t.id,lmDate:t.dd||''}}}}}
+    for(const r of (LP_STATE.generatedPlan||[])){if(r.sku&&r.sku.startsWith('FA-')&&r.sku.includes('-G')){if(!_engAsgn[r.sku])_engAsgn[r.sku]={};_engAsgn[r.sku].lp='LP-'+r.truckId;_engAsgn[r.sku].lpDate=r.date||''}}
+    const _faResult=[];const _faSeen=new Set();
+    for(const g of _faGroups){
+      const eng=_engAsgn[g.sku]||{};
+      const lpRef=g.linkedLP||eng.lp||null;
+      const lmRef=g.linkedLM||eng.lm||null;
+      const kitRef=g.linkedKit||null;
+      for(const did of g.items||[]){
+        const it=_faById[did];if(!it)continue;
+        _faSeen.add(it.sku+'|'+g.venue);
+        _faResult.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,venue:g.venue||it.venue||'',fa:g.fa||'FA',biDate:g.biDate||'',linkedTruck:lmRef||null,linkedLP:lpRef||null,linkedKit:kitRef||null,_groupPlt:g.pallets||0,_groupSku:g.sku});
+      }
+    }
+    _digestData.faItems=_faResult;
+    _digestData.faGroups=_faGroups.map(g=>{const eng=_engAsgn[g.sku]||{};return{sku:g.sku,venue:g.venue,fa:g.fa||'FA',biDate:g.biDate||'',pallets:g.pallets||0,value:g.value||0,items:(g.items||[]).length,lpTruck:g.linkedLP||eng.lp||'',lmTruck:g.linkedLM||eng.lm||'',kit:g.linkedKit||''}});
   }
   // Venue BI dates for FA delivery column
   const _venueBiMap={};
