@@ -13672,20 +13672,24 @@ async function generateDailyDigest(){
   // Fresh-load FA groups + demand from Supabase to ensure digest has current data
   {
     let _faGroups=LP_FA_GROUPS.length?LP_FA_GROUPS:(FA_LINKED._groups||[]);
+    console.log('[Digest FA] Step 1: LP_FA_GROUPS.length='+LP_FA_GROUPS.length+', FA_LINKED._groups='+(FA_LINKED._groups||[]).length+', using='+_faGroups.length);
     if(!_faGroups.length&&SB){
-      try{const _r=await SB.from('shared_state').select('value').eq('id','fa-groups').maybeSingle();if(_r?.data){const v=JSON.parse(_r.data.value);_faGroups=v.items||[];if(_faGroups.length)LP_FA_GROUPS=_faGroups}}catch(e){}
+      try{const _r=await SB.from('shared_state').select('value').eq('id','fa-groups').maybeSingle();if(_r?.data){const v=JSON.parse(_r.data.value);_faGroups=v.items||[];if(_faGroups.length)LP_FA_GROUPS=_faGroups;console.log('[Digest FA] Step 1b: Fresh-loaded from Supabase:',_faGroups.length,'groups')}}catch(e){console.warn('[Digest FA] Step 1b: Supabase load error:',e)}
     }
     let _faDemItems=FA_LINKED._items||[];
+    console.log('[Digest FA] Step 2: FA_LINKED._items='+_faDemItems.length);
     if(!_faDemItems.length&&SB){
-      try{const _r=await SB.from('shared_state').select('value').eq('id','fa-demand').maybeSingle();if(_r?.data)_faDemItems=JSON.parse(_r.data.value).items||[]}catch(e){}
+      try{const _r=await SB.from('shared_state').select('value').eq('id','fa-demand').maybeSingle();if(_r?.data){_faDemItems=JSON.parse(_r.data.value).items||[];console.log('[Digest FA] Step 2b: Fresh-loaded demand from Supabase:',_faDemItems.length,'items')}}catch(e){console.warn('[Digest FA] Step 2b: Supabase load error:',e)}
     }
     const _faById={};for(const it of _faDemItems)_faById[it.id]=it;
     // Build engine assignment map from PLAN_CACHE + LP plan
     const _engAsgn={};
-    for(const label in PLAN_CACHE){const P=PLAN_CACHE[label];if(!P)continue;for(const t of P.allT||[]){for(const it of t.items||[]){if(it._fa&&it.sku){_engAsgn[it.sku]={lm:t.id,lmDate:t.dd||''}}}}}
-    for(const r of (LP_STATE.generatedPlan||[])){if(r.sku&&r.sku.startsWith('FA-')&&r.sku.includes('-G')){if(!_engAsgn[r.sku])_engAsgn[r.sku]={};_engAsgn[r.sku].lp='LP-'+r.truckId;_engAsgn[r.sku].lpDate=r.date||''}}
+    let _engLmCount=0,_engLpCount=0;
+    for(const label in PLAN_CACHE){const P=PLAN_CACHE[label];if(!P)continue;for(const t of P.allT||[]){for(const it of t.items||[]){if(it._fa&&it.sku){_engAsgn[it.sku]={lm:t.id,lmDate:t.dd||''};_engLmCount++}}}}
+    for(const r of (LP_STATE.generatedPlan||[])){if(r.sku&&r.sku.startsWith('FA-')&&r.sku.includes('-G')){if(!_engAsgn[r.sku])_engAsgn[r.sku]={};_engAsgn[r.sku].lp='LP-'+r.truckId;_engAsgn[r.sku].lpDate=r.date||'';_engLpCount++}}
+    console.log('[Digest FA] Step 3: Engine assignments — LM:',_engLmCount,', LP:',_engLpCount,', total keys:',Object.keys(_engAsgn).length);
     // Build per-item list (for digest email detail rows)
-    const _faResult=[];
+    const _faResult=[];let _resolvedCount=0,_fallbackCount=0;
     for(const g of _faGroups){
       const eng=_engAsgn[g.sku]||{};
       const lpRef=g.linkedLP||eng.lp||null;
@@ -13693,14 +13697,18 @@ async function generateDailyDigest(){
       const kitRef=g.linkedKit||null;
       const resolved=(g.items||[]).map(did=>_faById[did]).filter(Boolean);
       if(resolved.length){
+        _resolvedCount+=resolved.length;
         for(const it of resolved){
           _faResult.push({sku:it.sku,name:it.name,qty:it.qty,pallets:0,venue:g.venue||it.venue||'',fa:g.fa||'FA',biDate:g.biDate||'',linkedTruck:lmRef||null,linkedLP:lpRef||null,linkedKit:kitRef||null,_groupPlt:g.pallets||0,_groupSku:g.sku});
         }
       } else {
+        _fallbackCount++;
         // Items not resolved (FA demand not loaded) — use group-level summary
         _faResult.push({sku:g.sku,name:'FA: '+(g.fa||'FA')+' Reserve ('+g.venue+')',qty:(g.items||[]).length,pallets:g.pallets||0,venue:g.venue||'',fa:g.fa||'FA',biDate:g.biDate||'',linkedTruck:lmRef||null,linkedLP:lpRef||null,linkedKit:kitRef||null,_groupPlt:g.pallets||0,_groupSku:g.sku});
       }
     }
+    console.log('[Digest FA] Step 4: Result — total:',_faResult.length,'(resolved:',_resolvedCount,', fallback:',_fallbackCount,'), with linkedTruck:',_faResult.filter(r=>r.linkedTruck).length,', with linkedLP:',_faResult.filter(r=>r.linkedLP).length);
+    if(_faGroups.length>0&&_faResult.length<3)console.warn('[Digest FA] ⚠ Only',_faResult.length,'items from',_faGroups.length,'groups — check item resolution');
     _digestData.faItems=_faResult;
     _digestData.faGroups=_faGroups.map(g=>{const eng=_engAsgn[g.sku]||{};return{sku:g.sku,venue:g.venue,fa:g.fa||'FA',biDate:g.biDate||'',pallets:g.pallets||0,value:g.value||0,items:(g.items||[]).length,lpTruck:g.linkedLP||eng.lp||'',lmTruck:g.linkedLM||eng.lm||'',kit:g.linkedKit||''}});
   }
