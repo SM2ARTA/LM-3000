@@ -903,60 +903,78 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const _faVenues=[...new Set(_faItems.map(i=>i.venue))];
     const _faTrucks=[...new Set(_faItems.map(i=>i.linkedTruck).filter(Boolean))];
 
-    // Group by dispatch week (all dates, not limited to forecast window)
-    const _faByDate={};
-    for(const it of _faResolved){const d=it.dispDate||'unscheduled';if(!_faByDate[d])_faByDate[d]=[];_faByDate[d].push(it)}
-    const _faUnscheduled=_faByDate['unscheduled']||[];
-    const _faDates=Object.keys(_faByDate).filter(d=>d!=='unscheduled').sort();
-    const _faWinLabel=_faDates.length?fD(_faDates[0])+' &#8211; '+fD(_faDates[_faDates.length-1]):'';
-    html+=_sec('&#128230;','FA Goods &#8212; Forecast'+(_faWinLabel?' ('+_faWinLabel+')':''),'#0891B2');
+    // Group by truck — only show locked trucks
+    // Build locked truck set from LM + LP dispatched
+    const _lmDispMap={};for(const t of (D.lmTrucks||[])){if(t.dispatched)_lmDispMap[t.id]=t}
+    const _lpDispSet=dispatched;// LP dispatched Set (line 140)
+    // Group FA groups by truck (use faGroups which has lmTruck/lpTruck)
+    const _faGrps=D.faGroups||[];
+    const _faByTruck2={};// truckRef → {truck info + groups[]}
+    for(const g of _faGrps){
+      const trk=g.lmTruck||g.lpTruck;if(!trk)continue;
+      // Check if truck is locked
+      const lmLocked=_lmDispMap[trk];
+      const lpId=trk.startsWith('LP-')?parseInt(trk.replace('LP-','')):null;
+      const lpLocked=lpId!==null&&_lpDispSet.has(lpId);
+      if(!lmLocked&&!lpLocked)continue;// skip unlocked trucks
+      if(!_faByTruck2[trk])_faByTruck2[trk]={truckId:trk,dd:lmLocked?lmLocked.dd:(g.lpDate||''),dest:lmLocked?lmLocked.dest:'',lsr:lmLocked?lmLocked.lsr:'',groups:[],totalItems:0,totalQty:0,totalPlt:0,totalValue:0};
+      _faByTruck2[trk].groups.push(g);
+      _faByTruck2[trk].totalItems+=g.items||0;
+      _faByTruck2[trk].totalPlt+=g.pallets||0;
+      _faByTruck2[trk].totalValue+=g.value||0;
+    }
+    // Also sum qty from resolved items
+    for(const it of _faResolved){
+      const trk=it.linkedTruck||it.linkedLP;if(!trk||!_faByTruck2[trk])continue;
+      _faByTruck2[trk].totalQty+=it.qty||0;
+    }
+    const _faTruckList=Object.values(_faByTruck2).sort((a,b)=>(a.dd||'9').localeCompare(b.dd||'9'));
+    const _faLockedCount=_faTruckList.length;
+    const _faLockedPlt=_faTruckList.reduce((s,t)=>s+t.totalPlt,0);
+    const _faLockedQty=_faTruckList.reduce((s,t)=>s+t.totalQty,0);
+    const _faLockedVal=_faTruckList.reduce((s,t)=>s+t.totalValue,0);
+    const _faLockedVenues=[...new Set(_faTruckList.flatMap(t=>t.groups.map(g=>g.venue)))];
+
+    html+=_sec('&#128230;','FA Goods &#8212; Locked Trucks','#0891B2');
     html+='<tr><td style="padding:0 32px 20px">';
     // KPI chips
     html+='<table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px"><tr>';
-    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faItems.length+' items</td><td style="width:8px"></td>';
-    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faTotalQty+' qty</td><td style="width:8px"></td>';
-    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faTotalPlt.toFixed(1)+' plt</td><td style="width:8px"></td>';
-    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faVenues.length+' venues</td><td style="width:8px"></td>';
-    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faTrucks.length+' trucks</td>';
+    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">&#128274; '+_faLockedCount+' trucks</td><td style="width:8px"></td>';
+    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faLockedPlt+' plt</td><td style="width:8px"></td>';
+    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faLockedQty+' qty</td><td style="width:8px"></td>';
+    html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">'+_faLockedVenues.length+' venues</td><td style="width:8px"></td>';
+    if(_faLockedVal)html+='<td bgcolor="#ECFEFF" style="padding:5px 14px;font-size:12px;font-weight:700;color:#0891B2;border:none">$'+Math.round(_faLockedVal).toLocaleString()+'</td>';
     html+='</tr></table>';
-    // Forecast table
-    html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
-    const _fh='padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2';
-    html+='<tr bgcolor="#E0F7FA"><td style="'+_fh+'">DISPATCH</td><td style="'+_fh+'">VENUE</td><td style="'+_fh+'">DELIVERY</td><td style="'+_fh+'">SKU</td><td style="'+_fh+'">ITEM</td><td style="'+_fh+';text-align:right">QTY</td><td style="'+_fh+'">TRUCK / KIT</td></tr>';
-    let _faIdx=0;
-    const _faRow=(it,dateLabel)=>{
-      const bg=_faIdx%2?'#F0FDFE':'#ffffff';
-      const truckDisp=it.linkedTruck?'<span style="font-size:10px;font-weight:700;color:#4A148C">'+it.linkedTruck+'</span>':'';
-      const kitDisp=it.linkedKit?'<span style="font-size:10px;font-weight:600;color:#12804A">'+it.linkedKit+'</span>':'';
-      let _venueBi=(D.venueBiDates||{})[it.venue]||'';
-      if(!_venueBi){// fuzzy: try partial match
-        const vl=(it.venue||'').toLowerCase();
-        for(const k in(D.venueBiDates||{})){if(k.toLowerCase()===vl||vl.includes(k.toLowerCase())||k.toLowerCase().includes(vl)){_venueBi=D.venueBiDates[k];break}}
+    if(!_faTruckList.length){
+      html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'"><tr><td style="padding:12px;font-size:12px;color:#999;text-align:center">No locked FA trucks yet</td></tr></table>';
+    } else {
+      // Table grouped by truck
+      html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
+      const _fh='padding:6px 10px;font-size:10px;font-weight:700;color:#0891B2';
+      html+='<tr bgcolor="#E0F7FA"><td style="'+_fh+'">TRUCK</td><td style="'+_fh+'">DISPATCH</td><td style="'+_fh+'">VENUE</td><td style="'+_fh+'">FA</td><td style="'+_fh+'">DELIVERY</td><td style="'+_fh+';text-align:right">ITEMS</td><td style="'+_fh+';text-align:right">PALLETS</td><td style="'+_fh+';text-align:right">VALUE</td><td style="'+_fh+'">KIT</td></tr>';
+      let _faIdx2=0;
+      for(const t of _faTruckList){
+        for(const g of t.groups){
+          const bg=_faIdx2%2?'#F0FDFE':'#ffffff';
+          let _vBi=(D.venueBiDates||{})[g.venue]||'';
+          if(!_vBi){const vl=(g.venue||'').toLowerCase();for(const k in(D.venueBiDates||{})){if(k.toLowerCase()===vl||vl.includes(k.toLowerCase())){_vBi=D.venueBiDates[k];break}}}
+          const _b='padding:5px 10px;border-bottom:1px solid #E0F2F1';
+          html+='<tr bgcolor="'+bg+'">';
+          html+='<td style="'+_b+';font-size:11px;font-weight:700;color:#4A148C">'+t.truckId+' &#128274;</td>';
+          html+='<td style="'+_b+';font-size:10px;font-weight:700">'+(t.dd?fD(t.dd):'—')+'</td>';
+          html+='<td style="'+_b+';font-size:10px;font-weight:600;color:#333">'+g.venue+'</td>';
+          html+='<td style="'+_b+';font-size:10px;color:#0891B2;font-weight:600">'+g.fa+'</td>';
+          html+='<td style="'+_b+';font-size:10px;font-weight:600;color:#12804A">'+(_vBi?fD(_vBi):'—')+'</td>';
+          html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right">'+(g.items||0)+'</td>';
+          html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right;color:#CF5D5D">'+(g.pallets||0)+'</td>';
+          html+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right;color:#6E3FF3">'+(g.value?'$'+Math.round(g.value).toLocaleString():'—')+'</td>';
+          html+='<td style="'+_b+';font-size:10px;color:#12804A;font-weight:600">'+(g.kit||'—')+'</td>';
+          html+='</tr>';_faIdx2++;
+        }
       }
-      const delDisp=_venueBi?fD(_venueBi):'—';
-      const _b='padding:5px 10px;border-bottom:1px solid #E0F2F1';
-      let r='<tr bgcolor="'+bg+'">';
-      r+='<td style="'+_b+';font-size:10px;font-weight:700">'+dateLabel+'</td>';
-      r+='<td style="'+_b+';font-size:10px;font-weight:600;color:#333">'+it.venue+'</td>';
-      r+='<td style="'+_b+';font-size:10px;font-weight:600;color:#12804A">'+delDisp+'</td>';
-      r+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;color:#0891B2">'+it.sku+'</td>';
-      r+='<td style="'+_b+';font-size:11px">'+it.name+'</td>';
-      r+='<td style="'+_b+';font-size:11px;font-family:Courier New,monospace;font-weight:700;text-align:right">'+it.qty+'</td>';
-      r+='<td style="'+_b+';font-size:10px">'+truckDisp+(truckDisp&&kitDisp?' ':'')+kitDisp+'</td>';
-      r+='</tr>';_faIdx++;return r;
-    };
-    for(const d of _faDates){
-      const items=_faByDate[d]||[];
-      if(!items.length)continue;
-      const dayLabel=fD(d);
-      items.sort((a,b)=>(a.venue||'').localeCompare(b.venue));
-      items.forEach((it,j)=>{html+=_faRow(it,j===0?'<span style="font-weight:700">'+dayLabel+'</span>':'')});
+      html+='</table>';
     }
-    // Unscheduled items (no linked truck date)
-    if(_faUnscheduled.length){
-      _faUnscheduled.forEach((it,j)=>{html+=_faRow(it,j===0?'<span style="color:#C4550A;font-weight:700">Unscheduled</span>':'')});
-    }
-    html+='</table></td></tr>';
+    html+='</td></tr>';
   }
 
   const _lateDestKeys=Object.keys(lateByDest).sort((a,b)=>lateByDest[b].maxDays-lateByDest[a].maxDays);
