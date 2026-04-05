@@ -905,15 +905,33 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
     // Group by truck — only show locked trucks
     // Build locked truck set from LM + LP dispatched
-    const _lmDispMap={};for(const t of (D.lmTrucks||[])){if(t.dispatched)_lmDispMap[t.id]=t}
+    const _lmDispMap={};const _lmDispByLsr={};const _lmDispByDest={};
+    for(const t of (D.lmTrucks||[])){
+      if(!t.dispatched)continue;
+      _lmDispMap[t.id]=t;
+      if(t.lsr)_lmDispByLsr[t.lsr]=t;
+      if(t.dest)_lmDispByDest['LM '+t.dest]=t;
+    }
     const _lpDispSet=dispatched;// LP dispatched Set (line 140)
+    // Match FA truck ref to locked LM truck (handles manual links like "LM New York / CORT · LSR631-001")
+    const _findLmLocked=ref=>{
+      if(!ref)return null;
+      if(_lmDispMap[ref])return _lmDispMap[ref];// exact match (engine: "LM-3")
+      // Match by LSR substring
+      for(const lsr in _lmDispByLsr){if(ref.includes(lsr))return _lmDispByLsr[lsr]}
+      // Match by dest substring
+      for(const k in _lmDispByDest){if(ref.includes(k)||k.includes(ref))return _lmDispByDest[k]}
+      // Match by LM-N pattern in ref
+      const m=ref.match(/LM-(\d+)/);if(m&&_lmDispMap['LM-'+m[1]])return _lmDispMap['LM-'+m[1]];
+      return null;
+    };
     // Group FA groups by truck (use faGroups which has lmTruck/lpTruck)
     const _faGrps=D.faGroups||[];
     const _faByTruck2={};// truckRef → {truck info + groups[]}
     for(const g of _faGrps){
       const trk=g.lmTruck||g.lpTruck;if(!trk)continue;
       // Check if truck is locked
-      const lmLocked=_lmDispMap[trk];
+      const lmLocked=_findLmLocked(trk);
       const lpId=trk.startsWith('LP-')?parseInt(trk.replace('LP-','')):null;
       const lpLocked=lpId!==null&&_lpDispSet.has(lpId);
       if(!lmLocked&&!lpLocked)continue;// skip unlocked trucks
