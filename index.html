@@ -10,6 +10,7 @@
 <script async src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1"></script>
 <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+<script src="ml3k-calc.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#F4F5F7;--sf:#FFF;--bd:#E2E4E9;--bl:#EDEEF1;--tp:#111318;--ts:#60646C;--tt:#9CA0AA;--ac:#CF5D5D;--as:#FDF0F0;--ab:#E8A5A5;--gn:#12804A;--gs:#E6F5ED;--or:#C4550A;--os:#FEF3EB;--rd:#C62A2F;--rs:#FDEBED;--pu:#6E3FF3;--ps:#F0EBFE;--fd:'DM Sans',system-ui,sans-serif;--fm:'IBM Plex Mono',monospace;--r:10px}
@@ -4729,7 +4730,6 @@ function LP_renderDemand(el){
   LP_recomputeStockHolds();
 
   // Filter to truck-relevant destinations only (MEX, CAN, RIC) — no source exclusion (chips handle it)
-  const isTruckDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
   const filtered=mp.filter(d=>isTruckDest(d.destination));
 
   // SKUs with at least one arrival date
@@ -5269,9 +5269,8 @@ function LP_renderPlan(el){
   <input type="text" class="lp-search" placeholder="Search by truck, destination, SKU..." id="lpPlanSearch" oninput="LP_filterPlan()" style="margin-bottom:8px">`;
 
   // ── Split trucks into MEX/CAN and USA ──
-  const _isMCDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')};
-  const mcTrucks=truckList.filter(t=>_isMCDest(t.dest));
-  const usTrucks=truckList.filter(t=>!_isMCDest(t.dest));
+  const mcTrucks=truckList.filter(t=>isDestMEX(t.dest)||isDestCAN(t.dest));
+  const usTrucks=truckList.filter(t=>isDestUSA(t.dest));
   const mcDates={};for(const t of mcTrucks){if(!mcDates[t.date])mcDates[t.date]=[];mcDates[t.date].push(t)}
   const usDates={};for(const t of usTrucks){if(!usDates[t.date])usDates[t.date]=[];usDates[t.date].push(t)}
   const mcReady=mcTrucks.filter(t=>!LP_dispatched.has(t.id)&&_truckInStock(t)&&Math.round((t.totalPlt/maxPlt)*100)>=95).length;
@@ -5402,9 +5401,8 @@ function _lpFaVenueToAbbr(venue){
 // Fallback dest strings for engine isTruck filter
 const _FA_ABBR_TO_DEST_FALLBACK={TOR:'CAN TOR',VAN:'CAN VAN',CDMX:'MEX CDMX',GDL:'MEX GDL',MTY:'MEX MTY',KC:'Kansas City / RIC',HOU:'Houston / RIC',NY:'New York New Jersey / RIC'};
 function _lpFaDestStr(abbr){
-  const _isTruck=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
   for(const d of LP_STATE.materialPlan||[]){
-    if(_isTruck(d.destination)&&LP_matchTransitAbbr(d.destination)===abbr)return d.destination;
+    if(isTruckDest(d.destination)&&LP_matchTransitAbbr(d.destination)===abbr)return d.destination;
   }
   return _FA_ABBR_TO_DEST_FALLBACK[abbr]||abbr;
 }
@@ -5608,7 +5606,6 @@ function LP_renderStatus(el){
   const mp=LP_STATE.materialPlan||[];
   if(!mp.length){el.innerHTML='<div class="lp-empty">No data loaded.</div>';return}
   const nom=LP_STATE.nomenclature||{};
-  const isTruckDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
 
   // Locked trucks with LSR numbers
   const lockedTrucks=[];
@@ -5661,8 +5658,7 @@ function LP_renderStatus(el){
 
   // Collect filter options
   const allSources=[...new Set(skus.map(s=>s.source).filter(Boolean))].sort();
-  const _destPri=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')?0:u.includes('CAN')?1:2};
-  const allDests=[...new Set(skus.flatMap(s=>[...s.dests]))].sort((a,b)=>_destPri(a)-_destPri(b)||a.localeCompare(b));
+  const allDests=[...new Set(skus.flatMap(s=>[...s.dests]))].sort((a,b)=>destPriority(a)-destPriority(b)||a.localeCompare(b));
 
   // Apply filters (multi-select)
   if(_lpStatusSrcs.size)skus=skus.filter(s=>_lpStatusSrcs.has(s.source));
@@ -5689,7 +5685,7 @@ function LP_renderStatus(el){
 
   // Group LSR trucks by destination
   const lsrByDest={};for(const t of lsrTrucks){if(!lsrByDest[t.dest])lsrByDest[t.dest]=[];lsrByDest[t.dest].push(t)}
-  const destOrder=Object.keys(lsrByDest).sort((a,b)=>_destPri(a)-_destPri(b)||a.localeCompare(b));
+  const destOrder=Object.keys(lsrByDest).sort((a,b)=>destPriority(a)-destPriority(b)||a.localeCompare(b));
   // Which dest LSR groups to show: if dest filter active, only those; else all
   const visibleDests=_lpStatusDests.size?destOrder.filter(d=>_lpStatusDests.has(d)):destOrder;
   const visDestsSet=new Set(visibleDests);
@@ -5943,7 +5939,6 @@ function LP_showTruckModal(truckId){
 
   // ── Total demand per dest+sku (filtered same as engine: MEX/CAN/RIC, no STP source) ──
   const totalDemandByDestSku={};
-  const isTruckDest=d=>{const u=(d||'').toUpperCase();return u.includes('MEX')||u.includes('CAN')||u.includes('RIC')};
   const isExcSrc=(sku,dest)=>{const s=(LP_STATE.nomenclature[sku]?.source||'').toUpperCase().trim();if(s==='STP CAN'||s==='STP MEX')return true;if(s==='STP USA'&&LP_excludeStaples){const a=LP_matchTransitAbbr(dest);return a==='HOU'||a==='KC'||a==='NY';}return false;};
   for(const d of LP_STATE.materialPlan){
     if(!isTruckDest(d.destination))continue;
@@ -7389,21 +7384,16 @@ function V26_render(){
   // LP trucks (dispatched from Dallas warehouse)
   const lpOnly=trucks.filter(t=>t.source==='Load Plan');
   if(lpOnly.length)v26FilterCats['lp']={label:'📦 LP — Dallas',trucks:lpOnly,cort:[]};
-  // Helper: classify STP+LM trucks by destination country
-  const _isDestCAN=d=>{const u=(d||'').toUpperCase();return u.startsWith('CAN')||u.includes('TORONTO')||u.includes('VANCOUVER')};
-  const _isDestMEX=d=>{const u=(d||'').toUpperCase();return u.startsWith('MEX')||u.includes('GUADALAJARA')||u.includes('MONTERREY')||u.includes('MEXICO CITY')};
+  // Filter trucks by destination country (uses ml3k-calc.js)
   const _isLmOrStp=t=>t.source==='Last Mile'||t.source==='STP Direct';
-  // LM+STP USA (dispatched from Dallas)
-  const lmUSA=trucks.filter(t=>{if(!_isLmOrStp(t))return false;const d=t.dest||'';return!_isDestCAN(d)&&!_isDestMEX(d)});
-  const cortUSA=cortAll.filter(c=>{const d=(c.dest||'').toUpperCase();return!d.startsWith('CAN')&&!d.startsWith('MEX')});
+  const lmUSA=trucks.filter(t=>_isLmOrStp(t)&&isDestUSA(t.dest));
+  const cortUSA=cortAll.filter(c=>isDestUSA(c.dest));
   if(lmUSA.length||cortUSA.length)v26FilterCats['usa']={label:'🇺🇸 USA — Dallas',trucks:lmUSA,cort:cortUSA};
-  // LM+STP Canada (dispatched from Toronto / Vancouver)
-  const lmCAN=trucks.filter(t=>{if(!_isLmOrStp(t))return false;return _isDestCAN(t.dest||'')});
-  const cortCAN=cortAll.filter(c=>{const d=(c.dest||'').toUpperCase();return d.startsWith('CAN')});
+  const lmCAN=trucks.filter(t=>_isLmOrStp(t)&&isDestCAN(t.dest));
+  const cortCAN=cortAll.filter(c=>isDestCAN(c.dest));
   if(lmCAN.length||cortCAN.length)v26FilterCats['can']={label:'🇨🇦 LM — Toronto / Vancouver',trucks:lmCAN,cort:cortCAN};
-  // LM+STP Mexico (dispatched from Mexico City / Guadalajara / Monterrey)
-  const lmMEX=trucks.filter(t=>{if(!_isLmOrStp(t))return false;return _isDestMEX(t.dest||'')});
-  const cortMEX=cortAll.filter(c=>{const d=(c.dest||'').toUpperCase();return d.startsWith('MEX')});
+  const lmMEX=trucks.filter(t=>_isLmOrStp(t)&&isDestMEX(t.dest));
+  const cortMEX=cortAll.filter(c=>isDestMEX(c.dest));
   if(lmMEX.length||cortMEX.length)v26FilterCats['mex']={label:'🇲🇽 LM — Mexico',trucks:lmMEX,cort:cortMEX};
 
   window._v26FilterCats=v26FilterCats;
@@ -7419,106 +7409,14 @@ function V26_render(){
   const fDates=Object.keys(fByDate).filter(d=>d.match(/^\d{4}-/)).sort();
   window._v26ByDate=fByDate;
 
-  // ── Filtered KPIs ──
+  // ── Filtered KPIs — standardized via ml3k-calc.js ──
   const fActiveTrucks=filteredTrucks.filter(t=>!t.excluded);
   const fActiveCort=filteredCort.filter(c=>!c.excluded);
-  const fTotalTrucks=fActiveTrucks.length;
-  // LM pallets from demand (VN) for consistency with LM module KPIs
-  const fLmPlt=(()=>{
-    const lmFilter=curFilter;
-    if(lmFilter==='lp')return 0;// LP-only filter, no LM pallets
-    const vnPlt=VN.reduce((s,v)=>s+v.ep,0);
-    if(lmFilter==='all')return Math.round(vnPlt*10)/10;
-    // For country filters, sum matching VN venues
-    if(lmFilter==='usa')return Math.round(VN.filter(v=>!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).reduce((s,v)=>s+v.ep,0)*10)/10;
-    if(lmFilter==='can')return Math.round(VN.filter(v=>vcIsCAN(v.cluster)).reduce((s,v)=>s+v.ep,0)*10)/10;
-    if(lmFilter==='mex')return Math.round(VN.filter(v=>vcIsMEX(v.cluster)).reduce((s,v)=>s+v.ep,0)*10)/10;
-    return Math.round(fActiveTrucks.filter(t=>t.source!=='Load Plan').reduce((s,t)=>s+t.pallets,0)*10)/10;
-  })();
-  const fLpPlt=Math.round(fActiveTrucks.filter(t=>t.source==='Load Plan').reduce((s,t)=>s+t.pallets,0)*10)/10;
-  const fTotalQty=fActiveTrucks.reduce((s,t)=>s+t.qty,0);
-  const fLpCount=fActiveTrucks.filter(t=>t.source==='Load Plan').length;
-  const fLmCount=fActiveTrucks.filter(t=>t.source==='Last Mile').length;
-  const fCortN=fActiveCort.length;
-  const fDests=new Set(fActiveTrucks.map(t=>t.dest));
-
-  // Pieces from venue demand (VN) for accuracy — matches LM dashboard
-  const fPieces=(()=>{
-    if(curFilter==='lp')return fActiveTrucks.filter(t=>t.source==='Load Plan').reduce((s,t)=>s+t.qty,0);
-    if(curFilter==='all')return VN.reduce((s,v)=>s+v.it,0);
-    if(curFilter==='usa')return VN.filter(v=>!vcIsCAN(v.cluster)&&!vcIsMEX(v.cluster)).reduce((s,v)=>s+v.it,0);
-    if(curFilter==='can')return VN.filter(v=>vcIsCAN(v.cluster)).reduce((s,v)=>s+v.it,0);
-    if(curFilter==='mex')return VN.filter(v=>vcIsMEX(v.cluster)).reduce((s,v)=>s+v.it,0);
-    return fTotalQty;
-  })();
-  const v26KpiItems=[
-    {label:'🚛 LM Pallets',value:fLmPlt.toLocaleString(),color:'var(--gn)',sub:fLmCount+' trucks'},
-    {label:'📦 LP Pallets',value:fLpPlt.toLocaleString(),color:'var(--ac)',sub:fLpCount+' trucks'},
-    {label:'📋 Pieces',value:fPieces.toLocaleString()},
-    {label:'🚛 Trucks',value:(fLmCount+fLpCount),sub:'LP '+fLpCount+' · LM '+fLmCount},
-  ];
-  // Total distribution cost (active non-excluded trucks only, CORT excluded)
-  const fLpCost=fActiveTrucks.filter(t=>t.source==='Load Plan').reduce((s,t)=>s+getEffRate(t.id,t.dest,26,false),0);
-  const _isLmCAN=d=>{const u=(d||'').toUpperCase();return u.startsWith('CAN ')||u.includes('TOR')||u.includes('VAN')};
-  const _isLmMEX=d=>{const u=(d||'').toUpperCase();return u.startsWith('MEX ')||u.includes('CDMX')||u.includes('GDL')||u.includes('MTY')||u.includes('GUADALAJARA')||u.includes('MEXICO CITY')||u.includes('MONTERREY')};
-  const _isLmSta=d=>d&&(d.includes('Stadium')||d.includes('Broadcast'));
-  const fLmSta=fActiveTrucks.filter(t=>t.source==='Last Mile'&&_isLmSta(t.dest));
-  const fLmCluster=fActiveTrucks.filter(t=>t.source==='Last Mile'&&!_isLmSta(t.dest)&&!_isLmCAN(t.dest)&&!_isLmMEX(t.dest));
-  const fLmLocal=fActiveTrucks.filter(t=>t.source==='Last Mile'&&(_isLmCAN(t.dest)||_isLmMEX(t.dest)));
-  const fLmStaCost=fLmSta.reduce((s,t)=>s+getEffRate(t.id,t.dest,LM_DEFAULT_TC[t.dest]||12,true),0);
-  const fLmClusterCost=fLmCluster.reduce((s,t)=>s+getEffRate(t.id,t.dest,LM_DEFAULT_TC[t.dest]||12,true),0);
-  const fLmLocalCost=fLmLocal.reduce((s,t)=>s+getEffRate(t.id,t.dest,LM_DEFAULT_TC[t.dest]||12,true),0);
-  const fStpCost=fActiveTrucks.filter(t=>t.source==='STP Direct').reduce((s,t)=>s+(t._stpRate||0),0);
-  const fDistCost=fLpCost+fLmStaCost+fLmClusterCost+fLmLocalCost+fStpCost;
-  // Dist. Cost hidden per user request — keep computation for possible future use
-  // v26KpiItems.push({label:'💰 Dist. Cost',value:'$'+Math.round(fDistCost).toLocaleString(),color:'var(--pu)',sub:`LP $${Math.round(fLpCost).toLocaleString()} · Stadiums $${Math.round(fLmStaCost).toLocaleString()} · Clusters $${Math.round(fLmClusterCost).toLocaleString()} (${fLmCluster.length}) · Local $${Math.round(fLmLocalCost).toLocaleString()}${fStpCost>0?' · STP $'+Math.round(fStpCost).toLocaleString():''}`});
-  if(fCortN>0)v26KpiItems.push({label:'🏷 CORT',value:fCortN,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8'});
-  const fStpN=fActiveTrucks.filter(t=>t.source==='STP Direct').length;
-  const fStpPlt=fActiveTrucks.filter(t=>t.source==='STP Direct').reduce((s,t)=>s+t.pallets,0);
-  const fStpPcs=fActiveTrucks.filter(t=>t.source==='STP Direct').reduce((s,t)=>s+t.qty,0);
-  if(fStpN>0)v26KpiItems.push({label:'🏪 Staples',value:fStpN,color:'#EF6C00',labelColor:'#EF6C00',style:'border-color:#FFCC80;background:#FFF8F0',sub:fStpPcs.toLocaleString()+' pcs · '+fStpPlt.toFixed(1)+' plt'});
-  // Destinations: LP cities + LM venue clusters (not individual truck dests)
-  const fLpDests=new Set(fActiveTrucks.filter(t=>t.source==='Load Plan').map(t=>t.dest));
-  const fLmVenues=new Set(fActiveTrucks.filter(t=>t.source==='Last Mile').map(t=>t.dest));
-  const fDestSub='LP '+fLpDests.size+' · LM '+fLmVenues.size;
-  v26KpiItems.push({label:'📅 Ship Dates',value:fDates.length},{label:'🌎 Destinations',value:fLpDests.size+fLmVenues.size,sub:fDestSub});
-  // Stock arrival % — unique SKUs from material plan (excl CT/STP) vs stock report
-  const _isExclSrc=sku=>{const s=(NOM[sku]?.src||'').toUpperCase().trim();return s.startsWith('CT')||s.startsWith('STP')};
-  // Determine which venues match the current filter
-  const _venueFilter=curFilter==='all'||curFilter==='usa'||curFilter==='can'||curFilter==='mex';
-  const _isVenueMatch=v=>{
-    if(curFilter==='all')return true;
-    if(curFilter==='lp')return false;// LP uses LP_STATE, not RW
-    const meta=VN.find(x=>x.name===v);
-    const cl=meta?.cluster||'';
-    if(curFilter==='can')return vcIsCAN(cl);
-    if(curFilter==='mex')return vcIsMEX(cl);
-    if(curFilter==='usa')return!vcIsCAN(cl)&&!vcIsMEX(cl);
-    return true;
-  };
-  const fDemandSkus=new Set();
-  // LM material plan (RW)
-  if(curFilter!=='lp'){
-    for(const r of RW){const sku=r["Nomenclature"];if(!sku||!NOM[sku])continue;if(NOM[sku]._kitNom)continue;if(_isExclSrc(sku))continue;const v=r["Venue"];if(!v||!_isVenueMatch(v))continue;fDemandSkus.add(sku)}
-  }
-  // LP material plan
-  if(curFilter==='all'||curFilter==='lp'){
-    for(const d of (LP_STATE.materialPlan||[])){if(!d.sku)continue;const src=(LP_STATE.nomenclature[d.sku]?.source||'').toUpperCase().trim();if(src.startsWith('CT')||src.startsWith('STP'))continue;fDemandSkus.add(d.sku)}
-  }
-  const fInStock=STOCK_SKUS.size>0?[...fDemandSkus].filter(s=>STOCK_SKUS.has(s)).length:0;
-  const fStockPct=fDemandSkus.size>0?Math.round(fInStock/fDemandSkus.size*100):0;
-  const stockColor=STOCK_SKUS.size===0?'var(--tt)':(fStockPct>=90?'var(--gn)':fStockPct>=50?'var(--or)':'var(--rd)');
-  v26KpiItems.push({label:'📦 In Stock',value:STOCK_SKUS.size===0?'—':fStockPct+'%',color:stockColor,sub:STOCK_SKUS.size===0?'No stock report':fInStock+' / '+fDemandSkus.size+' SKUs'});
-  // Compact inline KPIs for TV mode
-  html+=`<div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap">`;
-  v26KpiItems.forEach(k=>{
-    html+=`<div style="background:var(--sf);border:1px solid var(--bl);border-radius:8px;padding:6px 10px;flex:1 1 70px;min-width:70px${k.style?';'+k.style:''}">
-      <div style="font-size:8px;color:${k.labelColor||'var(--tt)'};font-weight:600">${k.label}</div>
-      <div style="font-size:18px;font-weight:700;letter-spacing:-.5px;color:${k.color||'var(--ts)'}">${k.value}</div>
-      ${k.sub?`<div style="font-size:7px;color:var(--tt)">${k.sub}</div>`:''}
-    </div>`;
-  });
-  html+=`</div>`;
+  const K=computeKpis(filteredTrucks,filteredCort,{countryFilter:curFilter,dates:fDates,getLmTc:d=>LM_DEFAULT_TC[d]||12});
+  const fStpN=K.stpN;
+  const fLmPlt=K.lmPlt;
+  const fLpPlt=K.lpPlt;
+  html+=kpiRow(buildKpiCards(K));
 
   // ── NOTIFICATION BOARD — Advance inbound/outbound requests ──
   const _nbDays=window._v26NbDays||3;
@@ -14483,17 +14381,16 @@ function LM_renderFAGoods(el){
 // ── LM FORECAST TAB ──
 let _fcCountryFilter='all';// 'all','usa','can','mex'
 const _FC_STAFF=['Ashley','Kyli','Yael','Brittany'];
-let _fcLeadMap={};// truckId → staffName (persisted)
-function _fcControl(truckId,lead){
+let _fcLeadMap={};// fingerprint → staffName (persisted, stable across rebuilds)
+function _fcControl(fp,lead){
   // Deterministic pseudo-random control that never matches lead
-  let h=0;for(let i=0;i<truckId.length;i++)h=(h*31+truckId.charCodeAt(i))>>>0;
+  let h=0;for(let i=0;i<fp.length;i++)h=(h*31+fp.charCodeAt(i))>>>0;
   const others=_FC_STAFF.filter(n=>n!==lead);
   return others[h%others.length];
 }
-function _fcSetLead(truckId,val){
+function _fcSetLead(fp,val){
   if(ROLE==='viewer')return;
-  if(val)_fcLeadMap[truckId]=val;else delete _fcLeadMap[truckId];
-  // Debounced save
+  if(val)_fcLeadMap[fp]=val;else delete _fcLeadMap[fp];
   clearTimeout(window._fcLeadTimer);
   window._fcLeadTimer=setTimeout(()=>{
     if(!SB)return;
@@ -14536,7 +14433,7 @@ function LM_renderForecast(el){
       const buffer=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
       const cargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
       const _lsr=LM_getLsr(t);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
-      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck});
+      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,fp:LM_fp(t),disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck});
     }
   };
   // USA trucks
@@ -14614,8 +14511,8 @@ function LM_renderForecast(el){
         <td class="mono" style="text-align:right;color:var(--pu);font-weight:600">${r.cargo>0?'$'+Math.round(r.cargo).toLocaleString():'—'}</td>
         <td style="text-align:center;font-weight:600;color:${r.faCount>0?'#0891B2':'var(--tt)'}">${r.faCount>0?'📦 '+r.faCount:'—'}</td>
         <td style="text-align:center;font-weight:600;color:${r.lateCount>0?'var(--rd)':'var(--tt)'}">${r.lateCount>0?'⚠ '+r.lateCount:'—'}</td>
-        <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${_fcLeadMap[r.truckId]?'var(--gn)':'var(--bd)'};border-radius:4px;color:${_fcLeadMap[r.truckId]?'var(--gn)':'var(--tt)'};background:#fff;min-width:70px" onchange="_fcSetLead('${r.truckId}',this.value)"><option value="">—</option>${_FC_STAFF.map(n=>`<option value="${n}"${_fcLeadMap[r.truckId]===n?' selected':''}>${n}</option>`).join('')}</select>`:`<span style="font-size:10px;color:${_fcLeadMap[r.truckId]?'var(--gn)':'var(--tt)'}">${_fcLeadMap[r.truckId]||'—'}</span>`}</td>
-        <td style="font-size:10px;color:${_fcLeadMap[r.truckId]?'var(--pu)':'var(--tt)'}">${_fcLeadMap[r.truckId]?_fcControl(r.truckId,_fcLeadMap[r.truckId]):'—'}</td>
+        <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${_fcLeadMap[r.fp]?'var(--gn)':'var(--bd)'};border-radius:4px;color:${_fcLeadMap[r.fp]?'var(--gn)':'var(--tt)'};background:#fff;min-width:70px" onchange="_fcSetLead('${r.fp.replace(/'/g,"\\'")}',this.value)"><option value="">—</option>${_FC_STAFF.map(n=>`<option value="${n}"${_fcLeadMap[r.fp]===n?' selected':''}>${n}</option>`).join('')}</select>`:`<span style="font-size:10px;color:${_fcLeadMap[r.fp]?'var(--gn)':'var(--tt)'}">${_fcLeadMap[r.fp]||'—'}</span>`}</td>
+        <td style="font-size:10px;color:${_fcLeadMap[r.fp]?'var(--pu)':'var(--tt)'}">${_fcLeadMap[r.fp]?_fcControl(r.fp,_fcLeadMap[r.fp]):'—'}</td>
       </tr>`;
     }
     h+=`</tbody></table></div>`;
@@ -15354,8 +15251,8 @@ if(cv==="dashboard"){
     {label:'📅 Dispatch Days',value:totalDays,color:'var(--or)'},
     {label:'📈 Peak/Day',value:peakTrucks,color:'var(--rd)'},
   ];
-  if(totalCort>0)lmKpiItems.push({label:'🏷 CORT',value:totalCort,color:'#E31837',labelColor:'#E31837',style:'border-color:#F5C6C7;background:#FFF8F8',sub:totalCortPcs.toLocaleString()+' pcs'});
-  if(totalStp>0){const stpDays=calDates.filter(d=>(calMap[d].stp||0)>0).length;lmKpiItems.push({label:'🏪 Staples',value:totalStp,color:'#EF6C00',labelColor:'#EF6C00',style:'border-color:#FFCC80;background:#FFF8F0',sub:totalStpPcs.toLocaleString()+' qty · '+stpDays+' days'});}
+  if(totalCort>0)lmKpiItems.push(cortCard(totalCort,totalCortPcs));
+  if(totalStp>0){const stpDays=calDates.filter(d=>(calMap[d].stp||0)>0).length;lmKpiItems.push(stpCard(totalStp,totalStpPcs,undefined,stpDays));}
   h+=kpiRow(lmKpiItems,'fin');
 
   // ── VISUAL CALENDAR: month grid ──
