@@ -10780,10 +10780,14 @@ function numberAll(){
   // Collect reserved IDs from locked trucks (e.g., "LM-9" → 9)
   const _reservedIds=new Set();
   allTrucks.forEach(e=>{if(e.ref._locked&&e.ref.id){const m=e.ref.id.match(/^LM-(\d+)$/);if(m)_reservedIds.add(parseInt(m[1]))}});
-  let tn=1;allTrucks.forEach(e=>{
+  let tn=1;let _idMigrated=false;
+  allTrucks.forEach(e=>{
     if(e.ref._locked&&e.ref.id){/* keep frozen ID */}else{while(_reservedIds.has(tn))tn++;e.ref.id=`LM-${tn++}`}
     e.ref.destLabel=e.label;e.ref.destDisplay=e.dispLabel;
+    // Backfill _lockedId for legacy snapshots (locked before this feature)
+    if(e.ref._locked){const fp=LM_fp(e.ref);const snap=LM_lockedSnapshots[fp];if(snap&&!snap._lockedId){snap._lockedId=e.ref.id;_idMigrated=true}}
   });
+  if(_idMigrated&&ROLE!=='viewer')LM_saveDateOverrides();// persist backfilled IDs
 
   // ── Migrate old-style fingerprints (raw kit SKU names) → new stable format (KIT:{kitId}) ──
   // This runs on every numberAll() but only migrates FPs that still use old format.
