@@ -10525,6 +10525,7 @@ function _lmInjectLockedIntoCache(label){
     if(P.allT&&P.allT.some(t=>t._locked&&LM_fp(t)===fp))continue;
     const trk=JSON.parse(JSON.stringify(snap));
     trk._locked=true;
+    trk.id=snap._lockedId||'';// preserve frozen ID
     // Recalculate pallets/pcs if items were returned (mirrors numberAll injection)
     const _trkRet=snap._returned||{};
     if(Object.keys(_trkRet).length){
@@ -10703,7 +10704,7 @@ function numberAll(){
     for(const {fp,snap} of _lockedByLabel[label]){
       const trk=JSON.parse(JSON.stringify(snap));
       trk._locked=true;
-      trk.id='';// will be numbered below
+      trk.id=snap._lockedId||'';// preserve frozen ID from lock time (numbered below only if empty)
       // Recalculate pallets/pcs if items were returned
       const _trkRet=snap._returned||{};
       if(Object.keys(_trkRet).length){
@@ -10774,9 +10775,15 @@ function numberAll(){
     }
   }
 
-  // Sort and number LM trucks globally
+  // Sort and number LM trucks globally — locked trucks keep their frozen ID
   allTrucks.sort((a,b)=>a.dateK<b.dateK?-1:a.dateK>b.dateK?1:0);
-  let tn=1;allTrucks.forEach(e=>{e.ref.id=`LM-${tn++}`;e.ref.destLabel=e.label;e.ref.destDisplay=e.dispLabel});
+  // Collect reserved IDs from locked trucks (e.g., "LM-9" → 9)
+  const _reservedIds=new Set();
+  allTrucks.forEach(e=>{if(e.ref._locked&&e.ref.id){const m=e.ref.id.match(/^LM-(\d+)$/);if(m)_reservedIds.add(parseInt(m[1]))}});
+  let tn=1;allTrucks.forEach(e=>{
+    if(e.ref._locked&&e.ref.id){/* keep frozen ID */}else{while(_reservedIds.has(tn))tn++;e.ref.id=`LM-${tn++}`}
+    e.ref.destLabel=e.label;e.ref.destDisplay=e.dispLabel;
+  });
 
   // ── Migrate old-style fingerprints (raw kit SKU names) → new stable format (KIT:{kitId}) ──
   // This runs on every numberAll() but only migrates FPs that still use old format.
@@ -11484,7 +11491,7 @@ function LM_changeDate(truckIdx,newDate){
     LM_lockedSnapshots[fp].dd=newDate;LM_lockedSnapshots[fp].dKey=newDate;
   }else{
     const snapItems=t.items.map(it=>{const n=NOM[it.sku];const _kit=n?._kitId?LM_getKitById(n._kitId):null;return{...it,_pq:it.pq||n?.pq||1,_ps:it.ps||n?.ps||0,_kitId:n?._kitId||null,_kitNom:!!n?._kitNom,_kitVenue:_kit?.venue||null,_kitItems:_kit?JSON.parse(JSON.stringify(_kit.items)):null}});
-    LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:newDate,dKey:newDate,biK:t.origBiK||t.biK||'',destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true,_returned:{}};
+    LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:newDate,dKey:newDate,biK:t.origBiK||t.biK||'',destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true,_returned:{},_lockedId:t.id};
   }
   LM_applyDateOverrides();
   LM_saveDateOverrides();
@@ -11498,7 +11505,7 @@ function LM_toggleDispatchTruck(truckIdx,checked){
     LM_dispatched.add(fp);
     // Snapshot truck data — frozen across all future rebuilds
     const snapItems=t.items.map(it=>{const n=NOM[it.sku];const _kit=n?._kitId?LM_getKitById(n._kitId):null;return{...it,_pq:it.pq||n?.pq||1,_ps:it.ps||n?.ps||0,_kitId:n?._kitId||null,_kitNom:!!n?._kitNom,_kitVenue:_kit?.venue||null,_kitItems:_kit?JSON.parse(JSON.stringify(_kit.items)):null}});
-    LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:t.dd,dKey:t.dKey||t.dd,biK:t.origBiK||t.biK||'',destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true,_returned:{}};
+    LM_lockedSnapshots[fp]={items:JSON.parse(JSON.stringify(snapItems)),dd:t.dd,dKey:t.dKey||t.dd,biK:t.origBiK||t.biK||'',destLabel:t.destLabel,destDisplay:t.destDisplay,pallets:t.pallets,pcs:t.pcs,_isStepB:!!t._isStepB,_locked:true,_returned:{},_lockedId:t.id};
   }else{
     LM_dispatched.delete(fp);delete LM_dateOverrides[fp];delete LM_lockedSnapshots[fp];
   }

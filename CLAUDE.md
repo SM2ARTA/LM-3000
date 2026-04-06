@@ -560,8 +560,10 @@ Locked LM trucks are fully immutable — same as LP locked trucks. They are neve
 - Dispatch date (via snapshot + LM_dateOverrides)
 - LSR number, exclude override, manual items
 
+**What is frozen at lock time** (in addition to items):
+- Truck ID (`LM-N`) — stored as `_lockedId` in snapshot, preserved across rebuilds. Unlocked trucks numbered around reserved IDs (gaps tolerated).
+
 **What still changes** (cosmetic only):
-- Truck ID (`LM-N`) — renumbered globally by date, but FP is content-based
 - `destDisplay` — display label, not used in FP
 
 **Return to Demand (LM)**:
