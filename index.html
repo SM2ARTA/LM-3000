@@ -8847,7 +8847,7 @@ function enterApp(){
       LM_loadClusterTA().catch(()=>{}),
       _hsLoadAIConfig().catch(()=>{}),
       FA_loadLinked().catch(()=>{}),
-      (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data)_fcLeadMap=JSON.parse(data.value)||{}}catch(e){}})()
+      (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){_fcLeadMap=JSON.parse(data.value)||{};console.log('[FC] Loaded',Object.keys(_fcLeadMap).length,'lead assignments')}}catch(e){}})()
     ]);
     // Now build venues and trucks AFTER all config is loaded
     if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="forecast";lmOk=true}}
@@ -14402,11 +14402,8 @@ function _fcControl(fp,lead){
 function _fcSetLead(fp,val){
   if(ROLE==='viewer')return;
   if(val)_fcLeadMap[fp]=val;else delete _fcLeadMap[fp];
-  clearTimeout(window._fcLeadTimer);
-  window._fcLeadTimer=setTimeout(()=>{
-    if(!SB)return;
-    SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify(_fcLeadMap),updated_at:new Date().toISOString()}).catch(e=>console.warn('FC leads save:',e));
-  },1500);
+  // Save immediately (no debounce — rare user action, must survive quick reload)
+  if(SB)SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify(_fcLeadMap),updated_at:new Date().toISOString()}).then(()=>console.log('[FC] Lead saved:',Object.keys(_fcLeadMap).length,'assignments')).catch(e=>console.warn('FC leads save:',e));
   LM_renderForecast(document.getElementById('mn'));
 }
 function LM_renderForecast(el){
