@@ -478,9 +478,10 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _wkIn={};for(let i=0;i<_showDays;i++)_wkIn[_weekDays[i]]=[];
   for(const c of allInbounds){if(_wkIn[c.readyDate]!==undefined)_wkIn[c.readyDate].push(c)}
 
-  // Bucket outbounds by day (only LP trucks with LSR numbers)
+  // Bucket outbounds by day (LP trucks with LSR + LM trucks with LSR)
   const _wkOut={};for(let i=0;i<_showDays;i++)_wkOut[_weekDays[i]]=[];
-  for(const t of lpList){if(lsrNumbers[t.id]&&_wkOut[t.date]!==undefined)_wkOut[t.date].push(t)}
+  for(const t of lpList){if(lsrNumbers[t.id]&&_wkOut[t.date]!==undefined)_wkOut[t.date].push({id:'LP-'+t.id,dest:clDisp(t.dest),date:t.date,pallets:t.plt,type:'LP',lsr:lsrNumbers[t.id]||''})}
+  for(const t of lmTruckData){if(t.lsr&&t.dd&&_wkOut[t.dd]!==undefined)_wkOut[t.dd].push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM',lsr:t.lsr||''})}
 
   // Weekend helper
   const _isWeekend=i=>i>=5;
@@ -573,22 +574,24 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     else if(trucks.length===0){html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>'}
     else{
       for(const t of trucks){
-        const isDisp=dispatched.has(t.id)&&lsrNumbers[t.id]&&t.date<=dShort;
-        const isReady=dispatched.has(t.id)&&lsrNumbers[t.id]&&t.date>dShort;
+        const isLM=t.type==='LM';
+        const isDisp=isLM?(t.lsr&&t.date<=dShort):(dispatched.has(parseInt(t.id.replace('LP-',''))&&t.lsr&&t.date<=dShort));
+        const isReady=!isDisp&&t.lsr;
         const dc=isPast?['#999999','#F0F0F0']:_dClr(t.dest);
-        const dest=clDisp(t.dest);
-        const lsr=lsrNumbers[t.id]||'';
+        const lsr=t.lsr||'';
         const statusIcon=isDisp?'&#10004;':isReady?'&#9654;':'&#9203;';
         const statusBg=isPast?'#E8E8E8':(isDisp?'#C8E6C9':isReady?'#BBDEFB':'#FFE0B2');
         const statusClr=isPast?'#999999':(isDisp?'#1B5E20':isReady?'#0D47A1':'#E65100');
         const destClr=isPast?'#AAAAAA':'#444444';
         const lsrClr=isPast?'#CCCCCC':'#888888';
+        const typeClr=isLM?'#304FFE':'#4A148C';
+        const typeBg=isLM?'#E3F2FD':'#F0EBFE';
         html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px"><tr>';
         html+='<td bgcolor="'+dc[1]+'" style="padding:5px 7px;border-left:4px solid '+dc[0]+'">';
-        html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">LP-'+t.id+'</span>';
+        html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">'+t.id+'</span>';
+        html+=' <span style="font-size:8px;font-weight:700;color:'+typeClr+';background:'+typeBg+';padding:1px 4px">'+t.type+'</span>';
         html+=' <span style="font-size:9px;font-weight:700;color:'+statusClr+';background:'+statusBg+';padding:1px 5px">'+statusIcon+'</span>';
-        const _wkFa=_faForLP(t.id);if(_wkFa){const _wkFas=[...new Set(_wkFa.map(i=>i.fa||'FA'))].join(', ');html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">'+_wkFas+'</span>';}
-        html+='<br><span style="font-size:10px;color:'+destClr+';font-weight:600">'+dest+'</span>';
+        html+='<br><span style="font-size:10px;color:'+destClr+';font-weight:600">'+t.dest+'</span>';
         if(lsr)html+='<br><span style="font-size:9px;color:'+lsrClr+';font-family:Courier New,monospace">LSR '+lsr+'</span>';
         html+='</td></tr></table>';
       }
@@ -717,7 +720,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const isReady=dispatched.has(t.id)&&lsrNumbers[t.id];
     _allOutbound.push({id:'LP-'+t.id,dest:clDisp(t.dest),date:t.date,pallets:t.plt.toFixed(1),type:'LP',status:isReady?'ready':'pending',lsr:lsrNumbers[t.id]||''})
   }
-  for(const t of lmTruckData){if(t.dd&&t.dd>dShort){_allOutbound.push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM',status:t.dispatched&&t.lsr?'ready':'pending',lsr:t.lsr||''})}}
+  for(const t of lmTruckData){if(t.dd&&t.lsr){_allOutbound.push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM',status:t.dispatched?'ready':'pending',lsr:t.lsr||''})}}
   _allOutbound.sort((a,b)=>a.date.localeCompare(b.date));
 
   // ── Tomorrow baseline ──
