@@ -463,6 +463,9 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+='<p style="font-size:10px;color:#888;text-align:center;margin:4px 0 0">'+_lmPct+'% dispatched &middot; '+_venues+' venues &middot; '+_totalItems.toLocaleString()+' items</p></td></tr>';
   html+='</table></td></tr>';
 
+  // ── LM trucks (needed for This Week + Outbounds) ──
+  const lmTruckData=D.lmTrucks||[];
+
   // ── This Week Overview ──
   const _dow=today.getDay();// 0=Sun
   const _monOff=_dow===0?-6:1-_dow;
@@ -606,8 +609,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
   html+='</td></tr>';
 
-  // ── LM trucks for outbounds + next week ──
-  const lmTruckData=D.lmTrucks||[];
+  // ── LM trucks for outbounds + next week (declared above This Week) ──
 
   // ── Next Week — same grid format as This Week, LSR trucks only ──
   try{
