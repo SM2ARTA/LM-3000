@@ -1,2 +1,21 @@
+# Dependencies
 node_modules/
 package-lock.json
+
+# Temp/scratch files (prefixed with _)
+_*.js
+_*.html
+_*.txt
+_*.png
+
+# Build artifacts
+eng.traineddata
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Large binaries (commit to git LFS or skip)
+*.pdf
