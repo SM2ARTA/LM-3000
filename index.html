@@ -14404,7 +14404,9 @@ function _fcControl(fp,lead){
 function _fcSave(){
   if(!SB)return;
   const now=new Date().toISOString();
-  SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify({leads:_fcLeadMap,legs:_fcLegMap,leg2lsr:_fcLeg2Lsr}),updated_at:now}).catch(e=>console.warn('FC save:',e));
+  const payload={leads:_fcLeadMap,legs:_fcLegMap,leg2lsr:_fcLeg2Lsr};
+  console.log('[FC] Saving:',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'legs,',Object.keys(_fcLeg2Lsr).length,'leg2lsr');
+  SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify(payload),updated_at:now}).catch(e=>console.warn('FC save:',e));
 }
 function _fcSetLead(fp,val){
   if(ROLE==='viewer')return;
