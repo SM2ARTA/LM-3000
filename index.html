@@ -14406,7 +14406,7 @@ function _fcSave(){
   const now=new Date().toISOString();
   const payload={leads:_fcLeadMap,legs:_fcLegMap,leg2lsr:_fcLeg2Lsr};
   console.log('[FC] Saving:',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'legs,',Object.keys(_fcLeg2Lsr).length,'leg2lsr');
-  SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify(payload),updated_at:now}).catch(e=>console.warn('FC save:',e));
+  SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify(payload),updated_at:now}).then(({error})=>{if(error)console.warn('FC save error:',error)});
 }
 function _fcSetLead(fp,val){
   if(ROLE==='viewer')return;
