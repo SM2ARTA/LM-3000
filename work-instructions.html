@@ -1,0 +1,1921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<title>FF&amp;E Supply Chain Management — Work Instructions</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+:root{
+  --pri:#4A148C;--sec:#751312;--a3:#304FFE;--a4:#03BFA5;
+  --tp:#1A1A2E;--ts:#555570;--tt:#8888A0;
+  --bg:#F5F5FA;--sf:#FFF;--bd:#E0E0EE;
+  --rd:#C62828;--fd:'Noto Sans',sans-serif;--fm:'IBM Plex Mono',monospace;--r:10px;
+  --pri-s:#EDE7F6;--pri-b:#C5B3E6;
+  --a4-s:#E0F7F3;--a4-b:#80CBC4;
+  --a3-s:#E8EAF6;--a3-b:#8C9EFF;
+  --sec-s:#FBE9E7;--sec-b:#D4A09F;
+  --rd-s:#FDEBED;--rd-b:#F5B8BA;
+  --am:#E65100;--am-s:#FFF3E0;--am-b:#FFB74D;
+  --gn:#2E7D32;--gn-s:#E8F5E9;--gn-b:#81C784;
+  --bob:#1565C0;--bob-s:#E3F2FD;--bob-b:#90CAF9;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--fd);background:var(--bg);color:var(--tp)}
+
+/* ── SLIDE SHELL ── */
+.S{
+  width:1920px;height:1080px;
+  padding:56px 88px 72px;
+  position:relative;
+  page-break-after:always;
+  background:var(--sf);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ── HEADER ── */
+.hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--bd);flex-shrink:0}
+.hd-left{display:flex;align-items:center;gap:12px}
+.hd-title{font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--tt)}
+.badge{padding:7px 18px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase}
+.badge-pri{background:var(--pri);color:#fff}
+.badge-sec{background:var(--sec);color:#fff}
+.badge-a3{background:var(--a3);color:#fff}
+.badge-a4{background:var(--a4);color:#fff}
+.badge-rd{background:var(--rd);color:#fff}
+.badge-am{background:var(--am);color:#fff}
+.badge-gn{background:var(--gn);color:#fff}
+
+/* ── PAGE NUMBER ── */
+.ft{position:absolute;bottom:22px;right:88px;display:flex;align-items:center;gap:10px;color:var(--tt);font-size:10px}
+.sn{background:var(--pri);color:#fff;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px}
+
+/* ── TYPOGRAPHY ── */
+h1{font-size:58px;font-weight:800;line-height:1.1;margin-bottom:10px}
+h2{font-size:34px;font-weight:800;margin-bottom:0;color:var(--tp);flex-shrink:0}
+h3{font-size:17px;font-weight:700;margin-bottom:8px}
+.acc{display:block;width:52px;height:3px;border-radius:2px;margin-bottom:14px;margin-top:6px;flex-shrink:0}
+.sub{font-size:16px;color:var(--ts);font-weight:500;margin-bottom:20px;max-width:1200px;line-height:1.6;flex-shrink:0}
+
+/* ── CARDS ── */
+.c{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:20px 24px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.cv{font-size:36px;font-weight:800;color:var(--pri);font-family:var(--fm);margin-bottom:2px}
+.cv-sm{font-size:22px}.cv-md{font-size:28px}
+.cl{font-size:12px;color:var(--ts);font-weight:600}
+.cd{font-size:10px;color:var(--tt);margin-top:4px;line-height:1.5}
+.c-pri{border-top:3px solid var(--pri)}.c-a4{border-top:3px solid var(--a4)}
+.c-a3{border-top:3px solid var(--a3)}.c-sec{border-top:3px solid var(--sec)}
+.c-rd{border-top:3px solid var(--rd)}.c-am{border-top:3px solid var(--am)}
+.c-gn{border-top:3px solid var(--gn)}
+
+/* ── STAT CARDS ── */
+.stat-card{background:var(--sf);border-radius:14px;padding:20px 24px;border-left:5px solid var(--pri);box-shadow:0 2px 16px rgba(0,0,0,.06);display:flex;flex-direction:column;justify-content:center}
+.stat-card .sc-num{font-family:var(--fm);font-size:48px;font-weight:800;line-height:1;margin-bottom:4px}
+.stat-card .sc-label{font-size:14px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.6px}
+.stat-card .sc-sub{font-size:10px;color:var(--tt);margin-top:4px}
+.stat-card .sc-icon{font-size:28px;margin-bottom:8px}
+
+/* ── TAGS ── */
+.tag{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.ta{background:var(--pri-s);color:var(--pri);border:1px solid var(--pri-b)}
+.tg{background:var(--a4-s);color:#00897B;border:1px solid var(--a4-b)}
+.tb{background:var(--a3-s);color:var(--a3);border:1px solid var(--a3-b)}
+.to{background:var(--sec-s);color:var(--sec);border:1px solid var(--sec-b)}
+.tr{background:var(--rd-s);color:var(--rd);border:1px solid var(--rd-b)}
+.t-am{background:var(--am-s);color:var(--am);border:1px solid var(--am-b)}
+.t-gn{background:var(--gn-s);color:var(--gn);border:1px solid var(--gn-b)}
+
+/* ── TABLES ── */
+.tbl{width:100%;border-collapse:collapse;margin-top:8px}
+.tbl th{text-align:left;padding:9px 14px;font-size:11px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.6px;border-bottom:2px solid var(--bd);background:var(--bg)}
+.tbl td{padding:9px 14px;font-size:13px;border-bottom:1px solid var(--bd);line-height:1.5}
+.tbl td.num,.tbl th.num{font-family:var(--fm);font-weight:600;text-align:right}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:nth-child(even) td{background:#FAFAFD}
+.tbl tr.total td{font-weight:800;border-top:2px solid var(--tp);border-bottom:none;background:var(--bg)}
+
+/* ── FLOW ── */
+.fl{display:flex;align-items:stretch;gap:0}
+.fn{background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:14px 18px;text-align:center;flex:1;position:relative;box-shadow:0 1px 8px rgba(0,0,0,.04)}
+.fn::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0;background:var(--bd)}
+.fn.pri{background:#fff;border-color:var(--pri-b)}.fn.pri::before{background:var(--pri)}
+.fn.a4{background:#fff;border-color:var(--a4-b)}.fn.a4::before{background:var(--a4)}
+.fn.a3{background:#fff;border-color:var(--a3-b)}.fn.a3::before{background:var(--a3)}
+.fn.sec{background:#fff;border-color:var(--sec-b)}.fn.sec::before{background:var(--sec)}
+.fn.am{background:#fff;border-color:var(--am-b)}.fn.am::before{background:var(--am)}
+.fn.gn{background:#fff;border-color:var(--gn-b)}.fn.gn::before{background:var(--gn)}
+.fn.rd{background:#fff;border-color:var(--rd-b)}.fn.rd::before{background:var(--rd)}
+.fn-icon{font-size:24px;margin-bottom:4px}
+
+/* SVG arrow between flow nodes */
+.fa{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:32px}
+.fa svg{display:block}
+
+.ft2{font-size:14px;font-weight:700;margin-bottom:2px}
+.fs{font-size:11px;color:var(--ts);line-height:1.4}
+
+/* ── GRIDS ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;align-items:stretch}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;align-items:stretch}
+.g5{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:12px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+.split-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px}
+
+/* ── CALLOUTS ── */
+.callout{border:2px solid var(--pri);border-radius:10px;padding:12px 18px;background:var(--pri-s);font-size:13px;line-height:1.6}
+.callout b{color:var(--pri)}
+.callout-blue{border-color:var(--a3);background:var(--a3-s)}.callout-blue b{color:var(--a3)}
+.callout-red{border-color:var(--rd);background:var(--rd-s)}.callout-red b{color:var(--rd)}
+.callout-teal{border-color:var(--a4);background:var(--a4-s)}.callout-teal b{color:var(--a4)}
+.callout-sec{border-color:var(--sec);background:var(--sec-s)}.callout-sec b{color:var(--sec)}
+.callout-am{border-color:var(--am);background:var(--am-s)}.callout-am b{color:var(--am)}
+.callout-gn{border-color:var(--gn);background:var(--gn-s)}.callout-gn b{color:var(--gn)}
+
+/* ── CHIP ── */
+.chip{background:var(--bg);border:1px solid var(--bd);border-radius:20px;padding:3px 11px;font-size:11px;font-weight:600;display:inline-block;margin:2px}
+.chip .n{color:var(--pri);font-family:var(--fm);margin-left:3px}
+
+/* ── HIGHLIGHT BOX ── */
+.hl{background:var(--pri-s);border:1px solid var(--pri-b);border-radius:10px;padding:12px 18px;margin-top:10px}
+
+/* ── PHASE PILLS ── */
+.phase{display:inline-flex;align-items:center;gap:5px;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700}
+.phase-frozen{background:var(--rd-s);color:var(--rd);border:1px solid var(--rd-b)}
+.phase-slushy{background:var(--am-s);color:var(--am);border:1px solid var(--am-b)}
+.phase-forecast{background:var(--gn-s);color:var(--gn);border:1px solid var(--gn-b)}
+
+/* ── ZONE BAR ── */
+.zone{display:flex;align-items:stretch;border-radius:12px;overflow:hidden;height:96px;box-shadow:0 2px 12px rgba(0,0,0,.08);flex-shrink:0}
+.zone-seg{display:flex;flex-direction:column;justify-content:center;align-items:center;padding:8px 20px;color:#fff;font-weight:700;position:relative}
+.zone-seg::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.15) 0%,rgba(0,0,0,.08) 100%)}
+.zone-seg .zl{font-size:10px;opacity:.85;margin-bottom:2px;letter-spacing:.8px;position:relative;z-index:1}
+.zone-seg .zi{font-size:24px;margin-bottom:1px;position:relative;z-index:1}
+.zone-seg .zv{font-size:24px;font-weight:800;position:relative;z-index:1}
+.zone-seg .zd{font-size:11px;opacity:.8;margin-top:2px;position:relative;z-index:1;max-width:220px;text-align:center}
+
+/* ── STEP NUMBERS ── */
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;font-size:20px;font-weight:800;font-family:var(--fm);flex-shrink:0}
+.step-num-sm{width:34px;height:34px;font-size:16px}
+
+/* ── ICON CARDS ── */
+.ic{display:flex;align-items:flex-start;gap:18px;padding:20px 22px;border-radius:12px;border:1px solid var(--bd);background:var(--sf);box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.ic-icon{font-size:32px;flex-shrink:0;width:64px;height:64px;display:flex;align-items:center;justify-content:center;border-radius:14px}
+.ic-body h3{margin-bottom:5px}
+.ic-body p{font-size:13px;color:var(--ts);line-height:1.6}
+
+/* ── BOB CALLOUT ── */
+.bob{
+  background:linear-gradient(135deg,var(--bob-s) 0%,#DDEEFF 100%);
+  border:2px solid var(--bob-b);
+  border-radius:14px;
+  padding:14px 22px 14px 80px;
+  font-size:13px;
+  line-height:1.6;
+  box-shadow:0 2px 10px rgba(21,101,192,.08);
+  position:relative;
+  flex-shrink:0;
+}
+.bob .bob-avatar{position:absolute;left:14px;top:50%;transform:translateY(-50%)}
+.bob b{color:var(--bob)}
+.bob .bob-name{font-weight:800;color:var(--bob);font-size:13px;display:block;margin-bottom:3px}
+
+/* bob inside a grid cell — no absolute positioning needed */
+.bob-inline{
+  background:linear-gradient(135deg,var(--bob-s) 0%,#DDEEFF 100%);
+  border:2px solid var(--bob-b);
+  border-radius:14px;
+  padding:14px 18px 14px 80px;
+  font-size:12px;
+  line-height:1.6;
+  box-shadow:0 2px 10px rgba(21,101,192,.08);
+  position:relative;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.bob-inline .bob-avatar{position:absolute;left:14px;top:50%;transform:translateY(-50%)}
+.bob-inline b{color:var(--bob)}
+.bob-inline .bob-name{font-weight:800;color:var(--bob);font-size:13px;display:block;margin-bottom:3px}
+
+/* ── EMAIL MOCKUP ── */
+.email{background:#fff;border:1px solid #C8C8D8;border-radius:10px;overflow:hidden;font-size:11px;box-shadow:0 3px 12px rgba(0,0,0,.08)}
+.email-toolbar{background:#F0F0F8;padding:6px 14px;border-bottom:1px solid #C8C8D8;display:flex;gap:6px;align-items:center}
+.email-tb-btn{background:#fff;border:1px solid #C8C8D8;border-radius:4px;padding:2px 8px;font-size:9px;font-weight:600;color:#444}
+.email-hdr{background:#F7F7FC;padding:10px 16px;border-bottom:1px solid #C8C8D8}
+.email-hdr div{margin-bottom:3px;color:#555;font-size:11px}
+.email-hdr span{color:#1A1A2E;font-weight:600}
+.email-body{padding:14px 16px;line-height:1.7;color:#333;font-size:12px}
+.email-body .sig{margin-top:10px;padding-top:8px;border-top:1px solid #E0E0E0;color:#888;font-size:10px}
+.otag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.3px}
+
+/* ── ILIST ── */
+.ilist{list-style:none;padding:0;margin:0}
+.ilist li{padding:5px 0;font-size:13px;line-height:1.5;border-bottom:1px solid var(--bd);padding-left:14px;position:relative}
+.ilist li:last-child{border-bottom:none}
+.ilist li::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%}
+.ilist.pri li::before{background:var(--pri)}
+.ilist.a4 li::before{background:var(--a4)}
+.ilist.a3 li::before{background:var(--a3)}
+.ilist.sec li::before{background:var(--sec)}
+.ilist.am li::before{background:var(--am)}
+.ilist.gn li::before{background:var(--gn)}
+.ilist.rd li::before{background:var(--rd)}
+
+/* ── UTILITIES ── */
+.mono{font-family:var(--fm)}
+.text-pri{color:var(--pri)}.text-a3{color:var(--a3)}.text-a4{color:var(--a4)}
+.text-sec{color:var(--sec)}.text-rd{color:var(--rd)}.text-am{color:var(--am)}
+.text-gn{color:var(--gn)}.text-tt{color:var(--tt)}
+.bold{font-weight:700}
+.mt{margin-top:12px}.mt-sm{margin-top:8px}.mb{margin-bottom:12px}.mb-sm{margin-bottom:8px}
+.stat-bar{display:flex;gap:14px;flex-wrap:wrap}
+.stat-bar .c{flex:1;min-width:110px;text-align:center;padding:12px 14px}
+.grow{flex:1;min-height:0}
+
+/* ── LAYOUT FIX: direct-child grids fill slide height ── */
+.S > .g2, .S > .g3, .S > .split { flex: 1; align-items: stretch; }
+
+/* ── COMPACT: tight slides ── */
+.s15 .tbl td{font-size:11px;padding:6px 10px}
+.s15 .tbl th{font-size:10px;padding:6px 10px}
+.s15 h3{font-size:15px}
+.s15 .sub{font-size:14px}
+.s15 .ilist li{font-size:11px;padding:4px 0}
+.s15 .callout{font-size:11px;padding:8px 12px}
+/* ── MEDIUM COMPACT: moderate slides ── */
+.s-med .tbl td{font-size:12px;padding:7px 12px}
+.s-med .tbl th{font-size:10px;padding:7px 12px}
+.s-med .sub{font-size:15px}
+.s-med .ilist li{font-size:12px;padding:4px 0}
+
+/* ── PRINT ── */
+@page{size:20in 11.25in;margin:0}
+@media print{body{background:#fff;margin:0;padding:0}.S{page-break-after:always;margin:0;box-shadow:none;width:20in;height:11.25in;padding:0.6in 0.9in 0.75in}}
+</style>
+</head>
+<body>
+
+<!-- BOB SVG AVATAR (reusable inline) -->
+<svg style="display:none" id="bob-defs">
+  <symbol id="bob-face" viewBox="0 0 52 52">
+    <ellipse cx="26" cy="14" rx="19" ry="10" fill="#FFD600"/>
+    <rect x="10" y="18" width="32" height="5" rx="2.5" fill="#F9A825"/>
+    <ellipse cx="26" cy="30" rx="16" ry="17" fill="#FFCC80"/>
+    <ellipse cx="20" cy="27" rx="2.5" ry="2.5" fill="#333"/>
+    <ellipse cx="32" cy="27" rx="2.5" ry="2.5" fill="#333"/>
+    <ellipse cx="20.8" cy="26.2" rx=".9" ry=".9" fill="#fff"/>
+    <ellipse cx="32.8" cy="26.2" rx=".9" ry=".9" fill="#fff"/>
+    <path d="M20 34 Q26 40 32 34" stroke="#555" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="10" cy="30" rx="3" ry="4.5" fill="#FFCC80"/>
+    <ellipse cx="42" cy="30" rx="3" ry="4.5" fill="#FFCC80"/>
+    <path d="M10 26 Q10 16 26 16 Q42 16 42 26" stroke="#1565C0" stroke-width="2" fill="none"/>
+    <rect x="7" y="24" width="6" height="8" rx="3" fill="#1565C0"/>
+    <rect x="39" y="24" width="6" height="8" rx="3" fill="#1565C0"/>
+    <rect x="22" y="45" width="8" height="5" rx="1.5" fill="#8D6E63"/>
+    <path d="M30 47 Q33 47 33 49 Q33 51 30 51" stroke="#8D6E63" stroke-width="1.5" fill="none"/>
+    <rect x="23" y="43" width="6" height="2.5" rx="1" fill="#BCAAA4"/>
+  </symbol>
+</svg>
+
+<!-- SVG arrow snippet shorthand -->
+<!-- Used inline: <svg class="fa-svg" ...> -->
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 1 — TITLE
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S" style="background:linear-gradient(160deg,#FAFAFE 0%,#F0EDF9 100%)">
+  <div class="hd">
+    <div class="hd-left">
+      <span style="font-size:11px;font-weight:700;color:var(--tt);letter-spacing:1.5px;text-transform:uppercase">FIFA WORLD CUP 2026&trade; &mdash; Materials Management</span>
+    </div>
+    <span class="badge badge-rd">CONFIDENTIAL</span>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:28px">
+    <div>
+      <div style="font-size:13px;font-weight:700;color:var(--pri);letter-spacing:2px;margin-bottom:14px;text-transform:uppercase">Supply Chain Work Instructions</div>
+      <h1 style="font-size:64px;line-height:1.05;margin-bottom:8px;color:var(--tp)">FF&amp;E Supply Chain Management</h1>
+      <div style="width:60px;height:4px;background:var(--pri);border-radius:2px;margin-bottom:18px"></div>
+      <div style="font-size:24px;color:var(--ts);font-weight:500;margin-bottom:6px">Work Instructions for Material Planning Managers</div>
+      <div style="font-size:17px;color:var(--tt);margin-bottom:18px">How to plan, track, confirm, and report across <span class="mono bold text-pri">214</span> venues in <span class="mono bold text-pri">16</span> cities across <span class="mono bold text-pri">3</span> countries</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="tag ta">Planning Horizons</span>
+        <span class="tag tb">4 Transaction Types</span>
+        <span class="tag tg">ASN &amp; OOR Documents</span>
+        <span class="tag t-am">OS&amp;D &amp; Materials Mailbox</span>
+        <span class="tag to">SM2ARTA &amp; WMS</span>
+      </div>
+    </div>
+
+    <!-- Bob intro callout -->
+    <div class="bob" style="position:relative">
+      <div class="bob-avatar">
+        <svg width="52" height="52"><use href="#bob-face"/></svg>
+      </div>
+      <span class="bob-name">Meet Bob.</span>
+      Bob is a material planning manager for FWC26. He's one of three regional planners &mdash; together with his fellow Bobs, they're responsible for making sure 166,311 items of furniture, fixtures, and equipment arrive at the right venue, at the right time, in one piece. Bob's region has about 100 trucks to manage. Bob drinks a lot of coffee. This is his story.
+    </div>
+
+    <!-- KPI cards — horizontal row -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px">
+      <div class="stat-card" style="border-left-color:var(--pri);padding:16px 18px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">&#x1F3DF;</div>
+        <div class="sc-num" style="color:var(--pri);font-size:44px;line-height:1">214</div>
+        <div class="sc-label">Venues</div>
+        <div class="sc-sub">Functional areas</div>
+      </div>
+      <div class="stat-card" style="border-left-color:var(--a3);padding:16px 18px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">&#x1F3D9;</div>
+        <div class="sc-num" style="color:var(--a3);font-size:44px;line-height:1">16</div>
+        <div class="sc-label">Cities</div>
+        <div class="sc-sub">USA, CAN &amp; MEX</div>
+      </div>
+      <div class="stat-card" style="border-left-color:var(--a4);padding:16px 18px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">&#x1F69A;</div>
+        <div class="sc-num" style="color:var(--a4);font-size:44px;line-height:1">400+</div>
+        <div class="sc-label">Trucks</div>
+        <div class="sc-sub">LP + LM combined</div>
+      </div>
+      <div class="stat-card" style="border-left-color:var(--am);padding:16px 18px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">&#x1F4E6;</div>
+        <div class="sc-num" style="color:var(--am);font-size:44px;line-height:1">166K</div>
+        <div class="sc-label">Items</div>
+        <div class="sc-sub">FF&amp;E across venues</div>
+      </div>
+      <div class="stat-card" style="border-left-color:var(--sec);padding:16px 18px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">&#x1F30E;</div>
+        <div class="sc-num" style="color:var(--sec);font-size:44px;line-height:1">3</div>
+        <div class="sc-label">Countries</div>
+        <div class="sc-sub">April 2026</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ft"><div class="sn">1</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 2 — SUPPLY CHAIN NETWORK (BIG VISUAL)
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Supply Chain</span></div>
+    <span class="badge badge-a3">THE NETWORK</span>
+  </div>
+  <h2>Supply Chain Network &amp; Transaction Types</h2>
+  <div class="acc" style="background:var(--a3)"></div>
+  <div class="sub" style="margin-bottom:6px">Every item flows through nodes. Every arrow is a transaction. Every transaction must be registered in SM2ARTA. This is the law.</div>
+
+  <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+    <!-- Layout: viewBox 1744 wide. 4 main nodes of 300w, gaps of ~88. Outside node 200w dashed. -->
+    <!-- Node positions: N1=20, N2=408, N3=796, N4=1184. Outside=1524. -->
+    <!-- Node centers: 170, 558, 946, 1334, 1624 -->
+    <svg width="100%" viewBox="0 0 1744 580" style="flex:1;display:block" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="aPri" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7Z" fill="#4A148C"/></marker>
+        <marker id="aA3" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7Z" fill="#304FFE"/></marker>
+        <marker id="aA4" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7Z" fill="#03BFA5"/></marker>
+        <marker id="aSec" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7Z" fill="#751312"/></marker>
+        <filter id="ns"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-opacity="0.10"/></filter>
+      </defs>
+
+      <!-- ═══ ROW 1: SYSTEMS — 3 full-width bars ═══ -->
+      <text x="20" y="16" font-family="Noto Sans" font-size="9" font-weight="700" fill="#8888A0" letter-spacing="1.5">SYSTEMS</text>
+      <rect x="20" y="24" width="1704" height="36" rx="8" fill="#EDE7F6" stroke="#C5B3E6" stroke-width="1.5"/>
+      <text x="872" y="47" text-anchor="middle" font-family="Noto Sans" font-weight="800" font-size="12" fill="#4A148C">SM2ARTA — Source of Truth (What is Planned, Where, When it is Needed, Asset Tracking &amp; Transactions)</text>
+      <rect x="20" y="66" width="1704" height="28" rx="7" fill="#E8EAF6" stroke="#8C9EFF" stroke-width="1"/>
+      <text x="872" y="85" text-anchor="middle" font-family="Noto Sans" font-weight="600" font-size="11" fill="#304FFE">ML3K — Planning Tool (Forecast &amp; Monitor)</text>
+      <rect x="20" y="100" width="1704" height="28" rx="7" fill="#E0F7F3" stroke="#80CBC4" stroke-width="1"/>
+      <text x="872" y="119" text-anchor="middle" font-family="Noto Sans" font-weight="600" font-size="11" fill="#00897B">WMS — Warehouse Management (Rock-it Cargo)</text>
+
+      <!-- ═══ ROW 2: SUPPLY CHAIN NODES — 5 equal nodes ═══ -->
+      <!-- 5 nodes x 260px = 1300. ViewBox 1744, margins 20ea = 1704 usable. 4 gaps = 101px each. -->
+      <!-- N1:20-280  gap:280-381  N2:381-641  gap:641-742  N3:742-1002  gap:1002-1103  N4:1103-1363  gap:1363-1464  N5:1464-1724 -->
+      <!-- Centers: 150, 511, 872, 1233, 1594. Gap centers: 330, 691, 1052, 1413 -->
+      <text x="20" y="154" font-family="Noto Sans" font-size="9" font-weight="700" fill="#8888A0" letter-spacing="1.5">SUPPLY CHAIN NODES</text>
+
+      <!-- N1: Suppliers -->
+      <rect x="20" y="166" width="260" height="108" rx="12" fill="#F5F5FA" stroke="#D8D8E8" stroke-width="1.5" filter="url(#ns)"/>
+      <rect x="20" y="166" width="260" height="4" rx="12" fill="#999" opacity=".4"/>
+      <text x="150" y="196" text-anchor="middle" font-family="Noto Sans" font-size="20">&#x1F3ED;</text>
+      <text x="150" y="216" text-anchor="middle" font-family="Noto Sans" font-weight="800" font-size="13" fill="#555570">SUPPLIERS</text>
+      <text x="150" y="234" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#8888A0">International &amp; Domestic</text>
+      <text x="150" y="248" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#8888A0">Manufacturers</text>
+
+      <!-- Arrow 1: INBOUND  gap 280-381, center 330 -->
+      <path d="M280 220 L377 220" stroke="#03BFA5" stroke-width="2.5" marker-end="url(#aA4)" fill="none"/>
+      <rect x="296" y="202" width="74" height="16" rx="8" fill="#E0F7F3" stroke="#80CBC4" stroke-width=".5"/>
+      <text x="333" y="213" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="8" fill="#00897B">INBOUND</text>
+
+      <!-- N2: Dallas WHS -->
+      <rect x="381" y="166" width="260" height="108" rx="12" fill="#E0F7F3" stroke="#80CBC4" stroke-width="2" filter="url(#ns)"/>
+      <rect x="381" y="166" width="260" height="4" rx="12" fill="#03BFA5"/>
+      <text x="511" y="196" text-anchor="middle" font-family="Noto Sans" font-size="20">&#x1F3E2;</text>
+      <text x="511" y="216" text-anchor="middle" font-family="Noto Sans" font-weight="800" font-size="13" fill="#00897B">DALLAS WHS</text>
+      <text x="511" y="234" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#555570">Central Hub — Receiving,</text>
+      <text x="511" y="248" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#555570">Kitting &amp; Outbound</text>
+
+      <!-- Arrow 2: MOVING  gap 641-742, center 691 -->
+      <path d="M641 220 L738 220" stroke="#304FFE" stroke-width="2.5" marker-end="url(#aA3)" fill="none"/>
+      <rect x="658" y="202" width="68" height="16" rx="8" fill="#E8EAF6" stroke="#8C9EFF" stroke-width=".5"/>
+      <text x="692" y="213" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="8" fill="#304FFE">MOVING</text>
+
+      <!-- N3: Satellite WHS -->
+      <rect x="742" y="166" width="260" height="108" rx="12" fill="#E8EAF6" stroke="#8C9EFF" stroke-width="2" filter="url(#ns)"/>
+      <rect x="742" y="166" width="260" height="4" rx="12" fill="#304FFE"/>
+      <text x="872" y="196" text-anchor="middle" font-family="Noto Sans" font-size="20">&#x1F3E0;</text>
+      <text x="872" y="216" text-anchor="middle" font-family="Noto Sans" font-weight="800" font-size="13" fill="#304FFE">SATELLITE WHS</text>
+      <text x="872" y="234" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#555570">Regional &amp; Satellite</text>
+      <text x="872" y="248" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#555570">8 LP Destinations</text>
+
+      <!-- Arrow 3: MOVING  gap 1002-1103, center 1052 -->
+      <path d="M1002 220 L1099 220" stroke="#304FFE" stroke-width="2.5" marker-end="url(#aA3)" fill="none"/>
+      <rect x="1019" y="202" width="68" height="16" rx="8" fill="#E8EAF6" stroke="#8C9EFF" stroke-width=".5"/>
+      <text x="1053" y="213" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="8" fill="#304FFE">MOVING</text>
+
+      <!-- N4: Venues -->
+      <rect x="1103" y="166" width="260" height="108" rx="12" fill="#FBE9E7" stroke="#D4A09F" stroke-width="2" filter="url(#ns)"/>
+      <rect x="1103" y="166" width="260" height="4" rx="12" fill="#751312"/>
+      <text x="1233" y="196" text-anchor="middle" font-family="Noto Sans" font-size="20">&#x26BD;</text>
+      <text x="1233" y="216" text-anchor="middle" font-family="Noto Sans" font-weight="800" font-size="13" fill="#751312">VENUES</text>
+      <text x="1233" y="234" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#555570">214 Functional Areas</text>
+      <text x="1233" y="248" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#555570">Final Placement</text>
+
+      <!-- Arrow 4: OUTBOUND  gap 1363-1464, center 1413 -->
+      <path d="M1363 220 L1460 220" stroke="#751312" stroke-width="2.5" marker-end="url(#aSec)" fill="none"/>
+      <rect x="1376" y="202" width="80" height="16" rx="8" fill="#FBE9E7" stroke="#D4A09F" stroke-width=".5"/>
+      <text x="1416" y="213" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="8" fill="#751312">OUTBOUND</text>
+
+      <!-- N5: Outside — SAME size and style as all others -->
+      <rect x="1464" y="166" width="260" height="108" rx="12" fill="#F5F5FA" stroke="#D8D8E8" stroke-width="1.5" stroke-dasharray="6,4" filter="url(#ns)"/>
+      <rect x="1464" y="166" width="260" height="4" rx="12" fill="#8888A0" opacity=".4"/>
+      <text x="1594" y="196" text-anchor="middle" font-family="Noto Sans" font-size="20">&#x1F3C6;</text>
+      <text x="1594" y="216" text-anchor="middle" font-family="Noto Sans" font-weight="800" font-size="13" fill="#8888A0">OUTSIDE</text>
+      <text x="1594" y="234" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#8888A0">Deployed / Returned</text>
+      <text x="1594" y="248" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#8888A0">Disposal</text>
+
+      <!-- Damage bar — centered across full width -->
+      <line x1="150" y1="290" x2="1594" y2="290" stroke="#C62828" stroke-width="1.5" stroke-dasharray="7,4"/>
+      <rect x="740" y="280" width="264" height="20" rx="5" fill="#FDEBED" stroke="#F5B8BA" stroke-width="1"/>
+      <text x="872" y="294" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="9" fill="#C62828">&#x26A0; DAMAGE REPORT — can occur at any node</text>
+
+      <!-- ═══ ROW 3: DOCUMENTS &amp; TRANSACTIONS (shifted down +20) ═══ -->
+      <text x="20" y="342" font-family="Noto Sans" font-size="9" font-weight="700" fill="#8888A0" letter-spacing="1.5">DOCUMENTS &amp; TRANSACTIONS</text>
+
+      <!-- Col 1: Inbound — centered on gap center=330 -->
+      <rect x="265" y="356" width="130" height="30" rx="6" fill="#E0F7F3" stroke="#80CBC4" stroke-width="1"/>
+      <text x="330" y="369" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#00897B">ASN</text>
+      <text x="330" y="381" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">Shipping Notification</text>
+      <text x="330" y="400" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">&#x2193;</text>
+      <rect x="265" y="408" width="130" height="30" rx="6" fill="#E0F7F3" stroke="#80CBC4" stroke-width="1"/>
+      <text x="330" y="421" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#00897B">Receiving Order</text>
+      <text x="330" y="433" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">WMS creates</text>
+      <text x="330" y="452" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">&#x2193;</text>
+      <rect x="265" y="460" width="130" height="30" rx="6" fill="#FFF3E0" stroke="#FFB74D" stroke-width="1"/>
+      <text x="330" y="473" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#E65100">OS&amp;D</text>
+      <text x="330" y="485" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">If over, short, or damaged</text>
+
+      <!-- Col 2: Moving Dallas→Sat — centered on gap center=691 -->
+      <rect x="576" y="356" width="110" height="30" rx="6" fill="#FDEBED" stroke="#F5B8BA" stroke-width="1"/>
+      <text x="631" y="369" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#C62828">OOR</text>
+      <text x="631" y="381" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">Outbound Order</text>
+      <text x="691" y="374" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">+</text>
+      <rect x="696" y="356" width="110" height="30" rx="6" fill="#E0F7F3" stroke="#80CBC4" stroke-width="1"/>
+      <text x="751" y="369" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#00897B">ASN</text>
+      <text x="751" y="381" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">Shipping Notification</text>
+      <text x="631" y="400" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">&#x2193;</text>
+      <text x="751" y="400" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">&#x2193;</text>
+      <rect x="576" y="408" width="110" height="30" rx="6" fill="#FDEBED" stroke="#F5B8BA" stroke-width="1"/>
+      <text x="631" y="421" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#C62828">Shipping Order</text>
+      <text x="631" y="433" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">WMS creates</text>
+      <rect x="696" y="408" width="110" height="30" rx="6" fill="#E0F7F3" stroke="#80CBC4" stroke-width="1"/>
+      <text x="751" y="421" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#00897B">Receiving Order</text>
+      <text x="751" y="433" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">WMS creates</text>
+      <text x="691" y="452" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">&#x2193;</text>
+      <rect x="626" y="460" width="130" height="30" rx="6" fill="#FFF3E0" stroke="#FFB74D" stroke-width="1"/>
+      <text x="691" y="473" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#E65100">OS&amp;D + Receipt PDF</text>
+      <text x="691" y="485" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">Bob checks line by line</text>
+
+      <!-- Col 3: Moving Sat→Venue — centered on gap center=1052 -->
+      <rect x="937" y="356" width="110" height="30" rx="6" fill="#FDEBED" stroke="#F5B8BA" stroke-width="1"/>
+      <text x="992" y="369" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#C62828">OOR</text>
+      <text x="992" y="381" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">Outbound Order</text>
+      <text x="1052" y="374" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">+</text>
+      <rect x="1057" y="356" width="110" height="30" rx="6" fill="#E0F7F3" stroke="#80CBC4" stroke-width="1"/>
+      <text x="1112" y="369" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#00897B">ASN</text>
+      <text x="1112" y="381" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">Shipping Notification</text>
+      <text x="992" y="400" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">&#x2193;</text>
+      <text x="1112" y="400" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">&#x2193;</text>
+      <rect x="937" y="408" width="110" height="30" rx="6" fill="#FDEBED" stroke="#F5B8BA" stroke-width="1"/>
+      <text x="992" y="421" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#C62828">Shipping Order</text>
+      <text x="992" y="433" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">WMS creates</text>
+      <rect x="1057" y="408" width="110" height="30" rx="6" fill="#E0F7F3" stroke="#80CBC4" stroke-width="1"/>
+      <text x="1112" y="421" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#00897B">Receiving Order</text>
+      <text x="1112" y="433" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">WMS creates</text>
+      <text x="1052" y="452" text-anchor="middle" font-family="Noto Sans" font-size="10" fill="#CCC">&#x2193;</text>
+      <rect x="987" y="460" width="130" height="30" rx="6" fill="#1565C0" stroke="#0D47A1" stroke-width="1"/>
+      <text x="1052" y="473" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#fff">Bob chases</text>
+      <text x="1052" y="485" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#BBDEFB">venue confirmation</text>
+
+      <!-- Col 4: Outbound — centered on gap center=1413 -->
+      <rect x="1358" y="356" width="110" height="30" rx="6" fill="#FDEBED" stroke="#F5B8BA" stroke-width="1"/>
+      <text x="1413" y="369" text-anchor="middle" font-family="Noto Sans" font-weight="700" font-size="10" fill="#C62828">OOR</text>
+      <text x="1413" y="381" text-anchor="middle" font-family="Noto Sans" font-size="8" fill="#555570">Outbound Order</text>
+
+      <!-- LEGEND — bottom-left -->
+      <rect x="20" y="506" width="440" height="74" rx="8" fill="#F9F9FD" stroke="#E0E0EE" stroke-width="1"/>
+      <text x="34" y="522" font-family="Noto Sans" font-weight="700" font-size="9" fill="#555570">LEGEND</text>
+      <!-- Left column: document types with colored squares -->
+      <rect x="34" y="532" width="10" height="10" rx="2" fill="#E0F7F3" stroke="#80CBC4" stroke-width="1"/>
+      <text x="50" y="541" font-family="Noto Sans" font-size="9" fill="#555570">ASN — Advanced Shipping Notification</text>
+      <rect x="34" y="548" width="10" height="10" rx="2" fill="#FDEBED" stroke="#F5B8BA" stroke-width="1"/>
+      <text x="50" y="557" font-family="Noto Sans" font-size="9" fill="#555570">OOR — Outbound Order Request</text>
+      <rect x="34" y="564" width="10" height="10" rx="2" fill="#FFF3E0" stroke="#FFB74D" stroke-width="1"/>
+      <text x="50" y="573" font-family="Noto Sans" font-size="9" fill="#555570">OS&amp;D — Over, Short &amp; Damage</text>
+      <!-- Right column: systems — separated by vertical line -->
+      <line x1="250" y1="528" x2="250" y2="576" stroke="#E0E0EE" stroke-width="1"/>
+      <text x="264" y="541" font-family="Noto Sans" font-weight="700" font-size="9" fill="#4A148C">SM2ARTA</text>
+      <text x="320" y="541" font-family="Noto Sans" font-size="9" fill="#8888A0">Creates ASN &amp; OOR</text>
+      <text x="264" y="557" font-family="Noto Sans" font-weight="700" font-size="9" fill="#00897B">WMS</text>
+      <text x="292" y="557" font-family="Noto Sans" font-size="9" fill="#8888A0">Receiving &amp; Shipping Orders</text>
+      <text x="264" y="573" font-family="Noto Sans" font-weight="700" font-size="9" fill="#1565C0">Bob</text>
+      <text x="286" y="573" font-family="Noto Sans" font-size="9" fill="#8888A0">Chases venue confirmations</text>
+
+      <!-- Dotted lines: from gap centers down to doc columns -->
+      <line x1="330" y1="302" x2="330" y2="356" stroke="#80CBC4" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="691" y1="302" x2="691" y2="356" stroke="#8C9EFF" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="1052" y1="302" x2="1052" y2="356" stroke="#8C9EFF" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="1413" y1="302" x2="1413" y2="356" stroke="#D4A09F" stroke-width="1" stroke-dasharray="3,3"/>
+    </svg>
+
+    <div class="bob" style="margin-top:6px;flex-shrink:0">
+      <div class="bob-avatar">
+        <svg width="52" height="52"><use href="#bob-face"/></svg>
+      </div>
+      <span class="bob-name">Bob says:</span> "I create the ASN and OOR in SM2ARTA. Rock-it's WMS turns my ASN into a Receiving Order and my OOR into a Shipping Order. For warehouses, I get a Receipt Confirmation PDF to check. For venues, I chase the Venue Logistics Manager myself. Either way &mdash; I don't rest until the transaction is Completed."
+    </div>
+  </div>
+  <div class="ft"><div class="sn">2</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 3 — PLANNING HORIZON
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S" style="display:flex;flex-direction:column">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Planning Discipline</span></div>
+    <span class="badge badge-sec">PLANNING DISCIPLINE</span>
+  </div>
+  <h2>Planning Horizon</h2>
+  <div class="acc" style="background:var(--sec)"></div>
+  <div class="sub" style="margin-bottom:18px">We are in the events world &mdash; everything can change a million times. These three zones tell Bob when to plan, when to lock, and when to just execute.</div>
+
+  <!-- ZONE BAR — visual race track metaphor -->
+  <div class="zone" style="margin-bottom:22px;height:120px">
+    <div class="zone-seg" style="background:var(--gn);flex:3">
+      <div class="zi" style="font-size:32px">&#x1F30D;</div>
+      <div class="zv" style="font-size:22px">7+ days &mdash; Open Forecast</div>
+      <div class="zd" style="max-width:300px">We calculated the trucks &mdash; but everything may change</div>
+    </div>
+    <div class="zone-seg" style="background:var(--am);flex:2">
+      <div class="zi" style="font-size:32px">&#x1F91D;</div>
+      <div class="zv" style="font-size:22px">7 days &mdash; Slushy</div>
+      <div class="zd" style="max-width:220px">Confirmed with stakeholders</div>
+    </div>
+    <div class="zone-seg" style="background:var(--rd);flex:1.5">
+      <div class="zi" style="font-size:32px">&#x1F3C1;</div>
+      <div class="zv" style="font-size:22px">3 days &mdash; Frozen</div>
+      <div class="zd" style="max-width:200px">On the start line, waiting</div>
+    </div>
+  </div>
+
+  <div class="g3" style="flex:1;min-height:0;margin-bottom:14px;align-items:stretch">
+    <!-- FORECAST -->
+    <div class="c c-gn" style="display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="phase phase-forecast" style="font-size:13px;padding:6px 16px">&#x1F30D; OPEN FORECAST</span>
+      </div>
+      <h3 style="color:var(--gn);font-size:17px;margin-bottom:8px">The Big Picture</h3>
+      <div style="font-size:12px;color:var(--ts);line-height:1.7;margin-bottom:10px;padding:10px 14px;background:var(--gn-s);border-radius:8px;border-left:3px solid var(--gn)">
+        We've calculated how many trucks travel and when. But this is events &mdash; <b>everything may change a million times</b>. Plans get refined daily.
+      </div>
+      <ul class="ilist gn" style="flex:1">
+        <li>Full replanning allowed &mdash; routes, dates, content</li>
+        <li>Demand changes, nomenclature updates</li>
+        <li>New stock reports &amp; arrival dates</li>
+        <li>Venue setting adjustments</li>
+        <li>This is where <b>Bob thinks ahead</b></li>
+      </ul>
+      <div class="callout callout-gn" style="padding:8px 12px;font-size:10px;margin-top:auto"><b>Mindset:</b> Every decision here prevents a crisis in the frozen zone.</div>
+    </div>
+
+    <!-- SLUSHY -->
+    <div class="c c-am" style="display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="phase phase-slushy" style="font-size:13px;padding:6px 16px">&#x1F91D; SLUSHY WEEK</span>
+      </div>
+      <h3 style="color:var(--am);font-size:17px;margin-bottom:8px">Stakeholder Confirmation</h3>
+      <div style="font-size:12px;color:var(--ts);line-height:1.7;margin-bottom:10px;padding:10px 14px;background:var(--am-s);border-radius:8px;border-left:3px solid var(--am)">
+        We create a <b>forecast for next week</b> and confirm it with all stakeholders. This is Bob's <b>main working zone</b>.
+      </div>
+      <ul class="ilist am" style="flex:1">
+        <li><b>Venues / FAs</b> confirm they're happy to receive on forecasted dates</li>
+        <li><b>Distribution</b> pre-books trucks for the week</li>
+        <li><b>Warehouse</b> starts assembly for next week's dispatch</li>
+        <li>Changes still possible but <b>require justification</b></li>
+        <li>All changes <b>communicated to downstream</b></li>
+      </ul>
+      <div class="callout callout-am" style="padding:8px 12px;font-size:10px;margin-top:auto"><b>Mindset:</b> Everyone is aligned. Changes ripple &mdash; communicate every one.</div>
+    </div>
+
+    <!-- FROZEN -->
+    <div class="c c-rd" style="display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="phase phase-frozen" style="font-size:13px;padding:6px 16px">&#x1F3C1; FROZEN</span>
+      </div>
+      <h3 style="color:var(--rd);font-size:17px;margin-bottom:8px">On the Start Line</h3>
+      <div style="font-size:12px;color:var(--ts);line-height:1.7;margin-bottom:10px;padding:10px 14px;background:var(--rd-s);border-radius:8px;border-left:3px solid var(--rd)">
+        <b>OORs submitted.</b> Warehouse knows what to pick. Distribution ordered the truck. Venues confirmed the arrival time. We're on the start line, <b>waiting for the start gun</b>.
+      </div>
+      <ul class="ilist rd" style="flex:1">
+        <li>Trucks locked &mdash; <b>no content changes</b></li>
+        <li>WHS picks, packs, loads per OOR</li>
+        <li><b>Monitor</b> dispatch and transit</li>
+        <li><b>Confirm</b> receivings, file OS&amp;D, check Receipt PDFs</li>
+        <li>Any issue &rarr; <b>escalate to LCC</b>, not replan</li>
+      </ul>
+      <div class="callout callout-red" style="padding:8px 12px;font-size:10px;margin-top:auto"><b>Mindset:</b> Execute. Confirm. Escalate. Nothing else.</div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's Monday morning:</span> "It's 8 AM. Bob checks his frozen zone first &mdash; two LM trucks dispatched Friday should have arrived at venues. He opens the Materials Mailbox: one venue sent a photo of unloaded pallets with a thumbs-up emoji. Professional. The other? Silence. Bob drafts a politely urgent email. His coffee goes cold."
+  </div>
+  <div class="ft"><div class="sn">3</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 4 — FOUR TRANSACTION TYPES
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Transactions</span></div>
+    <span class="badge badge-pri">TRANSACTIONS</span>
+  </div>
+  <h2>Four Transaction Types</h2>
+  <div class="acc" style="background:var(--pri)"></div>
+  <div class="sub">Every physical movement or status change must be one of four types. Each generates specific documents. All registered in SM2ARTA &mdash; this is the law.</div>
+
+  <div class="g2" style="margin-bottom:18px;flex:1;min-height:0;align-items:stretch;grid-template-rows:1fr 1fr">
+    <div class="ic" style="border-top:3px solid var(--a4);align-items:center">
+      <div class="ic-icon" style="background:linear-gradient(135deg,var(--a4-s),#B2EFE8);color:var(--a4)">
+        <svg width="36" height="36" viewBox="0 0 36 36"><path d="M18 4L4 16h6v12h16V16h6z" fill="#03BFA5" opacity=".9"/><path d="M12 36V22h12v14" stroke="#03BFA5" stroke-width="2" fill="none"/></svg>
+      </div>
+      <div class="ic-body">
+        <h3 style="color:var(--a4)">1. Inbound</h3>
+        <p><b>Receiving goods INTO a supply chain node</b></p>
+        <div style="margin-top:8px;font-size:13px;line-height:1.8">
+          📄 Generates <b style="color:var(--a4)">ASN</b> (Advanced Shipping Notification)<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> WMS creates <b>Receiving Order</b> from ASN<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Warehouse executes receiving &amp; files <b style="color:var(--am)">OS&amp;D</b><br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Bob receives <b>Receipt Confirmation PDF</b> and checks line by line
+        </div>
+      </div>
+    </div>
+    <div class="ic" style="border-top:3px solid var(--a3);align-items:center">
+      <div class="ic-icon" style="background:linear-gradient(135deg,var(--a3-s),#C8CCFF);color:var(--a3)">
+        <svg width="36" height="36" viewBox="0 0 36 36"><path d="M4 18h28M22 10l10 8-10 8" stroke="#304FFE" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 10L4 18l10 8" stroke="#304FFE" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="ic-body">
+        <h3 style="color:var(--a3)">2. Moving</h3>
+        <p><b>Transfer BETWEEN supply chain nodes</b></p>
+        <div style="margin-top:8px;font-size:13px;line-height:1.8">
+          📄 Generates <b style="color:var(--rd)">OOR</b> at dispatch site (ship out)<br>
+          📄 Generates <b style="color:var(--a4)">ASN</b> at receiving site (ship in)<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> <b>Bob's big job:</b> chase the receiver to confirm delivery<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Complete transaction only after confirmation
+        </div>
+      </div>
+    </div>
+    <div class="ic" style="border-top:3px solid var(--sec);align-items:center">
+      <div class="ic-icon" style="background:linear-gradient(135deg,var(--sec-s),#F0C4C4);color:var(--sec)">
+        <svg width="36" height="36" viewBox="0 0 36 36"><path d="M18 32L4 20h6V8h16v12h6z" fill="#751312" opacity=".85"/></svg>
+      </div>
+      <div class="ic-body">
+        <h3 style="color:var(--sec)">3. Outbound</h3>
+        <p><b>Goods EXIT the supply chain network</b></p>
+        <div style="margin-top:8px;font-size:13px;line-height:1.8">
+          📄 Generates <b style="color:var(--rd)">OOR</b> (Outbound Order Request)<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> WMS creates <b>Shipping Order</b> from OOR<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Items leave supply chain custody<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Venue deployment, returns to supplier, disposal
+        </div>
+      </div>
+    </div>
+    <div class="ic" style="border-top:3px solid var(--rd);align-items:center">
+      <div class="ic-icon" style="background:linear-gradient(135deg,var(--rd-s),#FFCDD2);color:var(--rd)">
+        <svg width="36" height="36" viewBox="0 0 36 36"><path d="M18 4l2 14h-4zM18 24v6" stroke="#C62828" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="18" cy="32" r="2" fill="#C62828"/><path d="M7 28L18 8l11 20H7z" stroke="#C62828" stroke-width="2" fill="none"/></svg>
+      </div>
+      <div class="ic-body">
+        <h3 style="color:var(--rd)">4. Damage Report</h3>
+        <p><b>Nomenclature transformation to damaged category</b></p>
+        <div style="margin-top:8px;font-size:13px;line-height:1.8">
+          📄 Part of <b style="color:var(--am)">OS&amp;D</b> report at receiving<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Original SKU qty reduced, Damaged SKU qty increased<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Item stays at same node &mdash; just reclassified<br>
+          <svg style="display:inline;vertical-align:middle" width="16" height="12"><path d="M2 6L12 6 M8 3 L12 6 L8 9" stroke="#304FFE" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg> Planner decides: reorder, reallocate, or accept
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Created vs Completed + Bob -->
+  <div class="split" style="gap:26px;align-items:stretch;flex:0 0 auto">
+    <div class="c c-pri">
+      <h3 style="color:var(--pri)">Transaction States: Created &rarr; Completed</h3>
+      <div style="display:flex;align-items:stretch;gap:10px;margin:12px 0">
+        <div style="flex:1;background:var(--pri-s);border:1.5px solid var(--pri-b);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;justify-content:center">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="step-num step-num-sm" style="background:var(--pri);color:#fff">&#x1F512;</span>
+            <span style="font-size:13px;font-weight:700;color:var(--pri)">CREATED</span>
+          </div>
+          <div style="font-size:11px;color:var(--ts);line-height:1.6"><b>Reserves stock</b> so it cannot be double-booked. Items are earmarked but haven't physically moved yet. Think of it as "dibs."</div>
+        </div>
+        <div style="display:flex;align-items:center;flex-shrink:0">
+          <svg width="36" height="24"><path d="M2 12 L28 12 M22 6 L28 12 L22 18" stroke="#4A148C" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div style="flex:1;background:var(--gn-s);border:1.5px solid var(--gn-b);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;justify-content:center">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="step-num step-num-sm" style="background:var(--gn);color:#fff">&#x2705;</span>
+            <span style="font-size:13px;font-weight:700;color:var(--gn)">COMPLETED</span>
+          </div>
+          <div style="font-size:11px;color:var(--ts);line-height:1.6"><b>Moves stock</b> between nodes. Items have physically moved and been confirmed received. Inventory balances update.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bob-inline">
+      <div class="bob-avatar">
+        <svg width="52" height="52"><use href="#bob-face"/></svg>
+      </div>
+      <span class="bob-name">Bob's analogy:</span> "Created is like putting a 'SOLD' sticker on a couch at a furniture store. It's not in your living room yet, but nobody else can buy it. Completed is when the delivery truck drops it off and you sign for it. Until then, the store still has your couch &mdash; you just have dibs."
+    </div>
+  </div>
+  <div class="ft"><div class="sn">4</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 5 — ASN, OOR & WMS
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Documents</span></div>
+    <span class="badge badge-a4">DOCUMENTS</span>
+  </div>
+  <h2>ASN, OOR &amp; the WMS Handshake</h2>
+  <div class="acc" style="background:var(--a4)"></div>
+  <div class="sub">SM2ARTA creates the instructions. Rock-it Cargo's WMS executes them. Two systems, one handshake &mdash; every time.</div>
+
+  <!-- Row 1: ASN and OOR side by side -->
+  <div class="g2" style="margin-bottom:16px;align-items:stretch">
+    <div class="c" style="border-top:3px solid var(--a4)">
+      <h3 style="color:#00897B">&#x1F4E5; ASN &mdash; Advanced Shipping Notification</h3>
+      <p style="font-size:12px;color:var(--ts);margin-bottom:10px">"Hey warehouse, something is coming your way."</p>
+      <table class="tbl" style="font-size:11px">
+        <tbody>
+          <tr><td style="width:110px;font-weight:700">Created by</td><td>Planner in <b>SM2ARTA</b></td></tr>
+          <tr><td style="font-weight:700">Sent to</td><td><b>WMS</b> (Rock-it Cargo warehouse)</td></tr>
+          <tr><td style="font-weight:700">WMS creates</td><td><b>Receiving Order</b> &mdash; WHS knows what to expect</td></tr>
+          <tr><td style="font-weight:700">Used for</td><td>All <b>Inbound</b> + receiving side of <b>Moving</b></td></tr>
+          <tr><td style="font-weight:700">Bob gets</td><td><b>Receipt Confirmation PDF</b> to check line by line</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="c" style="border-top:3px solid var(--rd)">
+      <h3 style="color:var(--rd)">&#x1F4E4; OOR &mdash; Outbound Order Request</h3>
+      <p style="font-size:12px;color:var(--ts);margin-bottom:10px">"Hey warehouse, I need you to ship this out."</p>
+      <table class="tbl" style="font-size:11px">
+        <tbody>
+          <tr><td style="width:110px;font-weight:700">Created by</td><td>Planner in <b>SM2ARTA</b></td></tr>
+          <tr><td style="font-weight:700">Sent to</td><td><b>WMS</b> (Rock-it Cargo warehouse)</td></tr>
+          <tr><td style="font-weight:700">WMS creates</td><td><b>Shipping Order</b> &mdash; pick, pack, load</td></tr>
+          <tr><td style="font-weight:700">Used for</td><td>All <b>Outbound</b> + dispatch side of <b>Moving</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Row 2: Moving Handshake + OS&D side by side -->
+  <div class="g2" style="flex:1;min-height:0;margin-bottom:16px;align-items:stretch">
+    <div class="c c-pri" style="display:flex;flex-direction:column">
+      <h3 style="color:var(--pri)">The Moving Handshake</h3>
+      <p style="font-size:11px;color:var(--ts);margin-bottom:10px">For Moving transactions, SM2ARTA <b>automatically creates both</b> OOR + ASN. Always both.</p>
+      <div style="background:var(--bg);border-radius:10px;padding:14px;flex:1;display:flex;flex-direction:column;justify-content:center">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap">
+          <div style="background:var(--rd-s);border:1.5px solid var(--rd-b);border-radius:8px;padding:8px 12px;font-size:11px;font-weight:700;color:var(--rd);text-align:center">OOR<br><span style="font-weight:500;font-size:9px">SM2ARTA creates</span></div>
+          <svg width="24" height="14"><path d="M2 7L18 7 M13 3 L18 7 L13 11" stroke="#4A148C" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+          <div style="background:var(--rd-s);border:1.5px solid var(--rd-b);border-radius:8px;padding:8px 12px;font-size:11px;font-weight:700;color:var(--rd);text-align:center">Shipping Order<br><span style="font-weight:500;font-size:9px">WMS executes</span></div>
+          <svg width="24" height="14"><path d="M2 7L18 7 M13 3 L18 7 L13 11" stroke="#888" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+          <div style="background:#F0F0F5;border:1.5px solid #D8D8E8;border-radius:8px;padding:8px 12px;font-size:11px;font-weight:700;color:var(--ts);text-align:center">&#x1F69B; Transit</div>
+          <svg width="24" height="14"><path d="M2 7L18 7 M13 3 L18 7 L13 11" stroke="#888" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+          <div style="background:var(--a4-s);border:1.5px solid var(--a4-b);border-radius:8px;padding:8px 12px;font-size:11px;font-weight:700;color:#00897B;text-align:center">ASN<br><span style="font-weight:500;font-size:9px">SM2ARTA creates</span></div>
+          <svg width="24" height="14"><path d="M2 7L18 7 M13 3 L18 7 L13 11" stroke="#00897B" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+          <div style="background:var(--a4-s);border:1.5px solid var(--a4-b);border-radius:8px;padding:8px 12px;font-size:11px;font-weight:700;color:#00897B;text-align:center">Receiving Order<br><span style="font-weight:500;font-size:9px">WMS executes</span></div>
+        </div>
+        <div style="font-size:10px;color:var(--tt);margin-top:8px;text-align:center">&larr; Dispatch (origin) &nbsp;&nbsp;|&nbsp;&nbsp; Receiving (destination) &rarr;</div>
+      </div>
+    </div>
+    <div class="c" style="border-top:3px solid var(--am);display:flex;flex-direction:column">
+      <h3 style="color:var(--am)">&#x1F4CB; OS&amp;D &mdash; Over, Short &amp; Damages</h3>
+      <p style="font-size:12px;color:var(--ts);margin-bottom:10px">Filed when something is <b>broken</b>, <b>missing</b>, or <b>more than expected</b>.</p>
+      <div class="g3" style="gap:10px;flex:1;align-items:stretch">
+        <div style="background:var(--gn-s);border-radius:8px;padding:14px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center"><div style="font-size:14px;font-weight:700;color:var(--gn)">OVER</div><div style="font-size:10px;color:var(--ts);margin-top:4px">Received more<br>than expected</div></div>
+        <div style="background:var(--am-s);border-radius:8px;padding:14px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center"><div style="font-size:14px;font-weight:700;color:var(--am)">SHORT</div><div style="font-size:10px;color:var(--ts);margin-top:4px">Received less<br>than expected</div></div>
+        <div style="background:var(--rd-s);border-radius:8px;padding:14px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center"><div style="font-size:14px;font-weight:700;color:var(--rd)">DAMAGE</div><div style="font-size:10px;color:var(--ts);margin-top:4px">Received items<br>damaged</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's Tuesday:</span> "Bob creates a Moving transaction in SM2ARTA for LM-14 going to Guadalajara Stadium &mdash; 18 pallets of tables and banners. SM2ARTA automatically generates both the OOR for Dallas and the ASN for Guadalajara WHS. Rock-it's WMS picks up both: Dallas starts loading, Guadalajara knows what's coming. Two days later, the Receipt Confirmation PDF lands in the Materials Mailbox. Bob opens it, grabs his coffee, and goes line by line. 18 pallets sent, 18 pallets received. Bob smiles. This almost never happens."
+  </div>
+  <div class="ft"><div class="sn">5</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 6 — SM2ARTA: SOURCE OF TRUTH
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Source of Truth</span></div>
+    <span class="badge badge-pri">SOURCE OF TRUTH</span>
+  </div>
+  <h2>SM2ARTA &mdash; The Law</h2>
+  <div class="acc" style="background:var(--pri)"></div>
+  <div class="sub">SM2ARTA is the <b>system of record</b> for all FF&amp;E assets. Every nomenclature, transaction, and inventory balance must be registered here. <b>If it's not in SM2ARTA, it didn't happen.</b></div>
+
+  <div class="split" style="flex:1;min-height:0;margin-bottom:16px;align-items:stretch">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="c c-pri" style="flex:1;display:flex;flex-direction:column">
+        <h3 style="color:var(--pri)">What SM2ARTA Tracks</h3>
+        <table class="tbl" style="flex:1">
+          <thead><tr><th>Data</th><th>Description</th><th>Update</th></tr></thead>
+          <tbody>
+            <tr><td><b>Nomenclature (Nom)</b></td><td>All asset codes with specs &amp; categories</td><td>On change</td></tr>
+            <tr><td><b>ASN</b></td><td>Advanced Shipping Notifications</td><td>Before shipment</td></tr>
+            <tr><td><b>OOR</b></td><td>Outbound Order Requests</td><td>Before dispatch</td></tr>
+            <tr><td><b>Transactions</b></td><td>All 4 types: Created &amp; Completed</td><td>Same day</td></tr>
+            <tr><td><b>Inventory</b></td><td>Balance per node, per Nom</td><td>Daily</td></tr>
+            <tr><td><b>OS&amp;D</b></td><td>All receiving discrepancies</td><td>Same day</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout callout-red" style="padding:10px 16px;font-size:12px"><b>Non-negotiable:</b> SM2ARTA must be updated <b>daily</b>. A transaction not logged within 24 hours is a compliance violation. Fill as many fields as possible &mdash; documents, photos, WMS order numbers. Your future self will thank you when it's time to reconcile.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="c" style="border-top:3px solid var(--a3);flex:1;display:flex;flex-direction:column">
+        <h3>Three Systems, Three Roles</h3>
+        <table class="tbl">
+          <thead><tr><th></th><th style="text-align:center">SM2ARTA</th><th style="text-align:center">ML3K</th><th style="text-align:center">WMS</th></tr></thead>
+          <tbody>
+            <tr><td><b>Owner</b></td><td style="text-align:center">FIFA MM</td><td style="text-align:center">FIFA MM</td><td style="text-align:center">Rock-it Cargo</td></tr>
+            <tr><td><b>Purpose</b></td><td style="text-align:center">Asset tracking</td><td style="text-align:center">Planning</td><td style="text-align:center">WHS operations</td></tr>
+            <tr><td><b>Answers</b></td><td style="text-align:center">What happened</td><td style="text-align:center">What should happen</td><td style="text-align:center">How to do it</td></tr>
+            <tr><td><b>Data</b></td><td style="text-align:center">Transaction ledger</td><td style="text-align:center">Forecast</td><td style="text-align:center">Pick/pack/ship</td></tr>
+            <tr><td><b>Inventory</b></td><td style="text-align:center">Truth (actual)</td><td style="text-align:center">Model (projected)</td><td style="text-align:center">Physical (floor)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="hl" style="padding:14px 18px">
+        <div style="font-size:13px;font-weight:700;color:var(--pri);margin-bottom:5px">Bob's Job in One Sentence</div>
+        <div style="font-size:13px;color:var(--ts);line-height:1.6"><b>Complete all transactions</b> and make sure he knows <b>where all the goods are</b> at all times. With 400+ trucks across the supply chain and 30&ndash;50 active transactions per week, this is Bob's real challenge &mdash; knowing what to load on which truck, on which date, to which destination, and recording it all properly.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's philosophy:</span> "I use ML3K to figure out what to send. I use SM2ARTA to prove I sent it. And I call Rock-it when they can't find it. Three systems, three jobs. If I skip SM2ARTA, it's like a tree falling in the forest &mdash; did it really ship? Nobody knows. And that's when people start yelling. Usually at 5 PM on a Friday."
+  </div>
+  <div class="ft"><div class="sn">6</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 7 — MATERIALS MAILBOX
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Communications</span></div>
+    <span class="badge badge-a3">COMMUNICATIONS</span>
+  </div>
+  <h2>Materials Mailbox &mdash; Bob's Command Center</h2>
+  <div class="acc" style="background:var(--a3)"></div>
+  <div class="sub">The shared mailbox <span class="mono bold" style="color:var(--a3)">materials@fwc2026.org</span> is the single source of truth for all supply chain communications. If it's not in the mailbox, it wasn't communicated.</div>
+
+  <div class="split" style="flex:1;min-height:0;margin-bottom:16px;align-items:stretch">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="c c-a3" style="flex:1;display:flex;flex-direction:column">
+        <h3 style="color:var(--a3)">Mailbox Rules</h3>
+        <ul class="ilist a3" style="flex:1">
+          <li><b>Always CC the Materials Mailbox</b> on every supply chain email &mdash; your Outlook "Sent" folder is not shared. What's in your Sent is invisible to your fellow Bobs.</li>
+          <li><b>Color-code every email</b> with an Outlook Category = team member name. When Bob handles a thread, he tags it <span class="otag" style="background:#BBDEFB;color:#1565C0">Bob</span>. Fellow Bobs use their own colors.</li>
+          <li><b>Archive resolved threads daily</b> &mdash; move from Inbox to the appropriate folder. Goal: inbox = active items only.</li>
+          <li><b>Use existing folder structure</b> for archiving. Add folders if you need them. The main rule: resolved emails out of the inbox by end of day.</li>
+          <li><b>Never delete</b> &mdash; archive only. Emails are evidence.</li>
+        </ul>
+      </div>
+      <div class="callout callout-blue" style="padding:10px 16px;font-size:11px"><b>Why CC the mailbox?</b> Because when Bob is on vacation and a fellow Bob needs to find that email where Rock-it confirmed LP-31 arrived in Monterrey, it needs to be in the shared mailbox &mdash; not buried in Bob's personal Sent folder. The mailbox is the team's memory.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--ts);margin-bottom:8px">Outlook Category Tags (one per team member):</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <span class="otag" style="background:#BBDEFB;color:#1565C0">Bob</span>
+          <span class="otag" style="background:#C8E6C9;color:#2E7D32">Alice</span>
+          <span class="otag" style="background:#FFE0B2;color:#E65100">Carlos</span>
+          <span style="font-size:10px;color:var(--tt);padding:2px 8px">&larr; one color per planner</span>
+        </div>
+      </div>
+
+      <!-- Email mockup -->
+      <div class="email">
+        <div class="email-toolbar">
+          <div class="email-tb-btn">Reply</div>
+          <div class="email-tb-btn">Reply All</div>
+          <div class="email-tb-btn">Forward</div>
+          <div style="flex:1"></div>
+          <div class="email-tb-btn" style="background:#BBDEFB;border-color:#90CAF9;color:#1565C0">⊞ Tag: Bob</div>
+        </div>
+        <div class="email-hdr">
+          <div><b>From:</b> <span>Rock-it Cargo Dallas &lt;ops@rockitcargo.com&gt;</span></div>
+          <div><b>To:</b> <span>Bob &lt;bob@fwc2026.org&gt;</span></div>
+          <div><b>CC:</b> <span style="color:var(--a3);font-weight:700">materials@fwc2026.org</span></div>
+          <div><b>Subject:</b> <span>Receipt Confirmation &mdash; LP-31 Monterrey (24 pallets)</span></div>
+          <div style="margin-top:4px"><span class="otag" style="background:#BBDEFB;color:#1565C0">Bob</span> <span style="font-size:9px;color:var(--tt)">&larr; category applied</span></div>
+        </div>
+        <div class="email-body">
+          Hi Bob,<br><br>
+          Please find attached the Receipt Confirmation for LP-31.<br>
+          23 of 24 pallets received. OS&amp;D: 1 pallet short (banner stands). PDF attached.<br>
+          <div class="sig">Rock-it Cargo &mdash; Monterrey Regional WHS</div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg);border-radius:10px;padding:12px 16px;font-size:11px;color:var(--ts)">
+        <div style="font-weight:700;margin-bottom:4px;color:var(--tp)">Bob's next steps with this email:</div>
+        <div style="line-height:2">
+          1. Open PDF, check line by line against SM2ARTA Inbound<br>
+          2. OS&amp;D says 1 short &mdash; investigate the missing pallet<br>
+          3. Update SM2ARTA: Complete transaction with adjusted qty<br>
+          4. Attach Receipt PDF to SM2ARTA transaction<br>
+          5. Archive email to resolved folder
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's rule #1:</span> "If I didn't CC the Materials Mailbox, it didn't happen. My fellow Bobs can't read my mind, and they definitely can't read my Sent folder. Every. Single. Email. Gets CC'd. No exceptions. Even the one where I'm just asking Rock-it 'hey did you get my last email?' &mdash; yes, that one too."
+  </div>
+  <div class="ft"><div class="sn">7</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 8 — TWO TYPES OF RECEIVING
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Receiving</span></div>
+    <span class="badge badge-a4">RECEIVING</span>
+  </div>
+  <h2>Two Types of Receiving</h2>
+  <div class="acc" style="background:var(--a4)"></div>
+  <div class="sub">Receiving looks different depending on whether goods come from a supplier or from within the network. Bob's verification process is different for each.</div>
+
+  <div class="split" style="gap:28px;margin-bottom:16px;align-items:stretch">
+    <!-- Type 1 -->
+    <div class="c" style="border-top:4px solid var(--a4);display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="background:linear-gradient(135deg,var(--a4-s),#B2EFE8);border-radius:10px;padding:8px 12px;font-size:24px">📦</div>
+        <div>
+          <h3 style="margin-bottom:0;color:#00897B">Type 1: From Supplier</h3>
+          <span style="font-size:11px;color:var(--tt)">Containers &amp; local deliveries arriving at warehouse or venue</span>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#00897B;margin-bottom:6px">Bob's job: verify the supplier delivered what was promised</div>
+      <ul class="ilist a4" style="font-size:11px;flex:1">
+        <li>Bob created the ASN in SM2ARTA before arrival</li>
+        <li>Rock-it WMS creates Receiving Order from ASN</li>
+        <li>Warehouse receives goods, counts, files OS&amp;D</li>
+        <li><b>Receipt Confirmation PDF</b> arrives in Materials Mailbox</li>
+        <li>Bob opens PDF and checks <b>line by line</b> against his SM2ARTA Inbound</li>
+        <li>Discrepancies? Investigate. Damage? File Damage Report.</li>
+        <li>Everything matches? Complete transaction in SM2ARTA.</li>
+      </ul>
+      <div class="callout callout-teal mt" style="padding:8px 12px;font-size:10px;margin-top:12px">
+        <b>Also check:</b> open Inbounds without Receipt Confirmation. If the Automatic Receipt PDF didn't arrive on time, Bob <b>proactively asks the warehouse</b>: "Did you receive this?"
+      </div>
+    </div>
+
+    <!-- Type 2 -->
+    <div class="c" style="border-top:4px solid var(--a3);display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="background:linear-gradient(135deg,var(--a3-s),#C5CAFF);border-radius:10px;padding:8px 12px;font-size:24px">🚛</div>
+        <div>
+          <h3 style="margin-bottom:0;color:var(--a3)">Type 2: From Movement</h3>
+          <span style="font-size:11px;color:var(--tt)">LP/LM trucks arriving at warehouses or venues</span>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--a3);margin-bottom:6px">Bob's big job: chase the receiver to confirm delivery</div>
+      <ul class="ilist a3" style="font-size:11px">
+        <li>Bob created the Moving transaction (OOR + ASN)</li>
+        <li>Truck departed. Transaction state: <b>Created</b> (stock reserved).</li>
+        <li>Now Bob needs confirmation from the <b>receiver</b>:</li>
+      </ul>
+      <table class="tbl" style="font-size:11px;margin-top:6px;margin-bottom:8px">
+        <thead><tr><th>Destination</th><th>Who Bob Chases</th></tr></thead>
+        <tbody>
+          <tr><td>Regional / Satellite WHS</td><td><b>Rock-it Cargo</b> staff &mdash; Receipt PDF arrives automatically</td></tr>
+          <tr><td>Stadium venue</td><td><b>FIFA Venue Logistics Manager</b> &mdash; Bob must request confirmation</td></tr>
+          <tr><td>Non-stadium venue</td><td><b>FIFA Functional Area rep</b> &mdash; Bob must request confirmation</td></tr>
+        </tbody>
+      </table>
+      <ul class="ilist a3" style="font-size:11px;flex:1">
+        <li>For WHS: Receipt PDF arrives, Bob checks line by line</li>
+        <li>For venues: Bob sends confirmation request email (see next slide)</li>
+        <li>Once confirmed: Complete transaction in SM2ARTA with all references</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 5-step flow -->
+  <div class="fl" style="margin-bottom:16px">
+    <div class="fn a4">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--a4);color:#fff;width:28px;height:28px;font-size:13px">1</span>
+      </div>
+      <div class="ft2">Count</div><div class="fs">Physical count before signing</div>
+    </div>
+    <div class="fa"><svg width="28" height="18"><path d="M2 9L22 9 M16 4 L22 9 L16 14" stroke="#8888A0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="fn a4">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--a4);color:#fff;width:28px;height:28px;font-size:13px">2</span>
+      </div>
+      <div class="ft2">Verify</div><div class="fs">Compare against ASN</div>
+    </div>
+    <div class="fa"><svg width="28" height="18"><path d="M2 9L22 9 M16 4 L22 9 L16 14" stroke="#8888A0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="fn am">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--am);color:#fff;width:28px;height:28px;font-size:13px">3</span>
+      </div>
+      <div class="ft2">OS&amp;D</div><div class="fs">Report if over, short, or damaged</div>
+    </div>
+    <div class="fa"><svg width="28" height="18"><path d="M2 9L22 9 M16 4 L22 9 L16 14" stroke="#8888A0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="fn pri">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--pri);color:#fff;width:28px;height:28px;font-size:13px">4</span>
+      </div>
+      <div class="ft2">SM2ARTA</div><div class="fs">Complete transaction + attach docs</div>
+    </div>
+    <div class="fa"><svg width="28" height="18"><path d="M2 9L22 9 M16 4 L22 9 L16 14" stroke="#8888A0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="fn gn">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--gn);color:#fff;width:28px;height:28px;font-size:13px">5</span>
+      </div>
+      <div class="ft2">Mailbox</div><div class="fs">Archive resolved thread</div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's reality:</span> "Warehouse receivings are the easy ones &mdash; the PDF shows up automatically and I just need to check it. Venue receivings? That's where the fun begins. I send an email, I wait, I send another email, I call, I message on Teams, I consider sending a carrier pigeon. The Venue Logistics Manager is busy setting up a stadium. Confirming Bob's 6 pallets of folding chairs is not their top priority. But it's mine."
+  </div>
+  <div class="ft"><div class="sn">8</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 9 — RECEIPT CONFIRMATION PDF (REAL EXAMPLE)
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S s15">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Real Example</span></div>
+    <span class="badge badge-a4">REAL EXAMPLE</span>
+  </div>
+  <h2>Receipt Confirmation &mdash; What Bob Actually Gets</h2>
+  <div class="acc" style="background:var(--a4)"></div>
+  <div class="sub">This is what lands in the Materials Mailbox when a warehouse receives goods. Bob's job: open the PDF, check every line against SM2ARTA, and complete the transaction.</div>
+
+  <div class="split" style="flex:1;min-height:0;margin-bottom:16px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="email">
+        <div class="email-toolbar">
+          <div class="email-tb-btn">Reply</div>
+          <div class="email-tb-btn">Reply All</div>
+          <div class="email-tb-btn">Forward</div>
+        </div>
+        <div class="email-hdr">
+          <div><b>From:</b> <span>Da Vinci Support &lt;donotreply_dvu@wdgcorp.com&gt;</span></div>
+          <div><b>To:</b> <span>Distribution Logistics (FIFA26); Material Management Team (FIFA26); matt.underwood@rockitcompany.com</span></div>
+          <div><b>Subject:</b> <span>Order 94 PO null Received</span></div>
+          <div style="margin-top:4px"><span style="font-size:9px;color:var(--am)">⚠ This sender is from outside your organization.</span></div>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:6px">
+            <div style="background:#F0F0F0;border:1px solid #D0D0D0;border-radius:4px;padding:3px 8px;display:inline-flex;align-items:center;gap:4px">
+              <span style="color:var(--rd);font-size:12px">📄</span>
+              <span style="font-size:10px"><b>94-20260403095538.pdf</b> &mdash; 1 MB</span>
+            </div>
+          </div>
+        </div>
+        <div class="email-body">
+          Order 94 PO null Equipment null from FIFA was received.<br><br>
+          <div class="sig">Email generated by Da Vinci Supply Chain Business Suite™, Wolin Design Group</div>
+        </div>
+      </div>
+
+      <div class="callout callout-teal" style="padding:10px 16px;font-size:11px">
+        <b>This email is automatic.</b> It comes from Rock-it Cargo's WMS (Da Vinci) every time a Receiving Order is completed at a warehouse. It goes to the Distribution Logistics and Material Management distribution lists. Bob doesn't request it &mdash; it just shows up. Bob's job is to <b>not ignore it</b>.
+      </div>
+
+      <div class="c c-a4" style="flex:1">
+        <h3 style="color:#00897B">Bob's Line-by-Line Checklist</h3>
+        <ul class="ilist a4" style="font-size:11px">
+          <li>Open the PDF attachment</li>
+          <li>Check <b>TRANSACTION #</b> &mdash; note it for SM2ARTA reference</li>
+          <li>Check <b>RECEIPT DATE</b> &mdash; does it match expected arrival?</li>
+          <li>For each line: match <b>ITEM CODE</b> to SM2ARTA SKU</li>
+          <li>For each line: match <b>QTY</b> and <b>UOM</b> to SM2ARTA transaction</li>
+          <li>Check <b>TOTAL UNITS</b> vs your ASN total</li>
+          <li>Any discrepancy? &rarr; OS&amp;D investigation</li>
+          <li>All matches? &rarr; <b>Complete</b> transaction in SM2ARTA</li>
+          <li>Attach PDF reference to SM2ARTA transaction</li>
+          <li>Archive email thread in Materials Mailbox</li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <!-- PDF mockup -->
+      <div style="background:#fff;border:2px solid #333;border-radius:6px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.12)">
+        <div style="background:#fff;padding:14px 22px;border-bottom:2px solid #333">
+          <div style="text-align:center;font-family:'Courier New',monospace;font-weight:700;font-size:17px;margin-bottom:4px">WAREHOUSE RECEIPT</div>
+          <div style="text-align:right;font-size:10px;color:#555">Page 1 of 1</div>
+        </div>
+        <div style="padding:14px 22px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:14px">
+            <div style="font-size:11px;color:#333;line-height:1.5">
+              <div>2250 East I-30</div>
+              <div>STE 100</div>
+              <div>Grand Prairie, TX 75050</div>
+            </div>
+            <div style="font-size:11px;color:#333;line-height:1.8;text-align:right;font-family:'Courier New',monospace">
+              <div><b>TRANSACTION #:</b> R00016186</div>
+              <div><b>RECEIPT #:</b> 94</div>
+              <div><b>RECEIPT DATE:</b> 03/05/2026</div>
+              <div><b>CARRIER:</b></div>
+              <div><b>CONTAINER:</b></div>
+            </div>
+          </div>
+          <div style="font-size:11px;margin-bottom:10px"><b>FOR ACCOUNT:</b> FIFA</div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'Courier New',monospace">
+            <thead>
+              <tr style="border-bottom:2px solid #333">
+                <th style="text-align:left;padding:5px 6px;font-size:10px">ITEM CODE/DESCRIPTION</th>
+                <th style="text-align:right;padding:5px 6px;font-size:10px">QTY</th>
+                <th style="text-align:center;padding:5px 6px;font-size:10px">UOM</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #DDD">
+                <td style="padding:7px 6px"><b>FEWHQ-003-002</b><br><span style="font-family:var(--fd);font-size:10px;color:#555">Dispenser Packaging Tape - GENERIC</span></td>
+                <td style="text-align:right;padding:7px 6px;font-weight:700">270</td>
+                <td style="text-align:center;padding:7px 6px">EA</td>
+              </tr>
+              <tr style="border-top:2px solid #333;background:#F5F5F5">
+                <td style="padding:7px 6px;font-weight:700">TOTAL UNITS:</td>
+                <td style="text-align:right;padding:7px 6px;font-weight:700;font-size:13px">270</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="c" style="border-top:3px solid var(--pri)">
+        <h3 style="color:var(--pri)">What Bob Checks Against SM2ARTA</h3>
+        <table class="tbl" style="font-size:11px">
+          <thead><tr><th>PDF Field</th><th>SM2ARTA Field</th><th>Match?</th></tr></thead>
+          <tbody>
+            <tr><td>ITEM CODE: <b>FEWHQ-003-002</b></td><td>SKU in Inbound transaction</td><td style="color:var(--gn);font-weight:700">✓</td></tr>
+            <tr><td>QTY: <b>270</b></td><td>Quantity in transaction</td><td style="color:var(--gn);font-weight:700">✓</td></tr>
+            <tr><td>UOM: <b>EA</b></td><td>Unit of Measurement</td><td style="color:var(--gn);font-weight:700">✓</td></tr>
+            <tr><td>RECEIPT DATE: <b>03/05/2026</b></td><td>Expected arrival date</td><td style="color:var(--gn);font-weight:700">✓</td></tr>
+            <tr><td>TRANSACTION #: <b>R00016186</b></td><td>WMS reference (attach to txn)</td><td style="color:var(--a3);font-weight:700">📎</td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:8px;font-size:10px;color:var(--ts)">All lines match &rarr; <b>Complete</b> the Inbound transaction in SM2ARTA. Attach the WMS Transaction # as reference.</div>
+      </div>
+
+      <div style="font-size:10px;color:var(--tt);line-height:1.5">
+        <b>If QTY doesn't match:</b> Complete transaction with the <b>physical qty</b> actually received. Create a separate transaction for the pending/missing items. Investigate what happened.
+      </div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's first time:</span> "My first Receipt PDF was terrifying. 47 line items, tiny font, item codes I'd never seen. I spent 45 minutes checking it. Now I can do a 50-line receipt in 10 minutes. The trick? Don't multitask. Close Teams. Close everything. Just you, the PDF, and SM2ARTA side by side. Line by line. It becomes muscle memory."
+  </div>
+  <div class="ft"><div class="sn">9</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 10 — VENUE CONFIRMATION TEMPLATE
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Templates</span></div>
+    <span class="badge badge-a3">TEMPLATES</span>
+  </div>
+  <h2>Venue Delivery Confirmation &mdash; Bob's Email Template</h2>
+  <div class="acc" style="background:var(--a3)"></div>
+  <div class="sub">Since venues don't have WMS, Bob needs to request confirmation directly. Here's the email Bob sends to every Venue Logistics Manager or FA representative after an LM truck delivery.</div>
+
+  <div class="split" style="flex:1;min-height:0;margin-bottom:16px">
+    <div>
+      <div class="email" style="font-size:11px">
+        <div class="email-toolbar">
+          <div class="email-tb-btn">Send</div>
+          <div style="flex:1"></div>
+          <div style="font-size:9px;color:#888">Draft — ready to send</div>
+        </div>
+        <div class="email-hdr">
+          <div><b>From:</b> <span>Bob &lt;bob@fwc2026.org&gt;</span></div>
+          <div><b>To:</b> <span>Jane Smith &lt;jane.smith@fwc2026.org&gt;</span> <span style="font-size:9px;color:var(--tt)">(Venue Logistics Manager)</span></div>
+          <div><b>CC:</b> <span style="color:var(--a3);font-weight:700">materials@fwc2026.org</span> <span style="font-size:9px;color:var(--rd);font-weight:600">&larr; ALWAYS</span></div>
+          <div><b>Subject:</b> <span>Delivery Confirmation Required &mdash; LM-47 to MetLife Stadium (6 pallets)</span></div>
+        </div>
+        <div class="email-body" style="font-size:11px">
+          Hi Jane,<br><br>
+          Truck <b>LM-47</b> was dispatched to <b>MetLife Stadium</b> on <b>April 3</b> with <b>6 pallets</b> (see attached packing list).<br><br>
+          Could you please confirm receipt by replying with:<br><br>
+          <div style="background:#F5F5FA;border:1px solid #E0E0EE;border-radius:6px;padding:10px 12px;margin:6px 0">
+            1. <b>Total pallets received:</b> ___<br>
+            2. <b>Any items missing or short?</b> Yes / No &mdash; if yes, which SKUs and qty<br>
+            3. <b>Any damage?</b> Yes / No &mdash; if yes, please attach photos<br>
+            4. <b>Date received:</b> ___<br>
+            5. <b>Received by (name):</b> ___
+          </div>
+          <br>
+          Please reply to this email (keeping <b>materials@fwc2026.org</b> in CC) within <b>24 hours</b> of delivery.<br><br>
+          If there are any discrepancies, please do not move or unpack the affected items until we resolve the issue.<br><br>
+          Thank you!<br>
+          <div class="sig">Bob<br>Materials Management &mdash; FF&amp;E Supply Chain<br>FIFA World Cup 2026™</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="c c-a3">
+        <h3 style="color:var(--a3)">Why This Template Works</h3>
+        <ul class="ilist a3" style="font-size:11px">
+          <li><b>Specific truck + pallet count</b> &mdash; receiver knows exactly what to look for</li>
+          <li><b>5 simple questions</b> &mdash; even the busiest venue manager can answer quickly</li>
+          <li><b>Materials Mailbox in CC</b> &mdash; fellow Bobs can follow up if Bob is unavailable</li>
+          <li><b>24-hour deadline</b> &mdash; sets clear expectation</li>
+          <li><b>"Don't move damaged items"</b> &mdash; preserves evidence for photos and claims</li>
+          <li><b>Packing list attached</b> &mdash; receiver can verify without asking Bob for details</li>
+        </ul>
+      </div>
+
+      <div class="c" style="border-top:3px solid var(--am)">
+        <h3 style="color:var(--am)">When They Don't Reply</h3>
+        <div style="font-size:11px;color:var(--ts)">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
+            <span class="step-num step-num-sm" style="background:var(--am-s);color:var(--am);font-size:12px;border:1.5px solid var(--am-b);width:30px;height:30px">+24h</span>
+            <span>Follow-up email (CC Materials Mailbox, always)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
+            <span class="step-num step-num-sm" style="background:var(--am-s);color:var(--am);font-size:12px;border:1.5px solid var(--am-b);width:30px;height:30px">+48h</span>
+            <span>Teams message or phone call</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0">
+            <span class="step-num step-num-sm" style="background:var(--rd-s);color:var(--rd);font-size:12px;border:1.5px solid var(--rd-b);width:30px;height:30px">+72h</span>
+            <span>Escalate to <b>LCC</b> (Logistics Coordination Center)</span>
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:var(--tt)">Keep all follow-ups in the same email thread. Never start a new thread for the same delivery.</div>
+      </div>
+
+      <div class="callout" style="padding:8px 12px;font-size:10px">
+        <b>Pro tip:</b> Send the confirmation request email <b>before</b> the truck arrives (same day as dispatch). The receiver gets a heads-up, and Bob has a paper trail with the timestamp.
+      </div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's confession:</span> "I send this email so often I could type it in my sleep. But I never skip it. Because three weeks from now, when someone asks 'did MetLife get those chairs?' &mdash; I open the Materials Mailbox, search 'LM-47', and there it is: Jane's reply with photos, timestamps, and a smiley face. That's not just an email. That's armor."
+  </div>
+  <div class="ft"><div class="sn">10</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 11 — DAILY RHYTHM
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S s-med">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Daily Operations</span></div>
+    <span class="badge badge-am">DAILY OPERATIONS</span>
+  </div>
+  <h2>Bob's Day &mdash; The Daily Planner Rhythm</h2>
+  <div class="acc" style="background:var(--am)"></div>
+  <div class="sub">Morning: frozen zone + SM2ARTA reconciliation. Midday: slushy zone. Afternoon: forecast zone and close-out. Materials Mailbox first &mdash; always.</div>
+
+  <div class="split" style="flex:1;min-height:0;align-items:stretch">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="c c-rd" style="flex:1;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:22px">☕</span>
+          <div><h3 style="margin-bottom:0;color:var(--rd)">Morning &mdash; Frozen Zone</h3><span style="font-size:10px;color:var(--tt)">First coffee. Mailbox first.</span></div>
+        </div>
+        <ul class="ilist rd" style="font-size:11px;flex:1">
+          <li>Open Materials Mailbox &mdash; scan for Receipt PDFs and venue confirmations</li>
+          <li>Check line by line: PDF vs SM2ARTA Inbound. Every. Line.</li>
+          <li>Check open Inbounds without Receipt Confirmation &mdash; chase warehouse</li>
+          <li>Review OS&amp;D reports &mdash; any shorts or damage to investigate?</li>
+          <li>Verify OORs completed &mdash; did trucks actually leave?</li>
+          <li>Color-code all new emails with your <span class="otag" style="background:#BBDEFB;color:#1565C0;font-size:8px">Name</span> category</li>
+        </ul>
+      </div>
+      <div class="c c-am" style="flex:1;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:22px">☀️</span>
+          <div><h3 style="margin-bottom:0;color:var(--am)">Midday &mdash; Slushy Zone</h3><span style="font-size:10px;color:var(--tt)">Second coffee. Working zone.</span></div>
+        </div>
+        <ul class="ilist am" style="font-size:11px;flex:1">
+          <li>Check ML3K for upcoming 7-day forecast &mdash; what's being dispatched?</li>
+          <li>Create OORs &amp; ASNs for next dispatch window</li>
+          <li>Send venue confirmation request emails (CC Materials Mailbox!)</li>
+          <li>Chase receivers for open Moving transactions &mdash; Bob's big job</li>
+          <li>Coordinate with Rock-it on WHS processing status</li>
+        </ul>
+      </div>
+      <div class="c c-gn" style="flex:1;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:22px">🌇</span>
+          <div><h3 style="margin-bottom:0;color:var(--gn)">End of Day &mdash; Forecast &amp; Close</h3><span style="font-size:10px;color:var(--tt)">Third coffee. Or herbal tea.</span></div>
+        </div>
+        <ul class="ilist gn" style="font-size:11px;flex:1">
+          <li>Verify <b>all</b> day's transactions logged in SM2ARTA</li>
+          <li>Archive resolved email threads from Materials Mailbox</li>
+          <li>Review tomorrow's frozen zone &mdash; everything ready?</li>
+          <li>Optimize forecast zone in ML3K: demand changes, truck loads</li>
+          <li>Reconcile: plan (ML3K) vs actual (SM2ARTA)</li>
+        </ul>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="c" style="border-top:3px solid var(--pri);flex:1;display:flex;flex-direction:column">
+        <h3 style="color:var(--pri)">Daily Checklist</h3>
+        <div style="font-size:12px;color:var(--ts);line-height:2.1;margin-top:8px">
+          <div style="display:flex;align-items:center;gap:8px"><span class="phase phase-frozen" style="font-size:10px;padding:3px 10px">❄️ FROZEN</span> All Receipt PDFs checked line by line?</div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="phase phase-frozen" style="font-size:10px;padding:3px 10px">❄️ FROZEN</span> All OS&amp;Ds reviewed? Discrepancies investigated?</div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="phase phase-frozen" style="font-size:10px;padding:3px 10px">❄️ FROZEN</span> All OORs completed? ASNs matched?</div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="phase phase-frozen" style="font-size:10px;padding:3px 10px">❄️ FROZEN</span> Open Inbounds without confirmation &mdash; chased?</div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="phase phase-slushy" style="font-size:10px;padding:3px 10px">💧 SLUSHY</span> Next 7-day dispatch OORs/ASNs created?</div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="phase phase-slushy" style="font-size:10px;padding:3px 10px">💧 SLUSHY</span> Venue confirmation emails sent? Receivers chased?</div>
+          <div style="display:flex;align-items:center;gap:8px"><span class="phase phase-forecast" style="font-size:10px;padding:3px 10px">🌱 FORECAST</span> ML3K plans optimized for 7+ days?</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:2px solid var(--bd)">
+            <span style="color:var(--a3);font-weight:700;font-size:16px">📧</span> <b>Materials Mailbox inbox clean? Resolved threads archived?</b>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="color:var(--rd);font-weight:700;font-size:16px">✓</span> <b>SM2ARTA fully up to date?</b>
+          </div>
+        </div>
+      </div>
+      <div class="callout" style="padding:10px 14px;font-size:12px"><b>Morning priority:</b> SM2ARTA reconciliation and Receipt PDF verification come first. No planning work until yesterday's actuals are confirmed.</div>
+    </div>
+  </div>
+  <div class="ft"><div class="sn">11</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 12 — MONITORING & ESCALATION
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S s-med">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Monitoring</span></div>
+    <span class="badge badge-sec">MONITORING</span>
+  </div>
+  <h2>What to Monitor &amp; When to Escalate</h2>
+  <div class="acc" style="background:var(--sec)"></div>
+  <div class="sub">Catch problems in the forecast zone before they reach the frozen zone. Focus on leading indicators. Escalate to <b>LCC</b> (Logistics Coordination Center) when stuck.</div>
+
+  <div class="split" style="flex:1;min-height:0;margin-bottom:16px;align-items:stretch">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="c c-rd" style="flex:1;display:flex;flex-direction:column">
+        <h3 style="color:var(--rd)">Daily Monitoring</h3>
+        <table class="tbl" style="font-size:11px">
+          <thead><tr><th>What</th><th>Why</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td><b>Receipt PDFs vs SM2ARTA</b></td><td>Line-by-line verification</td><td>Mailbox + SM2ARTA</td></tr>
+            <tr><td><b>Open Inbounds w/o confirmation</b></td><td>Chase warehouse proactively</td><td>SM2ARTA</td></tr>
+            <tr><td><b>Open Movings w/o completion</b></td><td>Chase receivers</td><td>SM2ARTA</td></tr>
+            <tr><td><b>OS&amp;D reports</b></td><td>Discrepancies affect demand</td><td>Mailbox + WMS</td></tr>
+            <tr><td><b>Created txns &gt; 48h</b></td><td>Stock reserved but not moved?</td><td>SM2ARTA</td></tr>
+            <tr><td><b>Frozen zone readiness</b></td><td>Next 72h ready to execute?</td><td>ML3K</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="c c-am" style="flex:1">
+        <h3 style="color:var(--am)">Weekly Monitoring</h3>
+        <table class="tbl" style="font-size:11px">
+          <thead><tr><th>What</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><b>Forecast accuracy</b></td><td>Plan vs actual dispatch dates</td></tr>
+            <tr><td><b>WHS processing throughput</b></td><td>Items moving through on time?</td></tr>
+            <tr><td><b>Open OS&amp;D discrepancies</b></td><td>Unresolved variances need closure</td></tr>
+            <tr><td><b>Inventory reconciliation</b></td><td>SM2ARTA vs physical count at WHS</td></tr>
+            <tr><td><b>Created txns aging &gt; 7 days</b></td><td>Something is stuck &mdash; investigate</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="c c-sec" style="flex:1;display:flex;flex-direction:column">
+        <h3 style="color:var(--sec)">Escalation to LCC</h3>
+        <p style="font-size:11px;color:var(--ts);margin-bottom:8px">These require <b>immediate</b> escalation to the Logistics Coordination Center:</p>
+        <table class="tbl" style="font-size:11px">
+          <thead><tr><th>Trigger</th><th>Zone</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><b>ASN sent, no receipt 48h+</b></td><td><span class="phase phase-frozen" style="font-size:9px;padding:2px 6px">FROZEN</span></td><td>Contact WHS &rarr; if no response, LCC</td></tr>
+            <tr><td><b>OOR not executed on schedule</b></td><td><span class="phase phase-frozen" style="font-size:9px;padding:2px 6px">FROZEN</span></td><td>Contact Rock-it &rarr; if no response, LCC</td></tr>
+            <tr><td><b>Venue not responding 72h+</b></td><td>Any</td><td>Escalate to LCC immediately</td></tr>
+            <tr><td><b>Significant OS&amp;D shortage</b></td><td>Any</td><td>Investigate + LCC if unresolved</td></tr>
+            <tr><td><b>Damage creates stockout</b></td><td>Any</td><td>Reorder / reallocate + inform LCC</td></tr>
+            <tr><td><b>SM2ARTA not updated 24h+</b></td><td>Any</td><td><b>STOP everything and update now</b></td></tr>
+          </tbody>
+        </table>
+        <div class="callout callout-sec" style="padding:8px 12px;font-size:10px;margin-top:12px"><b>Leading vs lagging:</b> A missing receipt confirmation in the frozen zone = lagging (you're reacting). A stock shortage spotted in the forecast zone = leading (you can still prevent it). Spend monitoring time on leading indicators.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's Thursday:</span> "Bob spots a Created transaction from Monday that never got Completed. LM-22 to a fan zone &mdash; OOR was issued, truck left, but no confirmation from the FA representative. Bob sent the email Monday. Follow-up Tuesday. Teams message Wednesday. Thursday: still nothing. Bob escalates to LCC. Twenty minutes later, LCC calls the venue directly. Turns out the FA rep was on vacation and nobody told Bob. Pallets were sitting on a loading dock. Received, unchecked, unsigned. Bob sighs, completes the transaction with a note: 'confirmed via LCC, no OS&amp;D available, requesting retroactive count.' This is not ideal. But now it's documented."
+  </div>
+  <div class="ft"><div class="sn">12</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 13 — DAMAGE PROCESS
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Damage</span></div>
+    <span class="badge badge-rd">DAMAGE</span>
+  </div>
+  <h2>Damage Reporting Process</h2>
+  <div class="acc" style="background:var(--rd)"></div>
+  <div class="sub">Damage does not remove an item from the network &mdash; it <b>transforms</b> the nomenclature. The item still exists, still occupies space, still needs tracking.</div>
+
+  <!-- 5-step flow -->
+  <div class="fl" style="margin-bottom:16px">
+    <div class="fn rd">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--rd);color:#fff;width:32px;height:32px;font-size:14px">1</span>
+      </div>
+      <div style="font-size:22px;margin-bottom:2px">📷</div>
+      <div class="ft2">Photo First</div><div class="fs">Before handling or moving</div>
+    </div>
+    <div class="fa"><svg width="28" height="18"><path d="M2 9L22 9 M16 4 L22 9 L16 14" stroke="#8888A0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="fn rd">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--rd);color:#fff;width:32px;height:32px;font-size:14px">2</span>
+      </div>
+      <div style="font-size:22px;margin-bottom:2px">🛑</div>
+      <div class="ft2">Isolate</div><div class="fs">Physically separate damaged</div>
+    </div>
+    <div class="fa"><svg width="28" height="18"><path d="M2 9L22 9 M16 4 L22 9 L16 14" stroke="#8888A0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="fn am">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--am);color:#fff;width:32px;height:32px;font-size:14px">3</span>
+      </div>
+      <div style="font-size:22px;margin-bottom:2px">📋</div>
+      <div class="ft2">OS&amp;D</div><div class="fs">Document in receiving report</div>
+    </div>
+    <div class="fa"><svg width="28" height="18"><path d="M2 9L22 9 M16 4 L22 9 L16 14" stroke="#8888A0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="fn pri">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--pri);color:#fff;width:32px;height:32px;font-size:14px">4</span>
+      </div>
+      <div style="font-size:22px;margin-bottom:2px">📝</div>
+      <div class="ft2">SM2ARTA</div><div class="fs">Damage Report txn + photos</div>
+    </div>
+    <div class="fa"><svg width="28" height="18"><path d="M2 9L22 9 M16 4 L22 9 L16 14" stroke="#8888A0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="fn gn">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
+        <span class="step-num step-num-sm" style="background:var(--gn);color:#fff;width:32px;height:32px;font-size:14px">5</span>
+      </div>
+      <div style="font-size:22px;margin-bottom:2px">✅</div>
+      <div class="ft2">Resolve</div><div class="fs">Replace, reorder, or adjust plan</div>
+    </div>
+  </div>
+
+  <div class="g2" style="gap:22px;flex:1;min-height:0;margin-bottom:16px;align-items:stretch">
+    <div class="c" style="border-top:3px solid var(--rd);display:flex;flex-direction:column">
+      <h3>What Happens in SM2ARTA</h3>
+      <div style="background:var(--bg);border-radius:10px;padding:14px 16px;margin:8px 0;font-family:var(--fm);font-size:12px;line-height:2.4">
+        <div><span style="color:var(--rd)">−</span> <span style="font-weight:600;color:var(--rd)">CHAIR-001</span> qty: <span style="color:var(--rd);font-weight:700">-48</span> <span style="color:var(--tt)">(original)</span></div>
+        <div><span style="color:var(--am)">+</span> <span style="font-weight:600;color:var(--am)">CHAIR-001-DMG</span> qty: <span style="color:var(--am);font-weight:700">+48</span> <span style="color:var(--tt)">(damaged)</span></div>
+        <div style="font-family:var(--fd);font-size:11px;color:var(--ts);margin-top:4px">Total at node unchanged. Nomenclature transformed. Audit trail created.</div>
+      </div>
+      <div style="font-size:11px;color:var(--ts);flex:1"><b>Attach to SM2ARTA transaction:</b> photos (before handling), OS&amp;D reference, WMS order number, email thread reference from Materials Mailbox. Your future detective self will need all of this.</div>
+    </div>
+    <div class="c" style="border-top:3px solid var(--am);display:flex;flex-direction:column">
+      <h3>Common Damage Scenarios</h3>
+      <table class="tbl" style="font-size:11px;flex:1">
+        <thead><tr><th>When</th><th>Where</th><th>Cause</th></tr></thead>
+        <tbody>
+          <tr><td>Container receipt</td><td>Dallas WHS</td><td>Transit damage, water</td></tr>
+          <tr><td>LP truck unload</td><td>Satellite WHS</td><td>Forklift, fallen pallets</td></tr>
+          <tr><td>Assembly</td><td>WHS / Venue</td><td>Breakage during assembly</td></tr>
+          <tr><td>LM delivery</td><td>Venue</td><td>Transit damage, handling</td></tr>
+          <tr><td>Storage</td><td>Any WHS</td><td>Water, crush, pest</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-red mt-sm" style="padding:8px 12px;font-size:10px;margin-top:12px"><b>Time is evidence.</b> Photograph damage <b>before</b> handling. Photos taken after items are moved lose evidentiary value for insurance and supplier claims.</div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's Friday:</span> "48 crushed chairs. Bob files the Damage Report in SM2ARTA, attaches the photos Rock-it sent, the OS&amp;D reference, and the WMS receiving order number. MetLife still needs those chairs. Bob checks ML3K forecast zone &mdash; there's a supplier delivery in 10 days. He adjusts the plan. Crisis averted. Bob archives the email thread and dreams about pallets all weekend."
+  </div>
+  <div class="ft"><div class="sn">13</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 14 — TAKE A DEEP BREATH
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Staying Sane</span></div>
+    <span class="badge badge-pri">STAYING SANE</span>
+  </div>
+  <h2 style="margin-bottom:0">Take a Deep Breath</h2>
+  <div class="acc" style="background:var(--pri)"></div>
+  <div class="sub">30&ndash;50 active transactions per week. 100+ trucks in your region. 400+ across the network. Three systems. One shared mailbox. It's a lot. Here's how Bob stays on top of it.</div>
+
+  <div class="split" style="flex:1;min-height:0;margin-bottom:16px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="c" style="border-top:4px solid var(--a3);flex:1">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+          <div style="flex-shrink:0">
+            <svg width="64" height="64" viewBox="0 0 64 64">
+              <rect x="28" y="44" width="8" height="16" rx="2" fill="#8888A0"/>
+              <rect x="20" y="56" width="24" height="4" rx="2" fill="#555570"/>
+              <polygon points="32,4 18,44 46,44" fill="#304FFE" opacity=".2" stroke="#304FFE" stroke-width="1.5" stroke-linejoin="round"/>
+              <rect x="22" y="32" width="20" height="12" rx="3" fill="#304FFE" opacity=".85"/>
+              <rect x="24" y="34" width="6" height="5" rx="1" fill="#BBDEFB" opacity=".9"/>
+              <rect x="32" y="34" width="8" height="5" rx="1" fill="#BBDEFB" opacity=".9"/>
+              <circle cx="32" cy="8" r="6" fill="none" stroke="#304FFE" stroke-width="1.5"/>
+              <line x1="32" y1="4" x2="32" y2="14" stroke="#304FFE" stroke-width="1.5"/>
+              <line x1="32" y1="8" x2="38" y2="4" stroke="#304FFE" stroke-width="1.5" stroke-dasharray="2,1"/>
+              <circle cx="40" cy="12" r="2" fill="#304FFE" opacity=".5"/>
+              <circle cx="22" cy="16" r="1.5" fill="#304FFE" opacity=".3"/>
+            </svg>
+          </div>
+          <div>
+            <h3 style="margin-bottom:2px;color:var(--a3)">Think Air Traffic Control</h3>
+            <div style="font-size:11px;color:var(--ts)">Your job is closer to ATC than you think</div>
+          </div>
+        </div>
+        <ul class="ilist a3" style="font-size:12px">
+          <li>Air traffic controllers manage dozens of planes simultaneously</li>
+          <li>They don't memorize everything &mdash; they <b>follow procedures</b></li>
+          <li>They have <b>checklists</b> for every phase of flight</li>
+          <li>They have a <b>co-pilot</b> who double-checks everything</li>
+          <li>And when something goes wrong? They don't panic. They <b>follow the checklist</b>.</li>
+        </ul>
+      </div>
+
+      <div class="c" style="border-top:4px solid var(--gn)">
+        <h3 style="color:var(--gn)">Your Co-Pilot: Fellow Bobs</h3>
+        <p style="font-size:12px;color:var(--ts);margin-bottom:8px">There are three regional planners. You are not alone.</p>
+        <ul class="ilist gn" style="font-size:12px">
+          <li><b>Ask a fellow Bob to double-check</b> your work &mdash; not because you're bad at your job, but because the job is hard</li>
+          <li>Two pairs of eyes on a 24-pallet Receipt PDF catch what one pair misses</li>
+          <li>Materials Mailbox lets any Bob pick up any thread</li>
+          <li>Color-code your categories so fellow Bobs know what's yours</li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="c" style="border-top:4px solid var(--pri);flex:1">
+        <h3 style="color:var(--pri)">When It Feels Overwhelming — 5 Steps</h3>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:15px">
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--pri-s);border-radius:10px">
+            <span class="step-num" style="background:var(--pri);color:#fff;width:42px;height:42px;font-size:18px">1</span>
+            <div><b>Pause.</b> Take a breath. Seriously. Five seconds.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--a3-s);border-radius:10px">
+            <span class="step-num" style="background:var(--a3);color:#fff;width:42px;height:42px;font-size:18px">2</span>
+            <div><b>What zone am I in?</b> Frozen = react. Slushy = manage. Forecast = plan.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--am-s);border-radius:10px">
+            <span class="step-num" style="background:var(--am);color:#fff;width:42px;height:42px;font-size:18px">3</span>
+            <div><b>What's the oldest open transaction?</b> Start there. Complete it.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--rd-s);border-radius:10px">
+            <span class="step-num" style="background:var(--rd);color:#fff;width:42px;height:42px;font-size:18px">4</span>
+            <div><b>Update SM2ARTA first.</b> Even when the building is on fire. Especially then.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--gn-s);border-radius:10px">
+            <span class="step-num" style="background:var(--gn);color:#fff;width:42px;height:42px;font-size:18px">5</span>
+            <div><b>Ask for help.</b> Fellow Bob, LCC, your manager. Nobody wins alone.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout" style="padding:10px 14px;font-size:11px">
+        <b>It may seem like SM2ARTA is an unnecessary step</b> when you're drowning in urgent issues. "I'll update it later." Don't. SM2ARTA is not overhead &mdash; it's your lifeline. When someone asks "where are the 48 chairs?" at 4:45 PM on a Friday, the planner with up-to-date SM2ARTA says <b>"let me check"</b> and has the answer in 10 seconds. The planner without it says <b>"let me dig through my emails"</b> and ruins everyone's weekend.
+      </div>
+
+      <div class="callout callout-red" style="padding:8px 14px;font-size:11px">
+        <b>Every mistake can be fixed.</b> Everyone makes them. A wrong quantity, a missed OS&amp;D, a late transaction &mdash; these happen. What matters is that you catch it, correct it, and document the correction. The mistake isn't the problem. The unrecorded mistake is.
+      </div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's wisdom:</span> "On my worst day I had 47 open transactions, 12 unanswered confirmation emails, a container arriving with wrong paperwork, and Rock-it calling about a misrouted pallet. I wanted to throw my laptop out the window. Instead, I made a coffee, opened SM2ARTA, sorted by oldest Created date, and started completing them one by one. By 5 PM I was down to 8. The next morning, my fellow Bob caught a mistake in one of my completed transactions. He fixed it. That's why we're a team."
+  </div>
+  <div class="ft"><div class="sn">14</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 15 — BOB'S FIRST DAY FAQ
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S s15">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Onboarding</span></div>
+    <span class="badge badge-pri">ONBOARDING</span>
+  </div>
+  <h2>Bob's First Day &mdash; Frequently Asked Questions</h2>
+  <div class="acc" style="background:var(--pri)"></div>
+  <div class="sub">You've seen the presentation. You have questions. Everyone does. Here are the answers so you can stop worrying and start working.</div>
+
+  <div class="g2" style="flex:1;min-height:0;margin-bottom:8px;align-items:stretch">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="c c-a4" style="flex:1">
+        <h3 style="color:#00897B">Systems &amp; Access</h3>
+        <table class="tbl" style="font-size:11px">
+          <tbody>
+            <tr><td style="width:48%;font-weight:600">"How do I get SM2ARTA access?"</td><td>Already done. There's a <b>test server</b> to practice without touching real data. Use it. Break things. Learn.</td></tr>
+            <tr><td style="font-weight:600">"Do I have access to Rock-it's WMS?"</td><td>Yes. You can view <b>inventory</b> at Regional/Satellite WHS and see the list of <b>Receiving/Shipping Orders</b>.</td></tr>
+            <tr><td style="font-weight:600">"What about ML3K?"</td><td><b>View-only access.</b> Click any button guiltlessly &mdash; you can't break anything. Refer to the <b>Help section</b> inside ML3K for guidance.</td></tr>
+            <tr><td style="font-weight:600">"Materials Mailbox setup?"</td><td>Access to <b>materials@fwc2026.org</b> is preset. Folder structure is pre-created. Add your Outlook Category with your name.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="c c-a3" style="flex:1">
+        <h3 style="color:var(--a3)">Day-to-Day Operations &amp; Scope</h3>
+        <table class="tbl" style="font-size:11px">
+          <tbody>
+            <tr><td style="width:48%;font-weight:600">"How do I create my first ASN/OOR?"</td><td>Your fellow Bobs will walk you through the first one. After that, you'll do it on your own. It's straightforward once you've seen it.</td></tr>
+            <tr><td style="font-weight:600">"How do I know what LP trucks are coming to my region?"</td><td>Liaise with <b>Regional Distribution Team</b> for truck status. Monitor <b>Materials Mailbox</b> for automatic Receipt Confirmations.</td></tr>
+            <tr><td style="font-weight:600">"What if I find a discrepancy in the Receipt PDF?"</td><td>Complete the transaction with the <b>physical qty</b> actually received. Create a new transaction for the pending/missing items. Investigate what happened.</td></tr>
+            <tr><td style="font-weight:600">"Damaged item naming convention?"</td><td>Add <b>-DMG</b> suffix to the original SKU. Example: <span class="mono" style="font-size:10px">CHAIR-001</span> &rarr; <span class="mono" style="font-size:10px">CHAIR-001-DMG</span></td></tr>
+            <tr><td style="font-weight:600">"Do I deal with customs?"</td><td><b>No.</b> You're part of Events Logistics. The <b>Customs Workstream</b> handles that. Your teammates deal with CI/HS codes.</td></tr>
+            <tr><td style="font-weight:600">"What happens after the tournament?"</td><td><b>Dissolution</b> &mdash; the reverse logistics plan. Details are TBC. For now, focus on getting items <i>to</i> venues.</td></tr>
+            <tr><td style="font-weight:600">"Reorder vs accept a shortage?"</td><td>Escalate to your manager. You flag the damage and impact; they decide the response.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="c c-pri" style="flex:1">
+        <h3 style="color:var(--pri)">People &amp; Contacts</h3>
+        <p style="font-size:11px;color:var(--ts);margin-bottom:8px">Bob needs a contact card for each of these. Get them on day one.</p>
+        <table class="tbl" style="font-size:11px">
+          <thead><tr><th>Who</th><th>What For</th></tr></thead>
+          <tbody>
+            <tr><td><b>Fellow Bobs</b> (2 other regional planners)</td><td>Cross-check work, cover, ask questions</td></tr>
+            <tr><td><b>WHS contacts</b> (per warehouse)</td><td>Send ASNs/OORs, chase receipt confirmations</td></tr>
+            <tr><td><b>Regional Distribution Team</b></td><td>Track LP truck status to your region</td></tr>
+            <tr><td><b>Regional Venue Logistics Team</b></td><td>Chase venue delivery confirmations</td></tr>
+            <tr><td><b>Regional Customs Team</b></td><td>Cross-border shipment questions</td></tr>
+            <tr><td><b>LCC</b> (Logistics Coordination Center)</td><td>24/7 escalation team for urgent issues</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="c" style="border-top:3px solid var(--am)">
+        <h3 style="color:var(--am)">Workload Expectations</h3>
+        <table class="tbl" style="font-size:11px">
+          <thead><tr><th>Phase</th><th>Transactions/Week</th><th>Intensity</th></tr></thead>
+          <tbody>
+            <tr><td><b>Pre-bump-in</b> (now)</td><td style="font-family:var(--fm);text-align:center">30&ndash;50</td><td><span class="tag tr" style="font-size:9px">HIGH</span> All trucks moving</td></tr>
+            <tr><td><b>During bump-in</b></td><td style="font-family:var(--fm);text-align:center">20&ndash;30</td><td><span class="tag t-am" style="font-size:9px">MEDIUM</span> Deliveries + fixes</td></tr>
+            <tr><td><b>Post bump-in</b></td><td style="font-family:var(--fm);text-align:center">5&ndash;10</td><td><span class="tag t-gn" style="font-size:9px">LOW</span> Monitor &amp; maintain</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="c" style="border-top:3px solid var(--gn)">
+        <h3 style="color:var(--gn)">Where to Find Things</h3>
+        <table class="tbl" style="font-size:11px">
+          <tbody>
+            <tr><td style="width:48%;font-weight:600">Product catalog with photos</td><td>SM2ARTA &rarr; <b>Nomenclature Directory</b></td></tr>
+            <tr><td style="font-weight:600">Transaction history</td><td>SM2ARTA &rarr; <b>Transaction List</b></td></tr>
+            <tr><td style="font-weight:600">WHS inventory</td><td>WMS &rarr; <b>Inventory view</b></td></tr>
+            <tr><td style="font-weight:600">Truck forecast</td><td>ML3K &rarr; your module (view only)</td></tr>
+            <tr><td style="font-weight:600">Something unclear?</td><td><b>Ask your fellow Bobs.</b> Seriously.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="ft"><div class="sn">15</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 16 — BOB'S WEEK
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Bob's Week</span></div>
+    <span class="badge badge-pri">BOB'S WEEK</span>
+  </div>
+  <h2>Bob's Week &mdash; A Complete Supply Chain Cycle</h2>
+  <div class="acc" style="background:var(--pri)"></div>
+  <div class="sub">Every action maps to a transaction type, a document, and a system. Every email goes through the Materials Mailbox.</div>
+
+  <table class="tbl" style="font-size:13px;flex:1;margin-bottom:14px">
+    <thead>
+      <tr><th style="width:90px">Day</th><th style="width:90px">Zone</th><th>What Bob Did</th><th style="width:88px">Transaction</th><th style="width:100px">Documents</th><th style="width:90px">System</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><b>Monday AM</b></td><td><span class="phase phase-frozen" style="font-size:9px;padding:2px 6px">❄️ FROZEN</span></td><td>Opens mailbox. Receipt PDF for LM-22 to fan zone. Checks line by line &mdash; all good. Completes transaction.</td><td><span class="tag tg" style="font-size:9px">INBOUND</span></td><td>Receipt PDF, OS&amp;D</td><td>SM2ARTA</td></tr>
+      <tr><td><b>Monday PM</b></td><td><span class="phase phase-slushy" style="font-size:9px;padding:2px 6px">💧 SLUSHY</span></td><td>Creates OOR for LM-31 to stadium. Creates ASN for satellite WHS. Sends venue confirmation template to VLM.</td><td><span class="tag tb" style="font-size:9px">MOVING</span></td><td>OOR + ASN</td><td>SM2ARTA &rarr; WMS</td></tr>
+      <tr><td><b>Tuesday</b></td><td><span class="phase phase-frozen" style="font-size:9px;padding:2px 6px">❄️ FROZEN</span></td><td>Supplier container arrives at Dallas. Rock-it sends Receipt PDF. Bob checks: 39 of 40 pallets. 1 crushed. OS&amp;D: 1 short + damage.</td><td><span class="tag tg" style="font-size:9px">INBOUND</span></td><td>Receipt PDF, OS&amp;D</td><td>SM2ARTA + WMS</td></tr>
+      <tr><td><b>Wednesday</b></td><td><span class="phase phase-frozen" style="font-size:9px;padding:2px 6px">❄️ FROZEN</span></td><td>48 chairs from crushed pallet &rarr; Damage Report. CHAIR-001: -48, CHAIR-001-DMG: +48. Photos attached.</td><td><span class="tag tr" style="font-size:9px">DAMAGE</span></td><td>Photos, OS&amp;D ref</td><td>SM2ARTA</td></tr>
+      <tr><td><b>Wed PM</b></td><td><span class="phase phase-forecast" style="font-size:9px;padding:2px 6px">🌱 FORECAST</span></td><td>Adjusts ML3K plan: pulls 48 replacement chairs from upcoming delivery, reroutes to NY satellite.</td><td>&mdash;</td><td>&mdash;</td><td>ML3K</td></tr>
+      <tr><td><b>Thursday</b></td><td><span class="phase phase-frozen" style="font-size:9px;padding:2px 6px">❄️ FROZEN</span></td><td>LM-31 dispatched. Rock-it loads, OOR completed. Chases venue for confirmation on LM-28 from last week &mdash; Teams message sent.</td><td><span class="tag tb" style="font-size:9px">MOVING</span></td><td>OOR completed</td><td>SM2ARTA</td></tr>
+      <tr><td><b>Friday</b></td><td><span class="phase phase-slushy" style="font-size:9px;padding:2px 6px">💧 SLUSHY</span></td><td>VLM finally replies re LM-28: all received, no damage. Bob completes. Satellite WHS confirms LM-31 arrival: 23 of 24 pallets. OS&amp;D: 1 short.</td><td><span class="tag tg" style="font-size:9px">INBOUND</span></td><td>Email + OS&amp;D</td><td>SM2ARTA</td></tr>
+      <tr><td><b>Friday EOD</b></td><td>&mdash;</td><td>Archives 14 resolved email threads. SM2ARTA reconciliation. Asks fellow Bob to spot-check two transactions. 2 open items for Monday.</td><td>&mdash;</td><td>&mdash;</td><td>All three</td></tr>
+    </tbody>
+  </table>
+
+  <div class="c" style="padding:14px 20px;border-top:3px solid var(--pri);margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--pri);margin-bottom:8px">Bob's Week in Numbers</div>
+    <div style="display:flex;gap:28px;font-family:var(--fm);font-size:14px;font-weight:700;flex-wrap:wrap;align-items:center">
+      <span><span style="color:var(--a4);font-size:22px">3</span> <span style="font-size:11px;font-weight:500;color:var(--ts)">Inbounds</span></span>
+      <span><span style="color:var(--a3);font-size:22px">2</span> <span style="font-size:11px;font-weight:500;color:var(--ts)">Movings</span></span>
+      <span><span style="color:var(--rd);font-size:22px">1</span> <span style="font-size:11px;font-weight:500;color:var(--ts)">Damage</span></span>
+      <span><span style="color:var(--am);font-size:22px">3</span> <span style="font-size:11px;font-weight:500;color:var(--ts)">OS&amp;Ds</span></span>
+      <span><span style="color:var(--pri);font-size:22px">7</span> <span style="font-size:11px;font-weight:500;color:var(--ts)">SM2ARTA updates</span></span>
+      <span><span style="color:var(--a3);font-size:22px">14</span> <span style="font-size:11px;font-weight:500;color:var(--ts)">Emails archived</span></span>
+      <span><span style="color:var(--ts);font-size:22px">∞</span> <span style="font-size:11px;font-weight:500;color:var(--ts)">Coffees</span></span>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's Friday reflection:</span> "Not a single item was lost. Some were short, some were damaged, but every single one is accounted for in SM2ARTA. When my boss asks 'where are the chairs?' &mdash; I don't guess. I open SM2ARTA and I <i>know</i>. Ten seconds. That's the whole point."
+  </div>
+  <div class="ft"><div class="sn">16</div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 17 — KEY RULES & SUMMARY
+     ════════════════════════════════════════════════════════════════ -->
+<div class="S s-med" style="background:linear-gradient(160deg,#FAFAFE 0%,#F0EDF9 100%)">
+  <div class="hd">
+    <div class="hd-left"><span class="hd-title">Summary</span></div>
+    <span class="badge badge-pri">SUMMARY</span>
+  </div>
+  <h2>Key Rules &amp; Quick Reference</h2>
+  <div class="acc" style="background:var(--pri)"></div>
+  <div class="sub">These rules are non-negotiable. Print this slide and pin it to your monitor.</div>
+
+  <div class="g2" style="flex:1;min-height:0;margin-bottom:14px;align-items:stretch">
+    <div class="c c-pri" style="display:flex;flex-direction:column">
+      <h3 style="color:var(--pri)">The 8 Golden Rules</h3>
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:0;flex:1;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;background:var(--bg);border-radius:8px;border-left:3px solid var(--pri)">
+          <span class="step-num" style="background:var(--pri);color:#fff;width:30px;height:30px;font-size:13px">1</span>
+          <span style="font-size:12px"><b>Update SM2ARTA daily.</b> No exceptions. No backlog. This is the law.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;background:var(--a3-s);border-radius:8px;border-left:3px solid var(--a3)">
+          <span class="step-num" style="background:var(--a3);color:#fff;width:30px;height:30px;font-size:13px">2</span>
+          <span style="font-size:12px"><b>Always CC materials@fwc2026.org.</b> Your Sent folder is invisible to others.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;background:var(--a4-s);border-radius:8px;border-left:3px solid var(--a4)">
+          <span class="step-num" style="background:var(--a4);color:#fff;width:30px;height:30px;font-size:13px">3</span>
+          <span style="font-size:12px"><b>Check Receipt PDFs line by line.</b> Never assume it's correct.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;background:var(--sec-s);border-radius:8px;border-left:3px solid var(--sec)">
+          <span class="step-num" style="background:var(--sec);color:#fff;width:30px;height:30px;font-size:13px">4</span>
+          <span style="font-size:12px"><b>Respect the zones.</b> Frozen = execute. Slushy = justify. Forecast = optimize.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;background:var(--am-s);border-radius:8px;border-left:3px solid var(--am)">
+          <span class="step-num" style="background:var(--am);color:#fff;width:30px;height:30px;font-size:13px">5</span>
+          <span style="font-size:12px"><b>Every movement is a transaction.</b> Created (reserves) then Completed (moves).</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;background:var(--rd-s);border-radius:8px;border-left:3px solid var(--rd)">
+          <span class="step-num" style="background:var(--rd);color:#fff;width:30px;height:30px;font-size:13px">6</span>
+          <span style="font-size:12px"><b>OOR to ship, ASN to receive.</b> Moving = both. Always.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;background:#FFF8E1;border-radius:8px;border-left:3px solid #F9A825">
+          <span class="step-num" style="background:#F9A825;color:#fff;width:30px;height:30px;font-size:13px">7</span>
+          <span style="font-size:12px"><b>OS&amp;D when something is wrong.</b> Over, short, or damaged. Photograph first.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;background:var(--gn-s);border-radius:8px;border-left:3px solid var(--gn)">
+          <span class="step-num" style="background:var(--gn);color:#fff;width:30px;height:30px;font-size:13px">8</span>
+          <span style="font-size:12px"><b>Ask a fellow Bob to check your work.</b> Not because you're useless &mdash; because the job is hard.</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <!-- Quick Reference Card -->
+      <div style="background:linear-gradient(135deg,#FAFAFE,#F0EDF9);border:2px solid var(--pri-b);border-radius:16px;padding:16px 20px;box-shadow:0 4px 20px rgba(74,20,140,.12);position:relative;overflow:hidden;flex:1">
+        <div style="position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,var(--pri),var(--a3),var(--a4))"></div>
+        <div style="text-align:center;margin-bottom:10px;margin-top:2px">
+          <div style="font-size:11px;font-weight:700;color:var(--tt);letter-spacing:2px;text-transform:uppercase">QUICK REFERENCE CARD</div>
+          <div style="font-size:9px;color:var(--tt);margin-top:2px">Print &bull; Laminate &bull; Keep at desk</div>
+        </div>
+        <table class="tbl" style="font-size:10px">
+          <tbody>
+            <tr style="background:rgba(198,40,40,.04)"><td style="width:130px;font-weight:700;color:var(--rd)">❄️ Frozen Zone</td><td>0&ndash;72h. Execute &amp; confirm only. Escalate issues to LCC.</td></tr>
+            <tr style="background:rgba(230,81,0,.04)"><td style="font-weight:700;color:var(--am)">💧 Slushy Zone</td><td>72h&ndash;7 days. Controlled changes with justification.</td></tr>
+            <tr style="background:rgba(46,125,50,.04)"><td style="font-weight:700;color:var(--gn)">🌱 Forecast Zone</td><td>7+ days. Free to plan and optimize.</td></tr>
+            <tr style="border-top:2px solid var(--bd)"><td style="font-weight:700;color:var(--a4)">📥 Inbound</td><td>INTO node. ASN &rarr; Receiving Order &rarr; Receipt PDF &rarr; OS&amp;D.</td></tr>
+            <tr><td style="font-weight:700;color:var(--a3)">🚚 Moving</td><td>BETWEEN nodes. OOR (origin) + ASN (destination). Chase receiver.</td></tr>
+            <tr><td style="font-weight:700;color:var(--sec)">📤 Outbound</td><td>EXIT network. OOR &rarr; Shipping Order.</td></tr>
+            <tr><td style="font-weight:700;color:var(--rd)">⚠ Damage Report</td><td>SKU reclassified. Part of OS&amp;D. Item stays at node.</td></tr>
+            <tr style="border-top:2px solid var(--bd)"><td style="font-weight:700;color:var(--pri)">🔒 Created</td><td>Reserves stock ("dibs"). Not yet physically moved.</td></tr>
+            <tr><td style="font-weight:700;color:var(--gn)">✅ Completed</td><td>Moves stock. Physical transfer confirmed. Balances update.</td></tr>
+            <tr style="border-top:2px solid var(--bd)"><td style="font-weight:700;color:var(--pri)">SM2ARTA</td><td>The Law. ASN + OOR + transactions + inventory. Update daily.</td></tr>
+            <tr><td style="font-weight:700;color:var(--a3)">ML3K</td><td>Planning tool. Forecast + monitor + follow.</td></tr>
+            <tr><td style="font-weight:700;color:#00897B">WMS (Rock-it)</td><td>Warehouse execution. Receiving &amp; Shipping Orders.</td></tr>
+            <tr><td style="font-weight:700;color:var(--a3)">📧 Materials Mailbox</td><td>materials@fwc2026.org. CC always. Archive daily. Color-code.</td></tr>
+            <tr><td style="font-weight:700;color:var(--sec)">LCC</td><td>Logistics Coordination Center. Escalate when stuck.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="bob">
+    <div class="bob-avatar">
+      <svg width="52" height="52"><use href="#bob-face"/></svg>
+    </div>
+    <span class="bob-name">Bob's advice to new planners:</span> "Look, it's not rocket science. It's more like air traffic control. You've got four transaction types, three zones, three systems, and one mailbox. The hard part isn't knowing what to do &mdash; it's doing it <i>every single day</i>, without skipping, without shortcuts. The day you forget to log a transaction is the day 48 chairs disappear into the void. And trust me, someone will ask about those chairs. Usually at 5 PM on a Friday. Have a coffee. You'll be fine."
+  </div>
+
+  <div style="position:absolute;bottom:56px;left:88px">
+    <div style="font-size:11px;color:var(--ts);font-weight:500">Prepared by <b>Materials Management</b> &middot; April 2026</div>
+  </div>
+  <div class="ft"><div class="sn">17</div></div>
+</div>
+
+</body>
+</html>
