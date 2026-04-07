@@ -14545,7 +14545,7 @@ function LM_renderForecast(el){
       ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
       ${wLate?'<span class="bg bgs bg-rd">⚠ '+wLate+' late</span>':''}
     </div>
-    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>Legs</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Control</th></tr></thead><tbody>`;
+    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>Legs</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Co-Pilot</th></tr></thead><tbody>`;
     for(const r of rows){
       const bufColor=r.buffer!=null?(r.buffer>=7?'var(--gn)':r.buffer>=3?'var(--or)':'var(--rd)'):'var(--tt)';
       const _fp=(r._leg1Fp||r.fp).replace(/'/g,"\\'");
