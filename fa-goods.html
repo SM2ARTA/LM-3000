@@ -681,28 +681,45 @@ function FA_addDemandConfirm(close){
 
 function FA_editDemand(id){
   const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
-  // Find which group this item belongs to
   const grp=FA_GROUPS.find(g=>g.items&&g.items.includes(id));
+  const isLocked=grp&&grp._locked;
   const grpLabel=grp?'<span class="bg bg-cy">📐 '+grp.sku+' · '+(grp.pallets||0)+' plt</span>':'<span style="color:var(--tt)">Not in any group</span>';
+  const ro=isLocked?' readonly style="flex:1;background:var(--bg);color:var(--ts)"':' style="flex:1"';
+  const roS=isLocked?' readonly style="width:80px;background:var(--bg);color:var(--ts)"':' style="width:80px"';
   const h=`<div class="modal-ov">
     <div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Demand #${id}</h3><button onclick="this.closest('.modal-ov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ts);padding:0 4px">✕</button></div>
-    <div style="padding:6px 0 4px;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.5px">Demand (locked)</div>
-    <div class="form-row"><span class="form-label">SKU</span><input type="text" value="${d.sku}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
-    <div class="form-row"><span class="form-label">Name</span><input type="text" value="${d.name||''}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
-    <div class="form-row"><span class="form-label">Venue</span><input type="text" value="${d.venue}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
-    <div class="form-row"><span class="form-label">FA</span><input type="text" value="${d.fa||''}" style="flex:1;background:var(--bg);color:var(--ts)" readonly></div>
-    <div class="form-row"><span class="form-label">Qty</span><input type="text" value="${d.qty}" style="width:80px;background:var(--bg);color:var(--ts)" readonly><span class="form-label">BI Date</span><input type="text" value="${d.biDate?new Date(d.biDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}" style="width:160px;background:var(--bg);color:var(--ts)" readonly></div>
+    ${isLocked?'<div style="padding:6px 0 4px;font-size:10px;font-weight:700;color:var(--gn);text-transform:uppercase;letter-spacing:0.5px">🔒 Demand (locked group)</div>':''}
+    <div class="form-row"><span class="form-label">SKU</span><input type="text" id="_faEdSku" value="${d.sku}"${ro} ${isLocked?'readonly':''}></div>
+    <div class="form-row"><span class="form-label">Name</span><input type="text" id="_faEdName" value="${d.name||''}"${ro} ${isLocked?'readonly':''}></div>
+    <div class="form-row"><span class="form-label">Venue</span><input type="text" id="_faEdVenue" value="${d.venue}"${ro} ${isLocked?'readonly':''}></div>
+    <div class="form-row"><span class="form-label">FA</span><input type="text" id="_faEdFa" value="${d.fa||''}"${ro} ${isLocked?'readonly':''}></div>
+    <div class="form-row"><span class="form-label">Qty</span><input type="number" id="_faEdQty" value="${d.qty}"${roS} ${isLocked?'readonly':''}><span class="form-label">BI Date</span><input type="date" id="_faEdBi" value="${d.biDate||''}" style="width:160px${isLocked?';background:var(--bg);color:var(--ts)':''}" ${isLocked?'readonly':''}></div>
     <div style="padding:6px 0;font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.5px">Delivery Group</div>
     <div class="form-row">${grpLabel}</div>
     <div class="form-row"><span class="form-label">Note</span><input type="text" id="_faEdNote" value="${d.note||''}" style="flex:1"></div>
-    <div class="modal-actions"><span style="flex:1"></span><button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveDemandEdit(${id})">Save</button></div>
+    <div class="modal-actions"><span style="flex:1"></span>${!isLocked?'<button class="mbtn mbtn-danger" onclick="FA_deleteDemand('+id+')">Delete</button>':''}<button class="mbtn" onclick="this.closest('.modal-ov').remove()">Cancel</button><button class="mbtn mbtn-primary" onclick="FA_saveDemandEdit(${id})">Save</button></div>
     </div></div>`;
   document.getElementById('faModal').innerHTML=h;
 }
 function FA_saveDemandEdit(id){
   const d=FA_DEMAND.find(x=>x.id===id);if(!d)return;
+  // Check if in locked group — only allow note change
+  const grp=FA_GROUPS.find(g=>g._locked&&g.items&&g.items.includes(id));
+  if(!grp){
+    // Editable: update all fields
+    const sku=(document.getElementById('_faEdSku').value||'').trim();
+    const name=(document.getElementById('_faEdName').value||'').trim();
+    const venue=(document.getElementById('_faEdVenue').value||'').trim();
+    const fa=(document.getElementById('_faEdFa').value||'').trim();
+    const qty=parseInt(document.getElementById('_faEdQty').value)||1;
+    const biDate=document.getElementById('_faEdBi').value||'';
+    if(sku)d.sku=sku;if(name)d.name=name;if(venue)d.venue=venue;
+    d.fa=fa;d.qty=qty;d.biDate=biDate;
+  }
   d.note=document.getElementById('_faEdNote').value.trim();
   document.getElementById('faModal').innerHTML='';
+  // Rebuild groups if venue/fa/biDate changed (affects grouping key)
+  if(!grp){FA_buildGroups();FA_saveGroups()}
   FA_saveDebounced();FA_render();
 }
 function FA_deleteDemand(id){
