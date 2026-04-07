@@ -14391,6 +14391,7 @@ function LM_renderFAGoods(el){
 
 // ── LM FORECAST TAB ──
 let _fcCountryFilter='all';// 'all','usa','can','mex'
+let _fcTypeFilter='all';// 'all','cluster','stadium','other'
 const _FC_STAFF=['Ashley','Kyli','Yael','Brittany'];
 let _fcLeadMap={};// fingerprint → staffName (persisted, stable across rebuilds)
 let _fcLegMap={};// fingerprint → 2 (2-leg truck) — absent = 1 leg
@@ -14476,24 +14477,36 @@ function LM_renderForecast(el){
   // MEX trucks
   VN.filter(v=>vcIsMEX(v.cluster)).forEach(v=>{const _cl=(v.cluster||'').replace(/^MEX\s*/i,'').split(/\s*\/\s*/)[0].trim();_addTrucks(v.name,PLAN_CACHE[v.name],'MEX',_cl?_cl+' Warehouse':'Mexico Warehouse')});
   allRows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
-  // Apply country filter
-  const filtered=_fcCountryFilter==='all'?allRows:allRows.filter(r=>r.country===_fcCountryFilter.toUpperCase());
+  // Apply country + type filters
+  let filtered=_fcCountryFilter==='all'?allRows:allRows.filter(r=>r.country===_fcCountryFilter.toUpperCase());
+  if(_fcTypeFilter!=='all')filtered=filtered.filter(r=>r.vtype===_fcTypeFilter);
   // KPIs
   const totalT=filtered.length,totalPlt=filtered.reduce((s,r)=>s+r.plt,0);
   const totalFn=filtered.reduce((s,r)=>s+r.fnKits,0),totalOs=filtered.reduce((s,r)=>s+r.osKits,0);
   const totalAsm=filtered.reduce((s,r)=>s+(r.asmCount||0),0),totalLate=filtered.reduce((s,r)=>s+(r.lateCount||0),0);
   const cntUSA=allRows.filter(r=>r.country==='USA').length,cntCAN=allRows.filter(r=>r.country==='CAN').length,cntMEX=allRows.filter(r=>r.country==='MEX').length;
-  // Country chip builder
-  const _cChip=(id,label,cnt,flag)=>{const on=_fcCountryFilter===id;return`<button onclick="_fcCountryFilter='${id}';LM_renderForecast(document.getElementById('mn'))" style="padding:4px 14px;border-radius:16px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`};
+  // Type counts (from country-filtered set)
+  const _cfRows=_fcCountryFilter==='all'?allRows:allRows.filter(r=>r.country===_fcCountryFilter.toUpperCase());
+  const cntCluster=_cfRows.filter(r=>r.vtype==='cluster').length,cntStadium=_cfRows.filter(r=>r.vtype==='stadium').length,cntOther=_cfRows.filter(r=>r.vtype==='other').length;
+  // Chip builders
+  const _cChip=(id,label,cnt,flag)=>{const on=_fcCountryFilter===id;return`<button onclick="_fcCountryFilter='${id}';_fcTypeFilter='all';LM_renderForecast(document.getElementById('mn'))" style="padding:4px 14px;border-radius:16px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`};
+  const _tChip=(id,label,cnt)=>{const on=_fcTypeFilter===id;return`<button onclick="_fcTypeFilter='${id}';LM_renderForecast(document.getElementById('mn'))" style="padding:3px 10px;border-radius:12px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`};
   let h='<div class="fin" style="padding:16px">';
   h+=`<h2 style="font-size:16px;font-weight:700;margin:0 0 4px">📋 LM Truck Forecast</h2>`;
   h+=`<p style="font-size:10px;color:var(--tt);margin:0 0 12px">All LM trucks across all countries — grouped by dispatch week</p>`;
   // Country chips
-  h+=`<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">`;
+  h+=`<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">`;
   h+=_cChip('all','All',allRows.length,'🌍');
   if(cntUSA)h+=_cChip('usa','USA',cntUSA,'🇺🇸');
   if(cntCAN)h+=_cChip('can','Canada',cntCAN,'🇨🇦');
   if(cntMEX)h+=_cChip('mex','Mexico',cntMEX,'🇲🇽');
+  h+=`</div>`;
+  // Type chips
+  h+=`<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">`;
+  h+=_tChip('all','All',_cfRows.length);
+  if(cntCluster)h+=_tChip('cluster','Clusters',cntCluster);
+  if(cntStadium)h+=_tChip('stadium','Stadiums',cntStadium);
+  if(cntOther)h+=_tChip('other','Other',cntOther);
   h+=`</div>`;
   // KPI summary — truck count includes Leg 2 splits
   const leg2Count=filtered.filter(r=>_fcLegMap[r.fp]===2).length;
