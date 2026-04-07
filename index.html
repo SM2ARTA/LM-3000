@@ -14499,17 +14499,24 @@ function LM_renderForecast(el){
   if(totalLate)h+=`<span class="bg bgs bg-rd">⚠ ${totalLate} late</span>`;
   h+=`</div>`;
   if(!filtered.length){h+='<div class="emp">No trucks for selected country.</div></div>';el.innerHTML=h;return}
+  // Generate Leg 2 virtual rows for 2-leg trucks (dispatch on bump-in date, placed in correct week)
+  const allWithLegs=[...filtered];
+  for(const r of filtered){
+    if(_fcLegMap[r.fp]!==2||!r.firstBI)continue;
+    const _satName=(()=>{const d=r.dest||'';if(d.includes('Stadium')||d.includes('Broadcast')){const city=d.replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();return city+' Satellite WHS'}return'Satellite WHS'})();
+    allWithLegs.push({...r,_leg2:true,_leg1Fp:r.fp,disp:r.firstBI,transit:0,arrDate:r.firstBI,buffer:0,dispLoc:_satName,lsr:_fcLeg2Lsr[r.fp]||'',lateCount:0,faCount:0});
+  }
+  allWithLegs.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId)||(a._leg2?1:0)-(b._leg2?1:0));
   // Group by week
-  const byWeek={};for(const r of filtered){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
+  const byWeek={};for(const r of allWithLegs){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
   const weeks=Object.keys(byWeek).sort();
   for(const wk of weeks){
     const rows=byWeek[wk];
     const wP=rows.reduce((s,r)=>s+r.plt,0),wFn=rows.reduce((s,r)=>s+r.fnKits,0),wOs=rows.reduce((s,r)=>s+r.osKits,0),wAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0),wLate=rows.reduce((s,r)=>s+(r.lateCount||0),0);
-    const wLeg2=rows.filter(r=>_fcLegMap[r.fp]===2).length;
     h+=`<div style="margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:11px;font-weight:700;color:var(--tp);border:1px solid var(--bd)">
       <span>📅 ${_fmtWk(wk)} — ${_fmtWk(_weekEnd(wk))}</span>
-      <span class="bg bgs bg-bl" style="font-weight:600">${rows.length+wLeg2} trucks</span>
+      <span class="bg bgs bg-bl" style="font-weight:600">${rows.length} trucks</span>
       <span class="bg bgs bg-gy">${Math.round(wP*10)/10} plt</span>
       ${wFn?'<span class="bg bgs bg-gn">'+wFn+' FF&E</span>':''}
       ${wOs?'<span class="bg bgs bg-or">'+wOs+' STP</span>':''}
@@ -14519,8 +14526,38 @@ function LM_renderForecast(el){
     <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>Legs</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Control</th></tr></thead><tbody>`;
     for(const r of rows){
       const bufColor=r.buffer!=null?(r.buffer>=7?'var(--gn)':r.buffer>=3?'var(--or)':'var(--rd)'):'var(--tt)';
-      const _fp=r.fp.replace(/'/g,"\\'");
-      const is2Leg=_fcLegMap[r.fp]===2;
+      const _fp=(r._leg1Fp||r.fp).replace(/'/g,"\\'");
+      const is2Leg=_fcLegMap[r._leg1Fp||r.fp]===2;
+      // ── Leg 2 row ──
+      if(r._leg2){
+        const l2Lsr=r.lsr;
+        const leadFp=r._leg1Fp||r.fp;
+        const lead=_fcLeadMap[leadFp]||'';
+        const control=lead?_fcControl(leadFp,lead):'';
+        h+=`<tr style="background:#E3F2FD">
+        <td style="font-size:10px;color:#1565C0;font-weight:600">${r.dispLoc}</td>
+        <td style="font-size:11px;font-weight:600;color:#1565C0">${r.dest}</td>
+        <td class="mono fw6" style="color:#1565C0">${r.truckId} <span style="font-size:8px;font-weight:700;color:#fff;background:#1565C0;padding:1px 4px;border-radius:3px">2nd Leg</span></td>
+        <td></td>
+        <td class="mono" style="font-size:10px;color:var(--pu)" onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="text" value="${l2Lsr}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${l2Lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:80px" onchange="_fcSetLeg2Lsr('${_fp}',this.value.trim())">`:`<span>${l2Lsr||''}</span>`}</td>
+        <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
+        <td class="mono" style="text-align:center;color:#1565C0">0d</td>
+        <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
+        <td style="font-weight:600;color:#1565C0">${_fmtD(r.firstBI)}</td>
+        <td style="text-align:center;font-weight:700;color:var(--gn)">0d</td>
+        <td class="mono" style="text-align:right">${r.plt}</td>
+        <td style="text-align:center">${r.fnKits||'—'}</td>
+        <td style="text-align:center">${r.osKits||'—'}</td>
+        <td style="text-align:center;color:var(--pu);font-weight:600">${r.asmCount>0?'🔧 '+r.asmCount:'—'}</td>
+        <td class="mono" style="text-align:right;color:var(--pu);font-weight:600">${r.cargo>0?'$'+Math.round(r.cargo).toLocaleString():'—'}</td>
+        <td style="text-align:center">—</td>
+        <td style="text-align:center">—</td>
+        <td style="font-size:10px;color:${lead?'var(--gn)':'var(--tt)'}">${lead||'—'}</td>
+        <td style="font-size:10px;color:${control?'var(--pu)':'var(--tt)'}">${control||'—'}</td>
+      </tr>`;
+        continue;
+      }
+      // ── Normal row (Leg 1 or single-leg) ──
       const legLabel=is2Leg?'<span style="font-size:8px;font-weight:700;color:#1565C0;background:#E3F2FD;padding:1px 4px;border-radius:3px">Leg 1</span>':'';
       h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
         <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
@@ -14543,33 +14580,6 @@ function LM_renderForecast(el){
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${_fcLeadMap[r.fp]?'var(--gn)':'var(--bd)'};border-radius:4px;color:${_fcLeadMap[r.fp]?'var(--gn)':'var(--tt)'};background:#fff;min-width:70px" onchange="_fcSetLead('${_fp}',this.value)"><option value="">—</option>${_FC_STAFF.map(n=>`<option value="${n}"${_fcLeadMap[r.fp]===n?' selected':''}>${n}</option>`).join('')}</select>`:`<span style="font-size:10px;color:${_fcLeadMap[r.fp]?'var(--gn)':'var(--tt)'}">${_fcLeadMap[r.fp]||'—'}</span>`}</td>
         <td style="font-size:10px;color:${_fcLeadMap[r.fp]?'var(--pu)':'var(--tt)'}">${_fcLeadMap[r.fp]?_fcControl(r.fp,_fcLeadMap[r.fp]):'—'}</td>
       </tr>`;
-      // ── Leg 2 row (satellite WHS → venue, same day as bump-in) ──
-      if(is2Leg){
-        const l2Lsr=_fcLeg2Lsr[r.fp]||'';
-        // Dispatch from: satellite WHS name (derive from destination)
-        const _satName=(()=>{const d=r.dest||'';if(d.includes('Stadium')||d.includes('Broadcast')){const city=d.replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();return city+' Satellite WHS'}return'Satellite WHS'})();
-        h+=`<tr style="background:#E3F2FD">
-        <td style="font-size:10px;color:#1565C0;font-weight:600">${_satName}</td>
-        <td style="font-size:11px;font-weight:600;color:#1565C0">${r.dest}</td>
-        <td class="mono fw6" style="color:#1565C0">${r.truckId} <span style="font-size:8px;font-weight:700;color:#fff;background:#1565C0;padding:1px 4px;border-radius:3px">2nd Leg</span></td>
-        <td></td>
-        <td class="mono" style="font-size:10px;color:var(--pu)" onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="text" value="${l2Lsr}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${l2Lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:80px" onchange="_fcSetLeg2Lsr('${_fp}',this.value.trim())">`:`<span>${l2Lsr||''}</span>`}</td>
-        <td style="color:#1565C0;font-weight:600">${_fmtD(r.firstBI)}</td>
-        <td class="mono" style="text-align:center;color:#1565C0">0d</td>
-        <td style="color:#1565C0;font-weight:600">${_fmtD(r.firstBI)}</td>
-        <td style="font-weight:600;color:#1565C0">${_fmtD(r.firstBI)}</td>
-        <td style="text-align:center;font-weight:700;color:var(--gn)">0d</td>
-        <td class="mono" style="text-align:right">${r.plt}</td>
-        <td style="text-align:center">${r.fnKits||'—'}</td>
-        <td style="text-align:center">${r.osKits||'—'}</td>
-        <td style="text-align:center;color:var(--pu);font-weight:600">${r.asmCount>0?'🔧 '+r.asmCount:'—'}</td>
-        <td class="mono" style="text-align:right;color:var(--pu);font-weight:600">${r.cargo>0?'$'+Math.round(r.cargo).toLocaleString():'—'}</td>
-        <td style="text-align:center">—</td>
-        <td style="text-align:center">—</td>
-        <td></td>
-        <td></td>
-      </tr>`;
-      }
     }
     h+=`</tbody></table></div>`;
   }
