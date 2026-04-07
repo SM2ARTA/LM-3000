@@ -722,7 +722,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const isReady=dispatched.has(t.id)&&lsrNumbers[t.id];
     _allOutbound.push({id:'LP-'+t.id,dest:clDisp(t.dest),date:t.date,pallets:t.plt.toFixed(1),type:'LP',status:isReady?'ready':'pending',lsr:lsrNumbers[t.id]||''})
   }
-  for(const t of lmTruckData){if(t.dd&&t.lsr){_allOutbound.push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM',status:t.dispatched?'ready':'pending',lsr:t.lsr||''})}}
+  for(const t of lmTruckData){if(t.dd&&t.lsr){const isSent=t.dispatched&&t.dd<=dShort;if(isSent)continue;_allOutbound.push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM',status:t.dispatched?'ready':'pending',lsr:t.lsr||''})}}
   _allOutbound.sort((a,b)=>a.date.localeCompare(b.date));
 
   // ── Tomorrow baseline ──
