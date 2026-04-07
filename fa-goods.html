@@ -765,7 +765,10 @@ function _faParsePaste(){
   if(!lines.length)return;
   const hdr=lines[0];
   const dRows=lines.filter((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
-  const isMatrix=hdr.length>=4&&dRows.some(r=>r.slice(2).some(c=>/^\d+$/.test(c||'')));
+  // Matrix detection: header row columns 2+ must have venue-like names (long strings, not short abbreviations or numbers)
+  // Row format has short venue codes (MIA, NYNJ, BOS) or numbers in col 2+; matrix has full venue names
+  const _hdrVenues=hdr.slice(2).filter(h=>h&&!/^\d+$/.test(h)&&!_faTryDate(h));
+  const isMatrix=hdr.length>=4&&_hdrVenues.length>0&&_hdrVenues.some(h=>h.length>5)&&dRows.some(r=>r.slice(2).some(c=>/^\d+$/.test(c||'')));
   const items=[];
   if(isMatrix){
     // Detect duplicate column headers and disambiguate with sub-header row
@@ -789,11 +792,16 @@ function _faParsePaste(){
       else continue;if(s&&v&&q>0)items.push({sku:s,name:n||s,venue:v,fa,qty:q,biDate:d||''})}
   }
   window._faPaste={items,venueMap:{},dateMap:{},ovrMap:{}};
-  // Best-guess venue mapping
+  // Best-guess venue mapping (with common abbreviation support)
+  const _abbrMap={MIA:'Miami',NYNJ:'New York',NY:'New York',BOS:'Boston',PHL:'Philadelphia',PHI:'Philadelphia',SEA:'Seattle',VAN:'Vancouver',TOR:'Toronto',HOU:'Houston',KC:'Kansas City',ATL:'Atlanta',SF:'San Francisco',SFO:'San Francisco',LA:'Los Angeles',LAX:'Los Angeles',DAL:'Dallas',DFW:'Dallas',GDL:'Guadalajara',MTY:'Monterrey',CDMX:'Mexico City',MEX:'Mexico City',IBC:'International Broadcast'};
   const rv=[...new Set(items.map(i=>i.venue))];
   for(const r of rv){
     const exact=FA_ML3K_VENUES.find(v=>v.name===r);
     if(exact){window._faPaste.venueMap[r]=r;continue}
+    // Try abbreviation lookup first
+    const abbrCity=_abbrMap[r.toUpperCase()];
+    if(abbrCity){const m=FA_ML3K_VENUES.find(v=>v.name.toLowerCase().includes(abbrCity.toLowerCase()));if(m){window._faPaste.venueMap[r]=m.name;const gd=items.find(i=>i.venue===r)?.biDate||'';const vd=m.biDate||'';window._faPaste.dateMap[r]=gd||vd||dd;continue}}
+    // Fuzzy word match
     let best='',bestN=0;const rl=r.toLowerCase();
     for(const v of FA_ML3K_VENUES){const vl=v.name.toLowerCase();const n=rl.split(/[\s,\/]+/).filter(w=>w.length>2&&vl.includes(w)).length;if(n>bestN){bestN=n;best=v.name}}
     window._faPaste.venueMap[r]=best;
