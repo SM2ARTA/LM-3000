@@ -13566,9 +13566,17 @@ async function generateDailyDigest(){
       // Collect individual LM trucks
       for(const t of activeT){
         if(_lmTruckSeen.has(t.id))continue;_lmTruckSeen.add(t.id);
-        _lmTruckList.push({id:t.id,dd:t.dd||'',dest:label,cluster:(VN.find(v=>v.name===label)||{}).cluster||'',pallets:Math.round((t.pallets||0)*10)/10,pcs:t.items?t.items.reduce((s,i)=>s+(i.loadQty||0),0):0,dispatched:LM_isDispatched(t),lsr:LM_getLsr(t)||'',items:t.items?t.items.map(i=>({sku:i.sku,qty:i.loadQty||0,nm:i.nm||NOM[i.sku]?.nm||i.sku})):[]});
+        _lmTruckList.push({id:t.id,dd:t.dd||'',dest:label,cluster:(VN.find(v=>v.name===label)||{}).cluster||'',pallets:Math.round((t.pallets||0)*10)/10,pcs:t.items?t.items.reduce((s,i)=>s+(i.loadQty||0),0):0,dispatched:LM_isDispatched(t),lsr:LM_getLsr(t)||'',items:t.items?t.items.map(i=>({sku:i.sku,qty:i.loadQty||0,nm:i.nm||NOM[i.sku]?.nm||i.sku})):[],_fp:LM_fp(t),_firstBI:t.origBiK||t.biK||''});
       }
     }
+  }
+  // Add Leg 2 virtual trucks (satellite → venue) for 2-leg trucks with LSR
+  for(const t of [..._lmTruckList]){
+    const fp=t._fp;if(!fp||_fcLegMap[fp]!==2)continue;
+    const l2Lsr=_fcLeg2Lsr[fp];if(!l2Lsr)continue;// only include if Leg 2 has LSR
+    const l2Date=_fcLeg2Date[fp]||t._firstBI||t.dd;
+    const _satName=(()=>{const d=t.dest||'';if(d.includes('Stadium')||d.includes('Broadcast')){const city=d.replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();return city+' Satellite WHS'}return'Satellite WHS'})();
+    _lmTruckList.push({id:t.id+' 2nd Leg',dd:l2Date,dest:t.dest,cluster:t.cluster,pallets:t.pallets,pcs:t.pcs,dispatched:t.dispatched,lsr:l2Lsr,items:t.items,_leg2:true,_dispFrom:_satName});
   }
   _digestData.lmTrucks=_lmTruckList;
   // Display names for destinations
