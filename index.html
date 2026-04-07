@@ -8847,7 +8847,7 @@ function enterApp(){
       LM_loadClusterTA().catch(()=>{}),
       _hsLoadAIConfig().catch(()=>{}),
       FA_loadLinked().catch(()=>{}),
-      (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{}}else{_fcLeadMap=v}console.log('[FC] Loaded',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'2-leg trucks')}}catch(e){}})()
+      (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{};_fcLeg2Date=v.leg2date||{}}else{_fcLeadMap=v}console.log('[FC] Loaded',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'2-leg trucks')}}catch(e){}})()
     ]);
     // Now build venues and trucks AFTER all config is loaded
     if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="forecast";lmOk=true}}
@@ -9003,7 +9003,7 @@ async function syncLM(){
     if(nomV)NOM=nomV;if(rwV){RW=rwV;_rwEnrichEffQty()}if(vsV)VS=vsV;
     if(exV)LM_excluded=new Set(exV);if(eoV)LM_excludeUserOvr=eoV;
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),MI_load().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadClusterTA().catch(()=>{})]);
-    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{}),FA_loadLinked().catch(()=>{}),(async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{}}else{_fcLeadMap=v}}}catch(e){}})()]);
+    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{}),FA_loadLinked().catch(()=>{}),(async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{};_fcLeg2Date=v.leg2date||{}}else{_fcLeadMap=v}}}catch(e){}})()]);
     LM_injectAll();LM_applyNomOverrides();bV();numberAll();
     rT();rVL();rMain();applyRole();
   });
@@ -14395,6 +14395,7 @@ const _FC_STAFF=['Ashley','Kyli','Yael','Brittany'];
 let _fcLeadMap={};// fingerprint → staffName (persisted, stable across rebuilds)
 let _fcLegMap={};// fingerprint → 2 (2-leg truck) — absent = 1 leg
 let _fcLeg2Lsr={};// fingerprint → LSR string for leg 2
+let _fcLeg2Date={};// fingerprint → date string for leg 2 dispatch (default: bump-in)
 function _fcControl(fp,lead){
   // Deterministic pseudo-random control that never matches lead
   let h=0;for(let i=0;i<fp.length;i++)h=(h*31+fp.charCodeAt(i))>>>0;
@@ -14404,7 +14405,7 @@ function _fcControl(fp,lead){
 function _fcSave(){
   if(!SB)return;
   const now=new Date().toISOString();
-  const payload={leads:_fcLeadMap,legs:_fcLegMap,leg2lsr:_fcLeg2Lsr};
+  const payload={leads:_fcLeadMap,legs:_fcLegMap,leg2lsr:_fcLeg2Lsr,leg2date:_fcLeg2Date};
   console.log('[FC] Saving:',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'legs,',Object.keys(_fcLeg2Lsr).length,'leg2lsr');
   SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify(payload),updated_at:now}).then(({error})=>{if(error)console.warn('FC save error:',error)});
 }
@@ -14422,6 +14423,11 @@ function _fcSetLeg2Lsr(fp,val){
   if(ROLE==='viewer')return;
   if(val)_fcLeg2Lsr[fp]=val;else delete _fcLeg2Lsr[fp];
   _fcSave();
+}
+function _fcSetLeg2Date(fp,val){
+  if(ROLE==='viewer')return;
+  if(val)_fcLeg2Date[fp]=val;else delete _fcLeg2Date[fp];
+  _fcSave();LM_renderForecast(document.getElementById('mn'));
 }
 function LM_renderForecast(el){
   if(!Object.keys(PLAN_CACHE).length){el.innerHTML='<div class="lp-empty">No plan data. Generate from Dashboard first.</div>';return}
@@ -14506,7 +14512,8 @@ function LM_renderForecast(el){
   for(const r of filtered){
     if(_fcLegMap[r.fp]!==2||!r.firstBI)continue;
     const _satName=(()=>{const d=r.dest||'';if(d.includes('Stadium')||d.includes('Broadcast')){const city=d.replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();return city+' Satellite WHS'}return'Satellite WHS'})();
-    allWithLegs.push({...r,_leg2:true,_leg1Fp:r.fp,disp:r.firstBI,transit:0,arrDate:r.firstBI,buffer:0,dispLoc:_satName,lsr:_fcLeg2Lsr[r.fp]||'',lateCount:0,faCount:0});
+    const l2d=_fcLeg2Date[r.fp]||r.firstBI;
+    allWithLegs.push({...r,_leg2:true,_leg1Fp:r.fp,disp:l2d,transit:0,arrDate:l2d,firstBI:l2d,buffer:0,dispLoc:_satName,lsr:_fcLeg2Lsr[r.fp]||'',lateCount:0,faCount:0});
   }
   allWithLegs.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId)||(a._leg2?1:0)-(b._leg2?1:0));
   // Group by week
@@ -14542,10 +14549,10 @@ function LM_renderForecast(el){
         <td class="mono fw6" style="color:#1565C0">${r.truckId} <span style="font-size:8px;font-weight:700;color:#fff;background:#1565C0;padding:1px 4px;border-radius:3px">2nd Leg</span></td>
         <td></td>
         <td class="mono" style="font-size:10px;color:var(--pu)" onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="text" value="${l2Lsr}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${l2Lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:80px" onchange="_fcSetLeg2Lsr('${_fp}',this.value.trim())">`:`<span>${l2Lsr||''}</span>`}</td>
-        <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
+        <td onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="date" value="${r.disp}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid #1565C0;border-radius:4px;color:#1565C0;width:115px" onchange="_fcSetLeg2Date('${_fp}',this.value)">`:`<span style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</span>`}</td>
         <td class="mono" style="text-align:center;color:#1565C0">0d</td>
         <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
-        <td style="font-weight:600;color:#1565C0">${_fmtD(r.firstBI)}</td>
+        <td style="font-weight:600;color:#1565C0">${_fmtD(r.disp)}</td>
         <td style="text-align:center;font-weight:700;color:var(--gn)">0d</td>
         <td class="mono" style="text-align:right">${r.plt}</td>
         <td style="text-align:center">${r.fnKits||'—'}</td>
