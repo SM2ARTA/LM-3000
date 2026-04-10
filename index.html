@@ -14398,8 +14398,8 @@ function LM_renderFAGoods(el){
 }
 
 // ── LM FORECAST TAB ──
-let _fcCountryFilter='all';// 'all','usa','can','mex'
-let _fcTypeFilter='all';// 'all','cluster','stadium','other'
+let _fcCountries=new Set(['USA','CAN','MEX']);// multi-select country filter
+let _fcTypes=new Set(['cluster','stadium','other']);// multi-select type filter
 const _FC_STAFF=['Ashley','Kyli','Yael','Brittany'];
 let _fcLeadMap={};// fingerprint → staffName (persisted, stable across rebuilds)
 let _fcLegMap={};// fingerprint → 2 (2-leg truck) — absent = 1 leg
@@ -14486,28 +14486,36 @@ function LM_renderForecast(el){
   VN.filter(v=>vcIsMEX(v.cluster)).forEach(v=>{const _cl=(v.cluster||'').replace(/^MEX\s*/i,'').split(/\s*\/\s*/)[0].trim();_addTrucks(v.name,PLAN_CACHE[v.name],'MEX',_cl?_cl+' Warehouse':'Mexico Warehouse')});
   allRows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
   // Apply country + type filters
-  let filtered=_fcCountryFilter==='all'?allRows:allRows.filter(r=>r.country===_fcCountryFilter.toUpperCase());
-  if(_fcTypeFilter!=='all')filtered=filtered.filter(r=>r.vtype===_fcTypeFilter);
+  let filtered=allRows.filter(r=>_fcCountries.has(r.country)&&_fcTypes.has(r.vtype));
   // KPIs
   const totalT=filtered.length,totalPlt=filtered.reduce((s,r)=>s+r.plt,0);
   const totalFn=filtered.reduce((s,r)=>s+r.fnKits,0),totalOs=filtered.reduce((s,r)=>s+r.osKits,0);
   const totalAsm=filtered.reduce((s,r)=>s+(r.asmCount||0),0),totalLate=filtered.reduce((s,r)=>s+(r.lateCount||0),0);
   const cntUSA=allRows.filter(r=>r.country==='USA').length,cntCAN=allRows.filter(r=>r.country==='CAN').length,cntMEX=allRows.filter(r=>r.country==='MEX').length;
   // Type counts (from country-filtered set)
-  const _cfRows=_fcCountryFilter==='all'?allRows:allRows.filter(r=>r.country===_fcCountryFilter.toUpperCase());
+  const _cfRows=allRows.filter(r=>_fcCountries.has(r.country));
   const cntCluster=_cfRows.filter(r=>r.vtype==='cluster').length,cntStadium=_cfRows.filter(r=>r.vtype==='stadium').length,cntOther=_cfRows.filter(r=>r.vtype==='other').length;
   // Chip builders
-  const _cChip=(id,label,cnt,flag)=>{const on=_fcCountryFilter===id;return`<button onclick="_fcCountryFilter='${id}';_fcTypeFilter='all';LM_renderForecast(document.getElementById('mn'))" style="padding:4px 14px;border-radius:16px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`};
-  const _tChip=(id,label,cnt)=>{const on=_fcTypeFilter===id;return`<button onclick="_fcTypeFilter='${id}';LM_renderForecast(document.getElementById('mn'))" style="padding:3px 10px;border-radius:12px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`};
+  const _allC=['USA','CAN','MEX'].filter(c=>allRows.some(r=>r.country===c));
+  const _allT=['cluster','stadium','other'].filter(t=>_cfRows.some(r=>r.vtype===t));
+  const _cAllOn=_allC.every(c=>_fcCountries.has(c));
+  const _tAllOn=_allT.every(t=>_fcTypes.has(t));
+  const _re=`LM_renderForecast(document.getElementById('mn'))`;
+  const _cChip=(id,label,cnt,flag)=>{
+    if(id==='all'){return`<button onclick="if(_fcCountries.size===${_allC.length}){_fcCountries.clear()}else{${_allC.map(c=>`_fcCountries.add('${c}')`).join(';')}};${_re}" style="padding:4px 14px;border-radius:16px;border:1px solid ${_cAllOn?'var(--ac)':'var(--bd)'};background:${_cAllOn?'var(--as)':'#fff'};color:${_cAllOn?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`}
+    const on=_fcCountries.has(id);return`<button onclick="if(_fcCountries.has('${id}'))_fcCountries.delete('${id}');else _fcCountries.add('${id}');if(!_fcCountries.size){${_allC.map(c=>`_fcCountries.add('${c}')`).join(';')}};${_re}" style="padding:4px 14px;border-radius:16px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`};
+  const _tChip=(id,label,cnt)=>{
+    if(id==='all'){return`<button onclick="if(_fcTypes.size===${_allT.length}){_fcTypes.clear()}else{${_allT.map(t=>`_fcTypes.add('${t}')`).join(';')}};${_re}" style="padding:3px 10px;border-radius:12px;border:1px solid ${_tAllOn?'var(--ac)':'var(--bd)'};background:${_tAllOn?'var(--as)':'#fff'};color:${_tAllOn?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`}
+    const on=_fcTypes.has(id);return`<button onclick="if(_fcTypes.has('${id}'))_fcTypes.delete('${id}');else _fcTypes.add('${id}');if(!_fcTypes.size){${_allT.map(t=>`_fcTypes.add('${t}')`).join(';')}};${_re}" style="padding:3px 10px;border-radius:12px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`};
   let h='<div class="fin" style="padding:16px">';
   h+=`<h2 style="font-size:16px;font-weight:700;margin:0 0 4px">📋 LM Truck Forecast</h2>`;
   h+=`<p style="font-size:10px;color:var(--tt);margin:0 0 12px">All LM trucks across all countries — grouped by dispatch week</p>`;
   // Country chips
   h+=`<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">`;
   h+=_cChip('all','All',allRows.length,'🌍');
-  if(cntUSA)h+=_cChip('usa','USA',cntUSA,'🇺🇸');
-  if(cntCAN)h+=_cChip('can','Canada',cntCAN,'🇨🇦');
-  if(cntMEX)h+=_cChip('mex','Mexico',cntMEX,'🇲🇽');
+  if(cntUSA)h+=_cChip('USA','USA',cntUSA,'🇺🇸');
+  if(cntCAN)h+=_cChip('CAN','Canada',cntCAN,'🇨🇦');
+  if(cntMEX)h+=_cChip('MEX','Mexico',cntMEX,'🇲🇽');
   h+=`</div>`;
   // Type chips
   h+=`<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">`;
@@ -14527,7 +14535,7 @@ function LM_renderForecast(el){
   if(totalAsm)h+=`<span class="bg bgs bg-pu">🔧 ${totalAsm} asm</span>`;
   if(totalLate)h+=`<span class="bg bgs bg-rd">⚠ ${totalLate} late</span>`;
   h+=`</div>`;
-  if(!filtered.length){h+='<div class="emp">No trucks for selected country.</div></div>';el.innerHTML=h;return}
+  if(!filtered.length){h+='<div class="emp">No trucks for selected filters.</div></div>';el.innerHTML=h;return}
   // Generate Leg 2 virtual rows for 2-leg trucks (dispatch on bump-in date, placed in correct week)
   const allWithLegs=[...filtered];
   for(const r of filtered){
