@@ -103,8 +103,8 @@ function render(hs,allHandshakes){
     <div style="margin-top:16px">
       <div style="font-size:12px;font-weight:600;color:#60646C;margin-bottom:4px">Truck Contents (${hs.items.length} items)</div>
       <table class="items-tbl"><thead><tr><th>SKU</th><th>Item</th><th class="r">Qty</th></tr></thead><tbody>
-      ${hs.items.map(it=>`<tr${it.fa?' style="background:#ECFEFF"':''}>
-        <td class="mono">${it.sku}${it.fa?' <span style="color:#0891B2;font-size:9px;font-weight:600">FA</span>':''}</td>
+      ${hs.items.map(it=>`<tr${it.fa?' style="background:#ECFEFF"':''}${it.isKit?' style="background:#F0EBFE"':''}${it.kitChild?' style="background:#FAFAFE"':''}>
+        <td class="mono">${it.kitChild?'<span style="color:#9CA0AA;margin-right:4px">└</span>':''}${it.sku}${it.fa?' <span style="color:#0891B2;font-size:9px;font-weight:600">FA</span>':''}${it.isKit?' <span style="color:#6E3FF3;font-size:9px;font-weight:600">KIT</span>':''}</td>
         <td>${it.name||'—'}</td>
         <td class="mono r">${(it.qty||0).toLocaleString()}</td>
       </tr>`).join('')}

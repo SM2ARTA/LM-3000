@@ -14607,7 +14607,7 @@ function LM_renderForecast(el){
       const buffer=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
       const cargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
       const _lsr=LM_getLsr(t);const _oor=LM_getOor(t);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
-      const _hsItems=t.items.map(it=>{const n=NOM[it.sku];return{sku:it.sku,name:n?.name||it.nm||it.name||'',qty:it.loadQty!=null?it.loadQty:(it.qty||0),fa:!!(n?._fa||it._fa)}});
+      const _hsItems=[];for(const it of t.items){const n=NOM[it.sku];const isKit=n?._kitNom||(it.sku.startsWith('FNKIT')||it.sku.startsWith('OSKIT'));if(isKit&&it._kitItems&&it._kitItems.length){_hsItems.push({sku:it.sku,name:n?.name||it.nm||'Kit',qty:1,fa:false,isKit:true});for(const ci of it._kitItems){const cn=NOM[ci.sku];_hsItems.push({sku:ci.sku,name:cn?.name||cn?.nm||ci.name||'',qty:ci.qty||0,fa:false,kitChild:true})}}else{_hsItems.push({sku:it.sku,name:n?.name||it.nm||it.name||'',qty:it.loadQty!=null?it.loadQty:(it.qty||0),fa:!!(n?._fa||it._fa)})}}
       allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,fp:LM_fp(t),disp,transit,arrDate,plt,skus:t.items.length,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,oor:_oor,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck,items:_hsItems});
     }
   };
