@@ -14673,7 +14673,7 @@ function LM_renderForecast(el){
         <td style="font-size:11px;font-weight:600;color:#1565C0">${r.dest}</td>
         <td class="mono fw6" style="color:#1565C0">${r.truckId} <span style="font-size:8px;font-weight:700;color:#fff;background:#1565C0;padding:1px 4px;border-radius:3px">2nd Leg</span></td>
         <td></td>
-        <td></td>
+        <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
         <td class="mono" style="font-size:10px;color:var(--pu)" onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="text" value="${l2Lsr}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${l2Lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:80px" onchange="_fcSetLeg2Lsr('${_fp}',this.value.trim())">`:`<span>${l2Lsr||''}</span>`}</td>
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="date" value="${r.disp}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid #1565C0;border-radius:4px;color:#1565C0;width:115px" onchange="_fcSetLeg2Date('${_fp}',this.value)">`:`<span style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</span>`}</td>
         <td class="mono" style="text-align:center;color:#1565C0">0d</td>
