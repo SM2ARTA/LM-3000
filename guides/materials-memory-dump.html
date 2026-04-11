@@ -352,145 +352,12 @@ let ENTRIES=[];
 let activeCat=null;
 let _nextId=1;
 
-// ── SEED DATA ── starter entries using plain text (auto-formatted on render)
-const SEED=[
-{id:1,cat:'receiving',icon:'📦',title:'Short Shipment on Container Arrival',
-_raw:`Scenario: Container arrives but physical count < ASN quantity.
-
-Unload -> [warn] Count ≠ ASN -> [hi] Photo Evidence -> Email Vlad -> Receive Actual Qty
-
-- Count EVERY pallet — do not trust the ASN blindly
-- Photograph the container interior (empty after unload) + any damage
-- Receive the *actual count* in SM²ARTA, not the ASN qty
-- Email materials@ with container #, ASN #, expected vs actual, photos
-
-Never: adjust your count to match the ASN. The ASN is what _should_ have shipped, your count is what _actually_ arrived.`,
-tags:['container','ASN','short shipment','count','receiving','discrepancy','photo'],author:'Vlad'},
-
-{id:2,cat:'damage',icon:'📸',title:'Damage Report Process',
-_raw:`When: Visible damage on arrival OR discovered during put-away/assembly.
-
-[bad] Damage Found -> 3+ Photos -> [hi] SM²ARTA Report -> Quarantine Item -> Await Decision
-
-Photo requirements:
-- Wide shot showing item + label/SKU sticker
-- Close-up of damage
-- Packaging condition (was it packed properly?)
-
-Caution: report within 24h of discovery. Late reports can't be claimed against carrier.
-Tip: Quarantine — move damaged item to a separate area, mark with red tape. Do NOT dispose until authorized.`,
-tags:['damage','photo','report','quarantine','carrier','claim','SM2ARTA'],author:'Vlad'},
-
-{id:3,cat:'inventory',icon:'🔢',title:'Cycle Count Discrepancy',
-_raw:`Scenario: Physical count doesn't match system inventory.
-
-Gap | Action | Escalation
-≤2% | Recount once, adjust if confirmed | None
-2-5% | Full recount by 2nd person | Email materials@
->5% | Stop. Full zone audit. | Call Vlad immediately
-
-Note: Common causes — items moved between zones without transaction, unreceived local deliveries, kit components pulled but kit not yet created in system.`,
-tags:['count','discrepancy','audit','cycle count','adjustment','inventory','zone'],author:'Vlad'},
-
-{id:4,cat:'shipping',icon:'📋',title:'LP Truck Dispatch Checklist',
-_raw:`Before the truck leaves the dock:
-
-1. Verify pallet count matches ML3K truck card
-2. Check every SKU label is visible and readable
-3. Take photo of loaded truck (pallets visible)
-4. Seal the truck — record seal number
-5. Collect signed BOL (Bill of Lading)
-6. Mark as *Dispatched* in ML3K
-7. Enter LSR number in ML3K
-
-Warning: No LSR = truck didn't leave. If logistics hasn't provided an LSR number, do not release the truck.
-Tip: Seal number goes in the email to the receiving warehouse. They verify seal intact on arrival.`,
-tags:['dispatch','truck','BOL','seal','LSR','pallet','checklist','loading'],author:'Vlad'},
-
-{id:5,cat:'customs',icon:'🛃',title:'HS Code Missing on CI Export',
-_raw:`Scenario: Exporting Commercial Invoice from ML3K and some SKUs show blank HS codes.
-
-Open Demand Tab -> [hi] Find SKU row -> Click 🔍 -> Use AI or Manual
-
-Three options:
-- *Sibling match:* system finds similar SKUs with confirmed codes — click to apply
-- *AI classify:* paste the product URL, AI returns HS code + country
-- *Manual:* browse HS database by chapter → heading → subheading
-
-Caution: Always confirm (✓) the HS code after setting it. Unconfirmed codes show as grey circles — confirmed show green checkmarks. Only confirmed codes appear in sibling suggestions.`,
-tags:['HS code','customs','CI','commercial invoice','export','classification','AI','sibling'],author:'Vlad'},
-
-{id:6,cat:'venue',icon:'🏗️',title:'Assembly vs Disassembly Decision',
-_raw:`Does this item get assembled at the warehouse or at the venue?
-
-Venue Type | Country | Default
-Stadium / IBC | Any | *Disassembled* (ship flat)
-Non-stadium | CAN / MEX | *Assembled* at regional WHS
-Non-stadium | USA | *Disassembled* (ship flat)
-
-Note: Override — individual SKUs can be flipped in ML3K Pallet Config. An assembled item needs \`pqA\` and \`psA\` values in the nomenclature.
-Info: Why it matters — assembled items take more pallet space but save venue labor. Assembly timeline in ML3K tracks the full date chain.`,
-tags:['assembly','disassembly','venue','stadium','warehouse','pallet config','pqA','psA'],author:'Vlad'},
-
-{id:7,cat:'kitting',icon:'📎',title:'Kit Readiness Check Before Shipping',
-_raw:`A kit ships as *ONE SKU*. All components must be in stock before the kit can be packed.
-
-Check ML3K Kit List -> Readiness = 100%? -> Pack Kit -> ASN Inbound -> Ship as 1 SKU
-
-- *FF&E kits* (FNKIT): tools + fixtures, ~12 items per kit
-- *Stationery kits* (OSKIT): office supplies, ~14 items per kit
-
-Never: ship a partial kit. If readiness <100%, escalate — do not substitute components without approval.`,
-tags:['kit','FNKIT','OSKIT','readiness','components','packing','assembly','stationery','FF&E'],author:'Vlad'},
-
-{id:8,cat:'systems',icon:'🔄',title:'ML3K Data Out of Sync',
-_raw:`Scenario: Your ML3K shows different data than a colleague's.
-
-Click Sync 🟢 -> Wait for spin -> Data refreshed
-
-If sync doesn't fix it:
-- Check you're on the same module (LP vs LM)
-- Check filters — destination/source chips may be deselected
-- Check if the other person has unsaved changes (debounced saves take ~1.5s)
-
-Caution: Last resort — Backup your data first, then try a soft reset. This clears file data but preserves dispatched trucks, customs overrides, and holds.`,
-tags:['sync','refresh','data','ML3K','mismatch','cache','soft reset','backup'],author:'Vlad'},
-
-{id:9,cat:'receiving',icon:'📍',title:'Local Delivery vs Container Arrival',
-_raw:`Two types of receiving — different workflows:
-
-Type | Source | ASN? | Pallet Labels
-Container | RGS international | Yes — from Supabase | Already labeled
-Local Delivery | Staples, CORT, etc. | Sometimes — varies | May need labeling
-
-Note: Local deliveries without ASN — receive against the PO or email confirmation. Count everything. Create the receipt manually in SM²ARTA.
-Tip: Staples deliveries come with a Staples packing slip. Cross-reference item numbers with the ML3K Staples catalog for your region.`,
-tags:['receiving','container','local delivery','Staples','CORT','ASN','packing slip','PO'],author:'Vlad'},
-
-{id:10,cat:'shipping',icon:'🌡️',title:'Re-Board / Cardboard Furniture Handling',
-_raw:`Re-Board tables and LOOK welcome desks are *cardboard-based*.
-
-Warning: WATER = DEATH. These items cannot get wet. Even humidity can warp them. Keep away from dock doors in rain, never store on ground floor without pallets.
-
-- Store *flat*, never standing upright
-- Maximum stack: *4 pallets high*
-- Ship last on truck (first off at venue)
-- Do not place heavy items on top
-
-Caution: 900 tables + 278 welcome desks across the tournament. Each one is custom-printed — no replacements available.`,
-tags:['Re-Board','cardboard','table','welcome desk','LOOK','water','handling','storage','fragile'],author:'Vlad'},
-];
+// No hardcoded seed data — all entries come from Supabase (shared across team)
 
 // ── INIT ──
 function init(){
   loadEntries();
-  if(!ENTRIES.length){
-    // Generate formatted body from raw text for seed entries
-    ENTRIES=SEED.map(e=>({...e,body:autoFormat(e._raw)}));
-    _nextId=SEED.length+1;
-    saveEntries();
-  }
-  else _nextId=Math.max(...ENTRIES.map(e=>e.id))+1;
+  if(ENTRIES.length)_nextId=Math.max(...ENTRIES.map(e=>e.id))+1;
   // Ensure all entries with _raw but no body get formatted
   ENTRIES.forEach(e=>{if(e._raw&&!e.body)e.body=autoFormat(e._raw)});
   renderCats();
@@ -500,14 +367,8 @@ function init(){
 }
 
 // ── PERSISTENCE ──
-const MEM_VERSION=3; // bump to force re-seed (v3 = flow-pair fix)
 function loadEntries(){
-  try{
-    const ver=parseInt(localStorage.getItem('mem-dump-ver'))||0;
-    if(ver<MEM_VERSION){localStorage.removeItem('mem-dump');localStorage.setItem('mem-dump-ver',MEM_VERSION)}
-    const s=localStorage.getItem('mem-dump');
-    if(s)ENTRIES=JSON.parse(s);
-  }catch(e){}
+  try{const s=localStorage.getItem('mem-dump');if(s)ENTRIES=JSON.parse(s)}catch(e){}
   loadFromSupabase();
 }
 function saveEntries(){
@@ -603,7 +464,11 @@ function renderGrid(){
   document.getElementById('stats').textContent=`${items.length} / ${ENTRIES.length} entries`;
 
   if(!items.length){
-    el.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No entries match your search</div><div class="empty-sub">Try different keywords or clear filters</div></div>`;
+    if(!ENTRIES.length&&!q&&!activeCat){
+      el.innerHTML=`<div class="empty"><div class="empty-icon">🧠</div><div class="empty-text">No entries yet</div><div class="empty-sub">Click <b>+ New Entry</b> to document your first case, or <b>Sync</b> to pull team entries</div></div>`;
+    }else{
+      el.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No entries match your search</div><div class="empty-sub">Try different keywords or clear filters</div></div>`;
+    }
     return;
   }
 
