@@ -62,6 +62,9 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 /* ── CARD ── */
 .card{background:var(--sf);border:1.5px solid var(--bd);border-radius:12px;padding:0;overflow:hidden;transition:all .2s;cursor:pointer;position:relative}
 .card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);transform:translateY(-1px);border-color:var(--pri-b)}
+.card.important{border:2px solid var(--rd);background:linear-gradient(135deg,#FFF8F8,var(--sf));box-shadow:0 0 0 1px var(--rd-s)}
+.card.important:hover{border-color:var(--rd);box-shadow:0 4px 20px rgba(198,42,47,.15)}
+.card.important .card-title::before{content:'⚠ ';color:var(--rd)}
 .card-head{padding:14px 16px 10px;display:flex;align-items:flex-start;gap:10px}
 .card-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .card-meta{flex:1;min-width:0}
@@ -267,6 +270,12 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
         <option value="venue">🏟️ Venue Ops</option>
         <option value="kitting">🧰 Kitting</option>
       </select>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--rd);user-select:none">
+        <input type="checkbox" id="f-important" style="width:16px;height:16px;accent-color:var(--rd);cursor:pointer">
+        ⚠ IMPORTANT — sort on top, red highlight
+      </label>
     </div>
     <div class="mf">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -485,7 +494,8 @@ function renderGrid(){
   }
 
   // Sort: newest first
-  items=items.slice().sort((a,b)=>b.id-a.id);
+  // Important first, then newest
+  items=items.slice().sort((a,b)=>(b.important?1:0)-(a.important?1:0)||b.id-a.id);
 
   document.getElementById('stats').textContent=`${items.length} / ${ENTRIES.length} entries`;
 
@@ -501,7 +511,7 @@ function renderGrid(){
   let h='';
   for(const e of items){
     const m=CAT_META[e.cat]||{label:e.cat,icon:'📌'};
-    h+=`<div class="card cat-${e.cat}" onclick="editEntry(${e.id})">
+    h+=`<div class="card cat-${e.cat}${e.important?' important':''}" onclick="editEntry(${e.id})">
       <div class="card-head">
         <div class="card-icon">${m.icon}</div>
         <div class="card-meta">
@@ -962,6 +972,7 @@ function showAddModal(){
   document.getElementById('edit-id').value='';
   document.getElementById('f-title').value='';
   document.getElementById('f-cat').value='receiving';
+  document.getElementById('f-important').checked=false;
   document.getElementById('f-body').value='';
   document.getElementById('del-btn').style.display='none';
   document.getElementById('modal').classList.add('show');
@@ -975,6 +986,7 @@ function editEntry(id){
   document.getElementById('edit-id').value=id;
   document.getElementById('f-title').value=e.title;
   document.getElementById('f-cat').value=e.cat;
+  document.getElementById('f-important').checked=!!e.important;
   // Show raw source if available, otherwise the formatted body (for seed/legacy entries)
   document.getElementById('f-body').value=e._raw||e.body;
   document.getElementById('del-btn').style.display='inline-flex';
@@ -991,15 +1003,16 @@ function saveEntry(){
   const title=document.getElementById('f-title').value.trim();
   if(!title){document.getElementById('f-title').focus();return}
   const cat=document.getElementById('f-cat').value;
+  const important=document.getElementById('f-important').checked;
   const rawBody=document.getElementById('f-body').value.trim();
-  const body=autoFormat(rawBody); // auto-format plain text into structured HTML
+  const body=autoFormat(rawBody);
   const now=Date.now();
   const editId=parseInt(document.getElementById('edit-id').value);
   if(editId){
     const e=ENTRIES.find(x=>x.id===editId);
-    if(e){Object.assign(e,{title,cat,body,_raw:rawBody,_ts:now})}
+    if(e){Object.assign(e,{title,cat,important,body,_raw:rawBody,_ts:now})}
   }else{
-    ENTRIES.push({id:_nextId++,cat,title,body,_raw:rawBody,date:new Date().toISOString().slice(0,10),_ts:now});
+    ENTRIES.push({id:_nextId++,cat,important,title,body,_raw:rawBody,date:new Date().toISOString().slice(0,10),_ts:now});
   }
   saveEntries();
   closeModal();
