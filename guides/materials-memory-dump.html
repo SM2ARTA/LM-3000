@@ -21,6 +21,19 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh}
 
+/* ── LOCK SCREEN ── */
+.lock{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
+.lock.hidden{display:none}
+.lock-card{text-align:center;max-width:340px;width:100%;padding:40px}
+.lock-icon{font-size:48px;margin-bottom:16px}
+.lock-title{font-size:18px;font-weight:800;color:var(--pri);margin-bottom:4px}
+.lock-sub{font-size:11px;color:var(--tt);margin-bottom:24px}
+.lock-input{width:100%;padding:12px 16px;border:2px solid var(--bd);border-radius:10px;font-size:14px;font-family:var(--fd);outline:none;text-align:center;letter-spacing:2px;transition:border-color .2s}
+.lock-input:focus{border-color:var(--pri)}
+.lock-input.err{border-color:var(--rd);animation:shake .4s}
+.lock-err{font-size:11px;color:var(--rd);margin-top:8px;min-height:16px}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+
 /* ── HEADER BAR ── */
 .top{background:var(--sf);border-bottom:2px solid var(--bd);padding:16px 32px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.06)}
 .top-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
@@ -193,6 +206,17 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 </style>
 </head>
 <body>
+
+<!-- ═══ LOCK SCREEN ═══ -->
+<div class="lock" id="lock">
+  <div class="lock-card">
+    <div class="lock-icon">🔒</div>
+    <div class="lock-title">Materials Memory Dump</div>
+    <div class="lock-sub">Authorized Materials Managers only</div>
+    <input type="password" class="lock-input" id="lock-pw" placeholder="Enter password" autocomplete="off" onkeydown="if(event.key==='Enter')checkPw()">
+    <div class="lock-err" id="lock-err"></div>
+  </div>
+</div>
 
 <!-- ═══ HEADER ═══ -->
 <div class="top">
@@ -1097,9 +1121,29 @@ document.addEventListener('keydown',e=>{
   }
 });
 
-init();
+// ── PASSWORD GATE ──
+const _PW='materials';
+function checkPw(){
+  const inp=document.getElementById('lock-pw');
+  if(inp.value===_PW){
+    sessionStorage.setItem('mem-auth','1');
+    document.getElementById('lock').classList.add('hidden');
+    init();
+  }else{
+    inp.classList.add('err');
+    document.getElementById('lock-err').textContent='Wrong password';
+    setTimeout(()=>{inp.classList.remove('err');inp.value='';inp.focus()},600);
+  }
+}
+// Auto-unlock if already authenticated in this session
+if(sessionStorage.getItem('mem-auth')==='1'){
+  document.getElementById('lock').classList.add('hidden');
+  init();
+}else{
+  document.getElementById('lock-pw').focus();
+}
 // Chrome restores form values after DOMContentLoaded — clear on pageshow to catch it
-window.addEventListener('pageshow',()=>{const s=document.getElementById('search');if(s.value){s.value='';filterCards()}});
+window.addEventListener('pageshow',()=>{const s=document.getElementById('search');if(s&&s.value){s.value='';filterCards()}});
 </script>
 </body>
 </html>
