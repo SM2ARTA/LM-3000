@@ -101,9 +101,13 @@ function render(hs,allHandshakes){
   const fmtD=d=>{if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}catch(e){return d}};
   const itemsHtml=(hs.items&&hs.items.length)?`
     <div style="margin-top:16px">
-      <div style="font-size:12px;font-weight:600;color:#60646C;margin-bottom:4px">Truck Contents</div>
-      <table class="items-tbl"><thead><tr><th>SKU</th><th>Item</th><th class="r">Qty</th><th class="r">Pallets</th></tr></thead><tbody>
-      ${hs.items.map(it=>`<tr><td class="mono">${it.sku}</td><td>${it.name||'—'}</td><td class="mono r">${(it.qty||0).toLocaleString()}</td><td class="mono r">${it.plt||'—'}</td></tr>`).join('')}
+      <div style="font-size:12px;font-weight:600;color:#60646C;margin-bottom:4px">Truck Contents (${hs.items.length} items)</div>
+      <table class="items-tbl"><thead><tr><th>SKU</th><th>Item</th><th class="r">Qty</th></tr></thead><tbody>
+      ${hs.items.map(it=>`<tr${it.fa?' style="background:#ECFEFF"':''}>
+        <td class="mono">${it.sku}${it.fa?' <span style="color:#0891B2;font-size:9px;font-weight:600">FA</span>':''}</td>
+        <td>${it.name||'—'}</td>
+        <td class="mono r">${(it.qty||0).toLocaleString()}</td>
+      </tr>`).join('')}
       </tbody></table>
     </div>`:'';
   el.innerHTML=`
