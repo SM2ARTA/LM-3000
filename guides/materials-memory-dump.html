@@ -1098,6 +1098,8 @@ document.addEventListener('keydown',e=>{
 });
 
 init();
+// Chrome restores form values after DOMContentLoaded — clear on pageshow to catch it
+window.addEventListener('pageshow',()=>{const s=document.getElementById('search');if(s.value){s.value='';filterCards()}});
 </script>
 </body>
 </html>
