@@ -865,24 +865,28 @@ function toggleVoice(){
   _voiceRec.interimResults=true;
   _voiceRec.lang='en-US';
   const ta=document.getElementById('f-body');
-  const startPos=ta.value.length;
-  let finalTranscript='';
+  let committed=ta.value;
   _voiceRec.onresult=function(ev){
-    let interim='';
+    let newFinal='',interim='';
     for(let i=ev.resultIndex;i<ev.results.length;i++){
-      if(ev.results[i].isFinal) finalTranscript+=ev.results[i][0].transcript;
+      if(ev.results[i].isFinal) newFinal+=ev.results[i][0].transcript;
       else interim+=ev.results[i][0].transcript;
     }
-    const prefix=ta.value.substring(0,startPos);
-    const sep=prefix.length&&!prefix.endsWith('\n')&&!prefix.endsWith(' ')?'\n':'';
-    ta.value=prefix+sep+finalTranscript+interim;
+    if(newFinal){
+      const s=committed.length&&!committed.endsWith('\n')&&!committed.endsWith(' ')?' ':'';
+      committed+=s+newFinal;
+    }
+    const s2=committed.length&&interim&&!committed.endsWith('\n')&&!committed.endsWith(' ')?' ':'';
+    ta.value=committed+(interim?s2+interim:'');
     ta.dispatchEvent(new Event('input'));
   };
   _voiceRec.onerror=function(ev){
     if(ev.error==='not-allowed')alert('Microphone access denied. Please allow microphone permission.');
     _stopVoice();
   };
-  _voiceRec.onend=function(){if(_voiceOn)try{_voiceRec.start()}catch(e){_stopVoice()}};
+  _voiceRec.onend=function(){
+    if(_voiceOn){committed=document.getElementById('f-body').value;try{_voiceRec.start()}catch(e){_stopVoice()}}
+  };
   _voiceRec.start();
   _voiceOn=true;
   btn.textContent='⏹ Stop';
