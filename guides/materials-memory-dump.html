@@ -69,8 +69,6 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .card-cat{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:2px 8px;border-radius:10px;display:inline-block}
 .card-body{padding:0 16px 14px;font-size:11.5px;line-height:1.6;color:var(--ts)}
 .card-body b{color:var(--tp);font-weight:700}
-.card-tags{padding:0 16px 12px;display:flex;gap:4px;flex-wrap:wrap}
-.card-tag{font-size:9px;font-weight:600;padding:2px 8px;border-radius:4px;background:var(--bg);color:var(--tt);font-family:var(--fm)}
 
 /* ── FLOW DIAGRAMS ── */
 .flow{display:flex;align-items:center;gap:0;margin:10px 0;flex-wrap:wrap;row-gap:6px}
@@ -327,10 +325,6 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
         </div>
       </div>
     </div>
-    <div class="mf">
-      <label>Tags <span style="font-weight:400;text-transform:none">(comma-separated keywords for search)</span></label>
-      <input type="text" id="f-tags" placeholder="e.g. ASN, short shipment, WMS, pallet count">
-    </div>
     <div class="m-actions">
       <button class="m-btn" onclick="closeModal()">Cancel</button>
       <button class="m-btn danger" id="del-btn" style="display:none" onclick="deleteEntry()">Delete</button>
@@ -485,7 +479,7 @@ function renderGrid(){
   if(activeCat) items=items.filter(e=>e.cat===activeCat);
   if(q){
     items=items.filter(e=>{
-      const hay=[e.title,e.cat,e.body,...(e.tags||[]),e.author||''].join(' ').toLowerCase();
+      const hay=[e.title,e.cat,e.body].join(' ').toLowerCase();
       return q.split(/\s+/).every(w=>hay.includes(w));
     });
   }
@@ -516,7 +510,6 @@ function renderGrid(){
         </div>
       </div>
       <div class="card-body">${e.body}</div>
-      ${e.tags&&e.tags.length?`<div class="card-tags">${e.tags.map(t=>`<span class="card-tag">${esc(t)}</span>`).join('')}</div>`:''}
     </div>`;
   }
   el.innerHTML=h;
@@ -921,9 +914,6 @@ async function aiEnhance(){
     if(result){
       body.value=result;
       body.dispatchEvent(new Event('input'));
-      // Auto-generate tags if empty
-      const tagsEl=document.getElementById('f-tags');
-      if(!tagsEl.value.trim())_aiAutoTags(cfg,raw,title,cat);
     }
   }catch(e){
     alert('AI error: '+(e.message||e));
@@ -954,14 +944,6 @@ async function _aiCall(provider,key,userMsg){
 }
 
 // Auto-generate tags (background, non-blocking)
-async function _aiAutoTags(cfg,raw,title,cat){
-  try{
-    const p=`Extract 5-8 short search keywords from this warehouse/logistics note. Return ONLY comma-separated keywords, nothing else.\nTitle: ${title||'untitled'}\nCategory: ${cat}\nContent: ${raw}`;
-    const result=await _aiCall(cfg.provider,cfg.key,p);
-    if(result){const el=document.getElementById('f-tags');if(!el.value.trim())el.value=result.trim()}
-  }catch(e){/* tags are optional */}
-}
-
 // Update preview on textarea input
 document.getElementById('f-body').addEventListener('input',function(){
   const preview=document.getElementById('f-preview');
@@ -981,7 +963,6 @@ function showAddModal(){
   document.getElementById('f-title').value='';
   document.getElementById('f-cat').value='receiving';
   document.getElementById('f-body').value='';
-  document.getElementById('f-tags').value='';
   document.getElementById('del-btn').style.display='none';
   document.getElementById('modal').classList.add('show');
   setTimeout(()=>document.getElementById('f-title').focus(),100);
@@ -996,7 +977,6 @@ function editEntry(id){
   document.getElementById('f-cat').value=e.cat;
   // Show raw source if available, otherwise the formatted body (for seed/legacy entries)
   document.getElementById('f-body').value=e._raw||e.body;
-  document.getElementById('f-tags').value=(e.tags||[]).join(', ');
   document.getElementById('del-btn').style.display='inline-flex';
   document.getElementById('modal').classList.add('show');
   // Trigger preview
@@ -1013,14 +993,13 @@ function saveEntry(){
   const cat=document.getElementById('f-cat').value;
   const rawBody=document.getElementById('f-body').value.trim();
   const body=autoFormat(rawBody); // auto-format plain text into structured HTML
-  const tags=document.getElementById('f-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
   const now=Date.now();
   const editId=parseInt(document.getElementById('edit-id').value);
   if(editId){
     const e=ENTRIES.find(x=>x.id===editId);
-    if(e){Object.assign(e,{title,cat,body,_raw:rawBody,tags,_ts:now})}
+    if(e){Object.assign(e,{title,cat,body,_raw:rawBody,_ts:now})}
   }else{
-    ENTRIES.push({id:_nextId++,cat,title,body,_raw:rawBody,tags,date:new Date().toISOString().slice(0,10),_ts:now});
+    ENTRIES.push({id:_nextId++,cat,title,body,_raw:rawBody,date:new Date().toISOString().slice(0,10),_ts:now});
   }
   saveEntries();
   closeModal();
