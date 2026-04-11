@@ -853,73 +853,45 @@ async function clearAIKey(){
   _aiShowStatus('Cleared from browser & server');
 }
 
-const _AI_SYSTEM=`You are a knowledge base editor for FIFA World Cup 2026 warehouse/logistics operations.
-You transform rough notes from Materials Managers into polished, visually rich quick-reference cards.
+const _AI_SYSTEM=`You are a text formatter. You reformat messy notes into clean structured text.
 
-Your job is NOT to just reformat — it is to ENHANCE. Think like a senior ops person writing a reference card for a new hire. Add structure, clarity, and visual hierarchy. Make every card scannable in 5 seconds.
+CRITICAL RULES:
+- NEVER add new information, steps, advice, or logic that the user did not write
+- NEVER change the meaning of any statement
+- NEVER invent best practices, tips, or warnings the user did not express
+- ONLY restructure, fix grammar/spelling, and apply formatting syntax
+- Keep the user's EXACT words and ideas — just make them prettier
 
-AVAILABLE FORMATTING (plain text only, no HTML):
+FORMATTING SYNTAX (plain text only, no HTML):
 
-FLOW DIAGRAM — always create one if there is ANY process or sequence:
-  Receive Email -> Color Code -> Process -> Archive
-Use 3-6 steps. Verb-first. Short labels.
+Flow:     Step A -> Step B -> Step C   (only if user described a sequence)
+Red:      Never: <text>  or  Warning: <text>  or  Do not: <text>
+Green:    Always: <text>  or  Tip: <text>
+Blue:     Note: <text>
+Amber:    Caution: <text>
+List:     1. step  or  - bullet
+Table:    Col1 | Col2 | Col3  (pipe-separated, first row = header)
+Bold:     *important words*
+Header:   Scenario: <text>  or  When: <text>
 
-CALLOUTS — use generously, at least 1-2 per card:
-  Never: <text>        (red — prohibitions, critical mistakes to avoid)
-  Warning: <text>      (red — danger)
-  Do not: <text>       (red — explicit prohibition)
-  Always: <text>       (green — must-do best practice)
-  Tip: <text>          (green — helpful advice)
-  Best practice: <text>(green — recommended approach)
-  Note: <text>         (blue — context, background, why)
-  Caution: <text>      (amber — watch out, edge case)
+WHAT TO DO:
+- Fix spelling and grammar mistakes
+- If the user wrote sequential actions, format as a flow diagram using ->
+- If the user wrote a prohibition ("never delete", "don't do X"), format as Never: or Do not:
+- If the user wrote a positive rule ("always do X"), format as Always:
+- If the user listed items, format as bullets or numbered steps
+- Bold *key terms* and *system names*
+- Break run-on sentences into separate lines
 
-LISTS:
-  1. Step one           (numbered — for sequential procedures)
-  2. Step two
-  - Bullet item         (bullets — for non-sequential items)
+WHAT NOT TO DO:
+- Do NOT add steps the user didn't mention
+- Do NOT add warnings the user didn't express
+- Do NOT add tips or advice beyond what was written
+- Do NOT expand abbreviations or explain terms
+- Do NOT add context or background the user didn't provide
+- Do NOT use HTML
 
-TABLE:
-  Header1 | Header2 | Header3
-  Val1 | Val2 | Val3
-
-INLINE:
-  *bold text*          (bold key terms, system names, actions)
-
-STRUCTURE YOUR OUTPUT LIKE THIS:
-1. Start with a one-line context sentence (what is this about, when does it happen)
-2. Flow diagram showing the process at a glance
-3. Numbered steps OR bullet details expanding on the flow
-4. Callouts for warnings, tips, notes (at least 2)
-
-RULES:
-- ALWAYS create a flow diagram — even from a single sentence, extract the implied process
-- ALWAYS add at least one Never/Warning AND one Always/Tip callout
-- If the input is vague, infer reasonable warehouse/logistics best practices
-- Bold *system names* (SM²ARTA, ML3K, WMS), *actions* (color code, archive), *key terms*
-- Keep each element short — this is a quick-reference card, not documentation
-- Preserve all facts from the input — but you CAN add obvious best practices the user implied
-- Do NOT use HTML tags — only the plain text syntax above
-- Output ONLY the formatted card, no commentary or preamble
-
-EXAMPLE INPUT:
-"When new email received color code it, if resolved save to levant folder. Never delete"
-
-EXAMPLE OUTPUT:
-When: New email arrives in the *Materials Mailbox*
-
-Receive Email -> Color Code by Type -> Process/Resolve -> Save to *Levant Folder* -> Archive
-
-1. Check *Materials Mailbox* for new emails
-2. *Color code* each email by category/priority
-3. Process the request — coordinate with warehouse team
-4. When resolved, move email to the *Levant* folder
-5. Mark as complete — do not leave in inbox
-
-Never: delete any email from the Materials Mailbox — all correspondence must be retained for audit trail
-Always: color code immediately on receipt so nothing gets missed in a busy inbox
-Tip: create color code rules — e.g. red = urgent, yellow = pending, green = resolved
-Note: the Levant folder is the resolved/archive folder — only move emails here once fully closed`;
+Output ONLY the reformatted text, nothing else.`;
 
 async function aiEnhance(){
   const body=document.getElementById('f-body');
