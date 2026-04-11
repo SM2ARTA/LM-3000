@@ -14580,6 +14580,19 @@ function LM_renderForecast(el){
   const _weekEnd=ws=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
   const _fmtWk=d=>{const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
   const _fmtD=d=>{if(!d)return'—';return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})};
+  // Expand a truck item into handshake items (resolves kits from _kitItems or LM_KITS)
+  const _hsExpandItem=(arr,it)=>{
+    const n=NOM[it.sku];const isKit=n?._kitNom||(it.sku.startsWith('FNKIT')||it.sku.startsWith('OSKIT'));
+    if(isKit){
+      const kitItems=it._kitItems||(n?._kitId?LM_getKitById(n._kitId)?.items:null);
+      if(kitItems&&kitItems.length){
+        arr.push({sku:it.sku,name:n?.name||it.nm||'Kit',qty:1,fa:false,isKit:true});
+        for(const ci of kitItems){const cn=NOM[ci.sku];arr.push({sku:ci.sku,name:cn?.name||cn?.nm||ci.name||'',qty:ci.qty||0,fa:false,kitChild:true})}
+        return;
+      }
+    }
+    arr.push({sku:it.sku,name:n?.name||it.nm||it.name||'',qty:it.loadQty!=null?it.loadQty:(it.qty||0),fa:!!(n?._fa||it._fa)});
+  };
   // Build rows for a label
   const _addTrucks=(label,P,country,dispLocOverride)=>{
     if(!P||!P.allT)return;
@@ -14607,7 +14620,7 @@ function LM_renderForecast(el){
       const buffer=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
       const cargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
       const _lsr=LM_getLsr(t);const _oor=LM_getOor(t);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
-      const _hsItems=[];for(const it of t.items){const n=NOM[it.sku];const isKit=n?._kitNom||(it.sku.startsWith('FNKIT')||it.sku.startsWith('OSKIT'));if(isKit&&it._kitItems&&it._kitItems.length){_hsItems.push({sku:it.sku,name:n?.name||it.nm||'Kit',qty:1,fa:false,isKit:true});for(const ci of it._kitItems){const cn=NOM[ci.sku];_hsItems.push({sku:ci.sku,name:cn?.name||cn?.nm||ci.name||'',qty:ci.qty||0,fa:false,kitChild:true})}}else{_hsItems.push({sku:it.sku,name:n?.name||it.nm||it.name||'',qty:it.loadQty!=null?it.loadQty:(it.qty||0),fa:!!(n?._fa||it._fa)})}}
+      const _hsItems=[];for(const it of t.items){_hsExpandItem(_hsItems,it)}
       allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,fp:LM_fp(t),disp,transit,arrDate,plt,skus:t.items.length,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,oor:_oor,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck,items:_hsItems});
     }
   };
@@ -14629,7 +14642,7 @@ function LM_renderForecast(el){
     // Include merged items from excluded freight trucks on same date
     const _cItems=(cd.items||[]).map(it=>({sku:it.sku,name:it.nm||'',qty:it.qty||0,fa:false}));
     const _pc=PLAN_CACHE[v];
-    if(_pc&&_pc.allT&&cd.biK){for(const et of _pc.allT){if(!LM_excluded.has(et.id))continue;if(et.dd!==cd.biK&&et.biK!==cd.biK)continue;for(const it of et.items){const n=NOM[it.sku];if(n?.src&&(n.src.toUpperCase().startsWith('CT')||n.src.toUpperCase().startsWith('CORT')))continue;const isKit=n?._kitNom||(it.sku.startsWith('FNKIT')||it.sku.startsWith('OSKIT'));if(isKit&&it._kitItems&&it._kitItems.length){_cItems.push({sku:it.sku,name:n?.name||it.nm||'Kit',qty:1,fa:false,isKit:true});for(const ci of it._kitItems){const cn=NOM[ci.sku];_cItems.push({sku:ci.sku,name:cn?.name||cn?.nm||'',qty:ci.qty||0,fa:false,kitChild:true})}}else{_cItems.push({sku:it.sku,name:n?.name||it.nm||'',qty:it.loadQty||0,fa:false})}}}}
+    if(_pc&&_pc.allT&&cd.biK){for(const et of _pc.allT){if(!LM_excluded.has(et.id))continue;if(et.dd!==cd.biK&&et.biK!==cd.biK)continue;for(const it of et.items){const n=NOM[it.sku];if(n?.src&&(n.src.toUpperCase().startsWith('CT')||n.src.toUpperCase().startsWith('CORT')))continue;_hsExpandItem(_cItems,it)}}}
     const totalSkus=_cItems.length;
     allRows.push({dest:cd.destDisplay||clDisp(v),cluster:v,truckId:cd.id,fp:'CORT:'+cd.id,disp:cd.biK,transit:0,arrDate:cd.biK,plt:0,skus:totalSkus,fnKits:0,osKits:0,dispatched:false,firstBI:cd.biK,buffer:0,lsr:'',oor:'',isCort:true,asmCount:0,dispLoc:'CORT',clusterLabel:'',lateCount:0,vtype:'cort',country:_cCountry,cargo:0,faCount:0,faTruck:false,items:_cItems});
   })}
