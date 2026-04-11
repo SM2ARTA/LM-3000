@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FF&E Delivery Confirmation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#F4F5F7;color:#111318;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+.card{background:#fff;border-radius:12px;border:1px solid #E2E4E9;max-width:520px;width:100%;padding:28px 24px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.logo{font-size:12px;font-weight:700;color:#CF5D5D;text-align:center;margin-bottom:16px;letter-spacing:.5px}
+h1{font-size:18px;font-weight:700;margin-bottom:4px}
+.sub{font-size:11px;color:#60646C;margin-bottom:20px}
+.field{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #F4F5F7;font-size:13px}
+.field .label{color:#60646C;font-weight:500}
+.field .value{font-family:'IBM Plex Mono',monospace;font-weight:600;color:#111318}
+.field .value.pur{color:#6E3FF3}
+.field .value.blue{color:#2563eb}
+.actions{margin-top:24px;display:flex;flex-direction:column;gap:10px}
+.btn{padding:12px 20px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
+.btn-confirm{background:#12804A;color:#fff}
+.btn-confirm:hover{background:#0e6b3d}
+.btn-reschedule{background:#FEF3EB;color:#C4550A;border:1px solid #F5D6B8}
+.btn-reschedule:hover{background:#FDE8D8}
+.date-row{display:none;margin-top:8px;align-items:center;gap:8px}
+.date-row.show{display:flex}
+.date-row input{font-family:'IBM Plex Mono',monospace;padding:8px 10px;border:1px solid #E2E4E9;border-radius:6px;font-size:12px}
+.note-row{margin-top:10px}
+.note-row textarea{width:100%;padding:8px 10px;border:1px solid #E2E4E9;border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;resize:vertical;min-height:60px}
+.locked{text-align:center;padding:20px;color:#60646C;font-size:13px}
+.locked .icon{font-size:32px;margin-bottom:8px}
+.locked .contact{font-size:11px;color:#9CA0AA;margin-top:8px}
+.locked .contact a{color:#CF5D5D}
+.status-badge{display:inline-block;padding:4px 12px;border-radius:12px;font-size:11px;font-weight:700}
+.status-confirmed{background:#E6F5ED;color:#12804A}
+.status-reschedule{background:#FEF3EB;color:#C4550A}
+.status-pending{background:#F4F5F7;color:#9CA0AA}
+.err{color:#C62A2F;font-size:12px;margin-top:8px;display:none}
+.footer{margin-top:20px;font-size:10px;color:#9CA0AA;text-align:center}
+</style>
+</head>
+<body>
+<div class="card" id="main">
+  <div class="logo">FIFA WORLD CUP 2026 &mdash; FF&E LOGISTICS</div>
+  <div id="loading" style="text-align:center;padding:40px;color:#60646C">Loading...</div>
+  <div id="content" style="display:none"></div>
+</div>
+<div class="footer">Materials Management Team &middot; ML3K &middot; SM2ARTA</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SB=supabase.createClient('https://stwopndhnxcjyomkufii.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyODk2NTksImV4cCI6MjA1Njg2NTY1OX0.yC0L0C_tx7bBSYxfSGEZVk3Vu9y49dBdl9W6UPQYfwM');
+
+const params=new URLSearchParams(window.location.search);
+const token=params.get('token');
+
+async function init(){
+  if(!token){showError('Invalid link — no token provided.');return}
+  try{
+    const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-handshakes').maybeSingle();
+    if(!data){showError('Handshake data not found.');return}
+    const all=JSON.parse(data.value);
+    const hs=Object.values(all).find(h=>h.token===token);
+    if(!hs){showError('Handshake not found or expired.');return}
+    render(hs,all);
+  }catch(e){showError('Failed to load: '+e.message)}
+}
+
+function render(hs,allHandshakes){
+  const el=document.getElementById('content');
+  const loading=document.getElementById('loading');
+  loading.style.display='none';
+  el.style.display='block';
+
+  if(hs.locked){
+    const statusClass=hs.status==='confirmed'?'status-confirmed':'status-reschedule';
+    const statusLabel=hs.status==='confirmed'?'Confirmed':'Date Change Requested: '+(hs.proposedDate||'');
+    el.innerHTML=`
+      <h1>Delivery ${hs.truckId} to ${hs.dest}</h1>
+      <div class="sub">Dispatch: ${hs.disp}</div>
+      <div style="margin:16px 0"><span class="status-badge ${statusClass}">${statusLabel}</span></div>
+      ${hs.note?'<div style="font-size:12px;color:#60646C;margin:8px 0;padding:8px;background:#F4F5F7;border-radius:6px">'+hs.note+'</div>':''}
+      <div class="locked">
+        <div class="icon">🔒</div>
+        <div>This confirmation has been submitted.</div>
+        <div class="contact">If something changed, contact <a href="mailto:materials@fwc2026.org">materials@fwc2026.org</a></div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML=`
+    <h1>Delivery Confirmation</h1>
+    <div class="sub">Please confirm or propose a new date for this delivery</div>
+    <div class="field"><span class="label">Truck</span><span class="value">${hs.truckId}</span></div>
+    <div class="field"><span class="label">Destination</span><span class="value">${hs.dest}</span></div>
+    <div class="field"><span class="label">Dispatch Date</span><span class="value">${hs.disp}</span></div>
+    <div class="field"><span class="label">Pallets</span><span class="value">${hs.plt}</span></div>
+    <div class="field"><span class="label">SKUs</span><span class="value">${hs.skus||'—'}</span></div>
+    ${hs.lsr?'<div class="field"><span class="label">LSR</span><span class="value pur">'+hs.lsr+'</span></div>':''}
+    ${hs.oor?'<div class="field"><span class="label">OOR</span><span class="value blue">'+hs.oor+'</span></div>':''}
+    <div class="note-row"><textarea id="hsNote" placeholder="Optional note (e.g., dock preference, time window)"></textarea></div>
+    <div class="actions">
+      <button class="btn btn-confirm" onclick="submit('confirmed')">✅ Confirm Delivery</button>
+      <button class="btn btn-reschedule" onclick="toggleDate()">🔄 Propose Different Date</button>
+    </div>
+    <div class="date-row" id="dateRow">
+      <span style="font-size:12px;color:#60646C">New date:</span>
+      <input type="date" id="hsDate" value="${hs.disp}">
+      <button class="btn btn-reschedule" onclick="submit('reschedule')" style="padding:8px 16px">Submit</button>
+    </div>
+    <div class="err" id="err"></div>`;
+}
+
+function toggleDate(){
+  document.getElementById('dateRow').classList.toggle('show');
+}
+
+async function submit(status){
+  const note=(document.getElementById('hsNote')?.value||'').trim();
+  const proposedDate=status==='reschedule'?(document.getElementById('hsDate')?.value||''):null;
+  if(status==='reschedule'&&!proposedDate){showInlineError('Please select a date.');return}
+  try{
+    const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-handshakes').maybeSingle();
+    if(!data)throw new Error('Data not found');
+    const all=JSON.parse(data.value);
+    const fp=Object.keys(all).find(k=>all[k].token===token);
+    if(!fp)throw new Error('Handshake not found');
+    all[fp].status=status;
+    all[fp].proposedDate=proposedDate;
+    all[fp].note=note||null;
+    all[fp].respondedAt=new Date().toISOString().slice(0,10);
+    all[fp].locked=true;
+    const now=new Date().toISOString();
+    const{error}=await SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(all),updated_at:now});
+    if(error)throw error;
+    render(all[fp],all);
+  }catch(e){showInlineError('Failed to submit: '+e.message)}
+}
+
+function showError(msg){
+  document.getElementById('loading').style.display='none';
+  document.getElementById('content').style.display='block';
+  document.getElementById('content').innerHTML='<div class="locked"><div class="icon">⚠️</div><div>'+msg+'</div></div>';
+}
+function showInlineError(msg){const el=document.getElementById('err');if(el){el.textContent=msg;el.style.display='block'}}
+
+init();
+</script>
+</body>
+</html>

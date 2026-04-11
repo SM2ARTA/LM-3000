@@ -3042,6 +3042,48 @@ async function _hsLoadAIConfig(){
 }
 function _hsResetAI(){_hsClearAI();_hsRenderStep()}
 
+// ── SM2ARTA API config (venue contacts for handshake system) ──
+let _sm2artaApiKey='';
+let _sm2artaContacts={};// venue name -> {name, email}
+function _sm2SetKey(key){
+  if(ROLE==='viewer')return;
+  _sm2artaApiKey=(key||'').trim();
+  localStorage.setItem('sm2arta-api-key',_sm2artaApiKey);
+  if(SB){const now=new Date().toISOString();SB.from('shared_state').upsert({id:'sm2arta-config',value:JSON.stringify({apiKey:_sm2artaApiKey}),updated_at:now}).then(r=>{if(r.error)console.warn('SM2ARTA config save failed:',r.error)})}
+}
+async function _sm2LoadConfig(){
+  if(!SB)return;
+  try{
+    const{data}=await SB.from('shared_state').select('value').eq('id','sm2arta-config').single();
+    if(data?.value){const cfg=JSON.parse(data.value);if(cfg.apiKey){_sm2artaApiKey=cfg.apiKey;localStorage.setItem('sm2arta-api-key',cfg.apiKey)}}
+  }catch(e){}
+  if(!_sm2artaApiKey)_sm2artaApiKey=localStorage.getItem('sm2arta-api-key')||'';
+}
+function _parseContact(text){
+  if(!text)return{name:'',email:''};
+  const lines=(text||'').split(/[\n,;]+/).map(l=>l.trim()).filter(Boolean);
+  const email=lines.find(l=>/[^\s@]+@[^\s@]+\.[^\s@]+/.test(l));
+  const emailClean=email?(email.match(/[^\s@]+@[^\s@]+\.[^\s@]+/)||[''])[0]:'';
+  const name=lines.find(l=>l!==email&&!/^\+?\d/.test(l)&&!/@/.test(l))||'';
+  return{name,email:emailClean};
+}
+async function _sm2FetchContacts(){
+  if(!_sm2artaApiKey){console.warn('[SM2ARTA] No API key configured');return}
+  try{
+    const r=await fetch('https://fwc26.smmarta.com/api/bi/venues?length=500',{headers:{Authorization:'Bearer '+_sm2artaApiKey,Accept:'application/json'}});
+    if(!r.ok){console.warn('[SM2ARTA] Venues fetch failed:',r.status);return}
+    const rows=await r.json();
+    _sm2artaContacts={};
+    for(const v of rows){if(v.name&&v.contact){_sm2artaContacts[v.name]=_parseContact(v.contact)}}
+    console.log('[SM2ARTA] Loaded contacts for',Object.keys(_sm2artaContacts).length,'venues');
+  }catch(e){console.warn('[SM2ARTA] Fetch error:',e)}
+}
+function _sm2GetContact(venueName){
+  if(_sm2artaContacts[venueName])return _sm2artaContacts[venueName];
+  for(const[k,v]of Object.entries(_sm2artaContacts)){if(k.includes(venueName)||venueName.includes(k))return v}
+  return{name:'',email:''};
+}
+
 // URL preview — fetch OG meta via proxy
 let _hsUrlDebounce=null;
 function _hsUrlPreviewDebounce(){
@@ -8938,6 +8980,8 @@ function enterApp(){
       LM_loadNomOverrides().catch(()=>{}),
       LM_loadClusterTA().catch(()=>{}),
       _hsLoadAIConfig().catch(()=>{}),
+      _sm2LoadConfig().catch(()=>{}),
+      _fcLoadHandshakes().catch(()=>{}),
       FA_loadLinked().catch(()=>{}),
       (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{};_fcLeg2Date=v.leg2date||{}}else{_fcLeadMap=v}console.log('[FC] Loaded',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'2-leg trucks')}}catch(e){}})()
     ]);
@@ -14502,6 +14546,36 @@ let _fcLeadMap={};// fingerprint → staffName (persisted, stable across rebuild
 let _fcLegMap={};// fingerprint → 2 (2-leg truck) — absent = 1 leg
 let _fcLeg2Lsr={};// fingerprint → LSR string for leg 2
 let _fcLeg2Date={};// fingerprint → date string for leg 2 dispatch (default: bump-in)
+let _fcHandshakes={};// fingerprint → {token, dest, truckId, disp, plt, skus, lsr, oor, contact:{name,email}, sentAt, status:'pending'|'confirmed'|'reschedule', proposedDate, note, respondedAt, locked}
+async function _fcLoadHandshakes(){
+  if(!SB)return;
+  try{
+    const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-handshakes').maybeSingle();
+    if(data){_fcHandshakes=JSON.parse(data.value)||{};console.log('[HS] Loaded',Object.keys(_fcHandshakes).length,'handshakes')}
+  }catch(e){}
+}
+function _fcSaveHandshakes(){
+  if(!SB||ROLE==='viewer')return;
+  const now=new Date().toISOString();
+  SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now}).then(({error})=>{if(error)console.warn('HS save error:',error)});
+}
+function _fcGenToken(){return crypto.randomUUID?crypto.randomUUID():(Math.random().toString(36).slice(2)+Date.now().toString(36))}
+function _fcSendHandshake(fp,row){
+  if(ROLE==='viewer')return;
+  const contact=_sm2GetContact(row.cluster||row.dest);
+  if(!contact.email){alert('No contact email found for '+row.dest+'. Configure SM2ARTA API key and fetch contacts first.');return}
+  const token=_fcGenToken();
+  const hs={token,dest:row.dest,cluster:row.cluster,truckId:row.truckId,fp,disp:row.disp,plt:row.plt,skus:row.skus||0,lsr:row.lsr,oor:row.oor,contact,sentAt:new Date().toISOString().slice(0,10),status:'pending',proposedDate:null,note:null,respondedAt:null,locked:false};
+  _fcHandshakes[fp]=hs;
+  _fcSaveHandshakes();
+  // Generate mailto link
+  const baseUrl=window.location.origin+window.location.pathname.replace(/[^/]*$/,'')+'handshake.html';
+  const hsUrl=baseUrl+'?token='+token;
+  const subject=encodeURIComponent('FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')');
+  const body=encodeURIComponent('Hi '+contact.name+',\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'—')+'\nOOR: '+(row.oor||'—')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
+  window.open('mailto:'+contact.email+'?subject='+subject+'&body='+body);
+  LM_renderForecast(document.getElementById('mn'));
+}
 function _fcControl(fp,lead){
   // Deterministic pseudo-random control that never matches lead
   let h=0;for(let i=0;i<fp.length;i++)h=(h*31+fp.charCodeAt(i))>>>0;
@@ -14570,7 +14644,7 @@ function LM_renderForecast(el){
       const buffer=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
       const cargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
       const _lsr=LM_getLsr(t);const _oor=LM_getOor(t);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
-      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,fp:LM_fp(t),disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,oor:_oor,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck});
+      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,fp:LM_fp(t),disp,transit,arrDate,plt,skus:t.items.length,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,oor:_oor,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck});
     }
   };
   // USA trucks
@@ -14605,8 +14679,17 @@ function LM_renderForecast(el){
     if(id==='all'){return`<button onclick="if(_fcTypes.size===${_allT.length}){_fcTypes.clear()}else{${_allT.map(t=>`_fcTypes.add('${t}')`).join(';')}};${_re}" style="padding:3px 10px;border-radius:12px;border:1px solid ${_tAllOn?'var(--ac)':'var(--bd)'};background:${_tAllOn?'var(--as)':'#fff'};color:${_tAllOn?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`}
     const on=_fcTypes.has(id);return`<button onclick="if(_fcTypes.has('${id}'))_fcTypes.delete('${id}');else _fcTypes.add('${id}');if(!_fcTypes.size){${_allT.map(t=>`_fcTypes.add('${t}')`).join(';')}};${_re}" style="padding:3px 10px;border-radius:12px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`};
   let h='<div class="fin" style="padding:16px">';
-  h+=`<h2 style="font-size:16px;font-weight:700;margin:0 0 4px">📋 LM Truck Forecast</h2>`;
-  h+=`<p style="font-size:10px;color:var(--tt);margin:0 0 12px">All LM trucks across all countries — grouped by dispatch week</p>`;
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+    <h2 style="font-size:16px;font-weight:700;margin:0">📋 LM Truck Forecast</h2>
+    ${ROLE==='admin'?`<button onclick="document.getElementById('fcSmCfg').style.display=document.getElementById('fcSmCfg').style.display==='none'?'flex':'none'" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--tt)" title="Handshake settings">⚙️</button>`:''}
+  </div>
+  <div id="fcSmCfg" style="display:none;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:var(--bg);border-radius:6px;border:1px solid var(--bd)">
+    <span style="font-size:10px;color:var(--ts);white-space:nowrap">SM2ARTA API Key</span>
+    <input type="password" value="${_sm2artaApiKey}" placeholder="Bearer token" style="font-size:10px;font-family:var(--fm);padding:3px 6px;border:1px solid var(--bd);border-radius:4px;color:var(--tp);width:200px" onchange="_sm2SetKey(this.value.trim())">
+    <button class="rbtn" onclick="_sm2FetchContacts().then(()=>alert('Loaded '+Object.keys(_sm2artaContacts).length+' contacts'))" style="font-size:10px">📡 Fetch Contacts</button>
+    <span style="font-size:9px;color:var(--tt)">${Object.keys(_sm2artaContacts).length?Object.keys(_sm2artaContacts).length+' contacts loaded':'No contacts loaded'}</span>
+  </div>
+  <p style="font-size:10px;color:var(--tt);margin:0 0 12px">All LM trucks across all countries — grouped by dispatch week</p>`;
   // Country chips
   h+=`<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">`;
   h+=_cChip('all','All',allRows.length,'🌍');
@@ -14658,7 +14741,7 @@ function LM_renderForecast(el){
       ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
       ${wLate?'<span class="bg bgs bg-rd">⚠ '+wLate+' late</span>':''}
     </div>
-    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>Legs</th><th>OOR</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Co-Pilot</th></tr></thead><tbody>`;
+    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>Legs</th><th>OOR</th><th>LSR</th><th style="text-align:center">Handshake</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Co-Pilot</th></tr></thead><tbody>`;
     for(const r of rows){
       const bufColor=r.buffer!=null?(r.buffer>=7?'var(--gn)':r.buffer>=3?'var(--or)':'var(--rd)'):'var(--tt)';
       const _fp=(r._leg1Fp||r.fp).replace(/'/g,"\\'");
@@ -14676,6 +14759,7 @@ function LM_renderForecast(el){
         <td></td>
         <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
         <td class="mono" style="font-size:10px;color:var(--pu)" onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="text" value="${l2Lsr}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${l2Lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:80px" onchange="_fcSetLeg2Lsr('${_fp}',this.value.trim())">`:`<span>${l2Lsr||''}</span>`}</td>
+        <td></td>
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="date" value="${r.disp}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid #1565C0;border-radius:4px;color:#1565C0;width:115px" onchange="_fcSetLeg2Date('${_fp}',this.value)">`:`<span style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</span>`}</td>
         <td class="mono" style="text-align:center;color:#1565C0">0d</td>
         <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
@@ -14702,6 +14786,7 @@ function LM_renderForecast(el){
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${is2Leg?'#1565C0':'var(--bd)'};border-radius:4px;color:${is2Leg?'#1565C0':'var(--tt)'};background:#fff" onchange="_fcSetLegs('${_fp}',parseInt(this.value))"><option value="1"${!is2Leg?' selected':''}>1</option><option value="2"${is2Leg?' selected':''}>2</option></select>`:`<span style="font-size:10px;color:var(--tt)">${is2Leg?'2':'1'}</span>`}</td>
         <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
         <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
+        <td style="text-align:center" onclick="event.stopPropagation()">${(()=>{const hs=_fcHandshakes[r.fp];if(!hs)return ROLE==='admin'?`<button class="rbtn" onclick="_fcSendHandshake('${_fp}',${JSON.stringify({dest:r.dest,cluster:r.cluster,truckId:r.truckId,disp:r.disp,plt:r.plt,skus:r.skus||0,lsr:r.lsr,oor:r.oor}).replace(/"/g,'&quot;')})" style="font-size:9px;padding:2px 8px;color:var(--ac);border-color:var(--ab)">📤 Send</button>`:'—';if(hs.status==='confirmed')return'<span style="font-size:10px;color:var(--gn);font-weight:600" title="Confirmed '+((hs.respondedAt||''))+'">✅</span>';if(hs.status==='reschedule')return'<span style="font-size:9px;color:var(--or);font-weight:600" title="'+(hs.note||'')+'">🔄 '+(hs.proposedDate||'')+'</span>';return'<span style="font-size:9px;color:var(--or)" title="Sent '+(hs.sentAt||'')+'">⏳</span>'})()}</td>
         <td>${_fmtD(r.disp)}</td>
         <td class="mono" style="text-align:center">${r.transit}d</td>
         <td style="color:var(--gn);font-weight:600">${_fmtD(r.arrDate)}</td>
