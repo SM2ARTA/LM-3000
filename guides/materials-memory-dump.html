@@ -206,7 +206,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
     </div>
     <div class="search-box">
       <span class="search-icon">🔍</span>
-      <input type="text" id="search" placeholder="Search by keyword, SKU, scenario..." oninput="filterCards()">
+      <input type="text" id="search" placeholder="Search by keyword, SKU, scenario..." oninput="filterCards()" autocomplete="off">
     </div>
     <div class="stats" id="stats"></div>
     <button class="add-btn" style="background:var(--a4-s);color:var(--a4);border-color:var(--a4-b)" onclick="syncNow(this)" title="Pull latest from team">🔄 Sync</button>
