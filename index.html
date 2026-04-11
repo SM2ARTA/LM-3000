@@ -14534,7 +14534,7 @@ async function _fcSendHandshake(fp,row){
   const hsUrl=baseUrl+'?token='+token;
   const subject=encodeURIComponent('FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')');
   const body=encodeURIComponent('Hi,\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'—')+'\nOOR: '+(row.oor||'—')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
-  window.open('mailto:materials@fwc2026.org?subject='+subject+'&body='+body);
+  window.open('mailto:?cc=materials@fwc2026.org&subject='+subject+'&body='+body);
   LM_renderForecast(document.getElementById('mn'));
 }
 function _fcControl(fp,lead){

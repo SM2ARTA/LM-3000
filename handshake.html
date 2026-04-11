@@ -58,13 +58,17 @@ const token=params.get('token');
 async function init(){
   if(!token){showError('Invalid link — no token provided.');return}
   try{
-    const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-handshakes').maybeSingle();
-    if(!data){showError('Handshake data not found.');return}
-    const all=JSON.parse(data.value);
+    console.log('[HS] Looking up token:',token);
+    const res=await SB.from('shared_state').select('value').eq('id','fm-fc-handshakes').maybeSingle();
+    console.log('[HS] Supabase response:',res);
+    if(!res.data){showError('Handshake data not found. Please wait a moment and refresh.');return}
+    const all=JSON.parse(res.data.value);
+    console.log('[HS] All handshakes:',Object.keys(all).length,'entries');
     const hs=Object.values(all).find(h=>h.token===token);
-    if(!hs){showError('Handshake not found or expired.');return}
+    if(!hs){showError('Handshake token not found. It may have expired or been replaced.');return}
+    console.log('[HS] Found handshake:',hs.truckId,hs.dest,hs.status);
     render(hs,all);
-  }catch(e){showError('Failed to load: '+e.message)}
+  }catch(e){console.error('[HS] Error:',e);showError('Failed to load: '+e.message)}
 }
 
 function render(hs,allHandshakes){
