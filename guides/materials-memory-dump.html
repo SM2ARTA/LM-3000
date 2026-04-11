@@ -852,42 +852,55 @@ function _updateAILink(){
     `<span style="color:var(--tt)"> — create a key, copy it, paste above</span>`;
 }
 
-/* ── VOICE TO TEXT ── */
-let _voiceRec=null;
+/* ── VOICE TO TEXT (OpenAI Whisper) ── */
+let _voiceStream=null;
+let _voiceRecorder=null;
 let _voiceOn=false;
-function toggleVoice(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){alert('Speech recognition is not supported in this browser.');return}
+async function toggleVoice(){
   const btn=document.getElementById('voice-btn');
   if(_voiceOn){_stopVoice();return}
-  _voiceRec=new SR();
-  _voiceRec.continuous=true;
-  _voiceRec.interimResults=true;
-  _voiceRec.lang='en-US';
-  const ta=document.getElementById('f-body');
-  let committed=ta.value;
-  _voiceRec.onresult=function(ev){
-    let newFinal='',interim='';
-    for(let i=ev.resultIndex;i<ev.results.length;i++){
-      if(ev.results[i].isFinal) newFinal+=ev.results[i][0].transcript;
-      else interim+=ev.results[i][0].transcript;
-    }
-    if(newFinal){
-      const s=committed.length&&!committed.endsWith('\n')&&!committed.endsWith(' ')?' ':'';
-      committed+=s+newFinal;
-    }
-    const s2=committed.length&&interim&&!committed.endsWith('\n')&&!committed.endsWith(' ')?' ':'';
-    ta.value=committed+(interim?s2+interim:'');
-    ta.dispatchEvent(new Event('input'));
-  };
-  _voiceRec.onerror=function(ev){
-    if(ev.error==='not-allowed')alert('Microphone access denied. Please allow microphone permission.');
-    _stopVoice();
-  };
-  _voiceRec.onend=function(){
-    if(_voiceOn){committed=document.getElementById('f-body').value;try{_voiceRec.start()}catch(e){_stopVoice()}}
-  };
-  _voiceRec.start();
+  // Need an OpenAI key — check chatgpt provider first, then any provider's key with a hint
+  let cfg=_getAICfg();
+  if(!cfg.key){await loadAIKey();cfg=_getAICfg()}
+  if(!cfg.key||cfg.provider!=='chatgpt'){
+    toggleAISettings();
+    _aiShowStatus('Voice requires an OpenAI key — select ChatGPT provider and enter your key',true);
+    return;
+  }
+  try{_voiceStream=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){
+    alert('Microphone access denied. Please allow microphone permission.');return;
+  }
+  const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/mp4';
+  _voiceRecorder=new MediaRecorder(_voiceStream,{mimeType:mime});
+  _voiceRecorder.chunks=[];
+  _voiceRecorder.addEventListener('dataavailable',function(ev){if(ev.data.size>0)_voiceRecorder.chunks.push(ev.data)});
+  _voiceRecorder.addEventListener('stop',async function(){
+    const blob=new Blob(_voiceRecorder.chunks,{type:mime});
+    _voiceRecorder.chunks=[];
+    _releaseStream();
+    if(blob.size<1000){_resetVoiceBtn();return}
+    btn.textContent='⏳ Transcribing...';btn.disabled=true;
+    try{
+      const ext=mime.includes('webm')?'webm':'m4a';
+      const fd=new FormData();
+      fd.append('file',blob,'voice.'+ext);
+      fd.append('model','whisper-1');
+      fd.append('language','en');
+      const r=await fetch('https://api.openai.com/v1/audio/transcriptions',{
+        method:'POST',headers:{'Authorization':'Bearer '+cfg.key},body:fd});
+      if(!r.ok)throw new Error(r.status===401?'Invalid OpenAI key':'Whisper error: '+r.status);
+      const text=(await r.json()).text||'';
+      if(text){
+        const ta=document.getElementById('f-body');
+        const cur=ta.value;
+        const sep=cur.length&&!cur.endsWith('\n')&&!cur.endsWith(' ')?'\n':'';
+        ta.value=cur+sep+text;
+        ta.dispatchEvent(new Event('input'));
+      }
+    }catch(e){alert('Transcription failed: '+(e.message||e))}
+    _resetVoiceBtn();
+  });
+  _voiceRecorder.start();
   _voiceOn=true;
   btn.textContent='⏹ Stop';
   btn.style.background='var(--rd-s)';btn.style.color='var(--rd)';btn.style.borderColor='var(--rd-b)';
@@ -895,11 +908,16 @@ function toggleVoice(){
 }
 function _stopVoice(){
   _voiceOn=false;
-  if(_voiceRec)try{_voiceRec.stop()}catch(e){}
-  _voiceRec=null;
+  if(_voiceRecorder&&_voiceRecorder.state==='recording')_voiceRecorder.stop();
+  else{_releaseStream();_resetVoiceBtn()}
+}
+function _releaseStream(){
+  if(_voiceStream){_voiceStream.getTracks().forEach(function(t){t.stop()});_voiceStream=null}
+}
+function _resetVoiceBtn(){
   const btn=document.getElementById('voice-btn');
   if(!btn)return;
-  btn.textContent='🎙️ Voice';
+  btn.textContent='🎙️ Voice';btn.disabled=false;
   btn.style.background='';btn.style.color='';btn.style.borderColor='';
   btn.classList.remove('voice-on');
 }
