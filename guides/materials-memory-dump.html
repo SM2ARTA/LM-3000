@@ -354,9 +354,24 @@ let _nextId=1;
 
 // No hardcoded seed data — all entries come from Supabase (shared across team)
 
+// Old seed entry titles to purge from Supabase (one-time cleanup)
+const _SEED_TITLES=new Set([
+  'Short Shipment on Container Arrival','Damage Report Process','Cycle Count Discrepancy',
+  'LP Truck Dispatch Checklist','HS Code Missing on CI Export','Assembly vs Disassembly Decision',
+  'Kit Readiness Check Before Shipping','ML3K Data Out of Sync','Local Delivery vs Container Arrival',
+  'Re-Board / Cardboard Furniture Handling'
+]);
+
 // ── INIT ──
 function init(){
   loadEntries();
+  // One-time purge of old hardcoded seeds
+  const before=ENTRIES.length;
+  ENTRIES=ENTRIES.filter(e=>!_SEED_TITLES.has(e.title));
+  if(ENTRIES.length<before){
+    localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
+    saveToSupabase(); // push cleaned list to Supabase so seeds don't come back
+  }
   if(ENTRIES.length)_nextId=Math.max(...ENTRIES.map(e=>e.id))+1;
   // Ensure all entries with _raw but no body get formatted
   ENTRIES.forEach(e=>{if(e._raw&&!e.body)e.body=autoFormat(e._raw)});
@@ -389,11 +404,16 @@ async function loadFromSupabase(){
     if(!Array.isArray(remote))return;
 
     // Merge: union of local + remote, newest _ts wins per ID
-    const merged=_mergeEntries(ENTRIES,remote);
+    let merged=_mergeEntries(ENTRIES,remote);
+    // Purge old hardcoded seeds that may still be in Supabase
+    const beforePurge=merged.length;
+    merged=merged.filter(e=>!_SEED_TITLES.has(e.title));
     // Ensure every entry has a body (generate from _raw if missing)
     merged.forEach(e=>{if(!e.body&&e._raw)e.body=autoFormat(e._raw)});
     const changed=JSON.stringify(merged)!==JSON.stringify(ENTRIES);
     ENTRIES=merged;
+    // If we purged seeds from remote, push the clean list back
+    if(merged.length<beforePurge)saveToSupabase();
     _nextId=Math.max(...ENTRIES.map(e=>e.id),0)+1;
     localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
     if(changed){renderCats();renderGrid()}
