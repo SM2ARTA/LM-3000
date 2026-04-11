@@ -835,6 +835,7 @@ function _undoSnap(){
     lp_demand:JSON.stringify(LP_STATE.materialPlan||[]),
     lp_plan:JSON.stringify(LP_STATE.generatedPlan||[]),
     lp_dispatched:JSON.stringify([...(LP_dispatched||[])]),
+    lp_arrivedTrucks:JSON.stringify([...(LP_arrived||[])]),
     lp_oorTrucks:JSON.stringify([...(LP_oorTrucks||[])]),
     lp_contOvr:JSON.stringify(LP_contDateOverrides||{}),
     lp_lsr:JSON.stringify(LP_lsrNumbers||{}),
@@ -904,6 +905,7 @@ function UNDO_restore(){
     if(snap.lp_demand)LP_STATE.materialPlan=JSON.parse(snap.lp_demand);
     LP_STATE.generatedPlan=JSON.parse(snap.lp_plan);
     LP_dispatched=new Set(JSON.parse(snap.lp_dispatched));
+    LP_arrived=new Set(JSON.parse(snap.lp_arrivedTrucks||'[]'));
     LP_oorTrucks=new Set(JSON.parse(snap.lp_oorTrucks||'[]'));
     LP_contDateOverrides=JSON.parse(snap.lp_contOvr);
     LP_lsrNumbers=JSON.parse(snap.lp_lsr);
@@ -2277,6 +2279,7 @@ let LP_STATE={
 };
 let LP_TAB='plan';
 let LP_dispatched=new Set();// truck IDs marked as dispatched
+let LP_arrived=new Set();// truck IDs confirmed arrived at destination (LP-fed venues)
 let LP_oorTrucks=new Set();// truck IDs with OOR (Outbound Order Request) submitted — stock reserved, no deduction
 let LP_contDateOverrides={};// container name -> new arrival date (YYYY-MM-DD)
 let LP_lsrNumbers={};// truckId -> LSR number string (e.g. "LSR625-001")
@@ -2458,8 +2461,25 @@ function LM_buildLPArrivalMap(){
   }
 }
 // Check if a SKU arrives on time from LP for a given LP-fed location and dispatch date
+// Priority: if any dispatched LP truck carries this SKU to this dest, check LP_arrived (actual confirmation)
+// Fallback: planned arrival date comparison (pre-dispatch planning view)
 function LM_skuArrivedOnTime(sku,lpAbbrs,dispatchDate){
   if(!lpAbbrs||!lpAbbrs.length||!dispatchDate)return false;
+  // Check actual arrival of dispatched LP trucks carrying this SKU
+  if(LP_arrived.size>0||LP_dispatched.size>0){
+    const plan=LP_STATE.generatedPlan||[];
+    let hasDispatchedTruck=false;
+    for(const r of plan){
+      if(r.sku!==sku||!LP_dispatched.has(r.truckId))continue;
+      const abbr=LP_matchTransitAbbr(r.destination);
+      if(abbr&&lpAbbrs.includes(abbr)){
+        if(LP_arrived.has(r.truckId))return true;// first arrived truck = green
+        hasDispatchedTruck=true;
+      }
+    }
+    if(hasDispatchedTruck)return false;// dispatched but not arrived = red
+  }
+  // No dispatched trucks for this SKU — fall back to planned dates
   for(const abbr of lpAbbrs){
     const m=LP_ARRIVAL_MAP[abbr];
     if(m&&m[sku]&&m[sku]<=dispatchDate)return true;
@@ -3845,7 +3865,7 @@ async function LP_saveTruckState(){
   try{
     const now=new Date().toISOString();
     const{error}=await SB.from('shared_state').upsert({id:LP_KEYS.truck,value:JSON.stringify({
-      dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,
+      dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,
       lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
       arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
 
@@ -3875,10 +3895,10 @@ window.addEventListener('beforeunload',e=>{
     // Fire immediate save with keepalive so it survives page close
     if(SB&&ROLE!=='viewer'){
       const truckData={
-        dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,
+        dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,
         lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
         arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
-  
+
         stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned
       };
       const now=new Date().toISOString();
@@ -3928,7 +3948,7 @@ async function LP_saveToSupabase(){
     const u=async(id,val)=>{const json=JSON.stringify(val);const h=_h(json);if(_lpSaveHashes[id]===h)return;const{error}=await SB.from('shared_state').upsert({id,value:json,updated_at:now});if(error){console.warn('LP save '+id+':',error)}else{_lpSaveHashes[id]=h}};
     // Sequential saves — lightweight first, heaviest last. Avoids DB connection burst.
     await u(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings});
-    await u(LP_KEYS.truck,{dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned});
+    await u(LP_KEYS.truck,{dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned});
     await u(LP_KEYS.demand,LP_STATE.materialPlan);
     await u(LP_KEYS.nom,LP_STATE.nomenclature);
     await u(LP_KEYS.arr,LP_STATE.arrivals);
@@ -3941,7 +3961,7 @@ async function LP_saveToSupabase(){
       const now=new Date().toISOString();
       const u2=async(id,val)=>{await SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now})};
       await u2(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings});
-      await u2(LP_KEYS.truck,{dispatched:[...LP_dispatched],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned});
+      await u2(LP_KEYS.truck,{dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned});
       console.log('LP save retry succeeded');
     }catch(e2){console.warn('LP save retry failed:',e2)}},3000);
   }
@@ -3970,6 +3990,7 @@ async function LP_loadFromSupabase(){
       LP_STATE.arrivals=arr||[];
       LP_STATE.generatedPlan=plan;
       LP_dispatched=new Set(truck?.dispatched||[]);
+      LP_arrived=new Set(truck?.arrived||[]);
       LP_oorTrucks=new Set(truck?.oorTrucks||[]);
       LP_contDateOverrides=truck?.contDateOverrides||{};
       LP_lsrNumbers=truck?.lsrNumbers||{};
@@ -4019,6 +4040,7 @@ async function LP_loadFromSupabase(){
     LP_STATE.planGenerated=true;
     LP_STATE.generatedPlan=p.generatedPlan;
     LP_dispatched=new Set(p.dispatched||[]);
+    LP_arrived=new Set(p.arrived||[]);
     LP_oorTrucks=new Set(p.oorTrucks||[]);
     LP_contDateOverrides=p.contDateOverrides||{};
     LP_lsrNumbers=p.lsrNumbers||{};
@@ -5323,8 +5345,8 @@ function LP_renderPlan(el){
     const _faItems=aggSkus.filter(s=>_lpIsFaSku(s.sku));
     if(_faItems.length){const _faPlt=_faItems.reduce((s,i)=>s+i.pallets,0);const _faTypes=[...new Set(_faItems.map(s=>{const p=s.sku.split('-');return p[1]||'FA'}))];h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#FEF3EB;color:#C4550A;border:1px solid #F5D6B8">📐 FA: '+_faTypes.join(', ')+' · '+_faPlt.toFixed(1)+' plt reserved</span></div>'}
     const _lpFa=_faMatchLP(t.id);if(_lpFa){const _lpFaLabel=_lpFa.fas&&_lpFa.fas.length?_lpFa.fas.join(', '):'FA';const _lpFaDts=[...new Set(_faItemsForTruck('LP-'+t.id,'','').map(i=>i.biDate).filter(Boolean))].sort().map(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}});h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 '+_lpFaLabel+': '+_lpFa.count+' items · '+_lpFa.qty+'qty · '+_lpFa.plt.toFixed(1)+'plt'+(_lpFaDts.length?' · BI: '+_lpFaDts.join(', '):'')+'</span></div>'}
-    if(ROLE==="viewer"){if(isDisp)h+='<div class="lp-dispatch-row"><span>🔒 Locked</span>'+(isOOR?' <span style="color:#2563eb;font-weight:600">OOR</span>':'')+'</div>';}
-    else{h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input type="checkbox" '+checked+' onclick="event.stopPropagation();LP_toggleDispatch('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0">'+(isDisp?'🔒 Lock':'Lock')+'</span><input type="checkbox" '+(isOOR?'checked':'')+' onclick="event.stopPropagation();LP_toggleOOR('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0;color:#2563eb">'+(isOOR?'📋 OOR':'OOR')+'</span><input type="date" value="'+t.date+'" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate('+t.id+',this.value)"></div>';}
+    if(ROLE==="viewer"){if(isDisp)h+='<div class="lp-dispatch-row"><span>🔒 Locked</span>'+(LP_arrived.has(t.id)?' <span style="color:var(--gn);font-weight:600">📦 Arrived</span>':'')+(isOOR?' <span style="color:#2563eb;font-weight:600">OOR</span>':'')+'</div>';}
+    else{const _isArr=LP_arrived.has(t.id);h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input type="checkbox" '+checked+' onclick="event.stopPropagation();LP_toggleDispatch('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0">'+(isDisp?'🔒 Lock':'Lock')+'</span>'+(isDisp?'<input type="checkbox" '+(_isArr?'checked':'')+' onclick="event.stopPropagation();LP_toggleArrived('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0;color:'+(_isArr?'var(--gn)':'var(--tt)')+'">'+(_isArr?'📦 Arrived':'Arrived')+'</span>':'')+'<input type="checkbox" '+(isOOR?'checked':'')+' onclick="event.stopPropagation();LP_toggleOOR('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0;color:#2563eb">'+(isOOR?'📋 OOR':'OOR')+'</span><input type="date" value="'+t.date+'" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate('+t.id+',this.value)"></div>';}
     const lsrEsc=lsr.replace(/"/g,'&quot;');
     h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:5px;margin-top:4px">';
     h+='<span style="font-size:10px;color:var(--tt);white-space:nowrap">LSR</span>';
@@ -5823,10 +5845,19 @@ function LP_toggleDispatch(truckId,checked){
     setTimeout(()=>{LP_render();_lpNotifyLM()},50);
   }else{
     LP_dispatched.delete(truckId);
+    LP_arrived.delete(truckId);
     delete LP_returned[truckId];
     console.log('[LP] Unlocked LP-'+truckId+', dispatched remaining:',LP_dispatched.size,', regenerating...');
     LP_regenerate();// unlocked truck items re-enter pool — rebuild plan
   }
+}
+
+function LP_toggleArrived(truckId,checked){
+  if(ROLE==="viewer")return;
+  if(checked)LP_arrived.add(truckId);else LP_arrived.delete(truckId);
+  LP_saveTruckState();
+  LP_render();
+  _lpNotifyLM();
 }
 
 // Return items from locked LP truck to demand pool
@@ -8199,6 +8230,7 @@ async function masterBackupExport(){
       {Setting:'Max Dests/Day',Value:LP_STATE.maxDests},
       {Setting:'RIC Start Date',Value:LP_STATE.ricStartDate},
       {Setting:'Locked Trucks',Value:[...LP_dispatched].join(', ')},
+      {Setting:'Arrived Trucks',Value:[...LP_arrived].join(', ')},
       {Setting:'OOR Trucks',Value:[...LP_oorTrucks].join(', ')},
       {Setting:'Arrived Containers',Value:[...LP_arrivedConts].join(', ')},
     ];
@@ -8429,7 +8461,7 @@ async function masterBackupRestore(file){
       LP_STATE.generatedPlan=lpPlanRows.map(r=>({truckId:r['Truck ID'],date:r.Date,destination:r.Destination,sku:r.SKU,name:r.Name||'',qty:r.Qty||0,pallets:r.Pallets||0}));
       LP_STATE.planGenerated=true;
       // Restore locked trucks + LSR from plan sheet
-      LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_returned={};
+      LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_returned={};
       for(const r of lpPlanRows){
         if(r.Locked==='Yes')LP_dispatched.add(r['Truck ID']);
         if(r.LSR)LP_lsrNumbers[r['Truck ID']]=r.LSR;
@@ -8449,6 +8481,7 @@ async function masterBackupRestore(file){
         else if(s==='Max Dests/Day')LP_STATE.maxDests=+v||LP_DEFAULT_MAX_DESTS;
         else if(s==='RIC Start Date')LP_STATE.ricStartDate=v||'2026-04-01';
         else if(s==='Locked Trucks'&&v){v.split(',').map(x=>+x.trim()).filter(Boolean).forEach(id=>LP_dispatched.add(id))}
+        else if(s==='Arrived Trucks'&&v){v.split(',').map(x=>+x.trim()).filter(Boolean).forEach(id=>LP_arrived.add(id))}
         else if(s==='OOR Trucks'&&v){v.split(',').map(x=>+x.trim()).filter(Boolean).forEach(id=>LP_oorTrucks.add(id))}
         else if(s==='Arrived Containers'&&v){LP_arrivedConts=new Set(v.split(',').map(x=>x.trim()).filter(Boolean))}
         else if(s.startsWith('Transit Days: ')){const city=s.replace('Transit Days: ','');const abbr=Object.entries(CITY_ABBR).find(([k,n])=>n===city);if(abbr)LP_transitDays[abbr[0]]=+v||0}
@@ -17087,7 +17120,7 @@ function doSystemReset(){
   STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};LM_holds=new Set();LM_holdReleased={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
+  LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
   LP_FA_GROUPS=[];
   LP_updateStockWaterfall();LP_invalidateLate();// all state cleared
   // Restore upload screen
@@ -17316,7 +17349,7 @@ function doResetLP(){
     SB.from('shared_state').delete().in('id',['lp-state','lp-config','lp-nom','lp-demand','lp-demand-raw','lp-arrivals','lp-plan','lp-truck-state']).then(()=>{}).catch(()=>{});
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
+  LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
   LP_FA_GROUPS=[];
   LP_lastGenSettings={};
   LP_updateStockWaterfall();LP_invalidateLate();// plan cleared
@@ -17355,7 +17388,7 @@ function doSoftResetLP(){
     planGenerated:false,generatedPlan:[]};
   LP_lastGenSettings={};
   LP_updateStockWaterfall();LP_invalidateLate();// plan cleared
-  // LP_dispatched, LP_oorTrucks, LP_lsrNumbers, LP_palletOverrides, LP_customsOverrides, LP_arrivedConts,
+  // LP_dispatched, LP_arrived, LP_oorTrucks, LP_lsrNumbers, LP_palletOverrides, LP_customsOverrides, LP_arrivedConts,
   // LP_transitDays, LP_contDateOverrides, manual arrivals (_manual:true) — all preserved
   lpUf=[];lpRenderUpload();
   // Clear rendered content so upload overlay is visible
@@ -17445,7 +17478,7 @@ async function goGenerateLP(){
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:_genNom,ricStartDate:LP_STATE.ricStartDate}
     ),LP_STATE.maxPallets||LP_DEFAULT_MAX_PALLETS);
     LP_STATE.planGenerated=true;
-    LP_dispatched=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
+    LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
     LP_snapshotSettings();
     LP_updateStockWaterfall();
     LP_invalidateLate();
