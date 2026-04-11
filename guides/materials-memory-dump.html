@@ -71,6 +71,20 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .cat:active{transform:scale(.93)}
 .cat:hover{border-color:var(--pri-b);color:var(--pri)}
 .cat.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.tags{max-width:1400px;margin:0 auto;padding:6px 32px 0;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.tags-label{font-size:9px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
+.tag-chip{padding:4px 10px;border-radius:14px;font-size:10px;font-weight:600;cursor:pointer;border:1.5px solid var(--a4-b);background:var(--sf);color:var(--a4);transition:all .2s cubic-bezier(.34,1.56,.64,1);user-select:none}
+.tag-chip:hover{transform:translateY(-1px);background:var(--a4-s)}
+.tag-chip:active{transform:scale(.93)}
+.tag-chip.on{background:var(--a4);color:#fff;border-color:var(--a4)}
+.tag-count{font-size:8px;font-weight:700;opacity:.7;margin-left:2px}
+.title-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--sf);border:1.5px solid var(--bd);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.1);display:none}
+.title-suggestions.show{display:block}
+.title-sug{padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid #F0F0F4;transition:background .1s}
+.title-sug:last-child{border-bottom:none}
+.title-sug:hover,.title-sug.active{background:var(--a4-s)}
+.title-sug b{color:var(--a4);font-weight:700}
+.title-sug .sug-count{font-size:9px;color:var(--tt);margin-left:6px;font-family:var(--fm)}
 .ppl{max-width:1400px;margin:0 auto;padding:6px 32px 0;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .ppl-label{font-size:9px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
 .ppl-chip{padding:4px 10px;border-radius:14px;font-size:10px;font-weight:600;cursor:pointer;border:1.5px solid var(--bd);background:var(--sf);color:var(--ts);transition:all .2s cubic-bezier(.34,1.56,.64,1);user-select:none}
@@ -238,6 +252,9 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
   .add-btn{padding:6px 12px;font-size:10px}
   .cats{padding:6px 12px 0;gap:4px}
   .cat{padding:4px 10px;font-size:10px}
+  .tags{padding:4px 12px 0;gap:4px}
+  .tags-label{font-size:8px;margin-right:2px}
+  .tag-chip{padding:3px 8px;font-size:9px}
   .ppl{padding:4px 12px 0;gap:4px}
   .ppl-label{font-size:8px;margin-right:2px}
   .ppl-chip{padding:3px 8px;font-size:9px}
@@ -354,6 +371,8 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 <div class="cats" id="cats"></div>
 <!-- ═══ PERSON CHIPS ═══ -->
 <div class="ppl" id="ppl"></div>
+<!-- ═══ TITLE TAG CHIPS ═══ -->
+<div class="tags" id="tags"></div>
 
 <!-- ═══ CARD GRID ═══ -->
 <div class="grid" id="grid"></div>
@@ -386,9 +405,10 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
     </div>
     <div class="msub">Document a case so the whole team benefits next time</div>
     <input type="hidden" id="edit-id">
-    <div class="mf">
+    <div class="mf" style="position:relative">
       <label>Title</label>
-      <input type="text" id="f-title" placeholder="Short, searchable title">
+      <input type="text" id="f-title" placeholder="Short, searchable title" oninput="_titleInput()" onfocus="_titleInput()" autocomplete="off">
+      <div class="title-suggestions" id="title-sug"></div>
     </div>
     <div class="mf">
       <label>Category</label>
@@ -494,6 +514,7 @@ const PEOPLE_COLORS={Everyone:'#4A148C',Anthony:'#F0A030',Ashley:'#8DB4E2',Britt
 let ENTRIES=[];
 let activeCat=null;
 let activePerson=null; // person filter chip
+let activeTag=null; // title tag filter
 let _nextId=1;
 
 // No hardcoded seed data — all entries come from Supabase (shared across team)
@@ -526,6 +547,7 @@ async function init(){
   ENTRIES.forEach(e=>{if(e._raw&&!e.body)e.body=autoFormat(e._raw)});
   renderCats();
   renderPeople();
+  renderTags();
   renderGrid();
   // Load shared AI key from Supabase (decrypt with saved passphrase)
   loadAIKey();
@@ -565,7 +587,7 @@ async function loadFromSupabase(){
     if(merged.length<beforePurge)saveToSupabase();
     _nextId=Math.max(...ENTRIES.map(e=>e.id),0)+1;
     localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
-    if(changed){renderCats();renderPeople();renderGrid()}
+    if(changed){renderCats();renderPeople();renderTags();renderGrid()}
   }catch(e){console.warn('Supabase load failed:',e)}
 }
 
@@ -623,6 +645,31 @@ function renderPeople(){
 }
 function setPerson(p){activePerson=p;renderPeople();renderGrid()}
 
+// ── RENDER TITLE TAGS ──
+function _getTitleCounts(){
+  const counts={};
+  ENTRIES.forEach(e=>{counts[e.title]=(counts[e.title]||0)+1});
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+}
+function renderTags(){
+  const el=document.getElementById('tags');
+  const titles=_getTitleCounts();
+  if(!titles.length){el.innerHTML='';return}
+  // Only show titles that appear more than once, or all if few unique titles
+  const multi=titles.filter(t=>t[1]>1);
+  const show=multi.length?multi:titles.slice(0,12);
+  let h='<span class="tags-label">Topics:</span>';
+  h+=`<span class="tag-chip${activeTag===null?' on':''}" onclick="setTag(null)">All</span>`;
+  for(let ti=0;ti<show.length;ti++){
+    const[title,count]=show[ti];
+    const on=activeTag===title;
+    h+=`<span class="tag-chip${on?' on':''}" data-ti="${ti}" onclick="setTag(_tagTitles[${ti}])">${esc(title)}<span class="tag-count">${count}</span></span>`;
+  }
+  window._tagTitles=show.map(s=>s[0]);
+  el.innerHTML=h;
+}
+function setTag(t){activeTag=t;renderTags();renderGrid()}
+
 // ── RENDER GRID ──
 function renderGrid(){
   const el=document.getElementById('grid');
@@ -630,6 +677,7 @@ function renderGrid(){
   let items=ENTRIES;
 
   if(activeCat) items=items.filter(e=>e.cat===activeCat);
+  if(activeTag) items=items.filter(e=>e.title===activeTag);
   if(activePerson) items=items.filter(e=>e.attention&&(e.attention.includes(activePerson)||e.attention.includes('Everyone')));
   if(q){
     items=items.filter(e=>{
@@ -1280,6 +1328,47 @@ function viewEntry(id){
 function closeView(){document.getElementById('view-modal').classList.remove('show');_viewId=null}
 function viewEdit(){const id=_viewId;closeView();if(id)editEntry(id)}
 
+// ── TITLE SUGGESTIONS ──
+let _sugIdx=-1;
+function _titleInput(){
+  const input=document.getElementById('f-title');
+  const sug=document.getElementById('title-sug');
+  const val=input.value.trim().toLowerCase();
+  _sugIdx=-1;
+  if(!val){sug.classList.remove('show');return}
+  // Get unique titles sorted by frequency
+  const titles=_getTitleCounts();
+  const matches=titles.filter(t=>t[0].toLowerCase().includes(val));
+  if(!matches.length){sug.classList.remove('show');return}
+  const _sugMatches=matches.slice(0,8);
+  window._sugTitles=_sugMatches.map(t=>t[0]);
+  sug.innerHTML=_sugMatches.map((t,i)=>{
+    const title=t[0],count=t[1];
+    const idx=title.toLowerCase().indexOf(val);
+    const hi=idx>=0?esc(title.slice(0,idx))+'<b>'+esc(title.slice(idx,idx+val.length))+'</b>'+esc(title.slice(idx+val.length)):esc(title);
+    return`<div class="title-sug" onmousedown="_pickTitle(_sugTitles[${i}])">${hi}<span class="sug-count">${count} ${count===1?'entry':'entries'}</span></div>`;
+  }).join('');
+  sug.classList.add('show');
+}
+function _pickTitle(title){
+  document.getElementById('f-title').value=title;
+  document.getElementById('title-sug').classList.remove('show');
+  _sugIdx=-1;
+}
+// Keyboard nav for suggestions
+document.addEventListener('keydown',function(ev){
+  const sug=document.getElementById('title-sug');
+  if(!sug||!sug.classList.contains('show'))return;
+  const items=sug.querySelectorAll('.title-sug');
+  if(!items.length)return;
+  if(ev.key==='ArrowDown'){ev.preventDefault();_sugIdx=Math.min(_sugIdx+1,items.length-1);items.forEach((el,i)=>el.classList.toggle('active',i===_sugIdx))}
+  else if(ev.key==='ArrowUp'){ev.preventDefault();_sugIdx=Math.max(_sugIdx-1,0);items.forEach((el,i)=>el.classList.toggle('active',i===_sugIdx))}
+  else if(ev.key==='Enter'&&_sugIdx>=0){ev.preventDefault();_pickTitle(window._sugTitles[_sugIdx])}
+  else if(ev.key==='Escape'){sug.classList.remove('show');_sugIdx=-1}
+});
+// Close suggestions on blur (with delay for click)
+document.getElementById('f-title').addEventListener('blur',function(){setTimeout(()=>{document.getElementById('title-sug').classList.remove('show')},150)});
+
 function saveEntry(){
   const title=document.getElementById('f-title').value.trim();
   if(!title){document.getElementById('f-title').focus();return}
@@ -1298,6 +1387,7 @@ function saveEntry(){
   saveEntries();
   closeModal();
   renderCats();
+  renderTags();
   renderGrid();
 }
 
@@ -1317,6 +1407,7 @@ function deleteEntry(){
   localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
   closeModal();
   renderCats();
+  renderTags();
   renderGrid();
 }
 
@@ -1325,6 +1416,7 @@ async function syncNow(btn){
   if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true}
   await loadFromSupabase();
   renderCats();
+  renderTags();
   if(btn){btn.textContent='🔄 Sync';btn.disabled=false}
 }
 // Auto-sync when tab gets focus (user switches back)
