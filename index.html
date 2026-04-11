@@ -5417,7 +5417,14 @@ function LP_renderPlan(el){
     html+='</div>';
   }
   html+='</div>';
+  // Preserve search text + scroll position across re-renders
+  const _prevSearch=document.getElementById('lpPlanSearch')?.value||'';
+  const _prevScroll=el.scrollTop;
   el.innerHTML=html;
+  // Restore search, filters, scroll
+  const _si=document.getElementById('lpPlanSearch');if(_si&&_prevSearch){_si.value=_prevSearch;LP_filterPlan()}
+  _lpSyncFilterBtns();_lpApplyTruckFilters();
+  setTimeout(()=>{el.scrollTop=_prevScroll},0);
 }
 
 
