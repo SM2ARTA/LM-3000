@@ -387,7 +387,8 @@ const CAT_META={
 };
 
 const PEOPLE=['All','Anthony','Ashley','Brittany','Diana','Karime','Kyli','Mike','Vlad','Yael'];
-const PEOPLE_COLORS={All:'#4A148C',Anthony:'#E2A336',Ashley:'#D4652F',Brittany:'#3EA660',Diana:'#E76B9A',Karime:'#8B6CC1',Kyli:'#4878D0',Mike:'#3AAFB9',Vlad:'#7B8B99',Yael:'#C8C234'};
+// Colors matched to Outlook Materials Mailbox categories
+const PEOPLE_COLORS={All:'#4A148C',Anthony:'#E2AD46',Ashley:'#75A3D4',Brittany:'#6ABD6E',Diana:'#E891B2',Karime:'#CB7FDE',Kyli:'#5B7EC2',Mike:'#4FBFAD',Vlad:'#8E9FAA',Yael:'#D5CA58'};
 
 let ENTRIES=[];
 let activeCat=null;
@@ -405,16 +406,19 @@ const _SEED_TITLES=new Set([
 ]);
 
 // ── INIT ──
-function init(){
+async function init(){
   // Clear any browser-restored search value
   document.getElementById('search').value='';
-  loadEntries();
+  // Load from localStorage first
+  try{const s=localStorage.getItem('mem-dump');if(s)ENTRIES=JSON.parse(s)}catch(e){}
+  // Then load from Supabase (await so we have data before rendering)
+  await loadFromSupabase();
   // One-time purge of old hardcoded seeds
   const before=ENTRIES.length;
   ENTRIES=ENTRIES.filter(e=>!_SEED_TITLES.has(e.title));
   if(ENTRIES.length<before){
     localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
-    saveToSupabase(); // push cleaned list to Supabase so seeds don't come back
+    saveToSupabase();
   }
   if(ENTRIES.length)_nextId=Math.max(...ENTRIES.map(e=>e.id))+1;
   // Ensure all entries with _raw but no body get formatted
@@ -427,10 +431,6 @@ function init(){
 }
 
 // ── PERSISTENCE ──
-function loadEntries(){
-  try{const s=localStorage.getItem('mem-dump');if(s)ENTRIES=JSON.parse(s)}catch(e){}
-  loadFromSupabase();
-}
 function saveEntries(){
   // Stamp every entry with update timestamp for merge
   ENTRIES.forEach(e=>{if(!e._ts)e._ts=Date.now()});
