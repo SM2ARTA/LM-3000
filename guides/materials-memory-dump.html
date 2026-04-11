@@ -55,6 +55,12 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .cat{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--bd);background:var(--sf);color:var(--ts);transition:all .15s;user-select:none}
 .cat:hover{border-color:var(--pri-b);color:var(--pri)}
 .cat.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.ppl{max-width:1400px;margin:0 auto;padding:6px 32px 0;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.ppl-label{font-size:9px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
+.ppl-chip{padding:4px 10px;border-radius:14px;font-size:10px;font-weight:600;cursor:pointer;border:1.5px solid var(--bd);background:var(--sf);color:var(--ts);transition:all .15s;user-select:none}
+.ppl-chip:hover{opacity:.8}
+.ppl-chip.on{color:#fff}
+.ppl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
 
 /* ── GRID ── */
 .grid{max-width:1400px;margin:0 auto;padding:16px 32px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px}
@@ -244,6 +250,8 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 
 <!-- ═══ CATEGORY CHIPS ═══ -->
 <div class="cats" id="cats"></div>
+<!-- ═══ PERSON CHIPS ═══ -->
+<div class="ppl" id="ppl"></div>
 
 <!-- ═══ CARD GRID ═══ -->
 <div class="grid" id="grid"></div>
@@ -289,6 +297,10 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
         <option value="lesson">💡 Lesson Learnt</option>
         <option value="important">🚨 Important</option>
       </select>
+    </div>
+    <div class="mf">
+      <label>Attention <span style="font-weight:400;text-transform:none">(who needs to know this?)</span></label>
+      <div id="f-attention" style="display:flex;gap:5px;flex-wrap:wrap"></div>
     </div>
     <div class="mf">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -374,8 +386,12 @@ const CAT_META={
   lesson:{label:'Lesson Learnt',icon:'💡',color:'var(--am)'},
 };
 
+const PEOPLE=['All','Anthony','Ashley','Brittany','Diana','Karime','Kyli','Mike','Vlad','Yael'];
+const PEOPLE_COLORS={All:'#4A148C',Anthony:'#E8A020',Ashley:'#D84315',Brittany:'#2E7D32',Diana:'#C2185B',Karime:'#6A1B9A',Kyli:'#1565C0',Mike:'#00838F',Vlad:'#455A64',Yael:'#F9A825'};
+
 let ENTRIES=[];
 let activeCat=null;
+let activePerson=null; // person filter chip
 let _nextId=1;
 
 // No hardcoded seed data — all entries come from Supabase (shared across team)
@@ -404,6 +420,7 @@ function init(){
   // Ensure all entries with _raw but no body get formatted
   ENTRIES.forEach(e=>{if(e._raw&&!e.body)e.body=autoFormat(e._raw)});
   renderCats();
+  renderPeople();
   renderGrid();
   // Load shared AI key from Supabase (decrypt with saved passphrase)
   loadAIKey();
@@ -488,6 +505,20 @@ function renderCats(){
   el.innerHTML=h;
 }
 
+// ── RENDER PEOPLE CHIPS ──
+function renderPeople(){
+  const el=document.getElementById('ppl');
+  let h='<span class="ppl-label">Attention:</span>';
+  h+=`<span class="ppl-chip${activePerson===null?' on':''}" style="${activePerson===null?'background:var(--pri);border-color:var(--pri)':''}" onclick="setPerson(null)">Everyone</span>`;
+  for(const p of PEOPLE){
+    const c=PEOPLE_COLORS[p];
+    const on=activePerson===p;
+    h+=`<span class="ppl-chip${on?' on':''}" style="${on?`background:${c};border-color:${c}`:`border-color:${c}40;color:${c}`}" onclick="setPerson('${p}')"><span class="ppl-dot" style="background:${c}"></span>${p}</span>`;
+  }
+  el.innerHTML=h;
+}
+function setPerson(p){activePerson=p;renderPeople();renderGrid()}
+
 // ── RENDER GRID ──
 function renderGrid(){
   const el=document.getElementById('grid');
@@ -495,6 +526,7 @@ function renderGrid(){
   let items=ENTRIES;
 
   if(activeCat) items=items.filter(e=>e.cat===activeCat);
+  if(activePerson) items=items.filter(e=>e.attention&&(e.attention.includes(activePerson)||e.attention.includes('All')));
   if(q){
     items=items.filter(e=>{
       const hay=[e.title,e.cat,e.body].join(' ').toLowerCase();
@@ -525,7 +557,10 @@ function renderGrid(){
         <div class="card-icon">${m.icon}</div>
         <div class="card-meta">
           <div class="card-title">${esc(e.title)}</div>
-          <span class="card-cat">${m.label}</span>
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:2px">
+            <span class="card-cat">${m.label}</span>
+            ${(e.attention||[]).map(p=>{const c=PEOPLE_COLORS[p]||'#999';return`<span style="font-size:8px;font-weight:600;padding:1px 6px;border-radius:8px;background:${c}18;color:${c}">${p}</span>`}).join('')}
+          </div>
         </div>
       </div>
       <div class="card-body">${e.body}</div>
@@ -981,6 +1016,7 @@ function showAddModal(){
   document.getElementById('edit-id').value='';
   document.getElementById('f-title').value='';
   document.getElementById('f-cat').value='procedure';
+  _selAttention=new Set(['All']);_renderAttChips();
   document.getElementById('f-body').value='';
   document.getElementById('del-btn').style.display='none';
   document.getElementById('modal').classList.add('show');
@@ -994,6 +1030,7 @@ function editEntry(id){
   document.getElementById('edit-id').value=id;
   document.getElementById('f-title').value=e.title;
   document.getElementById('f-cat').value=e.cat;
+  _selAttention=new Set(e.attention||['All']);_renderAttChips();
   // Show raw source if available, otherwise the formatted body (for seed/legacy entries)
   document.getElementById('f-body').value=e._raw||e.body;
   document.getElementById('del-btn').style.display='inline-flex';
@@ -1005,6 +1042,27 @@ function editEntry(id){
 }
 
 function closeModal(){document.getElementById('modal').classList.remove('show')}
+
+// ── ATTENTION CHIPS IN MODAL ──
+let _selAttention=new Set();
+function _renderAttChips(){
+  const el=document.getElementById('f-attention');
+  el.innerHTML=PEOPLE.map(p=>{
+    const c=PEOPLE_COLORS[p];
+    const on=_selAttention.has(p);
+    return`<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:14px;font-size:10px;font-weight:600;cursor:pointer;user-select:none;border:1.5px solid ${on?c:c+'40'};background:${on?c:'transparent'};color:${on?'#fff':c};transition:all .15s" onclick="_toggleAtt('${p}')"><span style="width:7px;height:7px;border-radius:50%;background:${on?'#fff':c}"></span>${p}</span>`;
+  }).join('');
+}
+function _toggleAtt(p){
+  if(p==='All'){
+    if(_selAttention.has('All'))_selAttention.clear();
+    else{_selAttention.clear();_selAttention.add('All')}
+  }else{
+    _selAttention.delete('All');
+    if(_selAttention.has(p))_selAttention.delete(p);else _selAttention.add(p);
+  }
+  _renderAttChips();
+}
 
 // ── VIEW MODAL ──
 let _viewId=null;
@@ -1021,7 +1079,15 @@ function viewEntry(id){
   catEl.textContent=m.label;
   catEl.style.background=e.cat==='important'?'var(--rd-s)':e.cat==='procedure'?'var(--a3-s)':e.cat==='bestpractice'?'var(--gn-s)':'var(--am-s)';
   catEl.style.color=e.cat==='important'?'var(--rd)':e.cat==='procedure'?'var(--a3)':e.cat==='bestpractice'?'var(--gn)':'var(--am)';
-  document.getElementById('view-body').innerHTML=e.body||'<span style="color:var(--tt);font-style:italic">No content</span>';
+  // Attention badges
+  let attHtml='';
+  if(e.attention&&e.attention.length){
+    attHtml='<div style="margin-bottom:12px;display:flex;gap:5px;flex-wrap:wrap">'+e.attention.map(p=>{
+      const c=PEOPLE_COLORS[p]||'var(--tt)';
+      return`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:10px;font-weight:700;background:${c}18;color:${c};border:1px solid ${c}40"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${p}</span>`;
+    }).join('')+'</div>';
+  }
+  document.getElementById('view-body').innerHTML=attHtml+(e.body||'<span style="color:var(--tt);font-style:italic">No content</span>');
   document.getElementById('view-modal').classList.add('show');
 }
 function closeView(){document.getElementById('view-modal').classList.remove('show');_viewId=null}
@@ -1045,15 +1111,16 @@ function saveEntry(){
   const title=document.getElementById('f-title').value.trim();
   if(!title){document.getElementById('f-title').focus();return}
   const cat=document.getElementById('f-cat').value;
+  const attention=[..._selAttention];
   const rawBody=document.getElementById('f-body').value.trim();
   const body=autoFormat(rawBody);
   const now=Date.now();
   const editId=parseInt(document.getElementById('edit-id').value);
   if(editId){
     const e=ENTRIES.find(x=>x.id===editId);
-    if(e){Object.assign(e,{title,cat,body,_raw:rawBody,_ts:now})}
+    if(e){Object.assign(e,{title,cat,attention,body,_raw:rawBody,_ts:now})}
   }else{
-    ENTRIES.push({id:_nextId++,cat,title,body,_raw:rawBody,date:new Date().toISOString().slice(0,10),_ts:now});
+    ENTRIES.push({id:_nextId++,cat,attention,title,body,_raw:rawBody,date:new Date().toISOString().slice(0,10),_ts:now});
   }
   saveEntries();
   closeModal();
