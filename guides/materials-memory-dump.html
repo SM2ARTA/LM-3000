@@ -257,24 +257,18 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
       <label>Title</label>
       <input type="text" id="f-title" placeholder="Short, searchable title">
     </div>
-    <div class="mf-row">
-      <div class="mf">
-        <label>Category</label>
-        <select id="f-cat">
-          <option value="receiving">Receiving</option>
-          <option value="shipping">Shipping</option>
-          <option value="damage">Damage</option>
-          <option value="inventory">Inventory</option>
-          <option value="systems">Systems</option>
-          <option value="customs">Customs</option>
-          <option value="venue">Venue Ops</option>
-          <option value="kitting">Kitting</option>
-        </select>
-      </div>
-      <div class="mf">
-        <label>Icon</label>
-        <input type="text" id="f-icon" placeholder="e.g. 📦" maxlength="4" style="width:60px">
-      </div>
+    <div class="mf">
+      <label>Category</label>
+      <select id="f-cat">
+        <option value="receiving">📦 Receiving</option>
+        <option value="shipping">🚛 Shipping</option>
+        <option value="damage">⚠️ Damage</option>
+        <option value="inventory">📋 Inventory</option>
+        <option value="systems">💻 Systems</option>
+        <option value="customs">📄 Customs</option>
+        <option value="venue">🏟️ Venue Ops</option>
+        <option value="kitting">🧰 Kitting</option>
+      </select>
     </div>
     <div class="mf">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -519,7 +513,7 @@ function renderGrid(){
     const m=CAT_META[e.cat]||{label:e.cat,icon:'📌'};
     h+=`<div class="card cat-${e.cat}" onclick="editEntry(${e.id})">
       <div class="card-head">
-        <div class="card-icon">${e.icon||m.icon}</div>
+        <div class="card-icon">${m.icon}</div>
         <div class="card-meta">
           <div class="card-title">${esc(e.title)}</div>
           <span class="card-cat">${m.label}</span>
@@ -1022,7 +1016,6 @@ function showAddModal(){
   document.getElementById('edit-id').value='';
   document.getElementById('f-title').value='';
   document.getElementById('f-cat').value='receiving';
-  document.getElementById('f-icon').value='';
   document.getElementById('f-body').value='';
   document.getElementById('f-tags').value='';
   document.getElementById('del-btn').style.display='none';
@@ -1037,7 +1030,6 @@ function editEntry(id){
   document.getElementById('edit-id').value=id;
   document.getElementById('f-title').value=e.title;
   document.getElementById('f-cat').value=e.cat;
-  document.getElementById('f-icon').value=e.icon||'';
   // Show raw source if available, otherwise the formatted body (for seed/legacy entries)
   document.getElementById('f-body').value=e._raw||e.body;
   document.getElementById('f-tags').value=(e.tags||[]).join(', ');
@@ -1056,16 +1048,15 @@ function saveEntry(){
   if(!title){document.getElementById('f-title').focus();return}
   const cat=document.getElementById('f-cat').value;
   const rawBody=document.getElementById('f-body').value.trim();
-  const icon=document.getElementById('f-icon').value.trim();
   const body=autoFormat(rawBody); // auto-format plain text into structured HTML
   const tags=document.getElementById('f-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
   const now=Date.now();
   const editId=parseInt(document.getElementById('edit-id').value);
   if(editId){
     const e=ENTRIES.find(x=>x.id===editId);
-    if(e){Object.assign(e,{title,cat,icon,body,_raw:rawBody,tags,_ts:now})}
+    if(e){Object.assign(e,{title,cat,body,_raw:rawBody,tags,_ts:now})}
   }else{
-    ENTRIES.push({id:_nextId++,cat,icon,title,body,_raw:rawBody,tags,date:new Date().toISOString().slice(0,10),_ts:now});
+    ENTRIES.push({id:_nextId++,cat,title,body,_raw:rawBody,tags,date:new Date().toISOString().slice(0,10),_ts:now});
   }
   saveEntries();
   closeModal();
