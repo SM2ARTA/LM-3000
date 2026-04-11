@@ -14519,21 +14519,23 @@ function _fcSaveHandshakes(){
   SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now}).then(({error})=>{if(error)console.warn('HS save error:',error)});
 }
 function _fcGenToken(){return crypto.randomUUID?crypto.randomUUID():(Math.random().toString(36).slice(2)+Date.now().toString(36))}
-async function _fcSendHandshake(fp,row){
+let _fcPendingRows={};// temp store for row data keyed by fp (avoids JSON in onclick)
+async function _fcSendHandshake(fp){
   if(ROLE==='viewer')return;
+  const row=_fcPendingRows[fp];if(!row){console.warn('[HS] No row data for',fp);return}
   const token=_fcGenToken();
   const hs={token,dest:row.dest,cluster:row.cluster,truckId:row.truckId,fp,disp:row.disp,plt:row.plt,skus:row.skus||0,lsr:row.lsr,oor:row.oor,sentAt:new Date().toISOString().slice(0,10),status:'pending',proposedDate:null,note:null,respondedAt:null,locked:false};
   _fcHandshakes[fp]=hs;
-  // Save to Supabase and wait before opening email (receiver needs data available)
   if(SB){
     const now=new Date().toISOString();
     const{error}=await SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now});
     if(error){console.warn('HS save error:',error);alert('Failed to save handshake. Try again.');delete _fcHandshakes[fp];return}
+    console.log('[HS] Saved handshake for',row.truckId,'token:',token);
   }
   const baseUrl=window.location.origin+window.location.pathname.replace(/[^/]*$/,'')+'handshake.html';
   const hsUrl=baseUrl+'?token='+token;
-  const subject=encodeURIComponent('FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')');
-  const body=encodeURIComponent('Hi,\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'—')+'\nOOR: '+(row.oor||'—')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
+  const subject=encodeURIComponent('FF&E Delivery Confirmation \u2014 '+row.truckId+' to '+row.dest+' ('+row.disp+')');
+  const body=encodeURIComponent('Hi,\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'\u2014')+'\nOOR: '+(row.oor||'\u2014')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
   window.open('mailto:?cc=materials@fwc2026.org&subject='+subject+'&body='+body);
   LM_renderForecast(document.getElementById('mn'));
 }
@@ -14738,7 +14740,7 @@ function LM_renderForecast(el){
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${is2Leg?'#1565C0':'var(--bd)'};border-radius:4px;color:${is2Leg?'#1565C0':'var(--tt)'};background:#fff" onchange="_fcSetLegs('${_fp}',parseInt(this.value))"><option value="1"${!is2Leg?' selected':''}>1</option><option value="2"${is2Leg?' selected':''}>2</option></select>`:`<span style="font-size:10px;color:var(--tt)">${is2Leg?'2':'1'}</span>`}</td>
         <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
         <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
-        <td style="text-align:center" onclick="event.stopPropagation()">${(()=>{const hs=_fcHandshakes[r.fp];if(!hs)return ROLE==='admin'?`<button class="rbtn" onclick="_fcSendHandshake('${_fp}',${JSON.stringify({dest:r.dest,cluster:r.cluster,truckId:r.truckId,disp:r.disp,plt:r.plt,skus:r.skus||0,lsr:r.lsr,oor:r.oor}).replace(/"/g,'&quot;')})" style="font-size:9px;padding:2px 8px;color:var(--ac);border-color:var(--ab)">📤 Send</button>`:'—';if(hs.status==='confirmed')return'<span style="font-size:10px;color:var(--gn);font-weight:600" title="Confirmed '+((hs.respondedAt||''))+'">✅</span>';if(hs.status==='reschedule')return'<span style="font-size:9px;color:var(--or);font-weight:600" title="'+(hs.note||'')+'">🔄 '+(hs.proposedDate||'')+'</span>';return'<span style="font-size:9px;color:var(--or)" title="Sent '+(hs.sentAt||'')+'">⏳</span>'})()}</td>
+        <td style="text-align:center" onclick="event.stopPropagation()">${(()=>{_fcPendingRows[r.fp]={dest:r.dest,cluster:r.cluster,truckId:r.truckId,disp:r.disp,plt:r.plt,skus:r.skus||0,lsr:r.lsr,oor:r.oor};const hs=_fcHandshakes[r.fp];const sendBtn=`<button class="rbtn" onclick="_fcSendHandshake('${_fp}')" style="font-size:9px;padding:2px 8px;color:var(--ac);border-color:var(--ab)">📤 Send</button>`;if(!hs)return ROLE==='admin'?sendBtn:'—';const resendBtn=ROLE==='admin'?` <button class="rbtn" onclick="_fcSendHandshake('${_fp}')" style="font-size:8px;padding:1px 5px;color:var(--tt);border-color:var(--bd)" title="Force resend (resets status)">↻</button>`:'';if(hs.status==='confirmed')return'<span style="font-size:10px;color:var(--gn);font-weight:600" title="Confirmed '+(hs.respondedAt||'')+'">✅</span>'+resendBtn;if(hs.status==='reschedule')return'<span style="font-size:9px;color:var(--or);font-weight:600" title="'+(hs.note||'')+'">🔄 '+(hs.proposedDate||'')+'</span>'+resendBtn;return'<span style="font-size:9px;color:var(--or)" title="Sent '+(hs.sentAt||'')+'">⏳</span>'+resendBtn})()}</td>
         <td>${_fmtD(r.disp)}</td>
         <td class="mono" style="text-align:center">${r.transit}d</td>
         <td style="color:var(--gn);font-weight:600">${_fmtD(r.arrDate)}</td>
