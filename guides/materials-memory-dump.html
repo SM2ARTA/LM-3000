@@ -457,14 +457,10 @@ function _mergeEntries(local,remote){
 }
 
 async function saveToSupabase(){
-  const payload=JSON.stringify({val:JSON.stringify(ENTRIES)});
-  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'};
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   try{
-    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}`,{method:'PATCH',headers:hdrs,body:payload});
-    if(!r.ok&&r.status===404){
-      await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-        body:JSON.stringify({id:SB_KEY_ID,val:JSON.stringify(ENTRIES)})});
-    }
+    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+      body:JSON.stringify({id:SB_KEY_ID,val:JSON.stringify(ENTRIES)})});
   }catch(e){console.warn('Supabase save failed:',e)}
 }
 
@@ -792,14 +788,10 @@ async function saveAIKey(){
     _aiShowStatus('Encrypting & saving...');
     const encrypted=await _encrypt(JSON.stringify({provider,key}),passphrase);
 
-    // Save encrypted to Supabase
-    const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'};
-    let r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}`,{method:'PATCH',headers:hdrs,
-      body:JSON.stringify({val:JSON.stringify({encrypted})})});
-    if(!r.ok||r.status===404){
-      await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-        body:JSON.stringify({id:_AI_SB_KEY,val:JSON.stringify({encrypted})})});
-    }
+    // Save encrypted to Supabase (upsert — creates or updates)
+    const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+      body:JSON.stringify({id:_AI_SB_KEY,val:JSON.stringify({encrypted})})});
 
     // Cache plain in localStorage + remember passphrase
     localStorage.setItem('mem-ai-cfg',JSON.stringify({provider,key}));
