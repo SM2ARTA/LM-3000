@@ -3042,49 +3042,7 @@ async function _hsLoadAIConfig(){
 }
 function _hsResetAI(){_hsClearAI();_hsRenderStep()}
 
-// ── SM2ARTA API config (venue contacts for handshake system) ──
-let _sm2artaApiKey='';
-let _sm2artaContacts={};// venue name -> {name, email}
-function _sm2SetKey(key){
-  if(ROLE==='viewer')return;
-  _sm2artaApiKey=(key||'').trim();
-  localStorage.setItem('sm2arta-api-key',_sm2artaApiKey);
-  if(SB){const now=new Date().toISOString();SB.from('shared_state').upsert({id:'sm2arta-config',value:JSON.stringify({apiKey:_sm2artaApiKey}),updated_at:now}).then(r=>{if(r.error)console.warn('SM2ARTA config save failed:',r.error)})}
-}
-async function _sm2LoadConfig(){
-  if(!SB)return;
-  try{
-    const{data}=await SB.from('shared_state').select('value').eq('id','sm2arta-config').single();
-    if(data?.value){const cfg=JSON.parse(data.value);if(cfg.apiKey){_sm2artaApiKey=cfg.apiKey;localStorage.setItem('sm2arta-api-key',cfg.apiKey)}}
-  }catch(e){}
-  if(!_sm2artaApiKey)_sm2artaApiKey=localStorage.getItem('sm2arta-api-key')||'';
-}
-function _parseContact(text){
-  if(!text)return{name:'',email:''};
-  const lines=(text||'').split(/[\n,;]+/).map(l=>l.trim()).filter(Boolean);
-  const email=lines.find(l=>/[^\s@]+@[^\s@]+\.[^\s@]+/.test(l));
-  const emailClean=email?(email.match(/[^\s@]+@[^\s@]+\.[^\s@]+/)||[''])[0]:'';
-  const name=lines.find(l=>l!==email&&!/^\+?\d/.test(l)&&!/@/.test(l))||'';
-  return{name,email:emailClean};
-}
-async function _sm2FetchContacts(){
-  if(!_sm2artaApiKey){console.warn('[SM2ARTA] No API key configured');return}
-  try{
-    const r=await fetch('https://fwc26.smmarta.com/api/bi/venues?length=500',{headers:{Authorization:'Bearer '+_sm2artaApiKey,Accept:'application/json'}});
-    if(!r.ok){console.warn('[SM2ARTA] Venues fetch failed:',r.status);return}
-    const json=await r.json();
-    const rows=Array.isArray(json)?json:(json.data||json.rows||Object.values(json));
-    console.log('[SM2ARTA] API returned',rows.length,'rows, sample:',rows[0]);
-    _sm2artaContacts={};
-    for(const v of rows){const nm=v['Venue name']||v.name||'';const ct=v['Contact']||v.contact||'';if(nm&&ct){_sm2artaContacts[nm]=_parseContact(ct)}}
-    console.log('[SM2ARTA] Loaded contacts for',Object.keys(_sm2artaContacts).length,'venues');
-  }catch(e){console.warn('[SM2ARTA] Fetch error:',e)}
-}
-function _sm2GetContact(venueName){
-  if(_sm2artaContacts[venueName])return _sm2artaContacts[venueName];
-  for(const[k,v]of Object.entries(_sm2artaContacts)){if(k.includes(venueName)||venueName.includes(k))return v}
-  return{name:'',email:''};
-}
+// ── Handshake contact helpers ──
 
 // URL preview — fetch OG meta via proxy
 let _hsUrlDebounce=null;
@@ -8982,7 +8940,6 @@ function enterApp(){
       LM_loadNomOverrides().catch(()=>{}),
       LM_loadClusterTA().catch(()=>{}),
       _hsLoadAIConfig().catch(()=>{}),
-      _sm2LoadConfig().catch(()=>{}),
       _fcLoadHandshakes().catch(()=>{}),
       FA_loadLinked().catch(()=>{}),
       (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{};_fcLeg2Date=v.leg2date||{}}else{_fcLeadMap=v}console.log('[FC] Loaded',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'2-leg trucks')}}catch(e){}})()
@@ -14564,18 +14521,19 @@ function _fcSaveHandshakes(){
 function _fcGenToken(){return crypto.randomUUID?crypto.randomUUID():(Math.random().toString(36).slice(2)+Date.now().toString(36))}
 function _fcSendHandshake(fp,row){
   if(ROLE==='viewer')return;
-  const contact=_sm2GetContact(row.cluster||row.dest);
-  if(!contact.email){alert('No contact email found for '+row.dest+'. Configure SM2ARTA API key and fetch contacts first.');return}
+  const email=prompt('Enter recipient email for '+row.dest+':','');
+  if(!email||!email.includes('@'))return;
+  const name=email.split('@')[0].replace(/[._-]/g,' ');
   const token=_fcGenToken();
+  const contact={name,email:email.trim()};
   const hs={token,dest:row.dest,cluster:row.cluster,truckId:row.truckId,fp,disp:row.disp,plt:row.plt,skus:row.skus||0,lsr:row.lsr,oor:row.oor,contact,sentAt:new Date().toISOString().slice(0,10),status:'pending',proposedDate:null,note:null,respondedAt:null,locked:false};
   _fcHandshakes[fp]=hs;
   _fcSaveHandshakes();
-  // Generate mailto link
   const baseUrl=window.location.origin+window.location.pathname.replace(/[^/]*$/,'')+'handshake.html';
   const hsUrl=baseUrl+'?token='+token;
   const subject=encodeURIComponent('FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')');
-  const body=encodeURIComponent('Hi '+contact.name+',\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'—')+'\nOOR: '+(row.oor||'—')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
-  window.open('mailto:'+contact.email+'?subject='+subject+'&body='+body);
+  const body=encodeURIComponent('Hi,\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'—')+'\nOOR: '+(row.oor||'—')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
+  window.open('mailto:'+email.trim()+'?subject='+subject+'&body='+body);
   LM_renderForecast(document.getElementById('mn'));
 }
 function _fcControl(fp,lead){
@@ -14681,17 +14639,8 @@ function LM_renderForecast(el){
     if(id==='all'){return`<button onclick="if(_fcTypes.size===${_allT.length}){_fcTypes.clear()}else{${_allT.map(t=>`_fcTypes.add('${t}')`).join(';')}};${_re}" style="padding:3px 10px;border-radius:12px;border:1px solid ${_tAllOn?'var(--ac)':'var(--bd)'};background:${_tAllOn?'var(--as)':'#fff'};color:${_tAllOn?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`}
     const on=_fcTypes.has(id);return`<button onclick="if(_fcTypes.has('${id}'))_fcTypes.delete('${id}');else _fcTypes.add('${id}');if(!_fcTypes.size){${_allT.map(t=>`_fcTypes.add('${t}')`).join(';')}};${_re}" style="padding:3px 10px;border-radius:12px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`};
   let h='<div class="fin" style="padding:16px">';
-  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-    <h2 style="font-size:16px;font-weight:700;margin:0">📋 LM Truck Forecast</h2>
-    ${ROLE==='admin'?`<button onclick="document.getElementById('fcSmCfg').style.display=document.getElementById('fcSmCfg').style.display==='none'?'flex':'none'" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--tt)" title="Handshake settings">⚙️</button>`:''}
-  </div>
-  <div id="fcSmCfg" style="display:none;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:var(--bg);border-radius:6px;border:1px solid var(--bd)">
-    <span style="font-size:10px;color:var(--ts);white-space:nowrap">SM2ARTA API Key</span>
-    <input type="password" value="${_sm2artaApiKey}" placeholder="Bearer token" style="font-size:10px;font-family:var(--fm);padding:3px 6px;border:1px solid var(--bd);border-radius:4px;color:var(--tp);width:200px" onchange="_sm2SetKey(this.value.trim())">
-    <button class="rbtn" onclick="_sm2FetchContacts().then(()=>alert('Loaded '+Object.keys(_sm2artaContacts).length+' contacts'))" style="font-size:10px">📡 Fetch Contacts</button>
-    <span style="font-size:9px;color:var(--tt)">${Object.keys(_sm2artaContacts).length?Object.keys(_sm2artaContacts).length+' contacts loaded':'No contacts loaded'}</span>
-  </div>
-  <p style="font-size:10px;color:var(--tt);margin:0 0 12px">All LM trucks across all countries — grouped by dispatch week</p>`;
+  h+=`<h2 style="font-size:16px;font-weight:700;margin:0 0 4px">📋 LM Truck Forecast</h2>`;
+  h+=`<p style="font-size:10px;color:var(--tt);margin:0 0 12px">All LM trucks across all countries — grouped by dispatch week</p>`;
   // Country chips
   h+=`<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">`;
   h+=_cChip('all','All',allRows.length,'🌍');
