@@ -14626,8 +14626,12 @@ function LM_renderForecast(el){
     if(LM_excluded.has(cd.id)||!cd.biK||!cd.items)return;
     const _vn=VN.find(vn=>vn.name===v);
     const _cCountry=_vn?(vcIsCAN(_vn.cluster)?'CAN':(vcIsMEX(_vn.cluster)?'MEX':'USA')):(vcIsCAN(v)?'CAN':(vcIsMEX(v)?'MEX':'USA'));
+    // Include merged items from excluded freight trucks (via _cortWithMerge)
+    const cwm=(window._cortWithMerge||[]).find(x=>x.id===cd.id);
     const _cItems=(cd.items||[]).map(it=>({sku:it.sku,name:it.nm||'',qty:it.qty||0,fa:false}));
-    allRows.push({dest:cd.destDisplay||clDisp(v),cluster:v,truckId:cd.id,fp:'CORT:'+cd.id,disp:cd.biK,transit:0,arrDate:cd.biK,plt:0,skus:(cd.items||[]).length,fnKits:0,osKits:0,dispatched:false,firstBI:cd.biK,buffer:0,lsr:'',oor:'',isCort:true,asmCount:0,dispLoc:'CORT',clusterLabel:'',lateCount:0,vtype:'cort',country:_cCountry,cargo:0,faCount:0,faTruck:false,items:_cItems});
+    if(cwm&&cwm._mergedItems){for(const mi of cwm._mergedItems){const n=NOM[mi.sku];const isKit=n?._kitNom||(mi.sku.startsWith('FNKIT')||mi.sku.startsWith('OSKIT'));_cItems.push({sku:mi.sku,name:mi.nm||n?.name||'',qty:mi.qty||0,fa:false,merged:true,fromTruck:mi.truckId,isKit})}}
+    const totalSkus=(cd.items||[]).length+(cwm?._mergedItems?.length||0);
+    allRows.push({dest:cd.destDisplay||clDisp(v),cluster:v,truckId:cd.id,fp:'CORT:'+cd.id,disp:cd.biK,transit:0,arrDate:cd.biK,plt:0,skus:totalSkus,fnKits:0,osKits:0,dispatched:false,firstBI:cd.biK,buffer:0,lsr:'',oor:'',isCort:true,asmCount:0,dispLoc:'CORT',clusterLabel:'',lateCount:0,vtype:'cort',country:_cCountry,cargo:0,faCount:0,faTruck:false,items:_cItems});
   })}
   // STP deliveries
   for(const del of LM_STP_DELIVERIES){
