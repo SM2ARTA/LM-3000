@@ -14499,7 +14499,7 @@ function LM_renderFAGoods(el){
 
 // ── LM FORECAST TAB ──
 let _fcCountries=new Set(['USA','CAN','MEX']);// multi-select country filter
-let _fcTypes=new Set(['cluster','stadium','other']);// multi-select type filter
+let _fcTypes=new Set(['cluster','stadium','other','cort','stp']);// multi-select type filter
 const _FC_STAFF=['Ashley','Kyli','Yael','Brittany'];
 let _fcLeadMap={};// fingerprint → staffName (persisted, stable across rebuilds)
 let _fcLegMap={};// fingerprint → 2 (2-leg truck) — absent = 1 leg
@@ -14619,6 +14619,24 @@ function LM_renderForecast(el){
   VN.filter(v=>vcIsCAN(v.cluster)).forEach(v=>{const _cl=(v.cluster||'').replace(/^CAN\s*/i,'').split(/\s*\/\s*/)[0].trim();_addTrucks(v.name,PLAN_CACHE[v.name],'CAN',_cl?_cl+' Warehouse':'Canada Warehouse')});
   // MEX trucks
   VN.filter(v=>vcIsMEX(v.cluster)).forEach(v=>{const _cl=(v.cluster||'').replace(/^MEX\s*/i,'').split(/\s*\/\s*/)[0].trim();_addTrucks(v.name,PLAN_CACHE[v.name],'MEX',_cl?_cl+' Warehouse':'Mexico Warehouse')});
+  // CORT deliveries
+  const _cortSeen=new Set();
+  for(const v in CORT_CACHE){CORT_CACHE[v].forEach(cd=>{
+    if(_cortSeen.has(cd.id)||_seen.has(cd.id))return;_cortSeen.add(cd.id);
+    if(LM_excluded.has(cd.id))return;
+    const _cCountry=vcIsCAN(v)?'CAN':(vcIsMEX(v)?'MEX':'USA');
+    const _cItems=cd.items.map(it=>({sku:it.sku,name:it.nm||'',qty:it.qty||0,fa:false}));
+    allRows.push({dest:cd.destDisplay||clDisp(v),cluster:v,truckId:cd.id,fp:'CORT:'+cd.id,disp:cd.biK||'',transit:0,arrDate:cd.biK||'',plt:0,skus:cd.items.length,fnKits:0,osKits:0,dispatched:false,firstBI:cd.biK||'',buffer:0,lsr:'',oor:'',isCort:true,asmCount:0,dispLoc:'CORT',clusterLabel:'',lateCount:0,vtype:'cort',country:_cCountry,cargo:0,faCount:0,faTruck:false,items:_cItems});
+  })}
+  // STP deliveries
+  for(const del of LM_STP_DELIVERIES){
+    const truck=LM_STP_TRUCKS[del.id];if(!truck||!truck.items.length)continue;
+    if(_seen.has(del.id))continue;
+    const _sVn=VN.find(vn=>vn.name===del.venue);
+    const _sCountry=_sVn?(vcIsCAN(_sVn.cluster)?'CAN':(vcIsMEX(_sVn.cluster)?'MEX':'USA')):'USA';
+    const _sItems=truck.items.map(it=>({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',qty:it.loadQty||0,fa:false}));
+    allRows.push({dest:clDisp(del.venue),cluster:del.venue,truckId:del.id,fp:'STP:'+del.id,disp:del.date||'',transit:0,arrDate:del.date||'',plt:truck.pallets||0,skus:truck.items.length,fnKits:0,osKits:0,dispatched:false,firstBI:del.date||'',buffer:0,lsr:'',oor:'',isCort:false,asmCount:0,dispLoc:'Staples Direct',clusterLabel:'',lateCount:0,vtype:'stp',country:_sCountry,cargo:0,faCount:0,faTruck:false,items:_sItems});
+  }
   allRows.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId));
   // Apply country + type filters
   let filtered=allRows.filter(r=>_fcCountries.has(r.country)&&_fcTypes.has(r.vtype));
@@ -14629,7 +14647,7 @@ function LM_renderForecast(el){
   const cntUSA=allRows.filter(r=>r.country==='USA').length,cntCAN=allRows.filter(r=>r.country==='CAN').length,cntMEX=allRows.filter(r=>r.country==='MEX').length;
   // Type counts (from country-filtered set)
   const _cfRows=allRows.filter(r=>_fcCountries.has(r.country));
-  const cntCluster=_cfRows.filter(r=>r.vtype==='cluster').length,cntStadium=_cfRows.filter(r=>r.vtype==='stadium').length,cntOther=_cfRows.filter(r=>r.vtype==='other').length;
+  const cntCluster=_cfRows.filter(r=>r.vtype==='cluster').length,cntStadium=_cfRows.filter(r=>r.vtype==='stadium').length,cntOther=_cfRows.filter(r=>r.vtype==='other').length,cntCort=_cfRows.filter(r=>r.vtype==='cort').length,cntStp=_cfRows.filter(r=>r.vtype==='stp').length;
   // Chip builders
   const _allC=['USA','CAN','MEX'].filter(c=>allRows.some(r=>r.country===c));
   const _allT=['cluster','stadium','other'].filter(t=>_cfRows.some(r=>r.vtype===t));
@@ -14658,6 +14676,8 @@ function LM_renderForecast(el){
   if(cntCluster)h+=_tChip('cluster','Clusters',cntCluster);
   if(cntStadium)h+=_tChip('stadium','Stadiums',cntStadium);
   if(cntOther)h+=_tChip('other','Other',cntOther);
+  if(cntCort)h+=_tChip('cort','CORT',cntCort);
+  if(cntStp)h+=_tChip('stp','Staples',cntStp);
   h+=`</div>`;
   // KPI summary — truck count includes Leg 2 splits
   const leg2Count=filtered.filter(r=>_fcLegMap[r.fp]===2).length;
@@ -14737,7 +14757,7 @@ function LM_renderForecast(el){
       h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
         <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
         <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort&&r.vtype!=='stadium'&&r.clusterLabel?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT Cluster</span>':(r.isCort&&r.vtype!=='stadium'?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':'')+(r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':'')}</td>
-        <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${legLabel}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
+        <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${r.vtype==='cort'?' <span style="font-size:8px;font-weight:700;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 4px;border-radius:3px">CORT</span>':''}${r.vtype==='stp'?' <span style="font-size:8px;font-weight:700;color:#EF6C00;background:#FFF8F0;border:1px solid #FFCC80;padding:1px 4px;border-radius:3px">STP</span>':''}${legLabel}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${is2Leg?'#1565C0':'var(--bd)'};border-radius:4px;color:${is2Leg?'#1565C0':'var(--tt)'};background:#fff" onchange="_fcSetLegs('${_fp}',parseInt(this.value))"><option value="1"${!is2Leg?' selected':''}>1</option><option value="2"${is2Leg?' selected':''}>2</option></select>`:`<span style="font-size:10px;color:var(--tt)">${is2Leg?'2':'1'}</span>`}</td>
         <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
         <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
