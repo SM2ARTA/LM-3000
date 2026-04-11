@@ -442,11 +442,14 @@ function saveEntries(){
 async function loadFromSupabase(){
   try{
     const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}&select=val`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
-    if(!r.ok)return;
+    if(!r.ok){console.warn('Supabase fetch failed:',r.status);return}
     const d=await r.json();
-    if(!d.length||!d[0].val)return;
-    const remote=typeof d[0].val==='string'?JSON.parse(d[0].val):d[0].val;
-    if(!Array.isArray(remote))return;
+    if(!d.length||!d[0].val){console.warn('Supabase: no data for',SB_KEY_ID);return}
+    // Handle double-stringified val
+    let raw=d[0].val;
+    while(typeof raw==='string'){try{raw=JSON.parse(raw)}catch(e){break}}
+    const remote=Array.isArray(raw)?raw:[];
+    if(!remote.length){console.warn('Supabase: empty entries array');return}
 
     // Merge: union of local + remote, newest _ts wins per ID
     let merged=_mergeEntries(ENTRIES,remote);
