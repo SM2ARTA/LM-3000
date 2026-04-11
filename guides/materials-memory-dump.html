@@ -142,6 +142,31 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .m-btn.primary{background:var(--pri);color:#fff;border-color:var(--pri)}
 .m-btn.danger{background:var(--rd);color:#fff;border-color:var(--rd)}
 
+/* ── VIEW MODAL ── */
+.view-modal{background:var(--sf);border-radius:14px;width:820px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:32px 36px}
+.view-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
+.view-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.view-title{font-size:20px;font-weight:800;line-height:1.3;margin-bottom:4px}
+.view-cat{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:3px 10px;border-radius:10px;display:inline-block}
+.view-body{font-size:13px;line-height:1.7;color:var(--ts);padding:16px 0;border-top:1px solid var(--bd)}
+.view-body b{color:var(--tp)}
+.view-actions{display:flex;gap:10px;justify-content:flex-end;padding-top:16px;border-top:1px solid var(--bd)}
+
+/* View modal inherits card-body styles for lists/flows/callouts */
+.view-body ul,.view-body ol{margin:6px 0;padding:0;list-style:none}
+.view-body ol{counter-reset:steps}
+.view-body ol li{counter-increment:steps;padding:5px 0 5px 32px;position:relative;border-bottom:1px solid #F0F0F4;font-size:13px;line-height:1.6}
+.view-body ol li:last-child{border-bottom:none}
+.view-body ol li::before{content:counter(steps);position:absolute;left:0;top:4px;width:22px;height:22px;border-radius:50%;background:var(--a3-s);color:var(--a3);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:var(--fm)}
+.view-body ul li{padding:4px 0 4px 18px;position:relative;border-bottom:1px solid #F0F0F4;font-size:13px;line-height:1.6}
+.view-body ul li:last-child{border-bottom:none}
+.view-body ul li::before{content:'';position:absolute;left:2px;top:12px;width:7px;height:7px;border-radius:50%;background:var(--a4)}
+.view-body code{font-family:var(--fm);font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px;font-weight:600}
+.view-body .co{font-size:12px}
+.view-body .flow-step{font-size:11px;padding:6px 14px}
+.view-body .mini-tbl{font-size:12px}
+.view-body .mini-tbl td,.view-body .mini-tbl th{padding:5px 8px}
+
 /* ── RESPONSIVE ── */
 @media(max-width:600px){
   .top{padding:12px 16px}
@@ -222,6 +247,26 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 
 <!-- ═══ CARD GRID ═══ -->
 <div class="grid" id="grid"></div>
+
+<!-- ═══ VIEW MODAL ═══ -->
+<div class="modal-bg" id="view-modal">
+  <div class="view-modal">
+    <div class="view-head">
+      <div class="view-icon" id="view-icon"></div>
+      <div style="flex:1;min-width:0">
+        <div class="view-title" id="view-title"></div>
+        <span class="view-cat" id="view-cat"></span>
+      </div>
+      <button type="button" onclick="closeView()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--tt);padding:0 2px;line-height:1" title="Close">&times;</button>
+    </div>
+    <div class="view-body" id="view-body"></div>
+    <div class="view-actions">
+      <button class="m-btn" onclick="closeView()">Close</button>
+      <button class="m-btn danger" id="view-del-btn" onclick="viewDelete()">Delete</button>
+      <button class="m-btn primary" id="view-edit-btn" onclick="viewEdit()">Edit</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ ADD/EDIT MODAL ═══ -->
 <div class="modal-bg" id="modal">
@@ -475,7 +520,7 @@ function renderGrid(){
   let h='';
   for(const e of items){
     const m=CAT_META[e.cat]||{label:e.cat,icon:'📌'};
-    h+=`<div class="card cat-${e.cat}" onclick="editEntry(${e.id})">
+    h+=`<div class="card cat-${e.cat}" onclick="viewEntry(${e.id})">
       <div class="card-head">
         <div class="card-icon">${m.icon}</div>
         <div class="card-meta">
@@ -961,6 +1006,41 @@ function editEntry(id){
 
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 
+// ── VIEW MODAL ──
+let _viewId=null;
+function viewEntry(id){
+  const e=ENTRIES.find(x=>x.id===id);
+  if(!e)return;
+  _viewId=id;
+  const m=CAT_META[e.cat]||{label:e.cat,icon:'📌'};
+  document.getElementById('view-icon').textContent=m.icon;
+  document.getElementById('view-icon').className='view-icon';
+  document.getElementById('view-icon').style.background=e.cat==='important'?'var(--rd-s)':e.cat==='procedure'?'var(--a3-s)':e.cat==='bestpractice'?'var(--gn-s)':'var(--am-s)';
+  document.getElementById('view-title').textContent=e.title;
+  const catEl=document.getElementById('view-cat');
+  catEl.textContent=m.label;
+  catEl.style.background=e.cat==='important'?'var(--rd-s)':e.cat==='procedure'?'var(--a3-s)':e.cat==='bestpractice'?'var(--gn-s)':'var(--am-s)';
+  catEl.style.color=e.cat==='important'?'var(--rd)':e.cat==='procedure'?'var(--a3)':e.cat==='bestpractice'?'var(--gn)':'var(--am)';
+  document.getElementById('view-body').innerHTML=e.body||'<span style="color:var(--tt);font-style:italic">No content</span>';
+  document.getElementById('view-modal').classList.add('show');
+}
+function closeView(){document.getElementById('view-modal').classList.remove('show');_viewId=null}
+function viewEdit(){closeView();if(_viewId)editEntry(_viewId)}
+function viewDelete(){
+  if(!_viewId)return;
+  if(!confirm('Delete this entry?'))return;
+  const e=ENTRIES.find(x=>x.id===_viewId);
+  if(e){e._deleted=true;e._ts=Date.now()}
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+  fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+    body:JSON.stringify({id:SB_KEY_ID,val:JSON.stringify(ENTRIES)})}).catch(()=>{});
+  ENTRIES=ENTRIES.filter(x=>!x._deleted);
+  localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
+  closeView();
+  renderCats();
+  renderGrid();
+}
+
 function saveEntry(){
   const title=document.getElementById('f-title').value.trim();
   if(!title){document.getElementById('f-title').focus();return}
@@ -1014,7 +1094,7 @@ document.addEventListener('visibilitychange',()=>{
 
 // ── KEYBOARD ──
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape')closeModal();
+  if(e.key==='Escape'){closeView();closeModal()}
   if(e.key==='/'&&!document.querySelector('.modal-bg.show')&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
     e.preventDefault();document.getElementById('search').focus();
   }
