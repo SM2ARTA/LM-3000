@@ -3076,7 +3076,7 @@ async function _sm2FetchContacts(){
     const rows=Array.isArray(json)?json:(json.data||json.rows||Object.values(json));
     console.log('[SM2ARTA] API returned',rows.length,'rows, sample:',rows[0]);
     _sm2artaContacts={};
-    for(const v of rows){if(v.name&&v.contact){_sm2artaContacts[v.name]=_parseContact(v.contact)}}
+    for(const v of rows){const nm=v['Venue name']||v.name||'';const ct=v['Contact']||v.contact||'';if(nm&&ct){_sm2artaContacts[nm]=_parseContact(ct)}}
     console.log('[SM2ARTA] Loaded contacts for',Object.keys(_sm2artaContacts).length,'venues');
   }catch(e){console.warn('[SM2ARTA] Fetch error:',e)}
 }
