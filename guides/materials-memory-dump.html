@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Materials Memory Dump — FF&E Quick Reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --pri:#4A148C;--pri-s:#F3E5F5;--pri-b:#CE93D8;
+  --a3:#304FFE;--a3-s:#E8EAF6;--a3-b:#8C9EFF;
+  --a4:#00897B;--a4-s:#E0F2F1;--a4-b:#80CBC4;
+  --sec:#751312;--sec-s:#FCE4EC;--sec-b:#EF9A9A;
+  --rd:#C62A2F;--rd-s:#FFEBEE;--rd-b:#EF9A9A;
+  --am:#E65100;--am-s:#FFF3E0;--am-b:#FFB74D;
+  --gn:#12804A;--gn-s:#E8F5E9;--gn-b:#81C784;
+  --tp:#1A1A2E;--ts:#5A5A7A;--tt:#9A9AB0;
+  --bg:#F5F5FA;--sf:#FFF;--bd:#E0E0E8;
+  --fd:'Noto Sans',sans-serif;--fm:'IBM Plex Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh}
+
+/* ── HEADER BAR ── */
+.top{background:var(--sf);border-bottom:2px solid var(--bd);padding:16px 32px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.top-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-icon{font-size:26px}
+.logo-text{font-size:14px;font-weight:800;letter-spacing:-.3px;color:var(--pri)}
+.logo-sub{font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--tt)}
+.search-box{flex:1;max-width:480px;position:relative}
+.search-box input{width:100%;padding:9px 14px 9px 36px;border:2px solid var(--bd);border-radius:10px;font-size:13px;font-family:var(--fd);outline:none;background:var(--bg);transition:all .2s}
+.search-box input:focus{border-color:var(--pri);background:var(--sf);box-shadow:0 0 0 3px rgba(74,20,140,.1)}
+.search-box input::placeholder{color:var(--tt)}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--tt);pointer-events:none}
+.stats{font-size:11px;color:var(--tt);font-weight:600;font-family:var(--fm);flex-shrink:0;margin-left:auto}
+.add-btn{padding:8px 18px;border-radius:8px;border:2px solid var(--pri-b);background:var(--pri-s);color:var(--pri);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fd);transition:all .2s;flex-shrink:0}
+.add-btn:hover{background:var(--pri);color:#fff;border-color:var(--pri)}
+
+/* ── CATEGORY CHIPS ── */
+.cats{max-width:1400px;margin:0 auto;padding:12px 32px 0;display:flex;gap:6px;flex-wrap:wrap}
+.cat{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--bd);background:var(--sf);color:var(--ts);transition:all .15s;user-select:none}
+.cat:hover{border-color:var(--pri-b);color:var(--pri)}
+.cat.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+
+/* ── GRID ── */
+.grid{max-width:1400px;margin:0 auto;padding:16px 32px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px}
+
+/* ── CARD ── */
+.card{background:var(--sf);border:1.5px solid var(--bd);border-radius:12px;padding:0;overflow:hidden;transition:all .2s;cursor:pointer;position:relative}
+.card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);transform:translateY(-1px);border-color:var(--pri-b)}
+.card-head{padding:14px 16px 10px;display:flex;align-items:flex-start;gap:10px}
+.card-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.card-meta{flex:1;min-width:0}
+.card-title{font-size:13px;font-weight:700;line-height:1.3;margin-bottom:2px}
+.card-cat{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:2px 8px;border-radius:10px;display:inline-block}
+.card-body{padding:0 16px 14px;font-size:11.5px;line-height:1.6;color:var(--ts)}
+.card-body b{color:var(--tp);font-weight:700}
+.card-tags{padding:0 16px 12px;display:flex;gap:4px;flex-wrap:wrap}
+.card-tag{font-size:9px;font-weight:600;padding:2px 8px;border-radius:4px;background:var(--bg);color:var(--tt);font-family:var(--fm)}
+
+/* ── FLOW DIAGRAMS ── */
+.flow{display:flex;align-items:center;gap:0;margin:10px 0;flex-wrap:wrap;row-gap:6px}
+.flow-pair{display:inline-flex;align-items:center;flex-shrink:0}
+.flow-step{background:var(--bg);border:1.5px solid var(--bd);border-radius:8px;padding:5px 12px;font-size:10px;font-weight:700;text-align:center;white-space:nowrap;letter-spacing:.2px}
+.flow-arr{color:var(--tt);font-size:10px;padding:0 4px;flex-shrink:0;font-family:var(--fm)}
+.flow-step.hi{border-color:var(--pri-b);background:var(--pri-s);color:var(--pri)}
+.flow-step.ok{border-color:var(--gn-b);background:var(--gn-s);color:var(--gn)}
+.flow-step.warn{border-color:var(--am-b);background:var(--am-s);color:var(--am)}
+.flow-step.bad{border-color:var(--rd-b);background:var(--rd-s);color:var(--rd)}
+
+/* ── INLINE TABLE ── */
+.mini-tbl{width:100%;border-collapse:collapse;margin:6px 0;font-size:10px}
+.mini-tbl th{text-align:left;padding:3px 6px;font-size:9px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--bd);background:var(--bg)}
+.mini-tbl td{padding:3px 6px;border-bottom:1px solid #F0F0F4}
+.mini-tbl tr:last-child td{border-bottom:none}
+.mini-tbl .mono{font-family:var(--fm);font-weight:600;font-size:10px}
+
+/* ── CALLOUT BOXES ── */
+.co{border-radius:6px;padding:6px 10px;font-size:10.5px;margin:6px 0;line-height:1.5}
+.co-r{background:var(--rd-s);border-left:3px solid var(--rd);color:#8B1A1A}
+.co-g{background:var(--gn-s);border-left:3px solid var(--gn);color:#1B5E20}
+.co-a{background:var(--am-s);border-left:3px solid var(--am);color:#BF360C}
+.co-b{background:var(--a3-s);border-left:3px solid var(--a3);color:#1A237E}
+.co-p{background:var(--pri-s);border-left:3px solid var(--pri);color:var(--pri)}
+
+/* ── CATEGORY COLORS ── */
+.cat-receiving .card-icon{background:var(--gn-s);color:var(--gn)}
+.cat-receiving .card-cat{background:var(--gn-s);color:var(--gn)}
+.cat-receiving{border-left:4px solid var(--gn)}
+
+.cat-shipping .card-icon{background:var(--a3-s);color:var(--a3)}
+.cat-shipping .card-cat{background:var(--a3-s);color:var(--a3)}
+.cat-shipping{border-left:4px solid var(--a3)}
+
+.cat-damage .card-icon{background:var(--rd-s);color:var(--rd)}
+.cat-damage .card-cat{background:var(--rd-s);color:var(--rd)}
+.cat-damage{border-left:4px solid var(--rd)}
+
+.cat-inventory .card-icon{background:var(--pri-s);color:var(--pri)}
+.cat-inventory .card-cat{background:var(--pri-s);color:var(--pri)}
+.cat-inventory{border-left:4px solid var(--pri)}
+
+.cat-systems .card-icon{background:var(--a4-s);color:var(--a4)}
+.cat-systems .card-cat{background:var(--a4-s);color:var(--a4)}
+.cat-systems{border-left:4px solid var(--a4)}
+
+.cat-customs .card-icon{background:var(--am-s);color:var(--am)}
+.cat-customs .card-cat{background:var(--am-s);color:var(--am)}
+.cat-customs{border-left:4px solid var(--am)}
+
+.cat-venue .card-icon{background:var(--sec-s);color:var(--sec)}
+.cat-venue .card-cat{background:var(--sec-s);color:var(--sec)}
+.cat-venue{border-left:4px solid var(--sec)}
+
+.cat-kitting .card-icon{background:#E3F2FD;color:#1565C0}
+.cat-kitting .card-cat{background:#E3F2FD;color:#1565C0}
+.cat-kitting{border-left:4px solid #1565C0}
+
+/* ── EXPANDED CARD ── */
+.card.expanded{grid-column:1/-1;max-width:820px}
+.card.expanded .card-body{max-height:none}
+
+/* ── EMPTY STATE ── */
+.empty{text-align:center;padding:60px 20px;color:var(--tt);grid-column:1/-1}
+.empty-icon{font-size:48px;margin-bottom:12px;opacity:.5}
+.empty-text{font-size:14px;font-weight:600}
+.empty-sub{font-size:12px;margin-top:4px}
+
+/* ── ADD MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(26,26,46,.5);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-bg.show{display:flex}
+.modal{background:var(--sf);border-radius:14px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:28px}
+.modal h2{font-size:18px;font-weight:800;margin-bottom:4px;color:var(--pri)}
+.modal .msub{font-size:12px;color:var(--ts);margin-bottom:20px}
+.mf{margin-bottom:14px}
+.mf label{display:block;font-size:11px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.mf input,.mf select,.mf textarea{width:100%;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;font-family:var(--fd);outline:none;transition:border-color .2s}
+.mf input:focus,.mf select:focus,.mf textarea:focus{border-color:var(--pri)}
+.mf textarea{resize:vertical;min-height:80px;line-height:1.5}
+.mf-row{display:flex;gap:12px}.mf-row>*{flex:1}
+.mf .hint{font-size:10px;color:var(--tt);margin-top:3px}
+.m-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.m-btn{padding:9px 22px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fd);border:1.5px solid var(--bd);background:var(--sf);color:var(--ts);transition:all .15s}
+.m-btn:hover{opacity:.85}
+.m-btn.primary{background:var(--pri);color:#fff;border-color:var(--pri)}
+.m-btn.danger{background:var(--rd);color:#fff;border-color:var(--rd)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:600px){
+  .top{padding:12px 16px}
+  .cats{padding:8px 16px 0}
+  .grid{padding:12px 16px 40px;grid-template-columns:1fr}
+  .top-inner{gap:8px}
+  .search-box{max-width:none;order:10;width:100%}
+  .stats{display:none}
+}
+
+/* ── CONTENT FORMATTING INSIDE BODY ── */
+.card-body ul,.card-body ol{margin:6px 0;padding:0;list-style:none}
+.card-body ol{counter-reset:steps}
+.card-body ol li{counter-increment:steps;padding:4px 0 4px 28px;position:relative;border-bottom:1px solid #F0F0F4;font-size:11px;line-height:1.5}
+.card-body ol li:last-child{border-bottom:none}
+.card-body ol li::before{content:counter(steps);position:absolute;left:0;top:3px;width:20px;height:20px;border-radius:50%;background:var(--pri-s);color:var(--pri);font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:var(--fm)}
+.card-body ul li{padding:3px 0 3px 16px;position:relative;border-bottom:1px solid #F0F0F4;font-size:11px;line-height:1.5}
+.card-body ul li:last-child{border-bottom:none}
+.card-body ul li::before{content:'';position:absolute;left:2px;top:10px;width:6px;height:6px;border-radius:50%;background:var(--a4)}
+.card-body code{font-family:var(--fm);font-size:10px;background:var(--bg);padding:1px 5px;border-radius:3px;font-weight:600}
+
+/* ── Category-specific list accent colors ── */
+.cat-receiving .card-body ol li::before{background:var(--gn-s);color:var(--gn)}
+.cat-receiving .card-body ul li::before{background:var(--gn)}
+.cat-shipping .card-body ol li::before{background:var(--a3-s);color:var(--a3)}
+.cat-shipping .card-body ul li::before{background:var(--a3)}
+.cat-damage .card-body ol li::before{background:var(--rd-s);color:var(--rd)}
+.cat-damage .card-body ul li::before{background:var(--rd)}
+.cat-inventory .card-body ol li::before{background:var(--pri-s);color:var(--pri)}
+.cat-inventory .card-body ul li::before{background:var(--pri)}
+.cat-customs .card-body ol li::before{background:var(--am-s);color:var(--am)}
+.cat-customs .card-body ul li::before{background:var(--am)}
+.cat-kitting .card-body ol li::before{background:#E3F2FD;color:#1565C0}
+.cat-kitting .card-body ul li::before{background:#1565C0}
+
+/* ── Preview panel list styling (mirrors card-body) ── */
+#f-preview ul,#f-preview ol{margin:6px 0;padding:0;list-style:none}
+#f-preview ol{counter-reset:steps}
+#f-preview ol li{counter-increment:steps;padding:4px 0 4px 28px;position:relative;border-bottom:1px solid #E8E8EE;font-size:11px}
+#f-preview ol li:last-child{border-bottom:none}
+#f-preview ol li::before{content:counter(steps);position:absolute;left:0;top:3px;width:20px;height:20px;border-radius:50%;background:var(--pri-s);color:var(--pri);font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:var(--fm)}
+#f-preview ul li{padding:3px 0 3px 16px;position:relative;border-bottom:1px solid #E8E8EE;font-size:11px}
+#f-preview ul li:last-child{border-bottom:none}
+#f-preview ul li::before{content:'';position:absolute;left:2px;top:10px;width:6px;height:6px;border-radius:50%;background:var(--a4)}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="top">
+  <div class="top-inner">
+    <div class="logo">
+      <span class="logo-icon">🧠</span>
+      <div>
+        <div class="logo-text">Materials Memory Dump</div>
+        <div class="logo-sub">FF&E Quick Reference</div>
+      </div>
+    </div>
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search" placeholder="Search by keyword, SKU, scenario..." oninput="filterCards()">
+    </div>
+    <div class="stats" id="stats"></div>
+    <button class="add-btn" style="background:var(--a4-s);color:var(--a4);border-color:var(--a4-b)" onclick="syncNow(this)" title="Pull latest from team">🔄 Sync</button>
+    <button class="add-btn" onclick="showAddModal()">+ New Entry</button>
+  </div>
+</div>
+
+<!-- ═══ CATEGORY CHIPS ═══ -->
+<div class="cats" id="cats"></div>
+
+<!-- ═══ CARD GRID ═══ -->
+<div class="grid" id="grid"></div>
+
+<!-- ═══ ADD/EDIT MODAL ═══ -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h2 id="modal-title" style="margin:0">New Memory Entry</h2>
+      <button type="button" onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--tt);padding:0 2px;line-height:1" title="Close">&times;</button>
+    </div>
+    <div class="msub">Document a case so the whole team benefits next time</div>
+    <input type="hidden" id="edit-id">
+    <div class="mf">
+      <label>Title</label>
+      <input type="text" id="f-title" placeholder="Short, searchable title">
+    </div>
+    <div class="mf-row">
+      <div class="mf">
+        <label>Category</label>
+        <select id="f-cat">
+          <option value="receiving">Receiving</option>
+          <option value="shipping">Shipping</option>
+          <option value="damage">Damage</option>
+          <option value="inventory">Inventory</option>
+          <option value="systems">Systems</option>
+          <option value="customs">Customs</option>
+          <option value="venue">Venue Ops</option>
+          <option value="kitting">Kitting</option>
+        </select>
+      </div>
+      <div class="mf">
+        <label>Icon</label>
+        <input type="text" id="f-icon" placeholder="e.g. 📦" maxlength="4" style="width:60px">
+      </div>
+    </div>
+    <div class="mf">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <label style="margin:0">Body <span style="font-weight:400;text-transform:none">(just type plain text or messy notes)</span></label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button type="button" class="m-btn" style="padding:5px 12px;font-size:10px;background:linear-gradient(135deg,#E8EAF6,#F3E5F5);color:var(--pri);border-color:var(--pri-b)" onclick="aiEnhance()" id="ai-btn" title="AI restructures your messy notes into formatted text">✨ AI Enhance</button>
+          <button type="button" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--tt);padding:2px" onclick="toggleAISettings()" title="AI settings">⚙️</button>
+        </div>
+      </div>
+      <div id="ai-settings" style="display:none;margin-bottom:8px;padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--bd)">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <select id="ai-provider" onchange="_updateAILink()" style="padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd)">
+            <option value="claude">Claude (Anthropic)</option>
+            <option value="chatgpt">ChatGPT (OpenAI)</option>
+            <option value="gemini">Gemini (Google)</option>
+          </select>
+          <input type="password" id="ai-key" placeholder="API key" style="flex:1;min-width:160px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm)">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <input type="password" id="ai-passphrase" placeholder="Team passphrase (shared secret)" style="flex:1;min-width:160px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fd)">
+          <button type="button" class="m-btn" style="padding:4px 12px;font-size:10px" onclick="saveAIKey()">Save &amp; Share</button>
+          <button type="button" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--rd)" onclick="clearAIKey()">Clear</button>
+        </div>
+        <div id="ai-key-link" style="font-size:9px;margin-bottom:6px"></div>
+        <div style="font-size:9px;color:var(--tt);line-height:1.5">
+          <b>How it works:</b> API key is encrypted with your team passphrase (AES-256) and stored in Supabase.<br>
+          Other team members enter the same passphrase to decrypt. Key is never stored or transmitted in plain text.<br>
+          Without the passphrase, the key is unreadable — even in the database.
+        </div>
+        <div id="ai-status" style="font-size:9px;margin-top:4px;display:none"></div>
+      </div>
+      <textarea id="f-body" rows="8" placeholder="Just dump your notes here — messy is fine! Then hit ✨ AI Enhance or use the syntax from the cheat sheet below."></textarea>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div class="mf" style="flex:1;min-width:0">
+        <label>Preview</label>
+        <div id="f-preview" style="border:1.5px solid var(--bd);border-radius:8px;padding:12px 14px;min-height:100px;font-size:11.5px;line-height:1.6;color:var(--ts);background:var(--bg)">
+          <span style="color:var(--tt);font-style:italic">Type above to see live preview</span>
+        </div>
+      </div>
+      <div style="width:220px;flex-shrink:0;background:var(--bg);border:1.5px solid var(--bd);border-radius:8px;padding:10px 12px;font-size:9px;line-height:1.7;color:var(--ts);margin-top:20px">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tt);margin-bottom:4px">Formatting Cheat Sheet</div>
+        <div style="font-family:var(--fm);font-size:8.5px;color:var(--tp)">
+          <div><span style="color:var(--a3)">A -> B -> C</span> <span style="color:var(--tt)">flow</span></div>
+          <div><span style="color:#C62A2F">Never:</span> <span style="color:var(--tt)">red alert</span></div>
+          <div><span style="color:#C62A2F">Warning:</span> <span style="color:var(--tt)">red alert</span></div>
+          <div><span style="color:#C62A2F">Do not:</span> <span style="color:var(--tt)">red alert</span></div>
+          <div><span style="color:#12804A">Always:</span> <span style="color:var(--tt)">green tip</span></div>
+          <div><span style="color:#12804A">Tip:</span> <span style="color:var(--tt)">green tip</span></div>
+          <div><span style="color:#304FFE">Note:</span> <span style="color:var(--tt)">blue info</span></div>
+          <div><span style="color:#E65100">Caution:</span> <span style="color:var(--tt)">amber warn</span></div>
+          <div><span style="color:var(--tp)">1. 2. 3.</span> <span style="color:var(--tt)">numbered list</span></div>
+          <div><span style="color:var(--tp)">- item</span> <span style="color:var(--tt)">bullet list</span></div>
+          <div><span style="color:var(--tp)">A | B | C</span> <span style="color:var(--tt)">table</span></div>
+          <div><span style="color:var(--tp)">*bold*</span> <span style="color:var(--tt)">bold text</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <label>Tags <span style="font-weight:400;text-transform:none">(comma-separated keywords for search)</span></label>
+      <input type="text" id="f-tags" placeholder="e.g. ASN, short shipment, WMS, pallet count">
+    </div>
+    <div class="mf">
+      <label>Added by</label>
+      <input type="text" id="f-author" placeholder="Your name">
+    </div>
+    <div class="m-actions">
+      <button class="m-btn" onclick="closeModal()">Cancel</button>
+      <button class="m-btn danger" id="del-btn" style="display:none" onclick="deleteEntry()">Delete</button>
+      <button class="m-btn primary" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════
+   DATA STORE — entries saved to localStorage
+   + Supabase for cross-browser sync
+   ══════════════════════════════════════════ */
+
+const SB_URL='https://stwopndhnxcjyomkufii.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanl'+
+'vbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE2NjczODIsImV4cCI6MjA1NzI0MzM4Mn0.GNnMXyj1OOPaHfbjbNjWxjN8BxFkNVShqS7LnCpS8W0';
+const SB_TABLE='shared_state';
+const SB_KEY_ID='mem-dump';
+
+const CAT_META={
+  receiving:{label:'Receiving',icon:'📦',color:'var(--gn)'},
+  shipping:{label:'Shipping',icon:'🚛',color:'var(--a3)'},
+  damage:{label:'Damage',icon:'⚠️',color:'var(--rd)'},
+  inventory:{label:'Inventory',icon:'📋',color:'var(--pri)'},
+  systems:{label:'Systems',icon:'💻',color:'var(--a4)'},
+  customs:{label:'Customs',icon:'📄',color:'var(--am)'},
+  venue:{label:'Venue Ops',icon:'🏟️',color:'var(--sec)'},
+  kitting:{label:'Kitting',icon:'🧰',color:'#1565C0'},
+};
+
+let ENTRIES=[];
+let activeCat=null;
+let _nextId=1;
+
+// ── SEED DATA ── starter entries using plain text (auto-formatted on render)
+const SEED=[
+{id:1,cat:'receiving',icon:'📦',title:'Short Shipment on Container Arrival',
+_raw:`Scenario: Container arrives but physical count < ASN quantity.
+
+Unload -> [warn] Count ≠ ASN -> [hi] Photo Evidence -> Email Vlad -> Receive Actual Qty
+
+- Count EVERY pallet — do not trust the ASN blindly
+- Photograph the container interior (empty after unload) + any damage
+- Receive the *actual count* in SM²ARTA, not the ASN qty
+- Email materials@ with container #, ASN #, expected vs actual, photos
+
+Never: adjust your count to match the ASN. The ASN is what _should_ have shipped, your count is what _actually_ arrived.`,
+tags:['container','ASN','short shipment','count','receiving','discrepancy','photo'],author:'Vlad'},
+
+{id:2,cat:'damage',icon:'📸',title:'Damage Report Process',
+_raw:`When: Visible damage on arrival OR discovered during put-away/assembly.
+
+[bad] Damage Found -> 3+ Photos -> [hi] SM²ARTA Report -> Quarantine Item -> Await Decision
+
+Photo requirements:
+- Wide shot showing item + label/SKU sticker
+- Close-up of damage
+- Packaging condition (was it packed properly?)
+
+Caution: report within 24h of discovery. Late reports can't be claimed against carrier.
+Tip: Quarantine — move damaged item to a separate area, mark with red tape. Do NOT dispose until authorized.`,
+tags:['damage','photo','report','quarantine','carrier','claim','SM2ARTA'],author:'Vlad'},
+
+{id:3,cat:'inventory',icon:'🔢',title:'Cycle Count Discrepancy',
+_raw:`Scenario: Physical count doesn't match system inventory.
+
+Gap | Action | Escalation
+≤2% | Recount once, adjust if confirmed | None
+2-5% | Full recount by 2nd person | Email materials@
+>5% | Stop. Full zone audit. | Call Vlad immediately
+
+Note: Common causes — items moved between zones without transaction, unreceived local deliveries, kit components pulled but kit not yet created in system.`,
+tags:['count','discrepancy','audit','cycle count','adjustment','inventory','zone'],author:'Vlad'},
+
+{id:4,cat:'shipping',icon:'📋',title:'LP Truck Dispatch Checklist',
+_raw:`Before the truck leaves the dock:
+
+1. Verify pallet count matches ML3K truck card
+2. Check every SKU label is visible and readable
+3. Take photo of loaded truck (pallets visible)
+4. Seal the truck — record seal number
+5. Collect signed BOL (Bill of Lading)
+6. Mark as *Dispatched* in ML3K
+7. Enter LSR number in ML3K
+
+Warning: No LSR = truck didn't leave. If logistics hasn't provided an LSR number, do not release the truck.
+Tip: Seal number goes in the email to the receiving warehouse. They verify seal intact on arrival.`,
+tags:['dispatch','truck','BOL','seal','LSR','pallet','checklist','loading'],author:'Vlad'},
+
+{id:5,cat:'customs',icon:'🛃',title:'HS Code Missing on CI Export',
+_raw:`Scenario: Exporting Commercial Invoice from ML3K and some SKUs show blank HS codes.
+
+Open Demand Tab -> [hi] Find SKU row -> Click 🔍 -> Use AI or Manual
+
+Three options:
+- *Sibling match:* system finds similar SKUs with confirmed codes — click to apply
+- *AI classify:* paste the product URL, AI returns HS code + country
+- *Manual:* browse HS database by chapter → heading → subheading
+
+Caution: Always confirm (✓) the HS code after setting it. Unconfirmed codes show as grey circles — confirmed show green checkmarks. Only confirmed codes appear in sibling suggestions.`,
+tags:['HS code','customs','CI','commercial invoice','export','classification','AI','sibling'],author:'Vlad'},
+
+{id:6,cat:'venue',icon:'🏗️',title:'Assembly vs Disassembly Decision',
+_raw:`Does this item get assembled at the warehouse or at the venue?
+
+Venue Type | Country | Default
+Stadium / IBC | Any | *Disassembled* (ship flat)
+Non-stadium | CAN / MEX | *Assembled* at regional WHS
+Non-stadium | USA | *Disassembled* (ship flat)
+
+Note: Override — individual SKUs can be flipped in ML3K Pallet Config. An assembled item needs \`pqA\` and \`psA\` values in the nomenclature.
+Info: Why it matters — assembled items take more pallet space but save venue labor. Assembly timeline in ML3K tracks the full date chain.`,
+tags:['assembly','disassembly','venue','stadium','warehouse','pallet config','pqA','psA'],author:'Vlad'},
+
+{id:7,cat:'kitting',icon:'📎',title:'Kit Readiness Check Before Shipping',
+_raw:`A kit ships as *ONE SKU*. All components must be in stock before the kit can be packed.
+
+Check ML3K Kit List -> Readiness = 100%? -> Pack Kit -> ASN Inbound -> Ship as 1 SKU
+
+- *FF&E kits* (FNKIT): tools + fixtures, ~12 items per kit
+- *Stationery kits* (OSKIT): office supplies, ~14 items per kit
+
+Never: ship a partial kit. If readiness <100%, escalate — do not substitute components without approval.`,
+tags:['kit','FNKIT','OSKIT','readiness','components','packing','assembly','stationery','FF&E'],author:'Vlad'},
+
+{id:8,cat:'systems',icon:'🔄',title:'ML3K Data Out of Sync',
+_raw:`Scenario: Your ML3K shows different data than a colleague's.
+
+Click Sync 🟢 -> Wait for spin -> Data refreshed
+
+If sync doesn't fix it:
+- Check you're on the same module (LP vs LM)
+- Check filters — destination/source chips may be deselected
+- Check if the other person has unsaved changes (debounced saves take ~1.5s)
+
+Caution: Last resort — Backup your data first, then try a soft reset. This clears file data but preserves dispatched trucks, customs overrides, and holds.`,
+tags:['sync','refresh','data','ML3K','mismatch','cache','soft reset','backup'],author:'Vlad'},
+
+{id:9,cat:'receiving',icon:'📍',title:'Local Delivery vs Container Arrival',
+_raw:`Two types of receiving — different workflows:
+
+Type | Source | ASN? | Pallet Labels
+Container | RGS international | Yes — from Supabase | Already labeled
+Local Delivery | Staples, CORT, etc. | Sometimes — varies | May need labeling
+
+Note: Local deliveries without ASN — receive against the PO or email confirmation. Count everything. Create the receipt manually in SM²ARTA.
+Tip: Staples deliveries come with a Staples packing slip. Cross-reference item numbers with the ML3K Staples catalog for your region.`,
+tags:['receiving','container','local delivery','Staples','CORT','ASN','packing slip','PO'],author:'Vlad'},
+
+{id:10,cat:'shipping',icon:'🌡️',title:'Re-Board / Cardboard Furniture Handling',
+_raw:`Re-Board tables and LOOK welcome desks are *cardboard-based*.
+
+Warning: WATER = DEATH. These items cannot get wet. Even humidity can warp them. Keep away from dock doors in rain, never store on ground floor without pallets.
+
+- Store *flat*, never standing upright
+- Maximum stack: *4 pallets high*
+- Ship last on truck (first off at venue)
+- Do not place heavy items on top
+
+Caution: 900 tables + 278 welcome desks across the tournament. Each one is custom-printed — no replacements available.`,
+tags:['Re-Board','cardboard','table','welcome desk','LOOK','water','handling','storage','fragile'],author:'Vlad'},
+];
+
+// ── INIT ──
+function init(){
+  loadEntries();
+  if(!ENTRIES.length){
+    // Generate formatted body from raw text for seed entries
+    ENTRIES=SEED.map(e=>({...e,body:autoFormat(e._raw)}));
+    _nextId=SEED.length+1;
+    saveEntries();
+  }
+  else _nextId=Math.max(...ENTRIES.map(e=>e.id))+1;
+  // Ensure all entries with _raw but no body get formatted
+  ENTRIES.forEach(e=>{if(e._raw&&!e.body)e.body=autoFormat(e._raw)});
+  renderCats();
+  renderGrid();
+  // Load shared AI key from Supabase (decrypt with saved passphrase)
+  loadAIKey();
+}
+
+// ── PERSISTENCE ──
+const MEM_VERSION=3; // bump to force re-seed (v3 = flow-pair fix)
+function loadEntries(){
+  try{
+    const ver=parseInt(localStorage.getItem('mem-dump-ver'))||0;
+    if(ver<MEM_VERSION){localStorage.removeItem('mem-dump');localStorage.setItem('mem-dump-ver',MEM_VERSION)}
+    const s=localStorage.getItem('mem-dump');
+    if(s)ENTRIES=JSON.parse(s);
+  }catch(e){}
+  loadFromSupabase();
+}
+function saveEntries(){
+  // Stamp every entry with update timestamp for merge
+  ENTRIES.forEach(e=>{if(!e._ts)e._ts=Date.now()});
+  localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
+  saveToSupabase();
+}
+
+// ── SUPABASE SYNC — proper merge by ID + timestamp ──
+async function loadFromSupabase(){
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}&select=val`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.length||!d[0].val)return;
+    const remote=typeof d[0].val==='string'?JSON.parse(d[0].val):d[0].val;
+    if(!Array.isArray(remote))return;
+
+    // Merge: union of local + remote, newest _ts wins per ID
+    const merged=_mergeEntries(ENTRIES,remote);
+    // Ensure every entry has a body (generate from _raw if missing)
+    merged.forEach(e=>{if(!e.body&&e._raw)e.body=autoFormat(e._raw)});
+    const changed=JSON.stringify(merged)!==JSON.stringify(ENTRIES);
+    ENTRIES=merged;
+    _nextId=Math.max(...ENTRIES.map(e=>e.id),0)+1;
+    localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
+    if(changed){renderCats();renderGrid()}
+  }catch(e){console.warn('Supabase load failed:',e)}
+}
+
+// Merge two entry arrays: keep all unique IDs, for duplicates keep newest _ts.
+// Deleted entries tracked via _deleted flag so deletes propagate.
+function _mergeEntries(local,remote){
+  const map=new Map();
+  // Local first
+  for(const e of local)map.set(e.id,e);
+  // Remote overwrites if newer
+  for(const e of remote){
+    const existing=map.get(e.id);
+    if(!existing){
+      map.set(e.id,e); // new from remote
+    }else{
+      // Keep whichever has later timestamp
+      if((e._ts||0)>(existing._ts||0))map.set(e.id,e);
+    }
+  }
+  // Filter out soft-deleted entries
+  return[...map.values()].filter(e=>!e._deleted);
+}
+
+async function saveToSupabase(){
+  const payload=JSON.stringify({val:JSON.stringify(ENTRIES)});
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'};
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}`,{method:'PATCH',headers:hdrs,body:payload});
+    if(!r.ok&&r.status===404){
+      await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+        body:JSON.stringify({id:SB_KEY_ID,val:JSON.stringify(ENTRIES)})});
+    }
+  }catch(e){console.warn('Supabase save failed:',e)}
+}
+
+// ── RENDER CATEGORIES ──
+function renderCats(){
+  const el=document.getElementById('cats');
+  const counts={};
+  ENTRIES.forEach(e=>{counts[e.cat]=(counts[e.cat]||0)+1});
+  let h=`<div class="cat${activeCat===null?' on':''}" onclick="setCat(null)">All (${ENTRIES.length})</div>`;
+  for(const[k,m]of Object.entries(CAT_META)){
+    if(counts[k])h+=`<div class="cat${activeCat===k?' on':''}" onclick="setCat('${k}')">${m.icon} ${m.label} (${counts[k]})</div>`;
+  }
+  el.innerHTML=h;
+}
+
+// ── RENDER GRID ──
+function renderGrid(){
+  const el=document.getElementById('grid');
+  const q=(document.getElementById('search').value||'').toLowerCase().trim();
+  let items=ENTRIES;
+
+  if(activeCat) items=items.filter(e=>e.cat===activeCat);
+  if(q){
+    items=items.filter(e=>{
+      const hay=[e.title,e.cat,e.body,...(e.tags||[]),e.author||''].join(' ').toLowerCase();
+      return q.split(/\s+/).every(w=>hay.includes(w));
+    });
+  }
+
+  // Sort: newest first
+  items=items.slice().sort((a,b)=>b.id-a.id);
+
+  document.getElementById('stats').textContent=`${items.length} / ${ENTRIES.length} entries`;
+
+  if(!items.length){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No entries match your search</div><div class="empty-sub">Try different keywords or clear filters</div></div>`;
+    return;
+  }
+
+  let h='';
+  for(const e of items){
+    const m=CAT_META[e.cat]||{label:e.cat,icon:'📌'};
+    h+=`<div class="card cat-${e.cat}" onclick="editEntry(${e.id})">
+      <div class="card-head">
+        <div class="card-icon">${e.icon||m.icon}</div>
+        <div class="card-meta">
+          <div class="card-title">${esc(e.title)}</div>
+          <span class="card-cat">${m.label}</span>
+        </div>
+      </div>
+      <div class="card-body">${e.body}</div>
+      ${e.tags&&e.tags.length?`<div class="card-tags">${e.tags.map(t=>`<span class="card-tag">${esc(t)}</span>`).join('')}</div>`:''}
+    </div>`;
+  }
+  el.innerHTML=h;
+}
+
+function esc(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
+
+// ── AUTO-FORMAT ENGINE ──
+// Transforms plain text into structured HTML with flow diagrams, callouts, tables, lists
+function autoFormat(raw){
+  if(!raw||!raw.trim())return'';
+  // If body already contains HTML tags (existing entries), return as-is
+  if(/<(div|table|ul|ol|br|span|b|i|code)\b/i.test(raw))return raw;
+
+  const lines=raw.split('\n');
+  const out=[];
+  let i=0;
+
+  while(i<lines.length){
+    const line=lines[i].trim();
+    if(!line){i++;continue}
+
+    // ── FLOW DIAGRAM: lines with -> or → ──
+    if(/(?:->|→)/.test(line)&&!/^\|/.test(line)){
+      const raw2=line.replace(/^(?:flow|process|steps?)\s*:\s*/i,'');
+      const steps=raw2.split(/\s*(?:->|→)\s*/).filter(Boolean);
+      if(steps.length>=2){
+        const parsed=steps.map((s,si)=>{
+          let c='';
+          let txt=s;
+          if(/^\[ok\]\s*/i.test(txt)){c='ok';txt=txt.replace(/^\[ok\]\s*/i,'')}
+          else if(/^\[warn\]\s*/i.test(txt)){c='warn';txt=txt.replace(/^\[warn\]\s*/i,'')}
+          else if(/^\[bad\]\s*/i.test(txt)){c='bad';txt=txt.replace(/^\[bad\]\s*/i,'')}
+          else if(/^\[hi\]\s*/i.test(txt)){c='hi';txt=txt.replace(/^\[hi\]\s*/i,'')}
+          else if(si===steps.length-1)c='ok';
+          else if(si===0&&/^[⚠️❌🔴]/.test(txt))c='bad';
+          txt=_inlineFmt(txt);
+          return{c,txt};
+        });
+        // Wrap each [arrow + step] in a .flow-pair so they never break apart on wrap
+        let flowHtml=`<span class="flow-step${parsed[0].c?' '+parsed[0].c:''}">${parsed[0].txt}</span>`;
+        for(let fi=1;fi<parsed.length;fi++){
+          flowHtml+=`<span class="flow-pair"><span class="flow-arr">→</span><span class="flow-step${parsed[fi].c?' '+parsed[fi].c:''}">${parsed[fi].txt}</span></span>`;
+        }
+        out.push(`<div class="flow">${flowHtml}</div>`);
+        i++;continue;
+      }
+    }
+
+    // ── CALLOUT: WARNING / NEVER / DO NOT / IMPORTANT ──
+    // Matches both "Never: text" and "Never delete anything!" (keyword + space, no colon needed)
+    if(/^(?:warning|never|do\s*n[o']t|important|danger|critical|stop)\s*[:\-!\s]/i.test(line)){
+      const txt=line.replace(/^(?:warning|never|do\s*n[o']t|important|danger|critical|stop)\s*[:\-!]?\s*/i,'');
+      if(txt.length>2){
+        const lbl=_extractLabel2(line,['Warning','Never','Do not',"Don't",'Important','Danger','Critical','Stop']);
+        out.push(`<div class="co co-r"><b>${lbl}:</b> ${_inlineFmt(txt)}</div>`);
+        i++;continue;
+      }
+    }
+    // ── CALLOUT: ALWAYS ──
+    if(/^always\s/i.test(line)){
+      const txt=line.replace(/^always\s*[:\-!]?\s*/i,'');
+      if(txt.length>2){
+        out.push(`<div class="co co-g"><b>Always:</b> ${_inlineFmt(txt)}</div>`);
+        i++;continue;
+      }
+    }
+    // ── CALLOUT: TIP / BEST PRACTICE / REMEMBER ──
+    if(/^(?:tip|best\s*practice|remember)\s*[:\-!\s]/i.test(line)){
+      const txt=line.replace(/^(?:tip|best\s*practice|remember)\s*[:\-!]?\s*/i,'');
+      if(txt.length>2){
+        const lbl=_extractLabel2(line,['Tip','Best practice','Remember']);
+        out.push(`<div class="co co-g"><b>${lbl}:</b> ${_inlineFmt(txt)}</div>`);
+        i++;continue;
+      }
+    }
+    // ── CALLOUT: NOTE / INFO / FYI ──
+    if(/^(?:note|info|fyi|context|background)\s*[:\-!\s]/i.test(line)){
+      const txt=line.replace(/^(?:note|info|fyi|context|background)\s*[:\-!]?\s*/i,'');
+      if(txt.length>2){
+        const lbl=_extractLabel2(line,['Note','Info','FYI','Context','Background']);
+        out.push(`<div class="co co-b"><b>${lbl}:</b> ${_inlineFmt(txt)}</div>`);
+        i++;continue;
+      }
+    }
+    // ── CALLOUT: CAUTION / WATCH OUT / CAREFUL ──
+    if(/^(?:caution|watch\s*out|careful|attention|heads?\s*up)\s*[:\-!\s]/i.test(line)){
+      const txt=line.replace(/^(?:caution|watch\s*out|careful|attention|heads?\s*up)\s*[:\-!]?\s*/i,'');
+      if(txt.length>2){
+        const lbl=_extractLabel2(line,['Caution','Watch out','Careful','Attention','Heads up']);
+        out.push(`<div class="co co-a"><b>${lbl}:</b> ${_inlineFmt(txt)}</div>`);
+        i++;continue;
+      }
+    }
+
+    // ── TABLE: pipe-separated rows (2+ consecutive lines with |) ──
+    if(/\|/.test(line)&&line.split('|').length>=2){
+      const tblRows=[line];
+      let j=i+1;
+      while(j<lines.length&&/\|/.test(lines[j].trim())&&lines[j].trim().split('|').length>=2){
+        // skip separator rows like |---|---|
+        if(!/^[\s|:-]+$/.test(lines[j].trim()))tblRows.push(lines[j].trim());
+        j++;
+      }
+      if(tblRows.length>=1){
+        let th='<tr>'+tblRows[0].split('|').map(c=>`<th>${_inlineFmt(c.trim())}</th>`).join('')+'</tr>';
+        let tb=tblRows.slice(1).map(r=>'<tr>'+r.split('|').map(c=>`<td>${_inlineFmt(c.trim())}</td>`).join('')+'</tr>').join('');
+        out.push(`<table class="mini-tbl">${th}${tb}</table>`);
+        i=j;continue;
+      }
+    }
+
+    // ── NUMBERED LIST: consecutive lines starting with 1. 2. 3. ──
+    if(/^\d+[\.\)]\s/.test(line)){
+      const items=[];
+      let j=i;
+      while(j<lines.length&&/^\d+[\.\)]\s/.test(lines[j].trim())){
+        items.push(lines[j].trim().replace(/^\d+[\.\)]\s*/,''));
+        j++;
+      }
+      out.push('<ol>'+items.map(it=>`<li>${_inlineFmt(it)}</li>`).join('')+'</ol>');
+      i=j;continue;
+    }
+
+    // ── BULLET LIST: consecutive lines starting with - or • ──
+    if(/^[-•]\s/.test(line)){
+      const items=[];
+      let j=i;
+      while(j<lines.length&&/^[-•]\s/.test(lines[j].trim())){
+        items.push(lines[j].trim().replace(/^[-•]\s*/,''));
+        j++;
+      }
+      out.push('<ul>'+items.map(it=>`<li>${_inlineFmt(it)}</li>`).join('')+'</ul>');
+      i=j;continue;
+    }
+
+    // ── SCENARIO / WHEN / IF header ──
+    if(/^(?:scenario|when|if|situation|case|problem|issue)\s*[:\-]/i.test(line)){
+      const txt=line.replace(/^(?:scenario|when|if|situation|case|problem|issue)\s*[:\-]\s*/i,'');
+      out.push(`<b>${_extractLabel2(line,['Scenario','When','If','Situation','Case','Problem','Issue'])}:</b> ${_inlineFmt(txt)}`);
+      i++;continue;
+    }
+
+    // ── Regular line ──
+    out.push(_inlineFmt(line));
+    i++;
+  }
+
+  return out.join('<br>');
+}
+
+// Inline formatting: *bold*, `code`, _italic_
+function _inlineFmt(s){
+  if(!s)return'';
+  s=s.replace(/\*([^*]+)\*/g,'<b>$1</b>');
+  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  s=s.replace(/(?<!\w)_([^_]+)_(?!\w)/g,'<i>$1</i>');
+  return s;
+}
+
+// Extract label from callout line — matches against known labels
+function _extractLabel2(line, candidates){
+  const low=line.toLowerCase();
+  for(const c of candidates)if(low.startsWith(c.toLowerCase()))return c;
+  return candidates[0];
+}
+
+// ── AI ENHANCE — encrypted key sharing via Supabase ──
+const _AI_SB_KEY='mem-dump-ai'; // Supabase shared_state key for encrypted AI config
+
+const _AI_LINKS={
+  claude:{url:'https://console.anthropic.com/settings/keys',label:'Get Claude API key',color:'#D97706'},
+  chatgpt:{url:'https://platform.openai.com/api-keys',label:'Get OpenAI API key',color:'#10A37F'},
+  gemini:{url:'https://aistudio.google.com/apikey',label:'Get Gemini API key',color:'#4285F4'},
+};
+
+function _updateAILink(){
+  const p=document.getElementById('ai-provider').value;
+  const info=_AI_LINKS[p];
+  document.getElementById('ai-key-link').innerHTML=
+    `🔑 <a href="${info.url}" target="_blank" rel="noopener" style="color:${info.color};font-weight:600;text-decoration:underline">${info.label}</a>` +
+    `<span style="color:var(--tt)"> — create a key, copy it, paste above</span>`;
+}
+
+function toggleAISettings(){
+  const el=document.getElementById('ai-settings');
+  el.style.display=el.style.display==='none'?'block':'none';
+  if(el.style.display==='block'){
+    const cfg=_getAICfg();
+    document.getElementById('ai-provider').value=cfg.provider||'claude';
+    document.getElementById('ai-key').value=cfg.key||'';
+    document.getElementById('ai-passphrase').value=localStorage.getItem('mem-ai-pass')||'';
+    _updateAILink();
+    _aiShowStatus('');
+  }
+}
+
+// Get decrypted config from localStorage (already decrypted on load)
+function _getAICfg(){try{return JSON.parse(localStorage.getItem('mem-ai-cfg'))||{}}catch(e){return{}}}
+
+// Show status message in AI settings panel
+function _aiShowStatus(msg,isErr){
+  const el=document.getElementById('ai-status');
+  if(!msg){el.style.display='none';return}
+  el.style.display='block';
+  el.style.color=isErr?'var(--rd)':'var(--gn)';
+  el.textContent=msg;
+}
+
+// ── Web Crypto AES-256-GCM encrypt/decrypt ──
+async function _deriveKey(passphrase){
+  const enc=new TextEncoder();
+  const keyMaterial=await crypto.subtle.importKey('raw',enc.encode(passphrase),'PBKDF2',false,['deriveKey']);
+  // Fixed salt — same passphrase always derives same key (team-shared)
+  const salt=enc.encode('ml3k-mem-dump-2026');
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:100000,hash:'SHA-256'},keyMaterial,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+
+async function _encrypt(plaintext,passphrase){
+  const key=await _deriveKey(passphrase);
+  const enc=new TextEncoder();
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(plaintext));
+  // Return iv + ciphertext as base64
+  const buf=new Uint8Array(iv.length+ct.byteLength);
+  buf.set(iv);buf.set(new Uint8Array(ct),iv.length);
+  return btoa(String.fromCharCode(...buf));
+}
+
+async function _decrypt(b64,passphrase){
+  const key=await _deriveKey(passphrase);
+  const buf=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+  const iv=buf.slice(0,12);
+  const ct=buf.slice(12);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  return new TextDecoder().decode(pt);
+}
+
+// Save: encrypt API key with passphrase, store encrypted in Supabase + plain in localStorage
+// If only passphrase entered (no key), try to decrypt existing shared key from Supabase
+async function saveAIKey(){
+  const provider=document.getElementById('ai-provider').value;
+  const key=document.getElementById('ai-key').value.trim();
+  const passphrase=document.getElementById('ai-passphrase').value.trim();
+
+  if(!passphrase){_aiShowStatus('Enter the team passphrase',true);return}
+
+  // If no API key entered, try to unlock the shared one
+  if(!key){
+    _aiShowStatus('Unlocking team key...');
+    localStorage.setItem('mem-ai-pass',passphrase);
+    try{
+      await loadAIKey();
+      const cfg=_getAICfg();
+      if(cfg.key){
+        _aiShowStatus('Team key unlocked!');
+        document.getElementById('ai-key').value=cfg.key;
+        document.getElementById('ai-provider').value=cfg.provider||'claude';
+        setTimeout(()=>{document.getElementById('ai-settings').style.display='none'},1500);
+      }else{
+        _aiShowStatus('No shared key found, or wrong passphrase',true);
+        localStorage.removeItem('mem-ai-pass');
+      }
+    }catch(e){_aiShowStatus('Wrong passphrase or no shared key found',true);localStorage.removeItem('mem-ai-pass')}
+    return;
+  }
+
+  try{
+    _aiShowStatus('Encrypting & saving...');
+    const encrypted=await _encrypt(JSON.stringify({provider,key}),passphrase);
+
+    // Save encrypted to Supabase
+    const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'};
+    let r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}`,{method:'PATCH',headers:hdrs,
+      body:JSON.stringify({val:JSON.stringify({encrypted})})});
+    if(!r.ok||r.status===404){
+      await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+        body:JSON.stringify({id:_AI_SB_KEY,val:JSON.stringify({encrypted})})});
+    }
+
+    // Cache plain in localStorage + remember passphrase
+    localStorage.setItem('mem-ai-cfg',JSON.stringify({provider,key}));
+    localStorage.setItem('mem-ai-pass',passphrase);
+
+    _aiShowStatus('Saved & shared with team');
+    setTimeout(()=>{document.getElementById('ai-settings').style.display='none'},1500);
+  }catch(e){
+    _aiShowStatus('Save failed: '+e.message,true);
+  }
+}
+
+// Load: try localStorage first, then fetch encrypted from Supabase and decrypt with passphrase
+async function loadAIKey(){
+  // If we already have it locally, done
+  const local=_getAICfg();
+  if(local.key)return;
+
+  // Try to load from Supabase
+  const passphrase=localStorage.getItem('mem-ai-pass');
+  if(!passphrase)return; // no passphrase saved — user needs to enter it
+
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}&select=val`,
+      {headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.length||!d[0].val)return;
+    const {encrypted}=typeof d[0].val==='string'?JSON.parse(d[0].val):d[0].val;
+    if(!encrypted)return;
+
+    const decrypted=JSON.parse(await _decrypt(encrypted,passphrase));
+    localStorage.setItem('mem-ai-cfg',JSON.stringify(decrypted));
+  }catch(e){
+    // Wrong passphrase or corrupt data — silently fail, user will be prompted
+    console.warn('AI key decrypt failed:',e.message);
+  }
+}
+
+// Clear: remove from localStorage and Supabase
+async function clearAIKey(){
+  localStorage.removeItem('mem-ai-cfg');
+  localStorage.removeItem('mem-ai-pass');
+  document.getElementById('ai-key').value='';
+  document.getElementById('ai-passphrase').value='';
+  // Also clear from Supabase
+  try{
+    const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'};
+    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}`,{method:'DELETE',headers:hdrs});
+  }catch(e){}
+  _aiShowStatus('Cleared from browser & server');
+}
+
+const _AI_SYSTEM=`You are a knowledge base editor for FIFA World Cup 2026 warehouse/logistics operations.
+You transform rough notes from Materials Managers into polished, visually rich quick-reference cards.
+
+Your job is NOT to just reformat — it is to ENHANCE. Think like a senior ops person writing a reference card for a new hire. Add structure, clarity, and visual hierarchy. Make every card scannable in 5 seconds.
+
+AVAILABLE FORMATTING (plain text only, no HTML):
+
+FLOW DIAGRAM — always create one if there is ANY process or sequence:
+  Receive Email -> Color Code -> Process -> Archive
+Use 3-6 steps. Verb-first. Short labels.
+
+CALLOUTS — use generously, at least 1-2 per card:
+  Never: <text>        (red — prohibitions, critical mistakes to avoid)
+  Warning: <text>      (red — danger)
+  Do not: <text>       (red — explicit prohibition)
+  Always: <text>       (green — must-do best practice)
+  Tip: <text>          (green — helpful advice)
+  Best practice: <text>(green — recommended approach)
+  Note: <text>         (blue — context, background, why)
+  Caution: <text>      (amber — watch out, edge case)
+
+LISTS:
+  1. Step one           (numbered — for sequential procedures)
+  2. Step two
+  - Bullet item         (bullets — for non-sequential items)
+
+TABLE:
+  Header1 | Header2 | Header3
+  Val1 | Val2 | Val3
+
+INLINE:
+  *bold text*          (bold key terms, system names, actions)
+
+STRUCTURE YOUR OUTPUT LIKE THIS:
+1. Start with a one-line context sentence (what is this about, when does it happen)
+2. Flow diagram showing the process at a glance
+3. Numbered steps OR bullet details expanding on the flow
+4. Callouts for warnings, tips, notes (at least 2)
+
+RULES:
+- ALWAYS create a flow diagram — even from a single sentence, extract the implied process
+- ALWAYS add at least one Never/Warning AND one Always/Tip callout
+- If the input is vague, infer reasonable warehouse/logistics best practices
+- Bold *system names* (SM²ARTA, ML3K, WMS), *actions* (color code, archive), *key terms*
+- Keep each element short — this is a quick-reference card, not documentation
+- Preserve all facts from the input — but you CAN add obvious best practices the user implied
+- Do NOT use HTML tags — only the plain text syntax above
+- Output ONLY the formatted card, no commentary or preamble
+
+EXAMPLE INPUT:
+"When new email received color code it, if resolved save to levant folder. Never delete"
+
+EXAMPLE OUTPUT:
+When: New email arrives in the *Materials Mailbox*
+
+Receive Email -> Color Code by Type -> Process/Resolve -> Save to *Levant Folder* -> Archive
+
+1. Check *Materials Mailbox* for new emails
+2. *Color code* each email by category/priority
+3. Process the request — coordinate with warehouse team
+4. When resolved, move email to the *Levant* folder
+5. Mark as complete — do not leave in inbox
+
+Never: delete any email from the Materials Mailbox — all correspondence must be retained for audit trail
+Always: color code immediately on receipt so nothing gets missed in a busy inbox
+Tip: create color code rules — e.g. red = urgent, yellow = pending, green = resolved
+Note: the Levant folder is the resolved/archive folder — only move emails here once fully closed`;
+
+async function aiEnhance(){
+  const body=document.getElementById('f-body');
+  const raw=body.value.trim();
+  if(!raw){body.focus();return}
+  const title=document.getElementById('f-title').value.trim();
+  const cat=document.getElementById('f-cat').value;
+  let cfg=_getAICfg();
+  if(!cfg.key){
+    // Try loading from Supabase with saved passphrase
+    await loadAIKey();
+    cfg=_getAICfg();
+  }
+  if(!cfg.key){
+    // Still no key — open settings so user can enter key or passphrase
+    toggleAISettings();
+    // Focus passphrase if key field is empty (team member joining)
+    const keyEl=document.getElementById('ai-key');
+    if(!keyEl.value)document.getElementById('ai-passphrase').focus();
+    else keyEl.focus();
+    _aiShowStatus('Enter API key + passphrase to save, or just passphrase to unlock team key',false);
+    return;
+  }
+
+  const btn=document.getElementById('ai-btn');
+  btn.textContent='⏳ Enhancing...';btn.disabled=true;
+  const userMsg=`Category: ${cat}${title?'\nTitle: '+title:''}\n\nRaw notes to restructure:\n${raw}`;
+
+  try{
+    let result;
+    if(cfg.provider==='claude') result=await _aiCall('claude',cfg.key,userMsg);
+    else if(cfg.provider==='chatgpt') result=await _aiCall('chatgpt',cfg.key,userMsg);
+    else result=await _aiCall('gemini',cfg.key,userMsg);
+
+    if(result){
+      body.value=result;
+      body.dispatchEvent(new Event('input'));
+      // Auto-generate tags if empty
+      const tagsEl=document.getElementById('f-tags');
+      if(!tagsEl.value.trim())_aiAutoTags(cfg,raw,title,cat);
+    }
+  }catch(e){
+    alert('AI error: '+(e.message||e));
+  }finally{btn.textContent='✨ AI Enhance';btn.disabled=false}
+}
+
+async function _aiCall(provider,key,userMsg){
+  if(provider==='claude'){
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+      headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1500,system:_AI_SYSTEM,messages:[{role:'user',content:userMsg}]})});
+    if(!r.ok)throw new Error(r.status===401?'Invalid API key — check Settings':await r.text());
+    return(await r.json()).content?.[0]?.text||'';
+  }
+  if(provider==='chatgpt'){
+    const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',
+      headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
+      body:JSON.stringify({model:'gpt-4o-mini',max_completion_tokens:1500,messages:[{role:'system',content:_AI_SYSTEM},{role:'user',content:userMsg}]})});
+    if(!r.ok)throw new Error(r.status===401?'Invalid API key — check Settings':await r.text());
+    return(await r.json()).choices?.[0]?.message?.content||'';
+  }
+  // gemini
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({systemInstruction:{parts:[{text:_AI_SYSTEM}]},contents:[{parts:[{text:userMsg}]}],generationConfig:{maxOutputTokens:1500}})});
+  if(!r.ok)throw new Error(r.status===400||r.status===403?'Invalid API key — check Settings':await r.text());
+  return(await r.json()).candidates?.[0]?.content?.parts?.[0]?.text||'';
+}
+
+// Auto-generate tags (background, non-blocking)
+async function _aiAutoTags(cfg,raw,title,cat){
+  try{
+    const p=`Extract 5-8 short search keywords from this warehouse/logistics note. Return ONLY comma-separated keywords, nothing else.\nTitle: ${title||'untitled'}\nCategory: ${cat}\nContent: ${raw}`;
+    const result=await _aiCall(cfg.provider,cfg.key,p);
+    if(result){const el=document.getElementById('f-tags');if(!el.value.trim())el.value=result.trim()}
+  }catch(e){/* tags are optional */}
+}
+
+// Update preview on textarea input
+document.getElementById('f-body').addEventListener('input',function(){
+  const preview=document.getElementById('f-preview');
+  const val=this.value.trim();
+  if(!val){preview.innerHTML='<span style="color:var(--tt);font-style:italic">Type above, then ✨ AI Enhance or just save</span>';return}
+  preview.innerHTML=autoFormat(val);
+});
+
+// ── FILTER ──
+function filterCards(){renderGrid()}
+function setCat(c){activeCat=c;renderCats();renderGrid()}
+
+// ── MODAL ──
+function showAddModal(){
+  document.getElementById('modal-title').textContent='New Memory Entry';
+  document.getElementById('edit-id').value='';
+  document.getElementById('f-title').value='';
+  document.getElementById('f-cat').value='receiving';
+  document.getElementById('f-icon').value='';
+  document.getElementById('f-body').value='';
+  document.getElementById('f-tags').value='';
+  document.getElementById('f-author').value=localStorage.getItem('mem-author')||'';
+  document.getElementById('del-btn').style.display='none';
+  document.getElementById('modal').classList.add('show');
+  setTimeout(()=>document.getElementById('f-title').focus(),100);
+}
+
+function editEntry(id){
+  const e=ENTRIES.find(x=>x.id===id);
+  if(!e)return;
+  document.getElementById('modal-title').textContent='Edit Entry';
+  document.getElementById('edit-id').value=id;
+  document.getElementById('f-title').value=e.title;
+  document.getElementById('f-cat').value=e.cat;
+  document.getElementById('f-icon').value=e.icon||'';
+  // Show raw source if available, otherwise the formatted body (for seed/legacy entries)
+  document.getElementById('f-body').value=e._raw||e.body;
+  document.getElementById('f-tags').value=(e.tags||[]).join(', ');
+  document.getElementById('f-author').value=e.author||'';
+  document.getElementById('del-btn').style.display='inline-flex';
+  document.getElementById('modal').classList.add('show');
+  // Trigger preview
+  const prev=document.getElementById('f-preview');
+  const val=(e._raw||e.body||'').trim();
+  prev.innerHTML=val?autoFormat(val):''
+}
+
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+
+function saveEntry(){
+  const title=document.getElementById('f-title').value.trim();
+  if(!title){document.getElementById('f-title').focus();return}
+  const cat=document.getElementById('f-cat').value;
+  const rawBody=document.getElementById('f-body').value.trim();
+  const icon=document.getElementById('f-icon').value.trim();
+  const body=autoFormat(rawBody); // auto-format plain text into structured HTML
+  const tags=document.getElementById('f-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const author=document.getElementById('f-author').value.trim();
+  if(author)localStorage.setItem('mem-author',author);
+
+  const now=Date.now();
+  const editId=parseInt(document.getElementById('edit-id').value);
+  if(editId){
+    const e=ENTRIES.find(x=>x.id===editId);
+    if(e){Object.assign(e,{title,cat,icon,body,_raw:rawBody,tags,author,_ts:now})}
+  }else{
+    ENTRIES.push({id:_nextId++,cat,icon,title,body,_raw:rawBody,tags,author,date:new Date().toISOString().slice(0,10),_ts:now});
+  }
+  saveEntries();
+  closeModal();
+  renderCats();
+  renderGrid();
+}
+
+function deleteEntry(){
+  const editId=parseInt(document.getElementById('edit-id').value);
+  if(!editId)return;
+  if(!confirm('Delete this entry?'))return;
+  // Soft-delete: mark with _deleted + _ts so it propagates via merge
+  const e=ENTRIES.find(x=>x.id===editId);
+  if(e){e._deleted=true;e._ts=Date.now()}
+  // Save full array WITH tombstone to Supabase so other users pick up the delete
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'};
+  fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}`,{method:'PATCH',headers:hdrs,
+    body:JSON.stringify({val:JSON.stringify(ENTRIES)})}).catch(()=>{});
+  // Then filter locally
+  ENTRIES=ENTRIES.filter(x=>!x._deleted);
+  localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
+  closeModal();
+  renderCats();
+  renderGrid();
+}
+
+// ── SYNC ──
+async function syncNow(btn){
+  if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true}
+  await loadFromSupabase();
+  renderCats();
+  if(btn){btn.textContent='🔄 Sync';btn.disabled=false}
+}
+// Auto-sync when tab gets focus (user switches back)
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden)loadFromSupabase();
+});
+
+// ── KEYBOARD ──
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeModal();
+  if(e.key==='/'&&!document.querySelector('.modal-bg.show')&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
+    e.preventDefault();document.getElementById('search').focus();
+  }
+});
+
+init();
+</script>
+</body>
+</html>
