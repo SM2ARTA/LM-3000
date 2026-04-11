@@ -3072,7 +3072,9 @@ async function _sm2FetchContacts(){
   try{
     const r=await fetch('https://fwc26.smmarta.com/api/bi/venues?length=500',{headers:{Authorization:'Bearer '+_sm2artaApiKey,Accept:'application/json'}});
     if(!r.ok){console.warn('[SM2ARTA] Venues fetch failed:',r.status);return}
-    const rows=await r.json();
+    const json=await r.json();
+    const rows=Array.isArray(json)?json:(json.data||json.rows||Object.values(json));
+    console.log('[SM2ARTA] API returned',rows.length,'rows, sample:',rows[0]);
     _sm2artaContacts={};
     for(const v of rows){if(v.name&&v.contact){_sm2artaContacts[v.name]=_parseContact(v.contact)}}
     console.log('[SM2ARTA] Loaded contacts for',Object.keys(_sm2artaContacts).length,'venues');
