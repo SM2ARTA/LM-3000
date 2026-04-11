@@ -143,7 +143,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 /* ── ADD MODAL ── */
 .modal-bg{position:fixed;inset:0;background:rgba(26,26,46,.5);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .modal-bg.show{display:flex}
-.modal{background:var(--sf);border-radius:14px;width:820px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:32px 36px}
+.modal{background:var(--sf);border-radius:14px;width:1100px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);padding:32px 36px}
 .modal h2{font-size:18px;font-weight:800;margin-bottom:4px;color:var(--pri)}
 .modal .msub{font-size:12px;color:var(--ts);margin-bottom:20px}
 .mf{margin-bottom:14px}
@@ -336,10 +336,6 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
     <div class="mf">
       <label>Tags <span style="font-weight:400;text-transform:none">(comma-separated keywords for search)</span></label>
       <input type="text" id="f-tags" placeholder="e.g. ASN, short shipment, WMS, pallet count">
-    </div>
-    <div class="mf">
-      <label>Added by</label>
-      <input type="text" id="f-author" placeholder="Your name">
     </div>
     <div class="m-actions">
       <button class="m-btn" onclick="closeModal()">Cancel</button>
@@ -1029,7 +1025,6 @@ function showAddModal(){
   document.getElementById('f-icon').value='';
   document.getElementById('f-body').value='';
   document.getElementById('f-tags').value='';
-  document.getElementById('f-author').value=localStorage.getItem('mem-author')||'';
   document.getElementById('del-btn').style.display='none';
   document.getElementById('modal').classList.add('show');
   setTimeout(()=>document.getElementById('f-title').focus(),100);
@@ -1046,7 +1041,6 @@ function editEntry(id){
   // Show raw source if available, otherwise the formatted body (for seed/legacy entries)
   document.getElementById('f-body').value=e._raw||e.body;
   document.getElementById('f-tags').value=(e.tags||[]).join(', ');
-  document.getElementById('f-author').value=e.author||'';
   document.getElementById('del-btn').style.display='inline-flex';
   document.getElementById('modal').classList.add('show');
   // Trigger preview
@@ -1065,16 +1059,13 @@ function saveEntry(){
   const icon=document.getElementById('f-icon').value.trim();
   const body=autoFormat(rawBody); // auto-format plain text into structured HTML
   const tags=document.getElementById('f-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
-  const author=document.getElementById('f-author').value.trim();
-  if(author)localStorage.setItem('mem-author',author);
-
   const now=Date.now();
   const editId=parseInt(document.getElementById('edit-id').value);
   if(editId){
     const e=ENTRIES.find(x=>x.id===editId);
-    if(e){Object.assign(e,{title,cat,icon,body,_raw:rawBody,tags,author,_ts:now})}
+    if(e){Object.assign(e,{title,cat,icon,body,_raw:rawBody,tags,_ts:now})}
   }else{
-    ENTRIES.push({id:_nextId++,cat,icon,title,body,_raw:rawBody,tags,author,date:new Date().toISOString().slice(0,10),_ts:now});
+    ENTRIES.push({id:_nextId++,cat,icon,title,body,_raw:rawBody,tags,date:new Date().toISOString().slice(0,10),_ts:now});
   }
   saveEntries();
   closeModal();
