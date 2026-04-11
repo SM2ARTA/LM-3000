@@ -384,9 +384,9 @@ const CAT_META={
   lesson:{label:'Lesson Learnt',icon:'💡',color:'var(--am)'},
 };
 
-const PEOPLE=['All','Anthony','Ashley','Brittany','Diana','Karime','Kyli','Mike','Vlad','Yael'];
+const PEOPLE=['Everyone','Anthony','Ashley','Brittany','Diana','Karime','Kyli','Mike','Vlad','Yael'];
 // Colors matched to Outlook Materials Mailbox categories (exact swatches)
-const PEOPLE_COLORS={All:'#4A148C',Anthony:'#F0A030',Ashley:'#8DB4E2',Brittany:'#60C060',Diana:'#F090B0',Karime:'#B07EDC',Kyli:'#5080D0',Mike:'#40A8A0',Vlad:'#A0A0A0',Yael:'#C8B830'};
+const PEOPLE_COLORS={Everyone:'#4A148C',Anthony:'#F0A030',Ashley:'#8DB4E2',Brittany:'#60C060',Diana:'#F090B0',Karime:'#B07EDC',Kyli:'#5080D0',Mike:'#40A8A0',Vlad:'#A0A0A0',Yael:'#C8B830'};
 
 let ENTRIES=[];
 let activeCat=null;
@@ -510,7 +510,7 @@ function renderCats(){
 function renderPeople(){
   const el=document.getElementById('ppl');
   let h='<span class="ppl-label">Attention:</span>';
-  h+=`<span class="ppl-chip${activePerson===null?' on':''}" style="${activePerson===null?'background:var(--pri);border-color:var(--pri)':''}" onclick="setPerson(null)">Everyone</span>`;
+  h+=`<span class="ppl-chip${activePerson===null?' on':''}" style="${activePerson===null?'background:var(--pri);border-color:var(--pri)':''}" onclick="setPerson(null)">Show All</span>`;
   for(const p of PEOPLE){
     const c=PEOPLE_COLORS[p];
     const on=activePerson===p;
@@ -527,7 +527,7 @@ function renderGrid(){
   let items=ENTRIES;
 
   if(activeCat) items=items.filter(e=>e.cat===activeCat);
-  if(activePerson) items=items.filter(e=>e.attention&&(e.attention.includes(activePerson)||e.attention.includes('All')));
+  if(activePerson) items=items.filter(e=>e.attention&&(e.attention.includes(activePerson)||e.attention.includes('Everyone')));
   if(q){
     items=items.filter(e=>{
       const hay=[e.title,e.cat,e.body].join(' ').toLowerCase();
@@ -1017,7 +1017,7 @@ function showAddModal(){
   document.getElementById('edit-id').value='';
   document.getElementById('f-title').value='';
   document.getElementById('f-cat').value='procedure';
-  _selAttention=new Set(['All']);_renderAttChips();
+  _selAttention=new Set(['Everyone']);_renderAttChips();
   document.getElementById('f-body').value='';
   document.getElementById('del-btn').style.display='none';
   document.getElementById('modal').classList.add('show');
@@ -1055,11 +1055,11 @@ function _renderAttChips(){
   }).join('');
 }
 function _toggleAtt(p){
-  if(p==='All'){
-    if(_selAttention.has('All'))_selAttention.clear();
-    else{_selAttention.clear();_selAttention.add('All')}
+  if(p==='Everyone'){
+    if(_selAttention.has('Everyone'))_selAttention.clear();
+    else{_selAttention.clear();_selAttention.add('Everyone')}
   }else{
-    _selAttention.delete('All');
+    _selAttention.delete('Everyone');
     if(_selAttention.has(p))_selAttention.delete(p);else _selAttention.add(p);
   }
   _renderAttChips();
