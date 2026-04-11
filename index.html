@@ -14519,17 +14519,22 @@ function _fcSaveHandshakes(){
   SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now}).then(({error})=>{if(error)console.warn('HS save error:',error)});
 }
 function _fcGenToken(){return crypto.randomUUID?crypto.randomUUID():(Math.random().toString(36).slice(2)+Date.now().toString(36))}
-function _fcSendHandshake(fp,row){
+async function _fcSendHandshake(fp,row){
   if(ROLE==='viewer')return;
   const token=_fcGenToken();
   const hs={token,dest:row.dest,cluster:row.cluster,truckId:row.truckId,fp,disp:row.disp,plt:row.plt,skus:row.skus||0,lsr:row.lsr,oor:row.oor,sentAt:new Date().toISOString().slice(0,10),status:'pending',proposedDate:null,note:null,respondedAt:null,locked:false};
   _fcHandshakes[fp]=hs;
-  _fcSaveHandshakes();
+  // Save to Supabase and wait before opening email (receiver needs data available)
+  if(SB){
+    const now=new Date().toISOString();
+    const{error}=await SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now});
+    if(error){console.warn('HS save error:',error);alert('Failed to save handshake. Try again.');delete _fcHandshakes[fp];return}
+  }
   const baseUrl=window.location.origin+window.location.pathname.replace(/[^/]*$/,'')+'handshake.html';
   const hsUrl=baseUrl+'?token='+token;
   const subject=encodeURIComponent('FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')');
   const body=encodeURIComponent('Hi,\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'—')+'\nOOR: '+(row.oor||'—')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
-  window.open('mailto:?subject='+subject+'&body='+body);
+  window.open('mailto:materials@fwc2026.org?subject='+subject+'&body='+body);
   LM_renderForecast(document.getElementById('mn'));
 }
 function _fcControl(fp,lead){
