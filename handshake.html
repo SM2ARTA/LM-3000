@@ -3,12 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FF&E Delivery Confirmation</title>
+<title>Delivery Confirmation</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'DM Sans',sans-serif;background:#F4F5F7;color:#111318;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
-.card{background:#fff;border-radius:12px;border:1px solid #E2E4E9;max-width:520px;width:100%;padding:28px 24px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.card{background:#fff;border-radius:12px;border:1px solid #E2E4E9;max-width:600px;width:100%;padding:28px 24px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.items-tbl{width:100%;border-collapse:collapse;margin-top:12px;font-size:11px}
+.items-tbl th{text-align:left;padding:6px 8px;background:#F4F5F7;color:#60646C;font-weight:600;font-size:10px;border-bottom:1px solid #E2E4E9}
+.items-tbl td{padding:5px 8px;border-bottom:1px solid #F4F5F7}
+.items-tbl .mono{font-family:'IBM Plex Mono',monospace;font-size:10px}
+.items-tbl .r{text-align:right}
 .logo{font-size:12px;font-weight:700;color:#CF5D5D;text-align:center;margin-bottom:16px;letter-spacing:.5px}
 h1{font-size:18px;font-weight:700;margin-bottom:4px}
 .sub{font-size:11px;color:#60646C;margin-bottom:20px}
@@ -42,7 +47,7 @@ h1{font-size:18px;font-weight:700;margin-bottom:4px}
 </head>
 <body>
 <div class="card" id="main">
-  <div class="logo">FIFA WORLD CUP 2026 &mdash; FF&E LOGISTICS</div>
+  <div class="logo">FIFA WORLD CUP 2026 &mdash; MATERIALS MANAGEMENT</div>
   <div id="loading" style="text-align:center;padding:40px;color:#60646C">Loading...</div>
   <div id="content" style="display:none"></div>
 </div>
@@ -93,16 +98,25 @@ function render(hs,allHandshakes){
     return;
   }
 
+  const fmtD=d=>{if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}catch(e){return d}};
+  const itemsHtml=(hs.items&&hs.items.length)?`
+    <div style="margin-top:16px">
+      <div style="font-size:12px;font-weight:600;color:#60646C;margin-bottom:4px">Truck Contents</div>
+      <table class="items-tbl"><thead><tr><th>SKU</th><th>Item</th><th class="r">Qty</th><th class="r">Pallets</th></tr></thead><tbody>
+      ${hs.items.map(it=>`<tr><td class="mono">${it.sku}</td><td>${it.name||'—'}</td><td class="mono r">${(it.qty||0).toLocaleString()}</td><td class="mono r">${it.plt||'—'}</td></tr>`).join('')}
+      </tbody></table>
+    </div>`:'';
   el.innerHTML=`
     <h1>Delivery Confirmation</h1>
     <div class="sub">Please confirm or propose a new date for this delivery</div>
     <div class="field"><span class="label">Truck</span><span class="value">${hs.truckId}</span></div>
     <div class="field"><span class="label">Destination</span><span class="value">${hs.dest}</span></div>
-    <div class="field"><span class="label">Dispatch Date</span><span class="value">${hs.disp}</span></div>
+    <div class="field"><span class="label">Bump-in Date</span><span class="value">${fmtD(hs.firstBI)}</span></div>
     <div class="field"><span class="label">Pallets</span><span class="value">${hs.plt}</span></div>
     <div class="field"><span class="label">SKUs</span><span class="value">${hs.skus||'—'}</span></div>
     ${hs.lsr?'<div class="field"><span class="label">LSR</span><span class="value pur">'+hs.lsr+'</span></div>':''}
     ${hs.oor?'<div class="field"><span class="label">OOR</span><span class="value blue">'+hs.oor+'</span></div>':''}
+    ${itemsHtml}
     <div class="note-row"><textarea id="hsNote" placeholder="Optional note (e.g., dock preference, time window)"></textarea></div>
     <div class="actions">
       <button class="btn btn-confirm" onclick="submit('confirmed')">✅ Confirm Delivery</button>
@@ -110,7 +124,7 @@ function render(hs,allHandshakes){
     </div>
     <div class="date-row" id="dateRow">
       <span style="font-size:12px;color:#60646C">New date:</span>
-      <input type="date" id="hsDate" value="${hs.disp}">
+      <input type="date" id="hsDate" value="${hs.firstBI||hs.disp}">
       <button class="btn btn-reschedule" onclick="submit('reschedule')" style="padding:8px 16px">Submit</button>
     </div>
     <div class="err" id="err"></div>`;
