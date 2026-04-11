@@ -206,7 +206,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
     </div>
     <div class="search-box">
       <span class="search-icon">🔍</span>
-      <input type="text" id="search" placeholder="Search by keyword, SKU, scenario..." oninput="filterCards()" autocomplete="off">
+      <input type="search" id="search" name="mem-search-nofill" placeholder="Search by keyword, SKU, scenario..." oninput="filterCards()" autocomplete="off" autofill="off">
     </div>
     <div class="stats" id="stats"></div>
     <button class="add-btn" style="background:var(--a4-s);color:var(--a4);border-color:var(--a4-b)" onclick="syncNow(this)" title="Pull latest from team">🔄 Sync</button>
@@ -364,6 +364,8 @@ const _SEED_TITLES=new Set([
 
 // ── INIT ──
 function init(){
+  // Clear any browser-restored search value
+  document.getElementById('search').value='';
   loadEntries();
   // One-time purge of old hardcoded seeds
   const before=ENTRIES.length;
