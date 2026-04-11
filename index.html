@@ -14623,15 +14623,16 @@ function LM_renderForecast(el){
   const _cortSeen=new Set();
   for(const v in CORT_CACHE){CORT_CACHE[v].forEach(cd=>{
     if(_cortSeen.has(cd.id)||_seen.has(cd.id))return;_cortSeen.add(cd.id);
-    if(LM_excluded.has(cd.id))return;
-    const _cCountry=vcIsCAN(v)?'CAN':(vcIsMEX(v)?'MEX':'USA');
-    const _cItems=cd.items.map(it=>({sku:it.sku,name:it.nm||'',qty:it.qty||0,fa:false}));
-    allRows.push({dest:cd.destDisplay||clDisp(v),cluster:v,truckId:cd.id,fp:'CORT:'+cd.id,disp:cd.biK||'',transit:0,arrDate:cd.biK||'',plt:0,skus:cd.items.length,fnKits:0,osKits:0,dispatched:false,firstBI:cd.biK||'',buffer:0,lsr:'',oor:'',isCort:true,asmCount:0,dispLoc:'CORT',clusterLabel:'',lateCount:0,vtype:'cort',country:_cCountry,cargo:0,faCount:0,faTruck:false,items:_cItems});
+    if(LM_excluded.has(cd.id)||!cd.biK||!cd.items)return;
+    const _vn=VN.find(vn=>vn.name===v);
+    const _cCountry=_vn?(vcIsCAN(_vn.cluster)?'CAN':(vcIsMEX(_vn.cluster)?'MEX':'USA')):(vcIsCAN(v)?'CAN':(vcIsMEX(v)?'MEX':'USA'));
+    const _cItems=(cd.items||[]).map(it=>({sku:it.sku,name:it.nm||'',qty:it.qty||0,fa:false}));
+    allRows.push({dest:cd.destDisplay||clDisp(v),cluster:v,truckId:cd.id,fp:'CORT:'+cd.id,disp:cd.biK,transit:0,arrDate:cd.biK,plt:0,skus:(cd.items||[]).length,fnKits:0,osKits:0,dispatched:false,firstBI:cd.biK,buffer:0,lsr:'',oor:'',isCort:true,asmCount:0,dispLoc:'CORT',clusterLabel:'',lateCount:0,vtype:'cort',country:_cCountry,cargo:0,faCount:0,faTruck:false,items:_cItems});
   })}
   // STP deliveries
   for(const del of LM_STP_DELIVERIES){
     const truck=LM_STP_TRUCKS[del.id];if(!truck||!truck.items.length)continue;
-    if(_seen.has(del.id))continue;
+    if(_seen.has(del.id)||!del.date)continue;
     const _sVn=VN.find(vn=>vn.name===del.venue);
     const _sCountry=_sVn?(vcIsCAN(_sVn.cluster)?'CAN':(vcIsMEX(_sVn.cluster)?'MEX':'USA')):'USA';
     const _sItems=truck.items.map(it=>({sku:it.sku,name:it.nm||NOM[it.sku]?.name||'',qty:it.loadQty||0,fa:false}));
@@ -14650,7 +14651,7 @@ function LM_renderForecast(el){
   const cntCluster=_cfRows.filter(r=>r.vtype==='cluster').length,cntStadium=_cfRows.filter(r=>r.vtype==='stadium').length,cntOther=_cfRows.filter(r=>r.vtype==='other').length,cntCort=_cfRows.filter(r=>r.vtype==='cort').length,cntStp=_cfRows.filter(r=>r.vtype==='stp').length;
   // Chip builders
   const _allC=['USA','CAN','MEX'].filter(c=>allRows.some(r=>r.country===c));
-  const _allT=['cluster','stadium','other'].filter(t=>_cfRows.some(r=>r.vtype===t));
+  const _allT=['cluster','stadium','other','cort','stp'].filter(t=>_cfRows.some(r=>r.vtype===t));
   const _cAllOn=_allC.every(c=>_fcCountries.has(c));
   const _tAllOn=_allT.every(t=>_fcTypes.has(t));
   const _re=`LM_renderForecast(document.getElementById('mn'))`;
