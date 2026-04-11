@@ -270,8 +270,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
     <div class="view-body" id="view-body"></div>
     <div class="view-actions">
       <button class="m-btn" onclick="closeView()">Close</button>
-      <button class="m-btn danger" id="view-del-btn" onclick="viewDelete()">Delete</button>
-      <button class="m-btn primary" id="view-edit-btn" onclick="viewEdit()">Edit</button>
+      <button class="m-btn primary" onclick="viewEdit()">Edit</button>
     </div>
   </div>
 </div>
@@ -1093,21 +1092,7 @@ function viewEntry(id){
   document.getElementById('view-modal').classList.add('show');
 }
 function closeView(){document.getElementById('view-modal').classList.remove('show');_viewId=null}
-function viewEdit(){closeView();if(_viewId)editEntry(_viewId)}
-function viewDelete(){
-  if(!_viewId)return;
-  if(!confirm('Delete this entry?'))return;
-  const e=ENTRIES.find(x=>x.id===_viewId);
-  if(e){e._deleted=true;e._ts=Date.now()}
-  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
-  fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-    body:JSON.stringify({id:SB_KEY_ID,value:JSON.stringify(ENTRIES)})}).catch(()=>{});
-  ENTRIES=ENTRIES.filter(x=>!x._deleted);
-  localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
-  closeView();
-  renderCats();
-  renderGrid();
-}
+function viewEdit(){const id=_viewId;closeView();if(id)editEntry(id)}
 
 function saveEntry(){
   const title=document.getElementById('f-title').value.trim();
