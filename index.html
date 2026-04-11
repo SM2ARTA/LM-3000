@@ -5422,7 +5422,7 @@ function LP_renderPlan(el){
   const _prevScroll=el.scrollTop;
   el.innerHTML=html;
   // Restore search, filters, scroll
-  const _si=document.getElementById('lpPlanSearch');if(_si&&_prevSearch){_si.value=_prevSearch;LP_filterPlan()}
+  const _si=document.getElementById('lpPlanSearch');if(_si&&_prevSearch)_si.value=_prevSearch;
   _lpSyncFilterBtns();_lpApplyTruckFilters();
   setTimeout(()=>{el.scrollTop=_prevScroll},0);
 }
@@ -5806,19 +5806,21 @@ function LP_renderStatus(el){
 }
 function LP_filterStatus(){filterBySearch('lpStatusSearch','#lpStatusBody','tr[data-search]',{})}
 
-function LP_filterPlan(){filterBySearch('lpPlanSearch','#lpPlanBody','.lp-truck',{dayHdrSel:'.lp-day-hdr'})}
+function LP_filterPlan(){_lpApplyTruckFilters()}
 let _lpReadyFilter=false;
 let _lpNoOorFilter=false;
 let _lpLsrFilter=false;
 function _lpApplyTruckFilters(){
   const body=document.getElementById('lpPlanBody');if(!body)return;
+  const q=(document.getElementById('lpPlanSearch')?.value||'').toLowerCase();
   body.querySelectorAll('.lp-truck').forEach(el=>{
     let show=true;
+    // Search filter
+    if(q){const text=(el.getAttribute('data-search')||el.textContent||'').toLowerCase();if(!text.includes(q))show=false}
     if(_lpReadyFilter){
       if(el.getAttribute('data-locked')==='1'||el.getAttribute('data-ready')!=='1')show=false;
     }
     if(_lpNoOorFilter){
-      // No OOR filter: show only locked trucks that are NOT OOR
       if(el.getAttribute('data-locked')!=='1'||el.getAttribute('data-oor')==='1')show=false;
     }
     if(_lpLsrFilter){
