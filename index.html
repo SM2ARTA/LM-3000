@@ -14521,19 +14521,15 @@ function _fcSaveHandshakes(){
 function _fcGenToken(){return crypto.randomUUID?crypto.randomUUID():(Math.random().toString(36).slice(2)+Date.now().toString(36))}
 function _fcSendHandshake(fp,row){
   if(ROLE==='viewer')return;
-  const email=prompt('Enter recipient email for '+row.dest+':','');
-  if(!email||!email.includes('@'))return;
-  const name=email.split('@')[0].replace(/[._-]/g,' ');
   const token=_fcGenToken();
-  const contact={name,email:email.trim()};
-  const hs={token,dest:row.dest,cluster:row.cluster,truckId:row.truckId,fp,disp:row.disp,plt:row.plt,skus:row.skus||0,lsr:row.lsr,oor:row.oor,contact,sentAt:new Date().toISOString().slice(0,10),status:'pending',proposedDate:null,note:null,respondedAt:null,locked:false};
+  const hs={token,dest:row.dest,cluster:row.cluster,truckId:row.truckId,fp,disp:row.disp,plt:row.plt,skus:row.skus||0,lsr:row.lsr,oor:row.oor,sentAt:new Date().toISOString().slice(0,10),status:'pending',proposedDate:null,note:null,respondedAt:null,locked:false};
   _fcHandshakes[fp]=hs;
   _fcSaveHandshakes();
   const baseUrl=window.location.origin+window.location.pathname.replace(/[^/]*$/,'')+'handshake.html';
   const hsUrl=baseUrl+'?token='+token;
   const subject=encodeURIComponent('FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')');
   const body=encodeURIComponent('Hi,\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'—')+'\nOOR: '+(row.oor||'—')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
-  window.open('mailto:'+email.trim()+'?subject='+subject+'&body='+body);
+  window.open('mailto:?subject='+subject+'&body='+body);
   LM_renderForecast(document.getElementById('mn'));
 }
 function _fcControl(fp,lead){
