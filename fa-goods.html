@@ -784,8 +784,8 @@ function _faParsePaste(){
   // Multi-row header: merge row 1 values into blank header cells (handles merged Excel headers)
   if(lines.length>1){const r1=lines[1];while(hdr.length<r1.length)hdr.push('');for(let c=0;c<r1.length;c++){if(!hdr[c]&&r1[c]&&!/^\d+$/.test(r1[c])&&!_faTryDate(r1[c]))hdr[c]=r1[c]}}
   const dRows=lines.filter((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
-  // Matrix detection: header columns 2+ have venue-like names (abbreviations or full), and 2+ columns carry numeric data
-  const _hdrVenues=hdr.slice(2).filter(h=>h&&!/^\d+$/.test(h)&&!_faTryDate(h));
+  // Matrix detection: header columns 2+ have non-numeric labels (venue names or abbreviations)
+  const _hdrVenues=hdr.slice(2).filter(h=>h&&!/^\d+$/.test(h)&&!/^\d{4}-\d{2}-\d{2}$/.test(h)&&!/^\d{1,2}-[A-Za-z]{3,9}$/.test(h));
   let _numDataCols=0;for(let c=2;c<hdr.length;c++){if(lines.some((l,i)=>i>0&&/^\d+$/.test((l[c]||'').trim())))_numDataCols++}
   const isMatrix=hdr.length>=4&&_hdrVenues.length>=2&&_numDataCols>=2;
   const items=[];
@@ -817,6 +817,14 @@ function _faParsePaste(){
       else if(row.length>=3){s=row[0];v=row[1];q=parseInt(row[2]);n=FA_NOM[s]?.name||s;d=dd}
       else continue;if(s&&v&&q>0)items.push({sku:s,name:n||s,venue:v,fa,qty:q,biDate:d||''})}
   }
+  // Debug: show parsing state when no items found
+  if(!items.length){const _d=document.getElementById('_faPastePreview');_d.innerHTML='<pre style="font-size:10px;color:var(--ts);padding:8px;white-space:pre-wrap">'+
+    'Lines: '+lines.length+'\nHdr('+hdr.length+'): '+JSON.stringify(hdr)+
+    '\nisMatrix: '+isMatrix+' (venues:'+_hdrVenues.length+', dataCols:'+_numDataCols+')'+
+    '\nvc: '+JSON.stringify(typeof vc!=='undefined'?vc.map(v=>v.venue+':'+v.col):[])+
+    '\ndRows: '+dRows.length+
+    '\nLine samples:\n'+lines.slice(0,6).map((l,i)=>'  ['+i+'] ('+l.length+' cols) '+JSON.stringify(l.slice(0,6))).join('\n')+
+    '</pre>';return}
   window._faPaste={items,venueMap:{},dateMap:{},ovrMap:{}};
   // Best-guess venue mapping (with common abbreviation support)
   const _abbrMap={MIA:'Miami',NYNJ:'New York',NY:'New York',BOS:'Boston',PHL:'Philadelphia',PHI:'Philadelphia',SEA:'Seattle',VAN:'Vancouver',TOR:'Toronto',HOU:'Houston',KC:'Kansas City',ATL:'Atlanta',SF:'San Francisco',SFO:'San Francisco',LA:'Los Angeles',LAX:'Los Angeles',DAL:'Dallas',DFW:'Dallas',GDL:'Guadalajara',MTY:'Monterrey',CDMX:'Mexico City',MEX:'Mexico City',IBC:'International Broadcast'};
