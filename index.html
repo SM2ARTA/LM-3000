@@ -862,6 +862,7 @@ function _undoSnap(){
     lm_dispatched:JSON.stringify([...(LM_dispatched||[])]),
     lm_dateOvr:JSON.stringify(LM_dateOverrides||{}),
     lm_lsr:JSON.stringify(LM_lsrNumbers||{}),
+    lm_oorNums:JSON.stringify(LM_oorNumbers||{}),
     lm_lockedSnaps:JSON.stringify(LM_lockedSnapshots||{}),
     lm_holds:JSON.stringify([...(LM_holds||[])]),
     lm_holdReleased:JSON.stringify(LM_holdReleased||{}),
@@ -936,6 +937,7 @@ function UNDO_restore(){
     LM_dispatched=new Set(JSON.parse(snap.lm_dispatched));
     LM_dateOverrides=JSON.parse(snap.lm_dateOvr);
     if(snap.lm_lsr)LM_lsrNumbers=JSON.parse(snap.lm_lsr);
+    if(snap.lm_oorNums)LM_oorNumbers=JSON.parse(snap.lm_oorNums);
     if(snap.lm_lockedSnaps)LM_lockedSnapshots=JSON.parse(snap.lm_lockedSnaps);
     if(snap.lm_holds)LM_holds=new Set(JSON.parse(snap.lm_holds));
     if(snap.lm_holdReleased)LM_holdReleased=JSON.parse(snap.lm_holdReleased);
@@ -8187,6 +8189,7 @@ async function masterBackupExport(){
     LM_dispatched.forEach(fp=>rows.push({Fingerprint:fp,Type:'Locked',Value:LM_dateOverrides[fp]||'',Snapshot:LM_lockedSnapshots[fp]?JSON.stringify(LM_lockedSnapshots[fp]):''}));
     Object.entries(LM_dateOverrides).forEach(([fp,d])=>{if(!LM_dispatched.has(fp))rows.push({Fingerprint:fp,Type:'Date Override',Value:d,Snapshot:''})});
     Object.entries(LM_lsrNumbers).forEach(([fp,lsr])=>{if(lsr)rows.push({Fingerprint:fp,Type:'LSR',Value:lsr,Snapshot:''})});
+    Object.entries(LM_oorNumbers).forEach(([fp,oor])=>{if(oor)rows.push({Fingerprint:fp,Type:'OOR',Value:oor,Snapshot:''})});
     LM_holds.forEach(k=>rows.push({Fingerprint:k,Type:'Hold',Value:'',Snapshot:''}));
     Object.entries(LM_holdReleased).forEach(([k,d])=>rows.push({Fingerprint:k,Type:'HoldReleased',Value:d,Snapshot:''}));
     if(rows.length){const ws=XLSX.utils.json_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'LM Dispatch State')}
@@ -8435,11 +8438,12 @@ async function masterBackupRestore(file){
     // ── 5. LM Dispatch State → LM_dispatched + LM_dateOverrides ──
     const dispRows=getSheet('LM Dispatch State');
     if(dispRows){
-      LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};LM_holds=new Set();LM_holdReleased={};
+      LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_oorNumbers={};LM_lockedSnapshots={};LM_holds=new Set();LM_holdReleased={};
       for(const r of dispRows){
         if(r.Type==='Locked'&&r.Fingerprint){LM_dispatched.add(r.Fingerprint);if(r.Value)LM_dateOverrides[r.Fingerprint]=r.Value;if(r.Snapshot)try{LM_lockedSnapshots[r.Fingerprint]=JSON.parse(r.Snapshot)}catch(e){}}
         else if(r.Type==='Date Override'&&r.Fingerprint&&r.Value){LM_dateOverrides[r.Fingerprint]=r.Value}
         else if(r.Type==='LSR'&&r.Fingerprint&&r.Value){LM_lsrNumbers[r.Fingerprint]=r.Value}
+        else if(r.Type==='OOR'&&r.Fingerprint&&r.Value){LM_oorNumbers[r.Fingerprint]=r.Value}
         else if(r.Type==='Hold'&&r.Fingerprint){LM_holds.add(r.Fingerprint)}
         else if(r.Type==='HoldReleased'&&r.Fingerprint&&r.Value){LM_holdReleased[r.Fingerprint]=r.Value}
       }
@@ -9478,7 +9482,8 @@ function renderTruckCard(t,opts){
       <input type="checkbox" ${isLmDisp?'checked':''} onchange="LM_toggleDispatchTruck(${opts.truckIdx!=null?opts.truckIdx:-1},this.checked)"><span>${isLmDisp?'🔒 Locked':'Lock'}</span>
       <input type="date" value="${t.dd||''}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="LM_changeDate(${opts.truckIdx!=null?opts.truckIdx:-1},this.value)">
       <span style="color:var(--bd);margin:0 2px">|</span>
-      <label style="color:var(--ts);font-size:10px">LSR</label><input type="text" value="${LM_getLsr(t)}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${LM_getLsr(t)?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:90px;margin-left:auto" onchange="LM_setLsr(${opts.truckIdx!=null?opts.truckIdx:-1},this.value.trim())">
+      <label style="color:var(--ts);font-size:10px">LSR</label><input type="text" value="${LM_getLsr(t)}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${LM_getLsr(t)?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:90px" onchange="LM_setLsr(${opts.truckIdx!=null?opts.truckIdx:-1},this.value.trim())">
+      <label style="color:#2563eb;font-size:10px">OOR</label><input type="text" value="${LM_getOor(t)}" placeholder="OOR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${LM_getOor(t)?'#2563eb':'var(--bd)'};border-radius:4px;color:#2563eb;width:70px" onchange="LM_setOor(${opts.truckIdx!=null?opts.truckIdx:-1},this.value.trim())">
     </div>`:''}
   </div>`;
   return h;
@@ -10827,7 +10832,7 @@ function numberAll(){
       if(computedFP!==fp){
         // FP mismatch — migrate all FP-keyed maps from stored key to computed key
         if(LM_dispatched.has(fp)){LM_dispatched.delete(fp);LM_dispatched.add(computedFP)}
-        for(const m of [LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr]){if(m[fp]!==undefined){m[computedFP]=m[fp];delete m[fp]}}
+        for(const m of [LM_dateOverrides,LM_lsrNumbers,LM_oorNumbers,LM_excludeUserOvr]){if(m[fp]!==undefined){m[computedFP]=m[fp];delete m[fp]}}
         if(LM_lockedSnapshots[fp]){LM_lockedSnapshots[computedFP]=LM_lockedSnapshots[fp];delete LM_lockedSnapshots[fp]}
         const oldMI='LM-'+fp,newMI='LM-'+computedFP;
         if(MANUAL_ITEMS[oldMI]){MANUAL_ITEMS[newMI]=MANUAL_ITEMS[oldMI];delete MANUAL_ITEMS[oldMI]}
@@ -10880,7 +10885,7 @@ function numberAll(){
   // This runs on every numberAll() but only migrates FPs that still use old format.
   // Needed because kit SKU renaming below changes SKU names on every rebuild.
   {
-    const _fpObjMaps=[LM_dateOverrides,LM_lsrNumbers,LM_excludeUserOvr,LM_lockedSnapshots];
+    const _fpObjMaps=[LM_dateOverrides,LM_lsrNumbers,LM_oorNumbers,LM_excludeUserOvr,LM_lockedSnapshots];
     let _fpChanged=false;
     allTrucks.forEach(e=>{
       const trk=e.ref;
@@ -11528,6 +11533,7 @@ let LM_excludeUserOvr={};// fingerprint -> true/false (user explicit override of
 let LM_dispatched=new Set();// truck fingerprints marked as dispatched
 let LM_dateOverrides={};// {fingerprint: newDate} — manual date changes
 let LM_lsrNumbers={};// {fingerprint: lsrString} — LSR numbers for LM trucks
+let LM_oorNumbers={};// {fingerprint: oorString} — OOR numbers for LM trucks
 let LM_lockedSnapshots={};// {fingerprint: truckSnapshot} — frozen truck data for locked trucks
 let LM_holds=new Set();// "venue|sku" pairs on hold — excluded from build() demand aggregation
 let LM_holdReleased={};// "venue|sku" → "YYYY-MM-DD" — eligibility floor: build() clamps planBiK to max(origBiK, releaseDate, today)
@@ -11634,12 +11640,14 @@ function LM_returnItem(fp,sku,truckIdx){
 function LM_getDateOverride(t){return LM_dateOverrides[LM_fp(t)]||null}
 function LM_getLsr(t){return LM_lsrNumbers[LM_fp(t)]||''}
 function LM_setLsr(truckIdx,val){if(ROLE==='viewer')return;const t=LP?.allT?.[truckIdx];if(!t)return;const fp=LM_fp(t);if(val)LM_lsrNumbers[fp]=val;else delete LM_lsrNumbers[fp];LM_saveDateOverrides()}
+function LM_getOor(t){return LM_oorNumbers[LM_fp(t)]||''}
+function LM_setOor(truckIdx,val){if(ROLE==='viewer')return;const t=LP?.allT?.[truckIdx];if(!t)return;const fp=LM_fp(t);if(val)LM_oorNumbers[fp]=val;else delete LM_oorNumbers[fp];LM_saveDateOverrides()}
 async function LM_saveDateOverrides(){
   if(ROLE==="viewer"||!SB)return;
   UNDO_capture();
   try{
     const now=new Date().toISOString();
-    await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides,lsrNumbers:LM_lsrNumbers,lockedSnapshots:LM_lockedSnapshots,holds:[...LM_holds],holdReleased:LM_holdReleased}),updated_at:now});
+    await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides,lsrNumbers:LM_lsrNumbers,oorNumbers:LM_oorNumbers,lockedSnapshots:LM_lockedSnapshots,holds:[...LM_holds],holdReleased:LM_holdReleased}),updated_at:now});
   }catch(e){console.warn('LM dispatch save error:',e)}
 }
 async function LM_loadDateOverrides(){
@@ -11651,6 +11659,7 @@ async function LM_loadDateOverrides(){
       LM_dispatched=new Set(p.dispatched||[]);
       LM_dateOverrides=p.dateOverrides||{};
       LM_lsrNumbers=p.lsrNumbers||{};
+      LM_oorNumbers=p.oorNumbers||{};
       LM_lockedSnapshots=p.lockedSnapshots||{};
       LM_holds=new Set(p.holds||[]);
       LM_holdReleased=p.holdReleased||{};
@@ -14559,8 +14568,8 @@ function LM_renderForecast(el){
       const tBI=t.origBiK||t.biK||firstBI||null;
       const buffer=tBI&&arrDate?Math.round((new Date(tBI+'T12:00:00')-new Date(arrDate+'T12:00:00'))/86400000):null;
       const cargo=t.items.reduce((s,it)=>{const n=NOM[it.sku];const q=it.loadQty!=null?it.loadQty:(it.qty||0);if(n&&n._fa){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===it.sku);return s+(fg?.value||0)}if(n&&n._kitNom&&it._kitItems)return s+it._kitItems.reduce((ks,ci)=>ks+((_lpCustNom(ci.sku).unitPrice||0)*ci.qty),0);return s+((_lpCustNom(it.sku).unitPrice||0)*q)},0);
-      const _lsr=LM_getLsr(t);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
-      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,fp:LM_fp(t),disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck});
+      const _lsr=LM_getLsr(t);const _oor=LM_getOor(t);const _faEng=t.items?t.items.filter(i=>i._fa).length:0;
+      allRows.push({dest:clDisp(label),cluster:label,truckId:t.id,fp:LM_fp(t),disp,transit,arrDate,plt,fnKits,osKits,dispatched:LM_isDispatched(t),firstBI:tBI,buffer,lsr:_lsr,oor:_oor,isCort:_hasCort,asmCount,dispLoc:_dispLoc,clusterLabel:_clLabel,lateCount,vtype,country,cargo,faCount:_faEng,faTruck:!!t._faTruck});
     }
   };
   // USA trucks
@@ -14648,7 +14657,7 @@ function LM_renderForecast(el){
       ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
       ${wLate?'<span class="bg bgs bg-rd">⚠ '+wLate+' late</span>':''}
     </div>
-    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>Legs</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Co-Pilot</th></tr></thead><tbody>`;
+    <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>Legs</th><th>OOR</th><th>LSR</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Co-Pilot</th></tr></thead><tbody>`;
     for(const r of rows){
       const bufColor=r.buffer!=null?(r.buffer>=7?'var(--gn)':r.buffer>=3?'var(--or)':'var(--rd)'):'var(--tt)';
       const _fp=(r._leg1Fp||r.fp).replace(/'/g,"\\'");
@@ -14663,6 +14672,7 @@ function LM_renderForecast(el){
         <td style="font-size:10px;color:#1565C0;font-weight:600">${r.dispLoc}</td>
         <td style="font-size:11px;font-weight:600;color:#1565C0">${r.dest}</td>
         <td class="mono fw6" style="color:#1565C0">${r.truckId} <span style="font-size:8px;font-weight:700;color:#fff;background:#1565C0;padding:1px 4px;border-radius:3px">2nd Leg</span></td>
+        <td></td>
         <td></td>
         <td class="mono" style="font-size:10px;color:var(--pu)" onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="text" value="${l2Lsr}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${l2Lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:80px" onchange="_fcSetLeg2Lsr('${_fp}',this.value.trim())">`:`<span>${l2Lsr||''}</span>`}</td>
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="date" value="${r.disp}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid #1565C0;border-radius:4px;color:#1565C0;width:115px" onchange="_fcSetLeg2Date('${_fp}',this.value)">`:`<span style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</span>`}</td>
@@ -14689,6 +14699,7 @@ function LM_renderForecast(el){
         <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':''}${r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':''}</td>
         <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${legLabel}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${is2Leg?'#1565C0':'var(--bd)'};border-radius:4px;color:${is2Leg?'#1565C0':'var(--tt)'};background:#fff" onchange="_fcSetLegs('${_fp}',parseInt(this.value))"><option value="1"${!is2Leg?' selected':''}>1</option><option value="2"${is2Leg?' selected':''}>2</option></select>`:`<span style="font-size:10px;color:var(--tt)">${is2Leg?'2':'1'}</span>`}</td>
+        <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
         <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
         <td>${_fmtD(r.disp)}</td>
         <td class="mono" style="text-align:center">${r.transit}d</td>
@@ -17171,7 +17182,7 @@ function doSystemReset(){
   document.getElementById("V26").classList.remove("vis");
   // Reset all state
   NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};
-  STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};LM_holds=new Set();LM_holdReleased={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
+  STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_oorNumbers={};LM_lockedSnapshots={};LM_holds=new Set();LM_holdReleased={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
   LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_oorNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
@@ -17337,7 +17348,7 @@ function doResetLM(){
   if(SB){
     SB.from('shared_state').delete().in('id',['fm-nom','fm-rw','fm-vs','fm-excl','fm-excl-ovr','fm-stock','fm-lm-dispatch','fm-manual-items','fm-lm-demand-adj','fm-lm-nom-ovr','fm-cluster-ta','fm-lm-manual-demand','fm-lm-kits','fm-lm-stp-deliveries','fm-stp-strategy','fm-dist-overrides','fm-pallet-cfg']).then(()=>{}).catch(()=>{});
   }
-  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};LM_holds=new Set();LM_holdReleased={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
+  NOM={};RW=[];VN=[];sel="";selCluster="";uf=[];VS={};CLUSTERS={};PLAN_CACHE={};LM_excluded=new Set();LM_excludeUserOvr={};CORT_CACHE={};LM_vtSkuMap={};STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_oorNumbers={};LM_lockedSnapshots={};LM_holds=new Set();LM_holdReleased={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_updateStockWaterfall();LP_invalidateLate();// stock cleared
   // Clear rendered content so upload overlay is visible
   document.getElementById("vl").innerHTML='';
