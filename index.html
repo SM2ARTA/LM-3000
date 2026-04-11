@@ -839,6 +839,7 @@ function _undoSnap(){
     lp_oorTrucks:JSON.stringify([...(LP_oorTrucks||[])]),
     lp_contOvr:JSON.stringify(LP_contDateOverrides||{}),
     lp_lsr:JSON.stringify(LP_lsrNumbers||{}),
+    lp_oorNums:JSON.stringify(LP_oorNumbers||{}),
     lp_palletOvr:JSON.stringify(LP_palletOverrides||{}),
     lp_customsOvr:JSON.stringify(LP_customsOverrides||{}),
     lp_excludeStaples:LP_excludeStaples,
@@ -909,6 +910,7 @@ function UNDO_restore(){
     LP_oorTrucks=new Set(JSON.parse(snap.lp_oorTrucks||'[]'));
     LP_contDateOverrides=JSON.parse(snap.lp_contOvr);
     LP_lsrNumbers=JSON.parse(snap.lp_lsr);
+    LP_oorNumbers=JSON.parse(snap.lp_oorNums||'{}');
     LP_palletOverrides=JSON.parse(snap.lp_palletOvr);
     LP_customsOverrides=JSON.parse(snap.lp_customsOvr||'{}');
     LP_excludeStaples=snap.lp_excludeStaples!==undefined?snap.lp_excludeStaples:true;
@@ -2283,6 +2285,7 @@ let LP_arrived=new Set();// truck IDs confirmed arrived at destination (LP-fed v
 let LP_oorTrucks=new Set();// truck IDs with OOR (Outbound Order Request) submitted — stock reserved, no deduction
 let LP_contDateOverrides={};// container name -> new arrival date (YYYY-MM-DD)
 let LP_lsrNumbers={};// truckId -> LSR number string (e.g. "LSR625-001")
+let LP_oorNumbers={};// truckId -> OOR number string (e.g. "234")
 let LP_palletOverrides={};// sku -> {palletQty, palletSpc} — manual overrides for pallet dimensions
 let LP_excludeStaples=true;// exclude STP USA items for HOU/KC/NY destinations
 let _lpDemFilterState={srcs:null,dests:null,search:''};// preserved across re-renders
@@ -3866,7 +3869,7 @@ async function LP_saveTruckState(){
     const now=new Date().toISOString();
     const{error}=await SB.from('shared_state').upsert({id:LP_KEYS.truck,value:JSON.stringify({
       dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,
-      lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
+      lsrNumbers:LP_lsrNumbers,oorNumbers:LP_oorNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
       arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
 
       stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned
@@ -3896,7 +3899,7 @@ window.addEventListener('beforeunload',e=>{
     if(SB&&ROLE!=='viewer'){
       const truckData={
         dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,
-        lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
+        lsrNumbers:LP_lsrNumbers,oorNumbers:LP_oorNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,
         arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],
 
         stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned
@@ -3948,7 +3951,7 @@ async function LP_saveToSupabase(){
     const u=async(id,val)=>{const json=JSON.stringify(val);const h=_h(json);if(_lpSaveHashes[id]===h)return;const{error}=await SB.from('shared_state').upsert({id,value:json,updated_at:now});if(error){console.warn('LP save '+id+':',error)}else{_lpSaveHashes[id]=h}};
     // Sequential saves — lightweight first, heaviest last. Avoids DB connection burst.
     await u(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings});
-    await u(LP_KEYS.truck,{dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned});
+    await u(LP_KEYS.truck,{dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,oorNumbers:LP_oorNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned});
     await u(LP_KEYS.demand,LP_STATE.materialPlan);
     await u(LP_KEYS.nom,LP_STATE.nomenclature);
     await u(LP_KEYS.arr,LP_STATE.arrivals);
@@ -3961,7 +3964,7 @@ async function LP_saveToSupabase(){
       const now=new Date().toISOString();
       const u2=async(id,val)=>{await SB.from('shared_state').upsert({id,value:JSON.stringify(val),updated_at:now})};
       await u2(LP_KEYS.config,{turnaround:LP_STATE.turnaround,maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,ricStartDate:LP_STATE.ricStartDate,planGenerated:LP_STATE.planGenerated,engineUnit:'uom',lastGenSettings:LP_lastGenSettings});
-      await u2(LP_KEYS.truck,{dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned});
+      await u2(LP_KEYS.truck,{dispatched:[...LP_dispatched],arrived:[...LP_arrived],oorTrucks:[...LP_oorTrucks],contDateOverrides:LP_contDateOverrides,lsrNumbers:LP_lsrNumbers,oorNumbers:LP_oorNumbers,palletOverrides:LP_palletOverrides,customsOverrides:LP_customsOverrides,excludeStaples:LP_excludeStaples,arrivedConts:[...LP_arrivedConts],transitDays:LP_transitDays,holds:[...LP_holds],stockSkus:[...STOCK_SKUS],stockReportName:STOCK_REPORT_NAME,destWhsDays:LP_destWhsDays,returned:LP_returned});
       console.log('LP save retry succeeded');
     }catch(e2){console.warn('LP save retry failed:',e2)}},3000);
   }
@@ -3994,6 +3997,7 @@ async function LP_loadFromSupabase(){
       LP_oorTrucks=new Set(truck?.oorTrucks||[]);
       LP_contDateOverrides=truck?.contDateOverrides||{};
       LP_lsrNumbers=truck?.lsrNumbers||{};
+      LP_oorNumbers=truck?.oorNumbers||{};
       LP_palletOverrides=truck?.palletOverrides||{};
       LP_customsOverrides=truck?.customsOverrides||{};
       LP_excludeStaples=truck?.excludeStaples!==undefined?truck.excludeStaples:true;
@@ -4044,6 +4048,7 @@ async function LP_loadFromSupabase(){
     LP_oorTrucks=new Set(p.oorTrucks||[]);
     LP_contDateOverrides=p.contDateOverrides||{};
     LP_lsrNumbers=p.lsrNumbers||{};
+    LP_oorNumbers=p.oorNumbers||{};
     LP_palletOverrides=p.palletOverrides||{};
     LP_customsOverrides=p.customsOverrides||{};
     LP_excludeStaples=p.excludeStaples!==undefined?p.excludeStaples:true;
@@ -5345,7 +5350,7 @@ function LP_renderPlan(el){
     const _faItems=aggSkus.filter(s=>_lpIsFaSku(s.sku));
     if(_faItems.length){const _faPlt=_faItems.reduce((s,i)=>s+i.pallets,0);const _faTypes=[...new Set(_faItems.map(s=>{const p=s.sku.split('-');return p[1]||'FA'}))];h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#FEF3EB;color:#C4550A;border:1px solid #F5D6B8">📐 FA: '+_faTypes.join(', ')+' · '+_faPlt.toFixed(1)+' plt reserved</span></div>'}
     const _lpFa=_faMatchLP(t.id);if(_lpFa){const _lpFaLabel=_lpFa.fas&&_lpFa.fas.length?_lpFa.fas.join(', '):'FA';const _lpFaDts=[...new Set(_faItemsForTruck('LP-'+t.id,'','').map(i=>i.biDate).filter(Boolean))].sort().map(d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}});h+='<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 '+_lpFaLabel+': '+_lpFa.count+' items · '+_lpFa.qty+'qty · '+_lpFa.plt.toFixed(1)+'plt'+(_lpFaDts.length?' · BI: '+_lpFaDts.join(', '):'')+'</span></div>'}
-    if(ROLE==="viewer"){if(isDisp)h+='<div class="lp-dispatch-row"><span>🔒 Locked</span>'+(LP_arrived.has(t.id)?' <span style="color:var(--gn);font-weight:600">📦 Arrived</span>':'')+(isOOR?' <span style="color:#2563eb;font-weight:600">OOR</span>':'')+'</div>';}
+    if(ROLE==="viewer"){if(isDisp)h+='<div class="lp-dispatch-row"><span>🔒 Locked</span>'+(LP_arrived.has(t.id)?' <span style="color:var(--gn);font-weight:600">📦 Arrived</span>':'')+(isOOR?' <span style="color:#2563eb;font-weight:600">OOR'+(LP_oorNumbers[t.id]?' #'+LP_oorNumbers[t.id]:'')+'</span>':'')+'</div>';}
     else{const _isArr=LP_arrived.has(t.id);h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input type="checkbox" '+checked+' onclick="event.stopPropagation();LP_toggleDispatch('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0">'+(isDisp?'🔒 Lock':'Lock')+'</span>'+(isDisp?'<input type="checkbox" '+(_isArr?'checked':'')+' onclick="event.stopPropagation();LP_toggleArrived('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0;color:'+(_isArr?'var(--gn)':'var(--tt)')+'">'+(_isArr?'📦 Arrived':'Arrived')+'</span>':'')+'<input type="checkbox" '+(isOOR?'checked':'')+' onclick="event.stopPropagation();LP_toggleOOR('+t.id+',this.checked)"><span onclick="event.stopPropagation()" style="flex-shrink:0;color:#2563eb">'+(isOOR?'📋 OOR':'OOR')+'</span><input type="date" value="'+t.date+'" onclick="event.stopPropagation()" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid var(--bd);border-radius:4px;color:var(--ts);width:120px" onchange="event.stopPropagation();LP_changeDate('+t.id+',this.value)"></div>';}
     const lsrEsc=lsr.replace(/"/g,'&quot;');
     h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:5px;margin-top:4px">';
@@ -5353,7 +5358,16 @@ function LP_renderPlan(el){
     h+='<span id="lsr-val-'+t.id+'" class="mono" style="font-size:10px;color:'+(lsr?'var(--tp)':'var(--tt)')+'">'+(lsr||'—')+'</span>';
     h+='<input id="lsr-inp-'+t.id+'" type="text" value="'+lsrEsc+'" placeholder="LSR625-001" onclick="event.stopPropagation()" onkeydown="event.stopPropagation();if(event.key===\'Enter\')LP_lsrSave('+t.id+');if(event.key===\'Escape\'){this.style.display=\'none\';document.getElementById(\'lsr-val-'+t.id+'\').style.display=\'\';document.getElementById(\'lsr-edit-'+t.id+'\').style.display=\'\';document.getElementById(\'lsr-save-'+t.id+'\').style.display=\'none\'}" style="display:none;font-size:10px;font-family:var(--fm);padding:2px 6px;border:1px solid var(--ac);border-radius:4px;color:var(--tp);width:105px;outline:none">';
     if(ROLE!=="viewer")h+='<button id="lsr-edit-'+t.id+'" onclick="event.stopPropagation();LP_lsrEdit('+t.id+')" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--ts)" title="Edit LSR">✏️</button><button id="lsr-save-'+t.id+'" onclick="event.stopPropagation();LP_lsrSave('+t.id+')" style="display:none;background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--gn)" title="Save LSR">💾</button>';
-    h+='</div></div>';
+    h+='</div>';
+    // OOR number row (only when OOR checked)
+    if(isOOR){const oorNum=LP_oorNumbers[t.id]||'';const oorEsc=oorNum.replace(/"/g,'&quot;');
+    h+='<div class="lp-dispatch-row" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:5px;margin-top:4px">';
+    h+='<span style="font-size:10px;color:#2563eb;white-space:nowrap">OOR#</span>';
+    h+='<span id="oor-val-'+t.id+'" class="mono" style="font-size:10px;color:'+(oorNum?'#2563eb':'var(--tt)')+'">'+(oorNum||'—')+'</span>';
+    h+='<input id="oor-inp-'+t.id+'" type="text" value="'+oorEsc+'" placeholder="234" onclick="event.stopPropagation()" onkeydown="event.stopPropagation();if(event.key===\'Enter\')LP_oorSave('+t.id+');if(event.key===\'Escape\'){this.style.display=\'none\';document.getElementById(\'oor-val-'+t.id+'\').style.display=\'\';document.getElementById(\'oor-edit-'+t.id+'\').style.display=\'\';document.getElementById(\'oor-save-'+t.id+'\').style.display=\'none\'}" style="display:none;font-size:10px;font-family:var(--fm);padding:2px 6px;border:1px solid #2563eb;border-radius:4px;color:var(--tp);width:80px;outline:none">';
+    if(ROLE!=="viewer")h+='<button id="oor-edit-'+t.id+'" onclick="event.stopPropagation();LP_oorEdit('+t.id+')" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:var(--ts)" title="Edit OOR#">✏️</button><button id="oor-save-'+t.id+'" onclick="event.stopPropagation();LP_oorSave('+t.id+')" style="display:none;background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;color:#2563eb" title="Save OOR#">💾</button>';
+    h+='</div>';}
+    h+='</div>';
     return h;
   }
 
@@ -5846,6 +5860,8 @@ function LP_toggleDispatch(truckId,checked){
   }else{
     LP_dispatched.delete(truckId);
     LP_arrived.delete(truckId);
+    LP_oorTrucks.delete(truckId);
+    delete LP_oorNumbers[truckId];
     delete LP_returned[truckId];
     console.log('[LP] Unlocked LP-'+truckId+', dispatched remaining:',LP_dispatched.size,', regenerating...');
     LP_regenerate();// unlocked truck items re-enter pool — rebuild plan
@@ -5895,7 +5911,7 @@ function LP_cleanupReturns(){
 
 function LP_toggleOOR(truckId,checked){
   if(ROLE==="viewer")return;
-  if(checked)LP_oorTrucks.add(truckId);else LP_oorTrucks.delete(truckId);
+  if(checked)LP_oorTrucks.add(truckId);else{LP_oorTrucks.delete(truckId);delete LP_oorNumbers[truckId]}
   LP_updateStockWaterfall();
   LP_saveTruckStateDebounced();
   setTimeout(()=>{LP_render();_lpNotifyLM()},50);
@@ -5952,6 +5968,30 @@ function LP_lsrSave(truckId){
       }
     }
   }
+}
+
+function LP_oorEdit(truckId){
+  if(ROLE==="viewer")return;
+  document.getElementById('oor-val-'+truckId).style.display='none';
+  document.getElementById('oor-edit-'+truckId).style.display='none';
+  const inp=document.getElementById('oor-inp-'+truckId);
+  inp.style.display='';
+  inp.focus();inp.select();
+  document.getElementById('oor-save-'+truckId).style.display='';
+}
+function LP_oorSave(truckId){
+  if(ROLE==="viewer")return;
+  const inp=document.getElementById('oor-inp-'+truckId);
+  const v=(inp.value||'').trim();
+  if(v)LP_oorNumbers[truckId]=v;else delete LP_oorNumbers[truckId];
+  LP_saveTruckState();
+  const valEl=document.getElementById('oor-val-'+truckId);
+  valEl.textContent=v||'—';
+  valEl.style.color=v?'#2563eb':'var(--tt)';
+  valEl.style.display='';
+  inp.style.display='none';
+  document.getElementById('oor-save-'+truckId).style.display='none';
+  document.getElementById('oor-edit-'+truckId).style.display='';
 }
 
 function LP_showTruckModal(truckId){
@@ -8244,6 +8284,8 @@ async function masterBackupExport(){
     Object.entries(LP_palletOverrides).forEach(([sku,ov])=>rows.push({Setting:'Pallet Override: '+sku,Value:JSON.stringify(ov)}));
     // LSR numbers
     Object.entries(LP_lsrNumbers).forEach(([id,lsr])=>rows.push({Setting:'LSR: LP-'+id,Value:lsr}));
+    // OOR numbers
+    Object.entries(LP_oorNumbers).forEach(([id,oor])=>rows.push({Setting:'OOR: LP-'+id,Value:oor}));
     // Customs overrides (HS code, country, price, customsName)
     Object.entries(LP_customsOverrides).forEach(([sku,ov])=>rows.push({Setting:'Customs Override: '+sku,Value:JSON.stringify(ov)}));
     // Holds, excludeStaples, destWhsDays
@@ -8461,7 +8503,7 @@ async function masterBackupRestore(file){
       LP_STATE.generatedPlan=lpPlanRows.map(r=>({truckId:r['Truck ID'],date:r.Date,destination:r.Destination,sku:r.SKU,name:r.Name||'',qty:r.Qty||0,pallets:r.Pallets||0}));
       LP_STATE.planGenerated=true;
       // Restore locked trucks + LSR from plan sheet
-      LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_returned={};
+      LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_oorNumbers={};LP_returned={};
       for(const r of lpPlanRows){
         if(r.Locked==='Yes')LP_dispatched.add(r['Truck ID']);
         if(r.LSR)LP_lsrNumbers[r['Truck ID']]=r.LSR;
@@ -8489,6 +8531,7 @@ async function masterBackupRestore(file){
         else if(s.startsWith('Container Date Override: '))LP_contDateOverrides[s.replace('Container Date Override: ','')]=v;
         else if(s.startsWith('Pallet Override: ')){try{LP_palletOverrides[s.replace('Pallet Override: ','')]=JSON.parse(v)}catch(e){}}
         else if(s.startsWith('LSR: LP-')){const id=+s.replace('LSR: LP-','');if(id)LP_lsrNumbers[id]=v}
+        else if(s.startsWith('OOR: LP-')){const id=+s.replace('OOR: LP-','');if(id)LP_oorNumbers[id]=v}
         else if(s.startsWith('Customs Override: ')){try{LP_customsOverrides[s.replace('Customs Override: ','')]=JSON.parse(v)}catch(e){}}
         else if(s==='Holds'&&v){try{LP_holds=new Set(JSON.parse(v))}catch(e){}}
         else if(s==='Exclude Staples')LP_excludeStaples=v==='true'
@@ -8587,6 +8630,8 @@ async function masterBackupRestore(file){
       for(const id of LP_dispatched){if(!planTruckIds.has(id)){_vErrs.push('LP_dispatched references truck LP-'+id+' not in plan');LP_dispatched.delete(id)}}
       for(const id of LP_oorTrucks){if(!planTruckIds.has(id)){_vErrs.push('LP_oorTrucks references truck LP-'+id+' not in plan');LP_oorTrucks.delete(id)}}
       for(const id of Object.keys(LP_lsrNumbers)){if(!planTruckIds.has(+id)){_vErrs.push('LP_lsrNumbers references truck LP-'+id+' not in plan');delete LP_lsrNumbers[id]}}
+      for(const id of Object.keys(LP_oorNumbers)){if(!planTruckIds.has(+id)){delete LP_oorNumbers[id]}}
+      for(const id of LP_arrived){if(!planTruckIds.has(id)){LP_arrived.delete(id)}}
       if(!LP_STATE.generatedPlan.length)LP_STATE.planGenerated=false;
     }
     // LP demand: filter out rows missing required fields
@@ -17120,7 +17165,7 @@ function doSystemReset(){
   STOCK_SKUS=new Set();STOCK_QTYS={};STOCK_REPORT_NAME='';LM_dispatched=new Set();LM_dateOverrides={};LM_lsrNumbers={};LM_lockedSnapshots={};LM_holds=new Set();LM_holdReleased={};MANUAL_ITEMS={};LM_demandAdj={};LM_nomOverrides={};LM_clusterTurnaround=5;
   LM_MANUAL_DEMAND=[];LM_KITS=[];_kitNextId=1;LM_STP_DELIVERIES=[];_stpNextId=1;LM_STP_TRUCKS={};LM_STP_STRATEGY={};DIST_OVERRIDES={};LM_palletCfg={};LM_initPalletCfg();
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
+  LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_oorNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
   LP_FA_GROUPS=[];
   LP_updateStockWaterfall();LP_invalidateLate();// all state cleared
   // Restore upload screen
@@ -17349,7 +17394,7 @@ function doResetLP(){
     SB.from('shared_state').delete().in('id',['lp-state','lp-config','lp-nom','lp-demand','lp-demand-raw','lp-arrivals','lp-plan','lp-truck-state']).then(()=>{}).catch(()=>{});
   }
   LP_STATE={materialPlan:[],nomenclature:{},arrivals:[],loadedFiles:{arrivals:null,nomenclature:null,materialplan:null},turnaround:6,maxPallets:LP_DEFAULT_MAX_PALLETS,maxTrucks:LP_DEFAULT_MAX_TRUCKS,maxDests:LP_DEFAULT_MAX_DESTS,ricStartDate:'2026-04-01',planGenerated:false,generatedPlan:[]};
-  LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
+  LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_oorNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_contDateOverrides={};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
   LP_FA_GROUPS=[];
   LP_lastGenSettings={};
   LP_updateStockWaterfall();LP_invalidateLate();// plan cleared
@@ -17478,7 +17523,7 @@ async function goGenerateLP(){
       {maxPallets:LP_STATE.maxPallets,maxTrucks:LP_STATE.maxTrucks,maxDests:LP_STATE.maxDests,nomenclature:_genNom,ricStartDate:LP_STATE.ricStartDate}
     ),LP_STATE.maxPallets||LP_DEFAULT_MAX_PALLETS);
     LP_STATE.planGenerated=true;
-    LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
+    LP_dispatched=new Set();LP_arrived=new Set();LP_oorTrucks=new Set();LP_lsrNumbers={};LP_oorNumbers={};LP_palletOverrides={};LP_customsOverrides={};LP_holds=new Set();LP_stockHolds=new Set();LP_arrivedConts=new Set();LP_transitDays={...LP_TRANSIT_DEFAULTS};LP_excludeStaples=true;LP_destWhsDays={...LP_DEST_WHS_DEFAULTS};LP_returned={};
     LP_snapshotSettings();
     LP_updateStockWaterfall();
     LP_invalidateLate();
