@@ -387,7 +387,7 @@ const CAT_META={
 };
 
 const PEOPLE=['All','Anthony','Ashley','Brittany','Diana','Karime','Kyli','Mike','Vlad','Yael'];
-const PEOPLE_COLORS={All:'#4A148C',Anthony:'#E8A020',Ashley:'#D84315',Brittany:'#2E7D32',Diana:'#C2185B',Karime:'#6A1B9A',Kyli:'#1565C0',Mike:'#00838F',Vlad:'#455A64',Yael:'#F9A825'};
+const PEOPLE_COLORS={All:'#4A148C',Anthony:'#E2A336',Ashley:'#D4652F',Brittany:'#3EA660',Diana:'#E76B9A',Karime:'#8B6CC1',Kyli:'#4878D0',Mike:'#3AAFB9',Vlad:'#7B8B99',Yael:'#C8C234'};
 
 let ENTRIES=[];
 let activeCat=null;
@@ -461,7 +461,7 @@ async function loadFromSupabase(){
     if(merged.length<beforePurge)saveToSupabase();
     _nextId=Math.max(...ENTRIES.map(e=>e.id),0)+1;
     localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
-    if(changed){renderCats();renderGrid()}
+    if(changed){renderCats();renderPeople();renderGrid()}
   }catch(e){console.warn('Supabase load failed:',e)}
 }
 
