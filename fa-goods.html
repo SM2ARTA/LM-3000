@@ -781,11 +781,13 @@ function _faParsePaste(){
   const lines=raw.split('\n').map(l=>l.split('\t').map(c=>c.trim()));
   if(!lines.length)return;
   const hdr=lines[0];
+  // Multi-row header: merge row 1 values into blank header cells (handles merged Excel headers)
+  if(lines.length>1){const r1=lines[1];while(hdr.length<r1.length)hdr.push('');for(let c=0;c<r1.length;c++){if(!hdr[c]&&r1[c]&&!/^\d+$/.test(r1[c])&&!_faTryDate(r1[c]))hdr[c]=r1[c]}}
   const dRows=lines.filter((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
-  // Matrix detection: header row columns 2+ must have venue-like names (long strings, not short abbreviations or numbers)
-  // Row format has short venue codes (MIA, NYNJ, BOS) or numbers in col 2+; matrix has full venue names
+  // Matrix detection: header columns 2+ have venue-like names (abbreviations or full), and 2+ columns carry numeric data
   const _hdrVenues=hdr.slice(2).filter(h=>h&&!/^\d+$/.test(h)&&!_faTryDate(h));
-  const isMatrix=hdr.length>=4&&_hdrVenues.length>0&&_hdrVenues.some(h=>h.length>5)&&dRows.some(r=>r.slice(2).some(c=>/^\d+$/.test(c||'')));
+  let _numDataCols=0;for(let c=2;c<hdr.length;c++){if(lines.some((l,i)=>i>0&&/^\d+$/.test((l[c]||'').trim())))_numDataCols++}
+  const isMatrix=hdr.length>=4&&_hdrVenues.length>=2&&_numDataCols>=2;
   const items=[];
   if(isMatrix){
     // Detect duplicate column headers and disambiguate with sub-header row
@@ -800,7 +802,14 @@ function _faParsePaste(){
       vc.push({col:c,venue:vn,biDate:''})}
     for(let r=1;r<Math.min(5,lines.length);r++){const row=lines[r];if(!row)continue;for(const v of vc){const d=_faTryDate(row[v.col]);if(d)v.biDate=d}}
     const ds=lines.findIndex((l,i)=>i>0&&l[0]&&/^[A-Z]{2,}/.test(l[0]));
-    if(ds>=0)for(let r=ds;r<lines.length;r++){const row=lines[r];if(!row||!row[0])continue;const sku=row[0],nm=row[1]||FA_NOM[sku]?.name||sku;for(const v of vc){const q=parseInt(row[v.col]);if(q>0)items.push({sku,name:nm,venue:v.venue,fa,qty:q,biDate:v.biDate||dd})}}
+    if(ds>=0)for(let r=ds;r<lines.length;r++){const row=lines[r];if(!row||!row[0])continue;
+      if(/^\d+$/.test(row[0]))continue;// skip pure-numeric rows (qty continuation)
+      if(!/^[A-Z]{2,}/.test(row[0]))continue;
+      const sku=row[0],nm=row[1]||FA_NOM[sku]?.name||sku;
+      // Check if quantities are on this row or the next (split rows from merged Excel cells)
+      const hasQty=vc.some(v=>/^\d+$/.test((row[v.col]||'').trim()));
+      if(hasQty){for(const v of vc){const q=parseInt(row[v.col]);if(q>0)items.push({sku,name:nm,venue:v.venue,fa,qty:q,biDate:v.biDate||dd})}}
+      else{const nxt=lines[r+1];if(nxt&&nxt.some((c,ci)=>ci>=2&&/^\d+$/.test((c||'').trim()))){for(const v of vc){const q=parseInt(nxt[v.col]);if(q>0)items.push({sku,name:nm,venue:v.venue,fa,qty:q,biDate:v.biDate||dd})};r++}}}
   } else {
     for(const row of lines){if(!row||!row[0]||row[0].toLowerCase()==='sku')continue;let s,n,v,q,d;
       if(row.length>=5){s=row[0];n=row[1];v=row[2];q=parseInt(row[3]);d=_faTryDate(row[4])||dd}
