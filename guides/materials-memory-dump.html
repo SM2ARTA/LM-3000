@@ -440,12 +440,12 @@ function saveEntries(){
 // ── SUPABASE SYNC — proper merge by ID + timestamp ──
 async function loadFromSupabase(){
   try{
-    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}&select=val`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
     if(!r.ok){console.warn('Supabase fetch failed:',r.status);return}
     const d=await r.json();
-    if(!d.length||!d[0].val){console.warn('Supabase: no data for',SB_KEY_ID);return}
+    if(!d.length||!d[0].value){console.warn('Supabase: no data for',SB_KEY_ID);return}
     // Handle double-stringified val
-    let raw=d[0].val;
+    let raw=d[0].value;
     while(typeof raw==='string'){try{raw=JSON.parse(raw)}catch(e){break}}
     const remote=Array.isArray(raw)?raw:[];
     if(!remote.length){console.warn('Supabase: empty entries array');return}
@@ -491,7 +491,7 @@ async function saveToSupabase(){
   const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   try{
     await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-      body:JSON.stringify({id:SB_KEY_ID,val:JSON.stringify(ENTRIES)})});
+      body:JSON.stringify({id:SB_KEY_ID,value:JSON.stringify(ENTRIES)})});
   }catch(e){console.warn('Supabase save failed:',e)}
 }
 
@@ -840,7 +840,7 @@ async function saveAIKey(){
     // Save encrypted to Supabase (upsert — creates or updates)
     const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
     await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-      body:JSON.stringify({id:_AI_SB_KEY,val:JSON.stringify({encrypted})})});
+      body:JSON.stringify({id:_AI_SB_KEY,value:JSON.stringify({encrypted})})});
 
     // Cache plain in localStorage + remember passphrase
     localStorage.setItem('mem-ai-cfg',JSON.stringify({provider,key}));
@@ -864,12 +864,12 @@ async function loadAIKey(){
   if(!passphrase)return; // no passphrase saved — user needs to enter it
 
   try{
-    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}&select=val`,
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}&select=value`,
       {headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
     if(!r.ok)return;
     const d=await r.json();
-    if(!d.length||!d[0].val)return;
-    const {encrypted}=typeof d[0].val==='string'?JSON.parse(d[0].val):d[0].val;
+    if(!d.length||!d[0].value)return;
+    const {encrypted}=typeof d[0].value==='string'?JSON.parse(d[0].value):d[0].value;
     if(!encrypted)return;
 
     const decrypted=JSON.parse(await _decrypt(encrypted,passphrase));
@@ -1101,7 +1101,7 @@ function viewDelete(){
   if(e){e._deleted=true;e._ts=Date.now()}
   const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-    body:JSON.stringify({id:SB_KEY_ID,val:JSON.stringify(ENTRIES)})}).catch(()=>{});
+    body:JSON.stringify({id:SB_KEY_ID,value:JSON.stringify(ENTRIES)})}).catch(()=>{});
   ENTRIES=ENTRIES.filter(x=>!x._deleted);
   localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
   closeView();
@@ -1140,7 +1140,7 @@ function deleteEntry(){
   // Save full array WITH tombstone to Supabase so other users pick up the delete
   const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'};
   fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}`,{method:'PATCH',headers:hdrs,
-    body:JSON.stringify({val:JSON.stringify(ENTRIES)})}).catch(()=>{});
+    body:JSON.stringify({value:JSON.stringify(ENTRIES)})}).catch(()=>{});
   // Then filter locally
   ENTRIES=ENTRIES.filter(x=>!x._deleted);
   localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
