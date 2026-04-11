@@ -158,6 +158,8 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .mf input,.mf select,.mf textarea{width:100%;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;font-family:var(--fd);outline:none;transition:border-color .2s}
 .mf input:focus,.mf select:focus,.mf textarea:focus{border-color:var(--pri)}
 .mf textarea{resize:vertical;min-height:80px;line-height:1.5}
+.preview-row{display:flex;gap:12px;align-items:flex-start}
+.cheat-sheet{width:220px;flex-shrink:0;background:var(--bg);border:1.5px solid var(--bd);border-radius:8px;padding:10px 12px;font-size:9px;line-height:1.7;color:var(--ts);margin-top:20px}
 .mf-row{display:flex;gap:12px}.mf-row>*{flex:1}
 .mf .hint{font-size:10px;color:var(--tt);margin-top:3px}
 .m-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
@@ -191,17 +193,63 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .view-body .mini-tbl{font-size:12px}
 .view-body .mini-tbl td,.view-body .mini-tbl th{padding:5px 8px}
 
-/* ── RESPONSIVE ── */
+/* ── RESPONSIVE — tablet ── */
+@media(max-width:900px){
+  .grid{columns:2 280px}
+  .modal,.view-modal{padding:24px 20px}
+}
+/* ── RESPONSIVE — mobile ── */
 @media(max-width:600px){
-  .top{padding:12px 16px}
-  .cats{padding:8px 16px 0}
-  .ppl{padding:6px 16px 0}
-  .grid{padding:12px 16px 40px;columns:1}
-  .top-inner{gap:8px}
+  .top{padding:10px 12px}
+  .top-inner{gap:6px}
+  .logo-text{font-size:13px}
+  .logo-sub{font-size:7px}
+  .logo-icon{font-size:22px}
   .search-box{max-width:none;order:10;width:100%}
+  .search-box input{padding:8px 12px 8px 32px;font-size:12px}
+  .search-icon{left:10px;font-size:12px}
   .stats{display:none}
-  .card{transform:none!important}
+  .add-btn{padding:6px 12px;font-size:10px}
+  .cats{padding:6px 12px 0;gap:4px}
+  .cat{padding:4px 10px;font-size:10px}
+  .ppl{padding:4px 12px 0;gap:4px}
+  .ppl-label{font-size:8px;margin-right:2px}
+  .ppl-chip{padding:3px 8px;font-size:9px}
+  .ppl-dot{width:6px;height:6px;margin-right:3px}
+  .grid{padding:10px 12px 40px;columns:1}
+  .card{transform:none!important;border-radius:8px;margin-bottom:12px}
   .card::before{display:none}
+  .card-head{padding:12px 14px 8px;gap:8px}
+  .card-icon{width:30px;height:30px;font-size:15px}
+  .card-title{font-size:12px}
+  .card-cat{font-size:8px;padding:2px 6px}
+  .card-body{padding:0 14px 12px;font-size:11px}
+  .flow{row-gap:4px}
+  .flow-step{padding:4px 8px;font-size:9px}
+  .co{padding:5px 8px;font-size:10px}
+  .mini-tbl{font-size:9px}
+  .mini-tbl th,.mini-tbl td{padding:3px 4px}
+  /* Modals full-screen on mobile */
+  .modal,.view-modal{width:100vw;max-width:100vw;max-height:100vh;height:100vh;border-radius:0;padding:16px}
+  .modal h2{font-size:16px}
+  .modal .msub{font-size:11px;margin-bottom:12px}
+  .mf label{font-size:10px}
+  .mf input,.mf select,.mf textarea{font-size:12px;padding:8px 10px}
+  .mf textarea{min-height:120px}
+  .m-actions{flex-wrap:wrap}
+  .m-btn{padding:10px 18px;font-size:11px;flex:1;text-align:center}
+  .view-modal .view-title{font-size:16px}
+  .view-modal .view-body{font-size:12px}
+  .view-actions{flex-wrap:wrap}
+  .view-actions .m-btn{flex:1;text-align:center}
+  /* Preview + cheat sheet stack */
+  .preview-row{flex-direction:column}
+  .cheat-sheet{width:100%;margin-top:0}
+  /* Lock screen mobile */
+  .lock-card{padding:24px 20px}
+  .lock-icon{font-size:36px;margin-bottom:12px}
+  .lock-title{font-size:16px}
+  .lock-input{padding:10px 14px;font-size:13px}
 }
 
 /* ── CONTENT FORMATTING INSIDE BODY ── */
@@ -354,14 +402,14 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
       </div>
       <textarea id="f-body" rows="16" placeholder="Just dump your notes here — messy is fine! Then hit ✨ AI Enhance or use the syntax from the cheat sheet below."></textarea>
     </div>
-    <div style="display:flex;gap:12px;align-items:flex-start">
+    <div class="preview-row">
       <div class="mf" style="flex:1;min-width:0">
         <label>Preview</label>
         <div id="f-preview" style="border:1.5px solid var(--bd);border-radius:8px;padding:12px 14px;min-height:100px;font-size:11.5px;line-height:1.6;color:var(--ts);background:var(--bg)">
           <span style="color:var(--tt);font-style:italic">Type above to see live preview</span>
         </div>
       </div>
-      <div style="width:220px;flex-shrink:0;background:var(--bg);border:1.5px solid var(--bd);border-radius:8px;padding:10px 12px;font-size:9px;line-height:1.7;color:var(--ts);margin-top:20px">
+      <div class="cheat-sheet">
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tt);margin-bottom:4px">Formatting Cheat Sheet</div>
         <div style="font-family:var(--fm);font-size:8.5px;color:var(--tp)">
           <div><span style="color:var(--a3)">A -> B -> C</span> <span style="color:var(--tt)">flow</span></div>
