@@ -125,6 +125,11 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .card-cat{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:2px 8px;border-radius:10px;display:inline-block}
 .card-body{padding:0 16px 14px;font-size:11.5px;line-height:1.6;color:var(--ts)}
 .card-body b{color:var(--tp);font-weight:700}
+.card-date{padding:0 16px 10px;font-size:9px;color:var(--tt);font-family:var(--fm);font-weight:500}
+/* NEW badge */
+.card-new{position:absolute;top:6px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:800;padding:1px 8px;border-radius:8px;background:var(--pri);color:#fff;letter-spacing:1px;text-transform:uppercase;animation:chipPop .3s ease both;z-index:3}
+/* Search highlight */
+.card-body mark,.card-title mark{background:#FFF176;color:var(--tp);padding:0 1px;border-radius:2px}
 
 /* Category-specific card textures */
 .cat-important{background:linear-gradient(135deg,#FFF8F8 0%,#FFF0F0 100%);border-color:var(--rd)}
@@ -302,6 +307,17 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 @media(prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+/* ── PRINT ── */
+@media print{
+  .top,.cats,.ppl,.tags,.lock,.modal-bg,.card-new,.card::before{display:none!important}
+  body{background:#fff}
+  .grid{columns:2!important;padding:10px!important;column-gap:10px}
+  .card{transform:none!important;box-shadow:none!important;border:1px solid #ccc;page-break-inside:avoid;margin-bottom:10px;animation:none!important}
+  .card-body{font-size:10px}
+  .card-date{font-size:8px}
+  .co{font-size:9px}
+  .flow-step{font-size:8px;padding:3px 6px}
+}
 
 /* ── CONTENT FORMATTING INSIDE BODY ── */
 .card-body ul,.card-body ol{margin:6px 0;padding:0;list-style:none}
@@ -364,7 +380,8 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
     </form>
     <div class="stats" id="stats"></div>
     <button class="add-btn" style="background:var(--a4-s);color:var(--a4);border-color:var(--a4-b)" onclick="syncNow(this)" title="Pull latest from team">🔄 Sync</button>
-    <button class="add-btn" onclick="showAddModal()">+ New Entry</button>
+    <button class="add-btn" onclick="window.print()" style="background:var(--bg);color:var(--ts);border-color:var(--bd)" title="Print all entries (Ctrl+P)">🖨</button>
+    <button class="add-btn" onclick="showAddModal()" title="New entry (N)">+ New Entry</button>
   </div>
 </div>
 
@@ -702,27 +719,62 @@ function renderGrid(){
     return;
   }
 
+  const lastVisit=parseInt(localStorage.getItem('mem-last-visit'))||0;
+  const hlWords=q?q.split(/\s+/).filter(Boolean):[];
+
   let h='';
   for(const e of items){
     const m=CAT_META[e.cat]||{label:e.cat,icon:'📌'};
+    const isNew=(e._ts||0)>lastVisit&&lastVisit>0;
+    const titleHtml=hlWords.length?_highlight(esc(e.title),hlWords):esc(e.title);
+    const bodyHtml=hlWords.length?_highlight(e.body,hlWords):e.body;
+    const dateStr=e.date?_fmtDate(e.date):'';
     h+=`<div class="card cat-${e.cat}" onclick="viewEntry(${e.id})">
+      ${isNew?'<span class="card-new">NEW</span>':''}
       <div class="card-head">
         <div class="card-icon">${m.icon}</div>
         <div class="card-meta">
-          <div class="card-title">${esc(e.title)}</div>
+          <div class="card-title">${titleHtml}</div>
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:2px">
             <span class="card-cat">${m.label}</span>
             ${(e.attention||[]).map(p=>{const c=PEOPLE_COLORS[p]||'#999';return`<span style="font-size:8px;font-weight:600;padding:1px 6px;border-radius:8px;background:${c}18;color:${c}">${p}</span>`}).join('')}
           </div>
         </div>
       </div>
-      <div class="card-body">${e.body}</div>
+      <div class="card-body">${bodyHtml}</div>
+      ${dateStr?`<div class="card-date">${dateStr}</div>`:''}
     </div>`;
   }
   el.innerHTML=h;
+  // Update last visit timestamp
+  localStorage.setItem('mem-last-visit',String(Date.now()));
 }
 
 function esc(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
+
+// Search highlight — wraps matching words in <mark> tags, skipping HTML tags
+function _highlight(html,words){
+  if(!words.length||!html)return html;
+  // Build regex that matches any of the search words, case-insensitive
+  const pattern=words.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+  const re=new RegExp(`(${pattern})`,'gi');
+  // Split on HTML tags to only highlight text content
+  return html.replace(/(<[^>]+>)|([^<]+)/g,(m,tag,text)=>{
+    if(tag)return tag;
+    return text.replace(re,'<mark>$1</mark>');
+  });
+}
+
+// Format date as "Apr 11" or "Apr 11, 2025" if different year
+function _fmtDate(dateStr){
+  if(!dateStr)return'';
+  const d=new Date(dateStr+'T00:00:00');
+  if(isNaN(d))return dateStr;
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const now=new Date();
+  const str=months[d.getMonth()]+' '+d.getDate();
+  return d.getFullYear()===now.getFullYear()?str:str+', '+d.getFullYear();
+}
 
 // ── AUTO-FORMAT ENGINE ──
 // Transforms plain text into structured HTML with flow diagrams, callouts, tables, lists
@@ -1471,10 +1523,12 @@ document.addEventListener('visibilitychange',()=>{
 
 // ── KEYBOARD ──
 document.addEventListener('keydown',e=>{
+  const inInput=document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'||document.activeElement.tagName==='SELECT';
+  const modalOpen=document.querySelector('.modal-bg.show');
   if(e.key==='Escape'){closeView();closeModal()}
-  if(e.key==='/'&&!document.querySelector('.modal-bg.show')&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
-    e.preventDefault();document.getElementById('search').focus();
-  }
+  if(e.key==='/'&&!modalOpen&&!inInput){e.preventDefault();document.getElementById('search').focus()}
+  if(e.key.toLowerCase()==='n'&&!modalOpen&&!inInput){e.preventDefault();showAddModal()}
+  if(e.key.toLowerCase()==='p'&&e.ctrlKey){/* let browser print handle it */}
 });
 
 // ── PASSWORD GATE ──
