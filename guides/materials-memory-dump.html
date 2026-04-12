@@ -443,9 +443,17 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
       <input type="text" id="gl-edit-term" placeholder="Term or abbreviation" style="font-weight:700;font-family:var(--fm)">
     </div>
     <div class="mf">
-      <label>Definition</label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <label style="margin:0">Definition</label>
+        <button type="button" class="m-btn" id="gl-ai-btn" style="padding:4px 10px;font-size:10px;background:linear-gradient(135deg,#E8EAF6,#F3E5F5);color:var(--pri);border-color:var(--pri-b)" onclick="_glAiDefine()" title="AI generates a definition">✨ AI Define</button>
+      </div>
       <textarea id="gl-edit-def" rows="3" placeholder="What does it mean? Keep it short."></textarea>
     </div>
+    <div class="mf">
+      <label>Aliases <span style="font-weight:400;text-transform:none">(comma-separated — plurals, abbreviations, variations)</span></label>
+      <input type="text" id="gl-edit-aliases" placeholder="e.g. OORs, Official Order Request">
+    </div>
+    <div id="gl-edit-refs" style="margin-bottom:12px"></div>
     <div class="m-actions">
       <button class="m-btn" onclick="_closeGlEdit()">Cancel</button>
       <button class="m-btn danger" id="gl-edit-del" onclick="_glEditDelete()">Delete</button>
@@ -1711,7 +1719,7 @@ function renderGlossaryList(){
   const el=document.getElementById('glossary-list');
   const q=(document.getElementById('glossary-search').value||'').toLowerCase().trim();
   let terms=Object.entries(GLOSSARY).filter(([,v])=>!v._deleted).sort((a,b)=>a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
-  if(q)terms=terms.filter(([t,v])=>t.toLowerCase().includes(q)||(v.def||'').toLowerCase().includes(q));
+  if(q)terms=terms.filter(([t,v])=>t.toLowerCase().includes(q)||(v.def||'').toLowerCase().includes(q)||(v.aliases||[]).some(a=>a.toLowerCase().includes(q)));
 
   document.getElementById('glossary-count').textContent=`${terms.length} terms`;
 
@@ -1725,6 +1733,7 @@ function renderGlossaryList(){
     const alpha=term[0].toUpperCase();
     if(alpha!==lastAlpha&&!q){h+=`<div class="gl-alpha">${alpha}</div>`;lastAlpha=alpha}
     const srcLabel=info.source==='manual'?'<span class="gl-term-sub" style="color:var(--am)">MANUAL</span>':'<span class="gl-term-sub" style="color:var(--a4)">AUTO</span>';
+    const aliasStr=info.aliases&&info.aliases.length?`<div class="gl-src">aka: ${info.aliases.join(', ')}</div>`:'';
     const srcNote=info.from?`<div class="gl-src">📎 ${esc(info.from)}</div>`:'';
     const tSafe=esc(term).replace(/'/g,"&#39;");
     h+=`<div class="gl-item" style="animation-delay:${Math.min(idx*30,300)}ms" onclick="_openGlEdit('${tSafe}')">
@@ -1734,6 +1743,7 @@ function renderGlossaryList(){
       </div>
       <div class="gl-def-box">
         <div class="gl-def">${info.def?esc(info.def):'<span style="color:var(--tt);font-style:italic">No definition yet</span>'}</div>
+        ${aliasStr}
         ${srcNote}
       </div>
     </div>`;
@@ -1748,7 +1758,9 @@ function _showGlAddModal(){
   document.getElementById('gl-edit-old').value='';
   document.getElementById('gl-edit-term').value='';
   document.getElementById('gl-edit-def').value='';
+  document.getElementById('gl-edit-aliases').value='';
   document.getElementById('gl-edit-del').style.display='none';
+  document.getElementById('gl-edit-refs').innerHTML='';
   document.getElementById('gl-edit-modal').classList.add('show');
   setTimeout(()=>document.getElementById('gl-edit-term').focus(),100);
 }
@@ -1758,20 +1770,53 @@ function _openGlEdit(term){
   document.getElementById('gl-edit-old').value=term;
   document.getElementById('gl-edit-term').value=term;
   document.getElementById('gl-edit-def').value=info.def||'';
+  document.getElementById('gl-edit-aliases').value=(info.aliases||[]).join(', ');
   document.getElementById('gl-edit-del').style.display='inline-flex';
+  // Find entries that mention this term
+  _renderGlRefs(term,info.aliases||[]);
   document.getElementById('gl-edit-modal').classList.add('show');
   setTimeout(()=>document.getElementById('gl-edit-def').focus(),100);
+}
+function _renderGlRefs(term,aliases){
+  const el=document.getElementById('gl-edit-refs');
+  const allForms=[term,...aliases];
+  const matches=ENTRIES.filter(e=>{
+    const hay=(e._raw||e.body||'').toLowerCase();
+    return allForms.some(f=>hay.includes(f.toLowerCase()));
+  });
+  if(!matches.length){el.innerHTML='';return}
+  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Found in ${matches.length} entry${matches.length>1?'s':''}:</div>`+
+    matches.slice(0,5).map(e=>`<div style="font-size:11px;padding:3px 0;color:var(--ts);cursor:pointer;border-bottom:1px solid #F0F0F4" onclick="_closeGlEdit();closeGlossary();viewEntry(${e.id})">📎 ${esc(e.title)}</div>`).join('')+
+    (matches.length>5?`<div style="font-size:10px;color:var(--tt);padding:3px 0">...and ${matches.length-5} more</div>`:'');
 }
 function _closeGlEdit(){document.getElementById('gl-edit-modal').classList.remove('show')}
 function _glEditSave(){
   const oldTerm=document.getElementById('gl-edit-old').value;
   const newTerm=document.getElementById('gl-edit-term').value.trim();
   const newDef=document.getElementById('gl-edit-def').value.trim();
+  const aliases=document.getElementById('gl-edit-aliases').value.split(',').map(s=>s.trim()).filter(Boolean);
   if(!newTerm){document.getElementById('gl-edit-term').focus();return}
-  // If renaming, remove old
   if(oldTerm&&oldTerm!==newTerm){GLOSSARY[oldTerm]={...GLOSSARY[oldTerm],_deleted:true,_ts:Date.now()}}
-  GLOSSARY[newTerm]={def:newDef,source:'manual',_ts:Date.now()};
+  GLOSSARY[newTerm]={def:newDef,aliases,source:'manual',_ts:Date.now()};
   _saveGlossary();_closeGlEdit();renderGlossaryList();
+}
+
+// AI define — generate definition for a term
+async function _glAiDefine(){
+  const term=document.getElementById('gl-edit-term').value.trim();
+  if(!term)return;
+  let cfg=_getAICfg();
+  if(!cfg.key){await loadAIKey();cfg=_getAICfg()}
+  if(!cfg.key){alert('Set up AI key first (⚙️ in main editor)');return}
+  const btn=document.getElementById('gl-ai-btn');
+  btn.textContent='⏳...';btn.disabled=true;
+  try{
+    const prompt=`Define "${term}" in the context of warehouse logistics and materials management for FIFA World Cup 2026. One sentence, max 15 words. No quotes, no preamble. Just the definition.`;
+    const prov=cfg.provider==='openai'?'chatgpt':cfg.provider;
+    const result=await _aiCall(prov,cfg.key,prompt);
+    if(result)document.getElementById('gl-edit-def').value=result.trim().replace(/^["']|["']$/g,'');
+  }catch(e){alert('AI error: '+e.message)}
+  finally{btn.textContent='✨ AI Define';btn.disabled=false}
 }
 function _glEditDelete(){
   const term=document.getElementById('gl-edit-old').value;
@@ -1783,16 +1828,20 @@ function _glEditDelete(){
 // Inject glossary tooltips into rendered card HTML
 function _injectGlossaryTips(html){
   if(!html||!Object.keys(GLOSSARY).length)return html;
-  const terms=Object.entries(GLOSSARY)
-    .filter(([,v])=>v.def&&!v._deleted)
-    .sort((a,b)=>b[0].length-a[0].length);
+  const terms=Object.entries(GLOSSARY).filter(([,v])=>v.def&&!v._deleted);
   if(!terms.length)return html;
-  // Build single regex matching all terms at once (longest first)
-  const pattern=terms.map(([t])=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
-  const re=new RegExp(`\\b(${pattern})\\b`,'gi');
-  // Build lookup map
+  // Build lookup: term + all aliases → definition
   const defMap={};
-  for(const[t,v]of terms)defMap[t.toLowerCase()]=v.def;
+  const allForms=[];
+  for(const[t,v]of terms){
+    defMap[t.toLowerCase()]=v.def;
+    allForms.push(t);
+    if(v.aliases)for(const a of v.aliases){defMap[a.toLowerCase()]=v.def;allForms.push(a)}
+  }
+  // Sort longest first, build single regex
+  allForms.sort((a,b)=>b.length-a.length);
+  const pattern=allForms.map(t=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+  const re=new RegExp(`\\b(${pattern})\\b`,'gi');
   // Replace only in text nodes (outside HTML tags), single pass
   return html.replace(/(<[^>]+>)|([^<]+)/g,(m,tag,text)=>{
     if(tag)return tag;
