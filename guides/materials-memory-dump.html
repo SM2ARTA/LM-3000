@@ -286,7 +286,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
   .mf input,.mf select,.mf textarea{font-size:12px;padding:8px 10px}
   .mf textarea{min-height:120px}
   .m-actions{flex-wrap:wrap;position:sticky;bottom:-16px;margin:20px -16px 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--sf);border-top:1px solid var(--bd)}
-  .m-btn{padding:10px 18px;font-size:11px;flex:1;text-align:center}
+  .m-btn{padding:10px 18px;font-size:11px;flex:1;text-align:center;display:flex;align-items:center;justify-content:center}
   .view-modal .view-title{font-size:16px}
   /* Preview + cheat sheet stack */
   .preview-row{flex-direction:column}
@@ -1268,7 +1268,7 @@ function editEntry(id){
   _selAttention=new Set(e.attention||['All']);_renderAttChips();
   // Show raw source if available, otherwise the formatted body (for seed/legacy entries)
   document.getElementById('f-body').value=e._raw||e.body;
-  document.getElementById('del-btn').style.display='inline-flex';
+  document.getElementById('del-btn').style.display='flex';
   document.getElementById('modal').classList.add('show');
   // Trigger preview
   const prev=document.getElementById('f-preview');
