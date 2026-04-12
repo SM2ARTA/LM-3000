@@ -520,21 +520,15 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tt);margin-bottom:4px">Formatting Cheat Sheet</div>
         <div style="font-family:var(--fm);font-size:8.5px;color:var(--tp)">
           <div><span style="color:var(--a3)">A -> B -> C</span> <span style="color:var(--tt)">flow</span></div>
-          <div><span style="color:#C62A2F">Never:</span> <span style="color:var(--tt)">red alert</span></div>
-          <div><span style="color:#C62A2F">Warning:</span> <span style="color:var(--tt)">red alert</span></div>
-          <div><span style="color:#C62A2F">Do not:</span> <span style="color:var(--tt)">red alert</span></div>
-          <div><span style="color:#12804A">Always:</span> <span style="color:var(--tt)">green tip</span></div>
-          <div><span style="color:#12804A">Tip:</span> <span style="color:var(--tt)">green tip</span></div>
-          <div><span style="color:#304FFE">Note:</span> <span style="color:var(--tt)">blue info</span></div>
-          <div><span style="color:#E65100">Caution:</span> <span style="color:var(--tt)">amber warn</span></div>
-          <div><span style="color:var(--tp)">1. 2. 3.</span> <span style="color:var(--tt)">numbered list</span></div>
-          <div><span style="color:var(--tp)">- item</span> <span style="color:var(--tt)">bullet list</span></div>
+          <div><span style="color:#C62A2F">Never:</span> <span style="color:var(--tt)">red</span></div>
+          <div><span style="color:#12804A">Always:</span> <span style="color:var(--tt)">green</span></div>
+          <div><span style="color:#304FFE">Note:</span> <span style="color:var(--tt)">blue</span></div>
+          <div><span style="color:#E65100">Caution:</span> <span style="color:var(--tt)">amber</span></div>
+          <div><span style="color:var(--tp)">1. 2. 3.</span> <span style="color:var(--tt)">steps</span></div>
+          <div><span style="color:var(--tp)">- item</span> <span style="color:var(--tt)">bullets</span></div>
           <div><span style="color:var(--tp)">A | B | C</span> <span style="color:var(--tt)">table</span></div>
-          <div><span style="color:var(--tp)">*bold*</span> <span style="color:var(--tt)">bold text</span></div>
-          <div style="border-top:1px solid var(--bd);margin-top:4px;padding-top:4px"><span style="color:var(--tt)">Multi-line callout:</span></div>
-          <div><span style="color:#12804A">Always:</span> <span style="color:var(--tt)">first line</span></div>
-          <div><span style="color:var(--tt)">&nbsp;&nbsp;- second line</span></div>
-          <div><span style="color:var(--tt)">&nbsp;&nbsp;- third line</span></div>
+          <div><span style="color:var(--tp)">*bold*</span> <span style="color:var(--tt)">bold</span></div>
+          <div><span style="color:var(--tp)">\\</span> <span style="color:var(--tt)">line break</span></div>
         </div>
       </div>
     </div>
@@ -968,6 +962,7 @@ function autoFormat(raw){
 // Inline formatting: *bold*, `code`, _italic_
 function _inlineFmt(s){
   if(!s)return'';
+  s=s.replace(/\s*\\\\\s*/g,'<br>');
   s=s.replace(/\*([^*]+)\*/g,'<b>$1</b>');
   s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
   s=s.replace(/(?<!\w)_([^_]+)_(?!\w)/g,'<i>$1</i>');
@@ -988,6 +983,11 @@ function _collectContinuation(lines,startIdx){
     }else{break}
   }
   return{body,end:j};
+}
+
+// Apply \\ line breaks within a string (before passing to callout)
+function _applyLineBreaks(s){
+  return s.replace(/\s*\\\\\s*/g,'<br>');
 }
 
 function _extractLabel2(line, candidates){
@@ -1266,10 +1266,7 @@ Always: <text>                (green callout)
 Tip: <text>                   (green callout)
 Note: <text>                  (blue callout)
 Caution: <text>               (amber callout)
-Multi-line callout — indent continuation lines with 2+ spaces:
-  Always: first point
-    - second point
-    - third point
+\\                            (line break — use inside any line or callout)
 1. step                       (numbered list)
 - bullet                      (bullet list)
 Col1 | Col2 | Col3            (table header — pipe-separated)
