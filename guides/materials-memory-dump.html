@@ -564,6 +564,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
           <div><span style="color:var(--tp)">A | B | C</span> <span style="color:var(--tt)">table</span></div>
           <div><span style="color:var(--tp)">*bold*</span> <span style="color:var(--tt)">bold</span></div>
           <div><span style="color:var(--tp)">\\</span> <span style="color:var(--tt)">line break</span></div>
+          <div><span style="color:var(--pri)">DAILY::</span> <span style="color:var(--tt)">custom callout</span></div>
         </div>
       </div>
     </div>
@@ -934,6 +935,24 @@ function autoFormat(raw){
         const lbl=_extractLabel2(line,['Caution','Watch out','Careful','Attention','Heads up']);
         const cont=_collectContinuation(lines,i+1);
         out.push(`<div class="co co-a"><b>${lbl}:</b> ${_inlineFmt(txt)}${cont.body}</div>`);
+        i=cont.end;continue;
+      }
+    }
+
+    // ── CUSTOM CALLOUT: WORD:: text — any label with double colon ──
+    if(/^\w[\w\s]*::\s/.test(line)){
+      const m=line.match(/^([\w\s]+?)::\s*(.*)/);
+      if(m&&m[2].length>1){
+        const lbl=m[1].trim();
+        const txt=m[2];
+        // Pick color: red keywords, green keywords, blue keywords, amber keywords, else purple
+        const low=lbl.toLowerCase();
+        const clr=/never|warning|danger|stop|critical|do not/i.test(low)?'co-r':
+          /always|tip|best|good|daily|weekly|remember/i.test(low)?'co-g':
+          /note|info|fyi|context/i.test(low)?'co-b':
+          /caution|careful|watch|attention/i.test(low)?'co-a':'co-p';
+        const cont=_collectContinuation(lines,i+1);
+        out.push(`<div class="co ${clr}"><b>${_inlineFmt(lbl)}:</b> ${_inlineFmt(txt)}${cont.body}</div>`);
         i=cont.end;continue;
       }
     }
@@ -1320,6 +1339,7 @@ Tip: <text>                   (green callout)
 Note: <text>                  (blue callout)
 Caution: <text>               (amber callout)
 \\                            (line break — use inside any line or callout)
+LABEL:: <text>                (custom callout — any word as label, e.g. DAILY:: check inbox)
 1. step                       (numbered list)
 - bullet                      (bullet list)
 Col1 | Col2 | Col3            (table header — pipe-separated)
