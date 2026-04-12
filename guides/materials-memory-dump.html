@@ -1783,19 +1783,24 @@ function _glEditDelete(){
 // Inject glossary tooltips into rendered card HTML
 function _injectGlossaryTips(html){
   if(!html||!Object.keys(GLOSSARY).length)return html;
-  // Build list of terms with definitions, sorted longest first to avoid partial matches
   const terms=Object.entries(GLOSSARY)
     .filter(([,v])=>v.def&&!v._deleted)
     .sort((a,b)=>b[0].length-a[0].length);
   if(!terms.length)return html;
-  // Process only text outside HTML tags
+  // Build single regex matching all terms at once (longest first)
+  const pattern=terms.map(([t])=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+  const re=new RegExp(`\\b(${pattern})\\b`,'gi');
+  // Build lookup map
+  const defMap={};
+  for(const[t,v]of terms)defMap[t.toLowerCase()]=v.def;
+  // Replace only in text nodes (outside HTML tags), single pass
   return html.replace(/(<[^>]+>)|([^<]+)/g,(m,tag,text)=>{
     if(tag)return tag;
-    for(const[term,info]of terms){
-      const re=new RegExp(`\\b(${term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})\\b`,'gi');
-      text=text.replace(re,(match)=>`<span class="gl-tip" data-def="${esc(info.def)}">${match}</span>`);
-    }
-    return text;
+    return text.replace(re,(match)=>{
+      const def=defMap[match.toLowerCase()]||'';
+      const safeDef=def.replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return`<span class="gl-tip" data-def="${safeDef}">${match}</span>`;
+    });
   });
 }
 
