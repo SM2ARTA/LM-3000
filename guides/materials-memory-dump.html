@@ -179,22 +179,21 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .cat-lesson .card-cat{background:var(--am-s);color:var(--am)}
 .cat-lesson{border-left:4px solid var(--am)}
 
-/* ── GLOSSARY ── */
-.gl-item{display:flex;gap:12px;padding:10px 12px;margin-bottom:6px;border-radius:8px;background:var(--bg);align-items:flex-start;animation:fadeSlideUp .3s ease both;transition:background .15s;position:relative}
-.gl-item:hover{background:#EDEEF4}
-.gl-term{font-size:13px;font-weight:800;color:var(--tp);min-width:110px;flex-shrink:0;font-family:var(--fm);cursor:pointer;padding:2px 0}
-.gl-term:hover{color:var(--pri)}
-.gl-def{font-size:12px;color:var(--ts);flex:1;line-height:1.5;cursor:pointer;padding:2px 0}
-.gl-def:hover{color:var(--tp)}
-.gl-src{font-size:9px;color:var(--tt);margin-top:2px;font-style:italic}
-.gl-auto{font-size:7px;font-weight:700;padding:1px 5px;border-radius:6px;background:var(--a4-s);color:var(--a4);margin-left:6px;vertical-align:middle}
-.gl-manual{font-size:7px;font-weight:700;padding:1px 5px;border-radius:6px;background:var(--am-s);color:var(--am);margin-left:6px;vertical-align:middle}
-.gl-del{background:none;border:none;cursor:pointer;color:var(--tt);font-size:14px;padding:0 4px;flex-shrink:0;opacity:.4;transition:all .15s}
-.gl-del:hover{opacity:1;color:var(--rd)}
-.gl-alpha{font-size:11px;font-weight:800;color:var(--pri);padding:12px 0 4px;margin-bottom:2px;letter-spacing:1.5px;display:flex;align-items:center;gap:8px}
-.gl-alpha::after{content:'';flex:1;height:1.5px;background:linear-gradient(90deg,var(--pri-s),transparent)}
-.gl-edit{width:100%;padding:5px 8px;border:1.5px solid var(--pri-b);border-radius:6px;font-size:12px;font-family:var(--fd);outline:none}
-.gl-edit:focus{border-color:var(--pri);box-shadow:0 0 0 2px rgba(74,20,140,.1)}
+/* ── GLOSSARY — dictionary style ── */
+.gl-item{display:flex;gap:0;padding:0;margin-bottom:8px;border-radius:10px;background:var(--sf);border:1.5px solid var(--bd);align-items:stretch;animation:fadeSlideUp .3s ease both;transition:all .2s;overflow:hidden;cursor:pointer}
+.gl-item:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-1px);border-color:var(--pri-b)}
+.gl-term-box{min-width:130px;max-width:180px;padding:12px 14px;background:linear-gradient(135deg,var(--pri-s),#F8F0FF);display:flex;flex-direction:column;justify-content:center;border-right:2px solid var(--pri-b)}
+.gl-term{font-size:14px;font-weight:900;color:var(--pri);font-family:var(--fm);letter-spacing:-.3px;line-height:1.2}
+.gl-term-sub{font-size:7px;font-weight:700;margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+.gl-def-box{flex:1;padding:12px 14px;display:flex;flex-direction:column;justify-content:center}
+.gl-def{font-size:12px;color:var(--ts);line-height:1.5}
+.gl-src{font-size:8px;color:var(--tt);margin-top:3px}
+.gl-actions{display:flex;flex-direction:column;gap:2px;padding:8px 6px;justify-content:center;flex-shrink:0}
+.gl-btn{background:none;border:none;cursor:pointer;font-size:12px;padding:3px;opacity:.4;transition:all .15s;border-radius:4px}
+.gl-btn:hover{opacity:1;background:var(--bg)}
+.gl-btn.del:hover{color:var(--rd)}
+.gl-alpha{font-size:36px;font-weight:900;color:var(--pri);padding:16px 0 6px;margin-bottom:4px;letter-spacing:-1px;font-family:var(--fm);display:flex;align-items:center;gap:10px;opacity:.25}
+.gl-alpha::after{content:'';flex:1;height:2px;background:linear-gradient(90deg,var(--pri-b),transparent);border-radius:1px}
 /* Glossary term tooltips in cards */
 .gl-tip{position:relative;border-bottom:1px dotted var(--a4);cursor:help;color:var(--tp);font-weight:600}
 .gl-tip:hover::after{content:attr(data-def);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--tp);color:#fff;padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:nowrap;max-width:280px;white-space:normal;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:chipPop .2s ease both;line-height:1.4;font-family:var(--fd)}
@@ -416,22 +415,41 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 
 <!-- ═══ GLOSSARY MODAL ═══ -->
 <div class="modal-bg" id="glossary-modal">
-  <div class="view-modal" style="width:700px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+  <div class="view-modal" style="width:800px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
       <div>
-        <h2 style="margin:0;color:var(--am)">🗣 Speak like Bob</h2>
-        <div style="font-size:11px;color:var(--ts);margin-top:2px">Terminology auto-collected from all entries</div>
+        <div style="font-size:40px;margin-bottom:4px">🗣</div>
+        <h2 style="margin:0;font-size:22px;font-weight:900;color:var(--tp)">Speak like Bob</h2>
+        <div style="font-size:11px;color:var(--tt);margin-top:4px">The team dictionary — auto-collected from your memory dumps</div>
       </div>
-      <button type="button" onclick="closeGlossary()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--tt);padding:0 2px;line-height:1" title="Close">&times;</button>
+      <button type="button" onclick="closeGlossary()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--tt);padding:4px;line-height:1" title="Close">&times;</button>
     </div>
-    <div style="margin-bottom:12px">
-      <input type="search" id="glossary-search" placeholder="Filter terms..." oninput="renderGlossaryList()" autocomplete="off" style="width:100%;padding:8px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-family:var(--fd);outline:none">
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <input type="search" id="glossary-search" placeholder="🔍 Search terms..." oninput="renderGlossaryList()" autocomplete="off" style="flex:1;padding:10px 14px;border:2px solid var(--bd);border-radius:10px;font-size:13px;font-family:var(--fd);outline:none;transition:border-color .2s" onfocus="this.style.borderColor='var(--pri)'" onblur="this.style.borderColor='var(--bd)'">
+      <button class="m-btn primary" style="padding:8px 16px;font-size:12px" onclick="_showGlAddModal()">+ Add Term</button>
     </div>
-    <div id="glossary-list" style="max-height:60vh;overflow-y:auto"></div>
-    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-      <input type="text" id="glossary-add-term" placeholder="New term" style="flex:1;padding:7px 10px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-family:var(--fd);outline:none;font-weight:700">
-      <input type="text" id="glossary-add-def" placeholder="Definition" style="flex:2;padding:7px 10px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-family:var(--fd);outline:none" onkeydown="if(event.key==='Enter')addGlossaryTerm()">
-      <button class="m-btn primary" style="padding:7px 14px;font-size:11px" onclick="addGlossaryTerm()">Add</button>
+    <div id="glossary-count" style="font-size:10px;color:var(--tt);margin-bottom:10px;font-family:var(--fm)"></div>
+    <div id="glossary-list" style="max-height:55vh;overflow-y:auto;padding-right:4px"></div>
+  </div>
+</div>
+
+<!-- ═══ GLOSSARY EDIT MODAL ═══ -->
+<div class="modal-bg" id="gl-edit-modal" style="z-index:210">
+  <div class="modal" style="width:480px;padding:24px 28px">
+    <h2 id="gl-edit-title" style="margin-bottom:16px">Edit Term</h2>
+    <input type="hidden" id="gl-edit-old">
+    <div class="mf">
+      <label>Term</label>
+      <input type="text" id="gl-edit-term" placeholder="Term or abbreviation" style="font-weight:700;font-family:var(--fm)">
+    </div>
+    <div class="mf">
+      <label>Definition</label>
+      <textarea id="gl-edit-def" rows="3" placeholder="What does it mean? Keep it short."></textarea>
+    </div>
+    <div class="m-actions">
+      <button class="m-btn" onclick="_closeGlEdit()">Cancel</button>
+      <button class="m-btn danger" id="gl-edit-del" onclick="_glEditDelete()">Delete</button>
+      <button class="m-btn primary" onclick="_glEditSave()">Save</button>
     </div>
   </div>
 </div>
@@ -1695,62 +1713,71 @@ function renderGlossaryList(){
   let terms=Object.entries(GLOSSARY).filter(([,v])=>!v._deleted).sort((a,b)=>a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
   if(q)terms=terms.filter(([t,v])=>t.toLowerCase().includes(q)||(v.def||'').toLowerCase().includes(q));
 
+  document.getElementById('glossary-count').textContent=`${terms.length} terms`;
+
   if(!terms.length){
-    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--tt)"><div style="font-size:32px;margin-bottom:8px">📖</div><div style="font-size:12px">No terms found</div></div>';
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--tt)"><div style="font-size:48px;margin-bottom:10px">📖</div><div style="font-size:14px;font-weight:600">No terms found</div><div style="font-size:11px;margin-top:4px">Add your first term or let the system auto-collect from entries</div></div>';
     return;
   }
 
-  let h='';let lastAlpha='';
+  let h='';let lastAlpha='';let idx=0;
   for(const[term,info]of terms){
     const alpha=term[0].toUpperCase();
     if(alpha!==lastAlpha&&!q){h+=`<div class="gl-alpha">${alpha}</div>`;lastAlpha=alpha}
-    const badge=info.source==='manual'?'<span class="gl-manual">MANUAL</span>':'<span class="gl-auto">AUTO</span>';
+    const srcLabel=info.source==='manual'?'<span class="gl-term-sub" style="color:var(--am)">MANUAL</span>':'<span class="gl-term-sub" style="color:var(--a4)">AUTO</span>';
     const srcNote=info.from?`<div class="gl-src">📎 ${esc(info.from)}</div>`:'';
     const tSafe=esc(term).replace(/'/g,"&#39;");
-    h+=`<div class="gl-item">
-      <div class="gl-term" onclick="_editGlTerm('${tSafe}')" title="Click to edit term">${esc(term)}${badge}</div>
-      <div class="gl-def" onclick="_editGlDef('${tSafe}')" title="Click to edit definition">${info.def?esc(info.def):'<span style="color:var(--tt);font-style:italic">Click to add definition</span>'}${srcNote}</div>
-      <button class="gl-del" onclick="_delGlossary('${tSafe}')" title="Remove">&times;</button>
+    h+=`<div class="gl-item" style="animation-delay:${Math.min(idx*30,300)}ms" onclick="_openGlEdit('${tSafe}')">
+      <div class="gl-term-box">
+        <div class="gl-term">${esc(term)}</div>
+        ${srcLabel}
+      </div>
+      <div class="gl-def-box">
+        <div class="gl-def">${info.def?esc(info.def):'<span style="color:var(--tt);font-style:italic">No definition yet</span>'}</div>
+        ${srcNote}
+      </div>
     </div>`;
+    idx++;
   }
   el.innerHTML=h;
 }
 
-// Inline edit term name
-function _editGlTerm(oldTerm){
-  const t=GLOSSARY[oldTerm];if(!t)return;
-  const newTerm=prompt('Edit term:',oldTerm);
-  if(!newTerm||newTerm.trim()===oldTerm)return;
-  GLOSSARY[newTerm.trim()]={...t,_ts:Date.now()};
-  delete GLOSSARY[oldTerm];
-  _saveGlossary();renderGlossaryList();
+// ── Glossary edit modal ──
+function _showGlAddModal(){
+  document.getElementById('gl-edit-title').textContent='New Term';
+  document.getElementById('gl-edit-old').value='';
+  document.getElementById('gl-edit-term').value='';
+  document.getElementById('gl-edit-def').value='';
+  document.getElementById('gl-edit-del').style.display='none';
+  document.getElementById('gl-edit-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('gl-edit-term').focus(),100);
 }
-
-// Inline edit definition
-function _editGlDef(term){
-  const t=GLOSSARY[term];if(!t)return;
-  const newDef=prompt('Edit definition for "'+term+'":',t.def||'');
-  if(newDef===null)return;
-  t.def=newDef.trim();t._ts=Date.now();t.source='manual';
-  _saveGlossary();renderGlossaryList();
+function _openGlEdit(term){
+  const info=GLOSSARY[term];if(!info)return;
+  document.getElementById('gl-edit-title').textContent='Edit Term';
+  document.getElementById('gl-edit-old').value=term;
+  document.getElementById('gl-edit-term').value=term;
+  document.getElementById('gl-edit-def').value=info.def||'';
+  document.getElementById('gl-edit-del').style.display='inline-flex';
+  document.getElementById('gl-edit-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('gl-edit-def').focus(),100);
 }
-
-function addGlossaryTerm(){
-  const termEl=document.getElementById('glossary-add-term');
-  const defEl=document.getElementById('glossary-add-def');
-  const term=termEl.value.trim();
-  const def=defEl.value.trim();
-  if(!term)return termEl.focus();
-  GLOSSARY[term]={def:def||'',source:'manual',_ts:Date.now()};
-  _saveGlossary();
-  termEl.value='';defEl.value='';
-  renderGlossaryList();termEl.focus();
+function _closeGlEdit(){document.getElementById('gl-edit-modal').classList.remove('show')}
+function _glEditSave(){
+  const oldTerm=document.getElementById('gl-edit-old').value;
+  const newTerm=document.getElementById('gl-edit-term').value.trim();
+  const newDef=document.getElementById('gl-edit-def').value.trim();
+  if(!newTerm){document.getElementById('gl-edit-term').focus();return}
+  // If renaming, remove old
+  if(oldTerm&&oldTerm!==newTerm){GLOSSARY[oldTerm]={...GLOSSARY[oldTerm],_deleted:true,_ts:Date.now()}}
+  GLOSSARY[newTerm]={def:newDef,source:'manual',_ts:Date.now()};
+  _saveGlossary();_closeGlEdit();renderGlossaryList();
 }
-
-function _delGlossary(term){
-  if(!confirm('Remove "'+term+'" from glossary?'))return;
+function _glEditDelete(){
+  const term=document.getElementById('gl-edit-old').value;
+  if(!term||!confirm('Remove "'+term+'" from glossary?'))return;
   GLOSSARY[term]={...GLOSSARY[term],_deleted:true,_ts:Date.now()};
-  _saveGlossary();renderGlossaryList();
+  _saveGlossary();_closeGlEdit();renderGlossaryList();
 }
 
 // Inject glossary tooltips into rendered card HTML
