@@ -1144,14 +1144,22 @@ FORBIDDEN — you will be penalized for:
 - Adding context, background, or motivation
 
 FORMAT SYNTAX (plain text, no HTML):
-Step A -> Step B -> Step C    (flow — only from user's sequence)
-Never: <text>                 (ONLY if user literally wrote "never")
-1. step                       (numbered list)
-- bullet                      (bullet list)
-*bold*                        (bold key terms)
-When: <text>                  (header — only if user described a trigger)
+Step A -> Step B -> Step C    (flow diagram — from user's sequence)
+Never: <text>                 (red callout — ONLY if user wrote "never"/"do not")
+Warning: <text>               (red callout — ONLY if user wrote "warning")
+Always: <text>                (green callout — ONLY if user wrote "always")
+Tip: <text>                   (green callout — ONLY if user wrote "tip")
+Note: <text>                  (blue callout — ONLY if user wrote "note")
+Caution: <text>               (amber callout — ONLY if user wrote "caution"/"careful")
+1. step                       (numbered list — for sequential actions)
+- bullet                      (bullet list — for non-sequential items)
+Col1 | Col2 | Col3            (table — first row = headers, pipe-separated)
+Val1 | Val2 | Val3            (table data rows)
+*bold*                        (bold key terms and system names)
+When: <text>                  (header — if user described a trigger/scenario)
+Scenario: <text>              (header — if user described a situation)
 
-EXAMPLE:
+EXAMPLE 1 (sequence):
 INPUT: "When received email with order shipped, find transaction in SM2ARTA, attach BOL and pictures, change status to Dispatched, archive email"
 OUTPUT:
 When: Email received with order shipped
@@ -1163,7 +1171,14 @@ Find in *SM2ARTA* -> Attach *BOL* & Pictures -> Change Status to *Dispatched* ->
 3. Change status to *Dispatched*
 4. Archive the email
 
-That's it. 4 steps because the user wrote 4 actions. Nothing added.
+EXAMPLE 2 (comparison data):
+INPUT: "container vs local delivery: containers have ASN from supabase and are pre-labeled, local deliveries sometimes have ASN and may need labeling"
+OUTPUT:
+Type | Source | ASN | Labels
+Container | International | Yes — from Supabase | Pre-labeled
+Local Delivery | Staples, CORT, etc. | Sometimes | May need labeling
+
+IMPORTANT: only use syntax the user's content calls for. Do not force all formats into every card.
 
 Output ONLY the reformatted text.`;
 
