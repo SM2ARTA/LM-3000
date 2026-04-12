@@ -181,16 +181,25 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .cat-lesson{border-left:4px solid var(--am)}
 
 /* ── GLOSSARY ── */
-.gl-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #F0F0F4;align-items:flex-start;animation:fadeSlideUp .3s ease both}
-.gl-item:last-child{border-bottom:none}
-.gl-term{font-size:12px;font-weight:800;color:var(--tp);min-width:120px;flex-shrink:0;font-family:var(--fm)}
-.gl-def{font-size:12px;color:var(--ts);flex:1;line-height:1.5}
+.gl-item{display:flex;gap:12px;padding:10px 12px;margin-bottom:6px;border-radius:8px;background:var(--bg);align-items:flex-start;animation:fadeSlideUp .3s ease both;transition:background .15s;position:relative}
+.gl-item:hover{background:#EDEEF4}
+.gl-term{font-size:13px;font-weight:800;color:var(--tp);min-width:110px;flex-shrink:0;font-family:var(--fm);cursor:pointer;padding:2px 0}
+.gl-term:hover{color:var(--pri)}
+.gl-def{font-size:12px;color:var(--ts);flex:1;line-height:1.5;cursor:pointer;padding:2px 0}
+.gl-def:hover{color:var(--tp)}
 .gl-src{font-size:9px;color:var(--tt);margin-top:2px;font-style:italic}
 .gl-auto{font-size:7px;font-weight:700;padding:1px 5px;border-radius:6px;background:var(--a4-s);color:var(--a4);margin-left:6px;vertical-align:middle}
 .gl-manual{font-size:7px;font-weight:700;padding:1px 5px;border-radius:6px;background:var(--am-s);color:var(--am);margin-left:6px;vertical-align:middle}
-.gl-del{background:none;border:none;cursor:pointer;color:var(--tt);font-size:14px;padding:0 4px;flex-shrink:0;opacity:.5;transition:opacity .15s}
+.gl-del{background:none;border:none;cursor:pointer;color:var(--tt);font-size:14px;padding:0 4px;flex-shrink:0;opacity:.4;transition:all .15s}
 .gl-del:hover{opacity:1;color:var(--rd)}
-.gl-alpha{font-size:10px;font-weight:800;color:var(--pri);padding:10px 0 4px;border-bottom:2px solid var(--pri-s);margin-bottom:2px;letter-spacing:1px}
+.gl-alpha{font-size:11px;font-weight:800;color:var(--pri);padding:12px 0 4px;margin-bottom:2px;letter-spacing:1.5px;display:flex;align-items:center;gap:8px}
+.gl-alpha::after{content:'';flex:1;height:1.5px;background:linear-gradient(90deg,var(--pri-s),transparent)}
+.gl-edit{width:100%;padding:5px 8px;border:1.5px solid var(--pri-b);border-radius:6px;font-size:12px;font-family:var(--fd);outline:none}
+.gl-edit:focus{border-color:var(--pri);box-shadow:0 0 0 2px rgba(74,20,140,.1)}
+/* Glossary term tooltips in cards */
+.gl-tip{position:relative;border-bottom:1px dotted var(--a4);cursor:help;color:var(--tp);font-weight:600}
+.gl-tip:hover::after{content:attr(data-def);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--tp);color:#fff;padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:nowrap;max-width:280px;white-space:normal;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:chipPop .2s ease both;line-height:1.4;font-family:var(--fd)}
+.gl-tip:hover::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:var(--tp);z-index:10}
 
 /* ── EXPANDED CARD ── */
 .card.expanded .card-body{max-height:none}
@@ -762,7 +771,8 @@ function renderGrid(){
     const m=CAT_META[e.cat]||{label:e.cat,icon:'📌'};
     const isNew=(e._ts||0)>lastVisit&&lastVisit>0;
     const titleHtml=hlWords.length?_highlight(esc(e.title),hlWords):esc(e.title);
-    const bodyHtml=hlWords.length?_highlight(e.body,hlWords):e.body;
+    let bodyHtml=_injectGlossaryTips(e.body);
+    if(hlWords.length)bodyHtml=_highlight(bodyHtml,hlWords);
     const dateStr=e.date?_fmtDate(e.date):'';
     h+=`<div class="card cat-${e.cat}" onclick="viewEntry(${e.id})">
       ${isNew?'<span class="card-new">NEW</span>':''}
@@ -1480,7 +1490,7 @@ function viewEntry(id){
       return`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:10px;font-weight:700;background:${c}18;color:${c};border:1px solid ${c}40"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${p}</span>`;
     }).join('')+'</div>';
   }
-  document.getElementById('view-body').innerHTML=attHtml+(e.body||'<span style="color:var(--tt);font-style:italic">No content</span>');
+  document.getElementById('view-body').innerHTML=attHtml+_injectGlossaryTips(e.body||'<span style="color:var(--tt);font-style:italic">No content</span>');
   document.getElementById('view-modal').classList.add('show');
 }
 function closeView(){document.getElementById('view-modal').classList.remove('show');_viewId=null}
@@ -1557,9 +1567,9 @@ function deleteEntry(){
   const e=ENTRIES.find(x=>x.id===editId);
   if(e){e._deleted=true;e._ts=Date.now()}
   // Save full array WITH tombstone to Supabase so other users pick up the delete
-  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'};
-  fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${SB_KEY_ID}`,{method:'PATCH',headers:hdrs,
-    body:JSON.stringify({value:JSON.stringify(ENTRIES)})}).catch(()=>{});
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+  fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+    body:JSON.stringify({id:SB_KEY_ID,value:JSON.stringify(ENTRIES)})}).catch(()=>{});
   // Then filter locally
   ENTRIES=ENTRIES.filter(x=>!x._deleted);
   localStorage.setItem('mem-dump',JSON.stringify(ENTRIES));
@@ -1617,17 +1627,40 @@ const _KNOWN_TERMS={
 };
 
 let GLOSSARY={}; // {term: {def, source:'auto'|'manual', from?:entryTitle}}
+const _GL_SB_KEY='mem-glossary';
 
-function _loadGlossary(){
+async function _loadGlossary(){
   try{const s=localStorage.getItem('mem-glossary');if(s)GLOSSARY=JSON.parse(s)}catch(e){}
+  // Load from Supabase
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_GL_SB_KEY}&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(r.ok){
+      const d=await r.json();
+      if(d.length&&d[0].value){
+        let remote=d[0].value;
+        while(typeof remote==='string'){try{remote=JSON.parse(remote)}catch(e){break}}
+        if(remote&&typeof remote==='object'){
+          // Merge: remote wins for same terms (shared edits)
+          for(const[t,v]of Object.entries(remote)){
+            if(!GLOSSARY[t]||(v._ts||0)>(GLOSSARY[t]._ts||0))GLOSSARY[t]=v;
+          }
+        }
+      }
+    }
+  }catch(e){}
   // Merge known terms (don't overwrite manual edits)
   for(const[t,d]of Object.entries(_KNOWN_TERMS)){
     if(!GLOSSARY[t])GLOSSARY[t]={def:d,source:'auto'};
   }
+  localStorage.setItem('mem-glossary',JSON.stringify(GLOSSARY));
 }
 
 function _saveGlossary(){
   localStorage.setItem('mem-glossary',JSON.stringify(GLOSSARY));
+  // Save to Supabase
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+  fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+    body:JSON.stringify({id:_GL_SB_KEY,value:JSON.stringify(GLOSSARY)})}).catch(()=>{});
 }
 
 // Auto-extract terms from entries: find *bold* words and system names
@@ -1636,20 +1669,16 @@ function _autoExtractTerms(){
   const sysNames=/\b(SM2ARTA|ML3K|WMS|ASN|BOL|OOR|LSR|SKU|FNKIT|OSKIT|CORT|STP|RGS|CI)\b/g;
   for(const e of ENTRIES){
     const raw=e._raw||e.body||'';
-    // Extract *bold* terms
     let m;
     while((m=boldRe.exec(raw))!==null){
       const term=m[1].trim();
-      if(term.length>1&&term.length<40&&!GLOSSARY[term]){
+      if(term.length>1&&term.length<40&&!GLOSSARY[term])
         GLOSSARY[term]={def:'',source:'auto',from:e.title};
-      }
     }
-    // Extract system abbreviations
     while((m=sysNames.exec(raw))!==null){
       const term=m[1];
-      if(!GLOSSARY[term]&&_KNOWN_TERMS[term]){
+      if(!GLOSSARY[term]&&_KNOWN_TERMS[term])
         GLOSSARY[term]={def:_KNOWN_TERMS[term],source:'auto'};
-      }
     }
   }
   _saveGlossary();
@@ -1662,35 +1691,52 @@ function showGlossary(){
   document.getElementById('glossary-search').value='';
   document.getElementById('glossary-search').focus();
 }
-
 function closeGlossary(){document.getElementById('glossary-modal').classList.remove('show')}
 
 function renderGlossaryList(){
   const el=document.getElementById('glossary-list');
   const q=(document.getElementById('glossary-search').value||'').toLowerCase().trim();
-  // Sort alphabetically
-  let terms=Object.entries(GLOSSARY).sort((a,b)=>a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
+  let terms=Object.entries(GLOSSARY).filter(([,v])=>!v._deleted).sort((a,b)=>a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
   if(q)terms=terms.filter(([t,v])=>t.toLowerCase().includes(q)||(v.def||'').toLowerCase().includes(q));
 
   if(!terms.length){
-    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--tt);font-size:12px">No terms found</div>';
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--tt)"><div style="font-size:32px;margin-bottom:8px">📖</div><div style="font-size:12px">No terms found</div></div>';
     return;
   }
 
-  let h='';
-  let lastAlpha='';
+  let h='';let lastAlpha='';
   for(const[term,info]of terms){
     const alpha=term[0].toUpperCase();
     if(alpha!==lastAlpha&&!q){h+=`<div class="gl-alpha">${alpha}</div>`;lastAlpha=alpha}
     const badge=info.source==='manual'?'<span class="gl-manual">MANUAL</span>':'<span class="gl-auto">AUTO</span>';
-    const srcNote=info.from?`<div class="gl-src">from: ${esc(info.from)}</div>`:'';
+    const srcNote=info.from?`<div class="gl-src">📎 ${esc(info.from)}</div>`:'';
+    const tSafe=esc(term).replace(/'/g,"&#39;");
     h+=`<div class="gl-item">
-      <div class="gl-term">${esc(term)}${badge}</div>
-      <div class="gl-def">${info.def?esc(info.def):'<span style="color:var(--tt);font-style:italic">No definition yet — click to add</span>'}${srcNote}</div>
-      <button class="gl-del" onclick="_delGlossary('${esc(term).replace(/'/g,"\\'")}')" title="Remove">&times;</button>
+      <div class="gl-term" onclick="_editGlTerm('${tSafe}')" title="Click to edit term">${esc(term)}${badge}</div>
+      <div class="gl-def" onclick="_editGlDef('${tSafe}')" title="Click to edit definition">${info.def?esc(info.def):'<span style="color:var(--tt);font-style:italic">Click to add definition</span>'}${srcNote}</div>
+      <button class="gl-del" onclick="_delGlossary('${tSafe}')" title="Remove">&times;</button>
     </div>`;
   }
   el.innerHTML=h;
+}
+
+// Inline edit term name
+function _editGlTerm(oldTerm){
+  const t=GLOSSARY[oldTerm];if(!t)return;
+  const newTerm=prompt('Edit term:',oldTerm);
+  if(!newTerm||newTerm.trim()===oldTerm)return;
+  GLOSSARY[newTerm.trim()]={...t,_ts:Date.now()};
+  delete GLOSSARY[oldTerm];
+  _saveGlossary();renderGlossaryList();
+}
+
+// Inline edit definition
+function _editGlDef(term){
+  const t=GLOSSARY[term];if(!t)return;
+  const newDef=prompt('Edit definition for "'+term+'":',t.def||'');
+  if(newDef===null)return;
+  t.def=newDef.trim();t._ts=Date.now();t.source='manual';
+  _saveGlossary();renderGlossaryList();
 }
 
 function addGlossaryTerm(){
@@ -1699,17 +1745,35 @@ function addGlossaryTerm(){
   const term=termEl.value.trim();
   const def=defEl.value.trim();
   if(!term)return termEl.focus();
-  GLOSSARY[term]={def:def||'',source:'manual'};
+  GLOSSARY[term]={def:def||'',source:'manual',_ts:Date.now()};
   _saveGlossary();
   termEl.value='';defEl.value='';
-  renderGlossaryList();
-  termEl.focus();
+  renderGlossaryList();termEl.focus();
 }
 
 function _delGlossary(term){
-  delete GLOSSARY[term];
-  _saveGlossary();
-  renderGlossaryList();
+  if(!confirm('Remove "'+term+'" from glossary?'))return;
+  GLOSSARY[term]={...GLOSSARY[term],_deleted:true,_ts:Date.now()};
+  _saveGlossary();renderGlossaryList();
+}
+
+// Inject glossary tooltips into rendered card HTML
+function _injectGlossaryTips(html){
+  if(!html||!Object.keys(GLOSSARY).length)return html;
+  // Build list of terms with definitions, sorted longest first to avoid partial matches
+  const terms=Object.entries(GLOSSARY)
+    .filter(([,v])=>v.def&&!v._deleted)
+    .sort((a,b)=>b[0].length-a[0].length);
+  if(!terms.length)return html;
+  // Process only text outside HTML tags
+  return html.replace(/(<[^>]+>)|([^<]+)/g,(m,tag,text)=>{
+    if(tag)return tag;
+    for(const[term,info]of terms){
+      const re=new RegExp(`\\b(${term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})\\b`,'gi');
+      text=text.replace(re,(match)=>`<span class="gl-tip" data-def="${esc(info.def)}">${match}</span>`);
+    }
+    return text;
+  });
 }
 
 // ── KEYBOARD ──
