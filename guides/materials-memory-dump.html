@@ -180,6 +180,18 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .cat-lesson .card-cat{background:var(--am-s);color:var(--am)}
 .cat-lesson{border-left:4px solid var(--am)}
 
+/* ── GLOSSARY ── */
+.gl-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #F0F0F4;align-items:flex-start;animation:fadeSlideUp .3s ease both}
+.gl-item:last-child{border-bottom:none}
+.gl-term{font-size:12px;font-weight:800;color:var(--tp);min-width:120px;flex-shrink:0;font-family:var(--fm)}
+.gl-def{font-size:12px;color:var(--ts);flex:1;line-height:1.5}
+.gl-src{font-size:9px;color:var(--tt);margin-top:2px;font-style:italic}
+.gl-auto{font-size:7px;font-weight:700;padding:1px 5px;border-radius:6px;background:var(--a4-s);color:var(--a4);margin-left:6px;vertical-align:middle}
+.gl-manual{font-size:7px;font-weight:700;padding:1px 5px;border-radius:6px;background:var(--am-s);color:var(--am);margin-left:6px;vertical-align:middle}
+.gl-del{background:none;border:none;cursor:pointer;color:var(--tt);font-size:14px;padding:0 4px;flex-shrink:0;opacity:.5;transition:opacity .15s}
+.gl-del:hover{opacity:1;color:var(--rd)}
+.gl-alpha{font-size:10px;font-weight:800;color:var(--pri);padding:10px 0 4px;border-bottom:2px solid var(--pri-s);margin-bottom:2px;letter-spacing:1px}
+
 /* ── EXPANDED CARD ── */
 .card.expanded .card-body{max-height:none}
 
@@ -380,6 +392,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
     </form>
     <div class="stats" id="stats"></div>
     <button class="add-btn" style="background:var(--a4-s);color:var(--a4);border-color:var(--a4-b)" onclick="syncNow(this)" title="Pull latest from team">🔄 Sync</button>
+    <button class="add-btn" onclick="showGlossary()" style="background:var(--am-s);color:var(--am);border-color:var(--am-b)" title="Speak like Bob — terminology glossary (G)">🗣 Glossary</button>
     <button class="add-btn" onclick="window.print()" style="background:var(--bg);color:var(--ts);border-color:var(--bd)" title="Print all entries (Ctrl+P)">🖨</button>
     <button class="add-btn" onclick="showAddModal()" title="New entry (N)">+ New Entry</button>
   </div>
@@ -394,6 +407,28 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 
 <!-- ═══ CARD GRID ═══ -->
 <div class="grid" id="grid"></div>
+
+<!-- ═══ GLOSSARY MODAL ═══ -->
+<div class="modal-bg" id="glossary-modal">
+  <div class="view-modal" style="width:700px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <h2 style="margin:0;color:var(--am)">🗣 Speak like Bob</h2>
+        <div style="font-size:11px;color:var(--ts);margin-top:2px">Terminology auto-collected from all entries</div>
+      </div>
+      <button type="button" onclick="closeGlossary()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--tt);padding:0 2px;line-height:1" title="Close">&times;</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <input type="search" id="glossary-search" placeholder="Filter terms..." oninput="renderGlossaryList()" autocomplete="off" style="width:100%;padding:8px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-family:var(--fd);outline:none">
+    </div>
+    <div id="glossary-list" style="max-height:60vh;overflow-y:auto"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <input type="text" id="glossary-add-term" placeholder="New term" style="flex:1;padding:7px 10px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-family:var(--fd);outline:none;font-weight:700">
+      <input type="text" id="glossary-add-def" placeholder="Definition" style="flex:2;padding:7px 10px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-family:var(--fd);outline:none" onkeydown="if(event.key==='Enter')addGlossaryTerm()">
+      <button class="m-btn primary" style="padding:7px 14px;font-size:11px" onclick="addGlossaryTerm()">Add</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ VIEW MODAL ═══ -->
 <div class="modal-bg" id="view-modal">
@@ -573,6 +608,8 @@ async function init(){
   renderGrid();
   // Load shared AI key from Supabase (decrypt with saved passphrase)
   loadAIKey();
+  // Load glossary
+  _loadGlossary();
 }
 
 // ── PERSISTENCE ──
@@ -1548,13 +1585,144 @@ document.addEventListener('visibilitychange',()=>{
   if(!document.hidden)loadFromSupabase();
 });
 
+// ── GLOSSARY — "Speak like Bob" ──
+// Known terms: auto-extracted from entry bodies + manually added
+// Stored in localStorage + Supabase as 'mem-glossary'
+const _KNOWN_TERMS={
+  // Pre-seeded common terms (will be merged with auto-detected + manual)
+  'ASN':'Advanced Shipping Notice — document listing what was shipped',
+  'BOL':'Bill of Lading — carrier transport document',
+  'OOR':'Official Order Request — formal order to warehouse for kit/item',
+  'LSR':'Logistics Service Request — truck booking number from logistics provider',
+  'SM2ARTA':'SM²ARTA — FIFA venue/materials management system',
+  'ML3K':'ML3000 — logistics planning tool for LP/LM truck management',
+  'WMS':'Warehouse Management System',
+  'LP':'Load Plan — outbound truck planning from Dallas',
+  'LM':'Last Mile — venue delivery planning',
+  'SKU':'Stock Keeping Unit — unique product identifier',
+  'CI':'Commercial Invoice — customs document for international shipments',
+  'HS Code':'Harmonized System code — international product classification for customs',
+  'FNKIT':'FF&E Kit — tools and fixtures kit for venues',
+  'OSKIT':'Stationery Kit — office supplies kit for venues',
+  'CORT':'CORT — furniture rental provider',
+  'STP':'Staples — office supplies direct delivery',
+  'PO':'Purchase Order',
+  'RGS':'RGS Global — primary FF&E supplier',
+  'Re-Board':'Cardboard-based furniture (tables, desks) — water-sensitive',
+  'Bump-in':'Date when venue setup begins — materials must arrive before this',
+  'Pallet Config':'ML3K setting for assembled vs disassembled pallet dimensions',
+  'Handshake':'Document exchange between warehouse and venue confirming delivery',
+  'Kitting':'Process of assembling multiple items into a single kit SKU',
+  'Dispatch':'Sending a truck from warehouse — marked in ML3K with date + LSR',
+  'Quarantine':'Isolated storage area for damaged or suspect items',
+  'Satellite WHS':'Regional warehouse that receives LP trucks and distributes to venues',
+  'Levant':'Outlook folder for resolved/archived Materials Mailbox emails',
+};
+
+let GLOSSARY={}; // {term: {def, source:'auto'|'manual', from?:entryTitle}}
+
+function _loadGlossary(){
+  try{const s=localStorage.getItem('mem-glossary');if(s)GLOSSARY=JSON.parse(s)}catch(e){}
+  // Merge known terms (don't overwrite manual edits)
+  for(const[t,d]of Object.entries(_KNOWN_TERMS)){
+    if(!GLOSSARY[t])GLOSSARY[t]={def:d,source:'auto'};
+  }
+}
+
+function _saveGlossary(){
+  localStorage.setItem('mem-glossary',JSON.stringify(GLOSSARY));
+}
+
+// Auto-extract terms from entries: find *bold* words and system names
+function _autoExtractTerms(){
+  const boldRe=/\*([^*]+)\*/g;
+  const sysNames=/\b(SM2ARTA|ML3K|WMS|ASN|BOL|OOR|LSR|SKU|FNKIT|OSKIT|CORT|STP|RGS|CI)\b/g;
+  for(const e of ENTRIES){
+    const raw=e._raw||e.body||'';
+    // Extract *bold* terms
+    let m;
+    while((m=boldRe.exec(raw))!==null){
+      const term=m[1].trim();
+      if(term.length>1&&term.length<40&&!GLOSSARY[term]){
+        GLOSSARY[term]={def:'',source:'auto',from:e.title};
+      }
+    }
+    // Extract system abbreviations
+    while((m=sysNames.exec(raw))!==null){
+      const term=m[1];
+      if(!GLOSSARY[term]&&_KNOWN_TERMS[term]){
+        GLOSSARY[term]={def:_KNOWN_TERMS[term],source:'auto'};
+      }
+    }
+  }
+  _saveGlossary();
+}
+
+function showGlossary(){
+  _autoExtractTerms();
+  renderGlossaryList();
+  document.getElementById('glossary-modal').classList.add('show');
+  document.getElementById('glossary-search').value='';
+  document.getElementById('glossary-search').focus();
+}
+
+function closeGlossary(){document.getElementById('glossary-modal').classList.remove('show')}
+
+function renderGlossaryList(){
+  const el=document.getElementById('glossary-list');
+  const q=(document.getElementById('glossary-search').value||'').toLowerCase().trim();
+  // Sort alphabetically
+  let terms=Object.entries(GLOSSARY).sort((a,b)=>a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
+  if(q)terms=terms.filter(([t,v])=>t.toLowerCase().includes(q)||(v.def||'').toLowerCase().includes(q));
+
+  if(!terms.length){
+    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--tt);font-size:12px">No terms found</div>';
+    return;
+  }
+
+  let h='';
+  let lastAlpha='';
+  for(const[term,info]of terms){
+    const alpha=term[0].toUpperCase();
+    if(alpha!==lastAlpha&&!q){h+=`<div class="gl-alpha">${alpha}</div>`;lastAlpha=alpha}
+    const badge=info.source==='manual'?'<span class="gl-manual">MANUAL</span>':'<span class="gl-auto">AUTO</span>';
+    const srcNote=info.from?`<div class="gl-src">from: ${esc(info.from)}</div>`:'';
+    h+=`<div class="gl-item">
+      <div class="gl-term">${esc(term)}${badge}</div>
+      <div class="gl-def">${info.def?esc(info.def):'<span style="color:var(--tt);font-style:italic">No definition yet — click to add</span>'}${srcNote}</div>
+      <button class="gl-del" onclick="_delGlossary('${esc(term).replace(/'/g,"\\'")}')" title="Remove">&times;</button>
+    </div>`;
+  }
+  el.innerHTML=h;
+}
+
+function addGlossaryTerm(){
+  const termEl=document.getElementById('glossary-add-term');
+  const defEl=document.getElementById('glossary-add-def');
+  const term=termEl.value.trim();
+  const def=defEl.value.trim();
+  if(!term)return termEl.focus();
+  GLOSSARY[term]={def:def||'',source:'manual'};
+  _saveGlossary();
+  termEl.value='';defEl.value='';
+  renderGlossaryList();
+  termEl.focus();
+}
+
+function _delGlossary(term){
+  delete GLOSSARY[term];
+  _saveGlossary();
+  renderGlossaryList();
+}
+
 // ── KEYBOARD ──
 document.addEventListener('keydown',e=>{
   const inInput=document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'||document.activeElement.tagName==='SELECT';
   const modalOpen=document.querySelector('.modal-bg.show');
-  if(e.key==='Escape'){closeView();closeModal()}
+  if(e.key==='Escape'){closeGlossary();closeView();closeModal()}
   if(e.key==='/'&&!modalOpen&&!inInput){e.preventDefault();document.getElementById('search').focus()}
   if(e.key.toLowerCase()==='n'&&!modalOpen&&!inInput){e.preventDefault();showAddModal()}
+  if(e.key.toLowerCase()==='g'&&!modalOpen&&!inInput){e.preventDefault();showGlossary()}
   if(e.key.toLowerCase()==='p'&&e.ctrlKey){/* let browser print handle it */}
 });
 
