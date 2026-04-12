@@ -155,6 +155,9 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 
 /* ── CALLOUT BOXES ── */
 .co{border-radius:6px;padding:6px 10px;font-size:10.5px;margin:6px 0;line-height:1.5}
+.co-list{margin:4px 0 0;padding:0;list-style:none}
+.co-list li{padding:1px 0;position:relative;padding-left:10px}
+.co-list li::before{content:'•';position:absolute;left:0;font-weight:700}
 .co-r{background:var(--rd-s);border-left:3px solid var(--rd);color:#8B1A1A}
 .co-g{background:var(--gn-s);border-left:3px solid var(--gn);color:#1B5E20}
 .co-a{background:var(--am-s);border-left:3px solid var(--am);color:#BF360C}
@@ -994,7 +997,25 @@ function autoFormat(raw){
 // Inline formatting: *bold*, `code`, _italic_
 function _inlineFmt(s){
   if(!s)return'';
+  // Convert \\ with - items into a proper list
+  if(/\\\\\s*-\s/.test(s)){
+    const parts=s.split(/\s*\\\\\s*/);
+    const first=parts[0];
+    const rest=parts.slice(1).filter(Boolean);
+    let out=_inlineFmtInner(first);
+    if(rest.length){
+      out+='<ul class="co-list">'+rest.map(p=>{
+        const txt=p.replace(/^-\s*/,'');
+        return'<li>'+_inlineFmtInner(txt)+'</li>';
+      }).join('')+'</ul>';
+    }
+    return out;
+  }
   s=s.replace(/\s*\\\\\s*/g,'<br>');
+  return _inlineFmtInner(s);
+}
+function _inlineFmtInner(s){
+  if(!s)return'';
   s=s.replace(/\*([^*]+)\*/g,'<b>$1</b>');
   s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
   s=s.replace(/(?<!\w)_([^_]+)_(?!\w)/g,'<i>$1</i>');
