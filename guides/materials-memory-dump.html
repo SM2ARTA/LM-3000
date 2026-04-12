@@ -496,6 +496,10 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
           <div><span style="color:var(--tp)">- item</span> <span style="color:var(--tt)">bullet list</span></div>
           <div><span style="color:var(--tp)">A | B | C</span> <span style="color:var(--tt)">table</span></div>
           <div><span style="color:var(--tp)">*bold*</span> <span style="color:var(--tt)">bold text</span></div>
+          <div style="border-top:1px solid var(--bd);margin-top:4px;padding-top:4px"><span style="color:var(--tt)">Multi-line callout:</span></div>
+          <div><span style="color:#12804A">Always:</span> <span style="color:var(--tt)">first line</span></div>
+          <div><span style="color:var(--tt)">&nbsp;&nbsp;- second line</span></div>
+          <div><span style="color:var(--tt)">&nbsp;&nbsp;- third line</span></div>
         </div>
       </div>
     </div>
@@ -819,21 +823,22 @@ function autoFormat(raw){
     }
 
     // ── CALLOUT: WARNING / NEVER / DO NOT / IMPORTANT ──
-    // Matches both "Never: text" and "Never delete anything!" (keyword + space, no colon needed)
     if(/^(?:warning|never|do\s*n[o']t|important|danger|critical|stop)\s*[:\-!\s]/i.test(line)){
       const txt=line.replace(/^(?:warning|never|do\s*n[o']t|important|danger|critical|stop)\s*[:\-!]?\s*/i,'');
       if(txt.length>2){
         const lbl=_extractLabel2(line,['Warning','Never','Do not',"Don't",'Important','Danger','Critical','Stop']);
-        out.push(`<div class="co co-r"><b>${lbl}:</b> ${_inlineFmt(txt)}</div>`);
-        i++;continue;
+        const cont=_collectContinuation(lines,i+1);
+        out.push(`<div class="co co-r"><b>${lbl}:</b> ${_inlineFmt(txt)}${cont.body}</div>`);
+        i=cont.end;continue;
       }
     }
     // ── CALLOUT: ALWAYS ──
     if(/^always\s/i.test(line)){
       const txt=line.replace(/^always\s*[:\-!]?\s*/i,'');
       if(txt.length>2){
-        out.push(`<div class="co co-g"><b>Always:</b> ${_inlineFmt(txt)}</div>`);
-        i++;continue;
+        const cont=_collectContinuation(lines,i+1);
+        out.push(`<div class="co co-g"><b>Always:</b> ${_inlineFmt(txt)}${cont.body}</div>`);
+        i=cont.end;continue;
       }
     }
     // ── CALLOUT: TIP / BEST PRACTICE / REMEMBER ──
@@ -841,8 +846,9 @@ function autoFormat(raw){
       const txt=line.replace(/^(?:tip|best\s*practice|remember)\s*[:\-!]?\s*/i,'');
       if(txt.length>2){
         const lbl=_extractLabel2(line,['Tip','Best practice','Remember']);
-        out.push(`<div class="co co-g"><b>${lbl}:</b> ${_inlineFmt(txt)}</div>`);
-        i++;continue;
+        const cont=_collectContinuation(lines,i+1);
+        out.push(`<div class="co co-g"><b>${lbl}:</b> ${_inlineFmt(txt)}${cont.body}</div>`);
+        i=cont.end;continue;
       }
     }
     // ── CALLOUT: NOTE / INFO / FYI ──
@@ -850,8 +856,9 @@ function autoFormat(raw){
       const txt=line.replace(/^(?:note|info|fyi|context|background)\s*[:\-!]?\s*/i,'');
       if(txt.length>2){
         const lbl=_extractLabel2(line,['Note','Info','FYI','Context','Background']);
-        out.push(`<div class="co co-b"><b>${lbl}:</b> ${_inlineFmt(txt)}</div>`);
-        i++;continue;
+        const cont=_collectContinuation(lines,i+1);
+        out.push(`<div class="co co-b"><b>${lbl}:</b> ${_inlineFmt(txt)}${cont.body}</div>`);
+        i=cont.end;continue;
       }
     }
     // ── CALLOUT: CAUTION / WATCH OUT / CAREFUL ──
@@ -859,8 +866,9 @@ function autoFormat(raw){
       const txt=line.replace(/^(?:caution|watch\s*out|careful|attention|heads?\s*up)\s*[:\-!]?\s*/i,'');
       if(txt.length>2){
         const lbl=_extractLabel2(line,['Caution','Watch out','Careful','Attention','Heads up']);
-        out.push(`<div class="co co-a"><b>${lbl}:</b> ${_inlineFmt(txt)}</div>`);
-        i++;continue;
+        const cont=_collectContinuation(lines,i+1);
+        out.push(`<div class="co co-a"><b>${lbl}:</b> ${_inlineFmt(txt)}${cont.body}</div>`);
+        i=cont.end;continue;
       }
     }
 
@@ -930,6 +938,21 @@ function _inlineFmt(s){
 }
 
 // Extract label from callout line — matches against known labels
+// Collect continuation lines after a callout: indented lines or lines starting with - merge into the callout
+function _collectContinuation(lines,startIdx){
+  let body='';
+  let j=startIdx;
+  while(j<lines.length){
+    const next=lines[j];
+    // Continuation: starts with spaces/tab, or starts with "- " (sub-item)
+    if(/^\s{2,}/.test(next)||/^\s*-\s/.test(next)){
+      body+='<br>'+_inlineFmt(next.trim());
+      j++;
+    }else{break}
+  }
+  return{body,end:j};
+}
+
 function _extractLabel2(line, candidates){
   const low=line.toLowerCase();
   for(const c of candidates)if(low.startsWith(c.toLowerCase()))return c;
@@ -1206,6 +1229,10 @@ Always: <text>                (green callout)
 Tip: <text>                   (green callout)
 Note: <text>                  (blue callout)
 Caution: <text>               (amber callout)
+Multi-line callout — indent continuation lines with 2+ spaces:
+  Always: first point
+    - second point
+    - third point
 1. step                       (numbered list)
 - bullet                      (bullet list)
 Col1 | Col2 | Col3            (table header — pipe-separated)
