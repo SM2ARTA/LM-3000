@@ -55,12 +55,11 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .logo-icon{font-size:26px}
 .logo-text{font-size:14px;font-weight:800;letter-spacing:-.3px;color:var(--pri)}
 .logo-sub{font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--tt)}
-.search-box{flex:1;max-width:480px;position:relative}
+.search-box{flex:1;position:relative}
 .search-box input{width:100%;padding:9px 14px 9px 36px;border:2px solid var(--bd);border-radius:10px;font-size:13px;font-family:var(--fd);outline:none;background:var(--bg);transition:all .2s}
 .search-box input:focus{border-color:var(--pri);background:var(--sf);box-shadow:0 0 0 3px rgba(74,20,140,.1);animation:glowPulse 2s ease-in-out infinite}
 .search-box input::placeholder{color:var(--tt)}
 .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--tt);pointer-events:none}
-.stats{font-size:11px;color:var(--tt);font-weight:600;font-family:var(--fm);flex-shrink:0;margin-left:auto}
 .add-btn{padding:8px 18px;border-radius:8px;border:2px solid var(--pri-b);background:var(--pri-s);color:var(--pri);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fd);transition:all .25s cubic-bezier(.34,1.56,.64,1);flex-shrink:0}
 .add-btn:hover{background:var(--pri);color:#fff;border-color:var(--pri);transform:translateY(-1px);box-shadow:0 4px 12px rgba(74,20,140,.25)}
 .add-btn:active{transform:translateY(0) scale(.95)}
@@ -274,7 +273,6 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
   .search-box{max-width:none;order:10;width:100%}
   .search-box input{padding:8px 12px 8px 32px;font-size:12px}
   .search-icon{left:10px;font-size:12px}
-  .stats{display:none}
   .add-btn{padding:6px 12px;font-size:10px}
   .add-btn:first-of-type{margin-left:auto}
   .cats{padding:6px 12px 0;gap:4px}
@@ -399,7 +397,6 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
       <span class="search-icon">🔍</span>
       <input type="search" id="search" name="q" placeholder="Search by keyword, SKU, scenario..." oninput="filterCards()" autocomplete="off">
     </form>
-    <div class="stats" id="stats"></div>
     <button class="add-btn" style="background:var(--a4-s);color:var(--a4);border-color:var(--a4-b)" onclick="syncNow(this)" title="Pull latest from team">🔄 Sync</button>
     <button class="add-btn" onclick="showGlossary()" style="background:var(--am-s);color:var(--am);border-color:var(--am-b)" title="Speak like Bob — terminology glossary (G)">🗣 Glossary</button>
     <button class="add-btn" onclick="window.print()" style="background:var(--bg);color:var(--ts);border-color:var(--bd)" title="Print all entries (Ctrl+P)">🖨</button>
@@ -752,7 +749,6 @@ function renderGrid(){
   // Important category on top, then newest
   items=items.slice().sort((a,b)=>(b.cat==='important'?1:0)-(a.cat==='important'?1:0)||b.id-a.id);
 
-  document.getElementById('stats').textContent=`${items.length} / ${ENTRIES.length} entries`;
 
   if(!items.length){
     if(!ENTRIES.length&&!q&&!activeCat){
