@@ -1206,7 +1206,12 @@ async function aiEnhance(){
       body.dispatchEvent(new Event('input'));
     }
   }catch(e){
-    alert('AI error: '+(e.message||e));
+    const msg=e.message||String(e);
+    if(msg.includes('Failed to fetch')){
+      alert('AI error: Could not reach the API.\n\nIf using ChatGPT: your OpenAI API key may have restricted permissions. Go to platform.openai.com → API keys → check the key allows "Model capabilities" and is not restricted to specific IPs.\n\nAlternatively, try Gemini (free, no CORS issues).');
+    }else{
+      alert('AI error: '+msg);
+    }
   }finally{btn.textContent='✨ AI Enhance';btn.disabled=false}
 }
 
@@ -1221,7 +1226,7 @@ async function _aiCall(provider,key,userMsg){
   if(provider==='chatgpt'){
     const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',
       headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
-      body:JSON.stringify({model:'gpt-4o-mini',max_completion_tokens:1500,messages:[{role:'system',content:_AI_SYSTEM},{role:'user',content:userMsg}]})});
+      body:JSON.stringify({model:'gpt-4.1-mini',max_completion_tokens:1500,messages:[{role:'system',content:_AI_SYSTEM},{role:'user',content:userMsg}]})});
     if(!r.ok)throw new Error(r.status===401?'Invalid API key — check Settings':await r.text());
     return(await r.json()).choices?.[0]?.message?.content||'';
   }
