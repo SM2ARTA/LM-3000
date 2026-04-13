@@ -283,63 +283,50 @@ const TEAM_GUIDE_META={
   'vlm-pocket-card-print.html':{title:"VLM Pocket Card (Print)"}
 };
 
-// Try to discover which guides actually exist on this server — try each base path
-async function _discoverGuides(){
-  // Try to find the right base path by probing with a known file
-  const bases=['','./','/guides/','guides/','../guides/'];
-  let workingBase=null;
-  for(const base of bases){
+// Try multiple paths for each guide individually — no pre-discovery needed.
+// Some servers return 200 for missing files (SPA fallback), so we also check
+// that the response actually looks like HTML with expected content.
+async function _fetchGuide(file){
+  const paths=[file,'./'+file,'/guides/'+file,'guides/'+file,'../guides/'+file];
+  for(const p of paths){
     try{
-      const r=await fetch(base+'bobs-survival-guide.html',{method:'HEAD'});
-      if(r.ok){workingBase=base;log('Guides base path: "'+base+'"');break}
+      const r=await fetch(p);
+      if(!r.ok)continue;
+      const text=await r.text();
+      // Validate: must contain HTML tags AND not be the Memory Dump index
+      if(!text.includes('<')||!text.includes('</')||text.length<500)continue;
+      // Skip if this is actually the memory-dump or build-refs page by mistake
+      if(text.includes('Bob\'s Memory Dump')||text.includes('Build Bob\'s Reference Library'))continue;
+      return{text,path:p};
     }catch(e){}
   }
-  if(workingBase===null){
-    // Try GET instead of HEAD (some servers don't support HEAD)
-    for(const base of bases){
-      try{
-        const r=await fetch(base+'bobs-survival-guide.html');
-        if(r.ok){workingBase=base;log('Guides base path (GET): "'+base+'"');break}
-      }catch(e){}
-    }
-  }
-  if(workingBase===null){
-    log('Could not find guides folder. Tried: '+bases.map(b=>`"${b}"`).join(', '),'err');
-    return{base:null,files:[]};
-  }
-  // Now test each known file
-  const available=[];
-  for(const[file,meta]of Object.entries(TEAM_GUIDE_META)){
-    try{
-      const r=await fetch(workingBase+file,{method:'HEAD'});
-      if(r.ok){available.push({file,...meta})}
-      else{
-        // fallback to GET
-        const r2=await fetch(workingBase+file);
-        if(r2.ok){available.push({file,...meta})}
-      }
-    }catch(e){}
-  }
-  log('Found '+available.length+' of '+Object.keys(TEAM_GUIDE_META).length+' guides');
-  return{base:workingBase,files:available};
+  return null;
 }
 
 async function buildGuides(){
   log('=== Team Guides extraction ===','ok');
-  setProgress('gd',5,'Discovering guides...');
-  const{base,files:TEAM_GUIDES}=await _discoverGuides();
-  if(!TEAM_GUIDES.length){
-    setProgress('gd',0,'No guides found');
+  const total=Object.keys(TEAM_GUIDE_META).length;
+  setProgress('gd',5,`Trying ${total} guides...`);
+  const gdChunks=[];
+  const foundGuides=[];
+  let tested=0;
+  for(const[file,meta]of Object.entries(TEAM_GUIDE_META)){
+    tested++;
+    setProgress('gd',Math.round(tested/total*50),`Testing ${tested}/${total}: ${file}`);
+    const fetched=await _fetchGuide(file);
+    if(!fetched){log('Not found: '+file,'err');continue}
+    foundGuides.push({file,path:fetched.path,html:fetched.text,...meta});
+  }
+  log(`Found ${foundGuides.length} of ${total} guides`);
+  if(!foundGuides.length){
+    setProgress('gd',0,'No guides accessible');
     return;
   }
-  setProgress('gd',10,`Extracting ${TEAM_GUIDES.length} guides...`);
-  const gdChunks=[];
   let done=0;
-  for(const g of TEAM_GUIDES){
+  for(const g of foundGuides){
+    done++;
     try{
-      const r=await fetch(base+g.file);
-      if(!r.ok){log('Skip '+g.file+' ('+r.status+')','err');continue}
-      const html=await r.text();
+      const html=g.html;
       const doc=new DOMParser().parseFromString(html,'text/html');
       // Remove SVG, scripts, styles
       doc.querySelectorAll('svg,script,style,.hnd-header,nav,footer').forEach(el=>el.remove());
@@ -406,12 +393,12 @@ async function buildGuides(){
         }
       }
     }catch(e){log('Error '+g.file+': '+e.message,'err')}
-    done++;
-    setProgress('gd',Math.round(done/TEAM_GUIDES.length*100),`${done}/${TEAM_GUIDES.length} guides`);
+    setProgress('gd',50+Math.round(done/foundGuides.length*50),`Parsing ${done}/${foundGuides.length}`);
   }
-  CHUNKS=CHUNKS.filter(c=>!TEAM_GUIDES.some(g=>g.title===c.source)).concat(gdChunks);
+  const titles=new Set(foundGuides.map(g=>g.title));
+  CHUNKS=CHUNKS.filter(c=>!titles.has(c.source)).concat(gdChunks);
   log(`Extracted ${gdChunks.length} chunks from team guides`,'ok');
-  setProgress('gd',100,`✓ ${gdChunks.length} chunks from ${TEAM_GUIDES.length} guides`);
+  setProgress('gd',100,`✓ ${gdChunks.length} chunks from ${foundGuides.length} guides`);
   _updateUploadBtn();
 }
 
