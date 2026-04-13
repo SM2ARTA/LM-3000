@@ -2609,16 +2609,33 @@ KNOWLEDGE SOURCES (in priority order):
 4. Glossary — team terminology
 5. General FF&E/warehouse/logistics expertise — your background knowledge
 
-RESPONSE RULES:
-- READ ALL the provided context carefully before responding. The Memory Dump entries, SM2ARTA Guide chunks, Glossary terms, and Reference Docs below ARE the answer most of the time.
-- If ANY provided source mentions the topic — even briefly — use it and cite it. Don't say "not in docs" if the topic appears in the context at all.
-- Cite the source naturally: "Per your Memory Dump entry 'X'..." or "From SM2ARTA Guide section 'Y'..." or "Per glossary: VLM means..."
-- ONLY say "Not in your docs — here's general guidance:" if the topic is genuinely absent from ALL provided context
-- Keep responses SHORT: 2-4 sentences for simple questions, bullet points for steps
-- Use **bold** for key terms, system names, and actions
-- Use \`code\` for specific values or SKU-like identifiers
-- Be conversational but professional — you're Bob, a senior warehouse ops expert
-- When the question is interesting and the answer not yet documented, suggest: "Worth adding to the memory dump!"
+CRITICAL — HOW TO USE THE PROVIDED CONTEXT:
+
+The user's question will be followed by RELEVANT MEMORY DUMP ENTRIES, REFERENCE DOCS, and GLOSSARY TERMS retrieved by keyword search. These are your ground truth.
+
+1. READ THE FULL TEXT of every chunk provided. Don't just look at headings.
+2. The chunks contain the LITERAL ANSWER — extract the actual steps, definitions, or instructions verbatim.
+3. If a chunk says "1. Go to X. 2. Click Y. 3. Fill in Z" — your answer must reflect those EXACT steps, not paraphrase them into something different.
+4. Cite the source: "Per SM2ARTA Guide → Create User:" then list the actual steps from that chunk.
+5. Combine multiple chunks if they're all relevant (e.g. Create User + Activating User + Edit User Details).
+
+RESPONSE STYLE:
+- Lead with the citation: "Per SM2ARTA Guide → [Heading]:"
+- Then use numbered steps if the source had numbered steps, or bullets for unordered info
+- Use **bold** for system names, button labels, key terms
+- Use \`code\` for field names, paths, identifiers
+- 2-6 sentences for simple questions; numbered list for procedures; brief paragraph for definitions
+
+WHEN THE CONTEXT IS NOT ENOUGH:
+- ONLY say "Not in your docs — here's general guidance:" when zero chunks were provided OR when chunks are clearly off-topic
+- If you partially have it, lead with what's documented, then offer "the docs don't cover X specifically — generally..."
+- Suggest "Worth adding to the memory dump!" when answering from general knowledge
+
+NEVER:
+- Invent steps that weren't in the source
+- Refuse to answer when relevant chunks were provided
+- Generic-summarize when the chunk has specific content
+- Skip citations
 - Never make up source titles — only cite sources explicitly provided in context`;
 
 async function bobSend(){
@@ -2705,21 +2722,21 @@ async function bobSend(){
 async function _bobClaude(key,msg){
   const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
     headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
-    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,system:BOB_SYSTEM,messages:[{role:'user',content:msg}]})});
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:BOB_SYSTEM,messages:[{role:'user',content:msg}]})});
   if(!r.ok)throw new Error(r.status===401?'Invalid API key':(await r.text()).slice(0,100));
   return(await r.json()).content?.[0]?.text||'';
 }
 async function _bobGPT(key,msg){
   const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',
     headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
-    body:JSON.stringify({model:'gpt-4.1-mini',max_completion_tokens:600,messages:[{role:'system',content:BOB_SYSTEM},{role:'user',content:msg}]})});
+    body:JSON.stringify({model:'gpt-4.1-mini',max_completion_tokens:1200,messages:[{role:'system',content:BOB_SYSTEM},{role:'user',content:msg}]})});
   if(!r.ok)throw new Error(r.status===401?'Invalid API key':(await r.text()).slice(0,100));
   return(await r.json()).choices?.[0]?.message?.content||'';
 }
 async function _bobGemini(key,msg){
   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({systemInstruction:{parts:[{text:BOB_SYSTEM}]},contents:[{parts:[{text:msg}]}],generationConfig:{maxOutputTokens:600}})});
+    body:JSON.stringify({systemInstruction:{parts:[{text:BOB_SYSTEM}]},contents:[{parts:[{text:msg}]}],generationConfig:{maxOutputTokens:1200}})});
   if(!r.ok)throw new Error(r.status===400||r.status===403?'Invalid API key':(await r.text()).slice(0,100));
   return(await r.json()).candidates?.[0]?.content?.parts?.[0]?.text||'';
 }
