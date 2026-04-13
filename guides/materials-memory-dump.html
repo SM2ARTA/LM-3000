@@ -493,6 +493,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
     </form>
     <button class="add-btn" style="background:var(--a4-s);color:var(--a4);border-color:var(--a4-b)" onclick="syncNow(this)" title="Pull latest from team">🔄 Sync</button>
     <button class="add-btn" onclick="showActivity()" style="background:var(--a3-s);color:var(--a3);border-color:var(--a3-b)" title="Recent activity (A)">⚡ Activity</button>
+    <button class="add-btn" onclick="showTeachBob()" style="background:linear-gradient(135deg,#E8EAF6,#F3E5F5);color:var(--pri);border-color:var(--pri-b)" title="Teach Bob — upload custom knowledge (T)">🎓 Teach Bob</button>
     <button class="add-btn" onclick="showGlossary()" style="background:var(--am-s);color:var(--am);border-color:var(--am-b)" title="Speak like Bob — terminology glossary (G)">🗣 Glossary</button>
     <button class="add-btn" onclick="window.print()" style="background:var(--bg);color:var(--ts);border-color:var(--bd)" title="Print all entries (Ctrl+P)">🖨</button>
     <button class="add-btn" onclick="showAddModal()" title="New entry (N)">+ New Entry</button>
@@ -570,6 +571,34 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
       <button type="button" onclick="closeActivity()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--tt);padding:4px;line-height:1">&times;</button>
     </div>
     <div class="act-feed" id="activity-feed"></div>
+  </div>
+</div>
+
+<!-- ═══ TEACH BOB MODAL ═══ -->
+<div class="modal-bg" id="teach-modal">
+  <div class="view-modal" style="width:800px;max-height:85vh">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:36px;margin-bottom:4px">🎓</div>
+        <h2 style="margin:0;font-size:20px;font-weight:900;color:var(--tp)">Teach Bob</h2>
+        <div style="font-size:11px;color:var(--tt);margin-top:4px">Upload any text knowledge for Bob — procedures, emails, reference material. Paste away.</div>
+      </div>
+      <button type="button" onclick="closeTeach()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--tt);padding:4px;line-height:1">&times;</button>
+    </div>
+    <div style="background:var(--bg);border:1.5px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px">
+      <input type="text" id="teach-title" placeholder="What is this? (e.g. 'Customs clearance checklist')" style="width:100%;padding:10px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;font-weight:600;margin-bottom:8px;outline:none;font-family:inherit" onfocus="this.style.borderColor='var(--pri)'" onblur="this.style.borderColor='var(--bd)'">
+      <textarea id="teach-body" placeholder="Paste anything — process steps, email thread, notes, policy document..." style="width:100%;padding:10px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-family:inherit;outline:none;min-height:160px;line-height:1.5;resize:vertical" onfocus="this.style.borderColor='var(--pri)'" onblur="this.style.borderColor='var(--bd)'"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <div id="teach-status" style="font-size:10px;color:var(--tt)"></div>
+        <div style="display:flex;gap:6px">
+          <input type="file" id="teach-file" accept=".txt,.md,.html,.csv" style="display:none" onchange="_teachFileSelected(event)">
+          <button class="m-btn" onclick="document.getElementById('teach-file').click()" style="padding:7px 12px;font-size:11px">📄 Upload file</button>
+          <button class="m-btn primary" onclick="_teachSave()" style="padding:7px 16px;font-size:11px">Save to Bob</button>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:10px;font-weight:800;color:var(--tt);text-transform:uppercase;letter-spacing:1px;padding:4px 0 8px">Saved manual knowledge · <span id="teach-count">0</span></div>
+    <div id="teach-list" style="max-height:40vh;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -2460,32 +2489,179 @@ function _bobFindTerms(query){
   return hits.slice(0,8);
 }
 
-// ── REFERENCE DOCS (SM2ARTA Guide + Presentation) ──
-let BOB_REFS=[]; // [{source,heading,url,text}]
+// ── REFERENCE DOCS (SM2ARTA Guide + Presentation + manual) ──
+let BOB_REFS=[];        // auto-extracted refs
+let BOB_MANUAL_REFS=[]; // manually uploaded text chunks
 
 async function _loadBobRefs(){
-  // Try localStorage cache first
+  // Auto refs
   try{const s=localStorage.getItem('mem-refs');if(s)BOB_REFS=JSON.parse(s)}catch(e){}
-  // Fetch from Supabase (update if remote is newer)
   try{
     const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
-    if(!r.ok)return;
-    const d=await r.json();
-    if(!d.length||!d[0].value)return;
-    let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
-    if(Array.isArray(v)&&v.length){
-      BOB_REFS=v;
-      localStorage.setItem('mem-refs',JSON.stringify(BOB_REFS));
+    if(r.ok){
+      const d=await r.json();
+      if(d.length&&d[0].value){
+        let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+        if(Array.isArray(v)&&v.length){BOB_REFS=v;localStorage.setItem('mem-refs',JSON.stringify(BOB_REFS))}
+      }
     }
-  }catch(e){console.warn('Bob refs load failed:',e)}
+  }catch(e){console.warn('Bob auto refs load failed:',e)}
+  // Manual refs
+  try{const s=localStorage.getItem('mem-refs-manual');if(s)BOB_MANUAL_REFS=JSON.parse(s)}catch(e){}
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs-manual&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(r.ok){
+      const d=await r.json();
+      if(d.length&&d[0].value){
+        let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+        if(Array.isArray(v)){BOB_MANUAL_REFS=v;localStorage.setItem('mem-refs-manual',JSON.stringify(BOB_MANUAL_REFS))}
+      }
+    }
+  }catch(e){console.warn('Bob manual refs load failed:',e)}
+}
+
+async function _saveManualRefs(){
+  // Always fetch fresh from Supabase first and merge, to avoid overwriting
+  // other users' or other sessions' additions
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs-manual&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(r.ok){
+      const d=await r.json();
+      if(d.length&&d[0].value){
+        let remote=d[0].value;while(typeof remote==='string'){try{remote=JSON.parse(remote)}catch(e){break}}
+        if(Array.isArray(remote)){
+          // Merge: by id, newest _ts wins
+          const map=new Map();
+          for(const r of remote)map.set(r.id,r);
+          for(const r of BOB_MANUAL_REFS){
+            const ex=map.get(r.id);
+            if(!ex||(r._ts||0)>(ex._ts||0))map.set(r.id,r);
+          }
+          BOB_MANUAL_REFS=[...map.values()].filter(r=>!r._deleted);
+        }
+      }
+    }
+  }catch(e){console.warn('manual refs merge fetch failed:',e)}
+  localStorage.setItem('mem-refs-manual',JSON.stringify(BOB_MANUAL_REFS));
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+  try{
+    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+      body:JSON.stringify({id:'mem-refs-manual',value:JSON.stringify(BOB_MANUAL_REFS)})});
+  }catch(e){console.warn('manual refs save failed:',e)}
+}
+
+// ── TEACH BOB MODAL ──
+function showTeachBob(){
+  document.getElementById('teach-modal').classList.add('show');
+  document.getElementById('teach-title').value='';
+  document.getElementById('teach-body').value='';
+  document.getElementById('teach-status').textContent='';
+  // Refresh from Supabase before displaying
+  _loadBobRefs().then(_renderTeachList);
+}
+function closeTeach(){document.getElementById('teach-modal').classList.remove('show')}
+
+function _renderTeachList(){
+  const el=document.getElementById('teach-list');
+  const items=BOB_MANUAL_REFS.filter(r=>!r._deleted);
+  document.getElementById('teach-count').textContent=items.length;
+  if(!items.length){
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--tt)"><div style="font-size:36px;margin-bottom:8px">📚</div><div style="font-size:12px">No manual knowledge yet</div><div style="font-size:10px;margin-top:2px">Paste anything above and Bob will learn it</div></div>';
+    return;
+  }
+  // Newest first
+  items.sort((a,b)=>(b._ts||0)-(a._ts||0));
+  el.innerHTML=items.map(r=>`
+    <div style="background:var(--bg);border:1.5px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--pri-b)'" onmouseout="this.style.borderColor='var(--bd)'" onclick="_teachEdit('${r.id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+        <div style="font-weight:700;font-size:13px;color:var(--tp);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.heading||'Untitled')}</div>
+        <button onclick="event.stopPropagation();_teachDelete('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--tt);font-size:14px;padding:2px 6px" title="Delete">&times;</button>
+      </div>
+      <div style="font-size:11px;color:var(--ts);line-height:1.4;max-height:40px;overflow:hidden">${esc((r.text||'').slice(0,200))}${(r.text||'').length>200?'…':''}</div>
+      <div style="font-size:9px;color:var(--tt);margin-top:4px;font-family:var(--fm)">${(r.text||'').length} chars · ${_relTime(r._ts||0)}</div>
+    </div>
+  `).join('');
+}
+
+async function _teachSave(){
+  const title=document.getElementById('teach-title').value.trim();
+  const body=document.getElementById('teach-body').value.trim();
+  if(!title||!body){
+    document.getElementById('teach-status').textContent='⚠ Title and content required';
+    document.getElementById('teach-status').style.color='var(--rd)';
+    return;
+  }
+  const st=document.getElementById('teach-status');
+  st.style.color='var(--tt)';
+  st.textContent='Saving...';
+  const existingId=document.getElementById('teach-title').dataset.editId;
+  if(existingId){
+    const e=BOB_MANUAL_REFS.find(r=>r.id===existingId);
+    if(e){e.heading=title;e.text=body;e._ts=Date.now();e.source='Manual'}
+    delete document.getElementById('teach-title').dataset.editId;
+  }else{
+    BOB_MANUAL_REFS.push({
+      id:'m'+Date.now()+'-'+Math.random().toString(36).slice(2,7),
+      source:'Manual',
+      heading:title,
+      text:body,
+      _ts:Date.now()
+    });
+  }
+  await _saveManualRefs();
+  document.getElementById('teach-title').value='';
+  document.getElementById('teach-body').value='';
+  st.style.color='var(--gn)';
+  st.textContent='✓ Saved — Bob will use this immediately';
+  setTimeout(()=>{st.textContent=''},2500);
+  _renderTeachList();
+}
+
+function _teachEdit(id){
+  const r=BOB_MANUAL_REFS.find(x=>x.id===id);
+  if(!r)return;
+  document.getElementById('teach-title').value=r.heading||'';
+  document.getElementById('teach-body').value=r.text||'';
+  document.getElementById('teach-title').dataset.editId=id;
+  document.getElementById('teach-title').focus();
+}
+
+async function _teachDelete(id){
+  const r=BOB_MANUAL_REFS.find(x=>x.id===id);
+  if(!r)return;
+  if(!confirm('Delete "'+(r.heading||'Untitled')+'"?'))return;
+  r._deleted=true;r._ts=Date.now();
+  await _saveManualRefs();
+  BOB_MANUAL_REFS=BOB_MANUAL_REFS.filter(x=>!x._deleted);
+  _renderTeachList();
+}
+
+function _teachFileSelected(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    let text=e.target.result;
+    // If HTML, strip tags
+    if(f.name.endsWith('.html')){
+      const doc=new DOMParser().parseFromString(text,'text/html');
+      doc.querySelectorAll('script,style').forEach(el=>el.remove());
+      text=(doc.body?.textContent||'').replace(/\s+/g,' ').trim();
+    }
+    document.getElementById('teach-body').value=text.slice(0,50000);
+    if(!document.getElementById('teach-title').value)document.getElementById('teach-title').value=f.name.replace(/\.[^.]+$/,'');
+  };
+  reader.readAsText(f);
+  ev.target.value='';
 }
 
 // Find relevant reference chunks via keyword scoring
 function _bobFindRefs(query,limit=3){
-  if(!BOB_REFS.length)return[];
+  // Combine auto + manual refs, manual gets a priority boost
+  const all=[...BOB_REFS,...BOB_MANUAL_REFS.map(r=>({...r,_manual:true}))];
+  if(!all.length)return[];
   const words=query.toLowerCase().split(/\s+/).filter(w=>w.length>2);
   if(!words.length)return[];
-  const scored=BOB_REFS.map(r=>{
+  const scored=all.map(r=>{
     const hay=(r.heading+' '+r.text).toLowerCase();
     let score=0;
     for(const w of words){
@@ -2495,6 +2671,8 @@ function _bobFindRefs(query,limit=3){
       score+=headingHit?8:0;
       score+=bodyHits;
     }
+    // Boost manual refs so user-curated content wins ties
+    if(r._manual&&score>0)score+=2;
     return{r,score};
   }).filter(x=>x.score>2).sort((a,b)=>b.score-a.score);
   return scored.slice(0,limit).map(x=>x.r);
@@ -2625,12 +2803,13 @@ try{const s=sessionStorage.getItem('bob-history');if(s)BOB_HISTORY=JSON.parse(s)
 document.addEventListener('keydown',e=>{
   const inInput=document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'||document.activeElement.tagName==='SELECT';
   const modalOpen=document.querySelector('.modal-bg.show');
-  if(e.key==='Escape'){closeGlossary();closeView();closeModal();closeActivity();_closeLbox()}
+  if(e.key==='Escape'){closeGlossary();closeView();closeModal();closeActivity();closeTeach();_closeLbox()}
   if(e.key==='/'&&!modalOpen&&!inInput){e.preventDefault();document.getElementById('search').focus()}
   if(e.key.toLowerCase()==='n'&&!modalOpen&&!inInput){e.preventDefault();showAddModal()}
   if(e.key.toLowerCase()==='g'&&!modalOpen&&!inInput){e.preventDefault();showGlossary()}
   if(e.key.toLowerCase()==='b'&&!modalOpen&&!inInput){e.preventDefault();bobToggle()}
   if(e.key.toLowerCase()==='a'&&!modalOpen&&!inInput){e.preventDefault();showActivity()}
+  if(e.key.toLowerCase()==='t'&&!modalOpen&&!inInput){e.preventDefault();showTeachBob()}
   if(e.key.toLowerCase()==='p'&&e.ctrlKey){/* let browser print handle it */}
 });
 

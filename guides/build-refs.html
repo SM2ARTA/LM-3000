@@ -44,14 +44,22 @@ input[type=password]:focus{border-color:var(--pri)}
 
 <div class="card">
   <h2>2. Supply Chain Presentation</h2>
-  <p>Extracts text from <code>supply-chain-overview.html</code> slides.</p>
+  <p>Extracts text from <code>supply-chain-overview.html</code> slides (22 slides).</p>
   <button onclick="buildPresentation()">Extract Presentation</button>
   <div class="progress"><div class="progress-bar" id="pb-pr"></div></div>
   <div class="status" id="st-pr">Not started</div>
 </div>
 
 <div class="card">
-  <h2>3. Upload to Supabase</h2>
+  <h2>3. Team Guides</h2>
+  <p>Extracts all other guides: Bob's Survival Guide, Work Instructions, VLM guides, damage reporting, CAN info sheet, inventory/transactions/roomdata guides, pocket cards.</p>
+  <button onclick="buildGuides()">Extract Team Guides</button>
+  <div class="progress"><div class="progress-bar" id="pb-gd"></div></div>
+  <div class="status" id="st-gd">Not started</div>
+</div>
+
+<div class="card">
+  <h2>4. Upload to Supabase</h2>
   <p>Combines all extracted chunks and uploads to Supabase as <code>mem-refs</code>. Bob will use this automatically.</p>
   <button onclick="uploadRefs()" id="upload-btn" disabled>Upload to Supabase</button>
   <button class="secondary" onclick="downloadRefs()" id="download-btn" disabled>Download JSON</button>
@@ -222,8 +230,12 @@ async function buildPresentation(){
   setProgress('pr',10,'Fetching presentation...');
   log('=== Supply Chain Presentation extraction ===','ok');
   try{
-    const r=await fetch('supply-chain-overview.html');
-    if(!r.ok){log('Failed to fetch: '+r.status,'err');return}
+    // Try several paths since we might be served from different roots
+    let r=null;
+    for(const p of ['supply-chain-overview.html','./supply-chain-overview.html','/guides/supply-chain-overview.html','guides/supply-chain-overview.html']){
+      try{const tr=await fetch(p);if(tr.ok){r=tr;log('Found at: '+p);break}}catch(e){}
+    }
+    if(!r){log('Failed to fetch supply-chain-overview.html from any path','err');return}
     const html=await r.text();
     const doc=new DOMParser().parseFromString(html,'text/html');
     // Each slide is a .S div
@@ -267,6 +279,123 @@ async function buildPresentation(){
     log('Error: '+e.message,'err');
     setProgress('pr',0,'Failed');
   }
+}
+
+// ── TEAM GUIDES ──
+const TEAM_GUIDES=[
+  {file:'bobs-survival-guide.html',title:"Bob's Survival Guide",pageSelector:'.P'},
+  {file:'work-instructions.html',title:"Work Instructions",pageSelector:'.S'},
+  {file:'can-info-sheet.html',title:"CAN Info Sheet"},
+  {file:'damage-report-guide.html',title:"Damage Report Guide"},
+  {file:'view-transactions-guide.html',title:"View Transactions Guide"},
+  {file:'view-inventory-guide.html',title:"View Inventory Guide"},
+  {file:'export-roomdata-guide.html',title:"Export Room Data Guide"},
+  {file:'vlm-sm2arta-guide.html',title:"VLM SM2ARTA Guide"},
+  {file:'vlm-pocket-card.html',title:"VLM Pocket Card"}
+];
+
+async function buildGuides(){
+  log('=== Team Guides extraction ===','ok');
+  setProgress('gd',5,'Fetching guides...');
+  const gdChunks=[];
+  let done=0;
+  for(const g of TEAM_GUIDES){
+    try{
+      let r=null;
+      for(const p of [g.file,'./'+g.file,'/guides/'+g.file,'guides/'+g.file]){
+        try{const tr=await fetch(p);if(tr.ok){r=tr;break}}catch(e){}
+      }
+      if(!r){log('Skip '+g.file+' (not found)','err');continue}
+      const html=await r.text();
+      const doc=new DOMParser().parseFromString(html,'text/html');
+      // Remove SVG, scripts, styles
+      doc.querySelectorAll('svg,script,style,.hnd-header,nav,footer').forEach(el=>el.remove());
+      // Multi-page guides (Bob's Survival, Work Instructions) — each page = chunk
+      if(g.pageSelector){
+        const pages=doc.querySelectorAll(g.pageSelector);
+        log(`${g.title}: ${pages.length} pages`);
+        let pi=0;
+        for(const page of pages){
+          pi++;
+          // Remove page decorations
+          page.querySelectorAll('.sn,.pn,.pn-l,.ft').forEach(el=>el.remove());
+          const heading=page.querySelector('h1,h2,.hd-title')?.textContent?.trim()||`Page ${pi}`;
+          const text=_cleanText(page);
+          if(text.length>80){
+            gdChunks.push({
+              source:g.title,
+              heading:`${g.title} — ${heading}`.slice(0,80),
+              url:`guides/${g.file}`,
+              text:text.slice(0,3000)
+            });
+          }
+        }
+      }
+      // Single-page guides — whole body = one chunk (or split by h2)
+      else{
+        const main=doc.querySelector('main,body');
+        if(!main)continue;
+        // Try to split by h2/h3 sections
+        const headings=main.querySelectorAll('h1,h2');
+        if(headings.length>2){
+          // Split into sections by heading
+          for(let hi=0;hi<headings.length;hi++){
+            const h=headings[hi];
+            const next=headings[hi+1];
+            const section=document.createElement('div');
+            section.appendChild(h.cloneNode(true));
+            let sib=h.nextElementSibling;
+            while(sib&&sib!==next){
+              section.appendChild(sib.cloneNode(true));
+              sib=sib.nextElementSibling;
+            }
+            const text=_cleanText(section);
+            if(text.length>80){
+              gdChunks.push({
+                source:g.title,
+                heading:`${g.title} — ${h.textContent.trim()}`.slice(0,80),
+                url:`guides/${g.file}`,
+                text:text.slice(0,3000)
+              });
+            }
+          }
+        }else{
+          // One big chunk
+          const text=_cleanText(main);
+          if(text.length>80){
+            gdChunks.push({
+              source:g.title,
+              heading:g.title,
+              url:`guides/${g.file}`,
+              text:text.slice(0,3000)
+            });
+          }
+        }
+      }
+    }catch(e){log('Error '+g.file+': '+e.message,'err')}
+    done++;
+    setProgress('gd',Math.round(done/TEAM_GUIDES.length*100),`${done}/${TEAM_GUIDES.length} guides`);
+  }
+  CHUNKS=CHUNKS.filter(c=>!TEAM_GUIDES.some(g=>g.title===c.source)).concat(gdChunks);
+  log(`Extracted ${gdChunks.length} chunks from team guides`,'ok');
+  setProgress('gd',100,`✓ ${gdChunks.length} chunks from ${TEAM_GUIDES.length} guides`);
+  _updateUploadBtn();
+}
+
+function _cleanText(el){
+  let text='';
+  const walk=(node)=>{
+    if(node.nodeType===3){const t=node.textContent.replace(/\s+/g,' ').trim();if(t)text+=t+' '}
+    else if(node.nodeType===1){
+      const tag=node.tagName.toLowerCase();
+      if(['script','style','nav','button','svg'].includes(tag))return;
+      if(['h1','h2','h3','h4','li','p','tr','div'].includes(tag)&&text&&!text.endsWith('\n'))text+='\n';
+      for(const c of node.childNodes)walk(c);
+      if(['h1','h2','h3','h4','p','li','tr'].includes(tag))text+='\n';
+    }
+  };
+  walk(el);
+  return text.replace(/\n{3,}/g,'\n\n').replace(/[ \t]+/g,' ').trim();
 }
 
 function _updateUploadBtn(){
