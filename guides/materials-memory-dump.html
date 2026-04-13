@@ -2192,31 +2192,24 @@ function _logActivity(action,title,id,preview){
 }
 
 let _showOldActivity=false;
-let _activitySessionLastSeen=0; // locks lastSeen during this modal session
 
 function showActivity(){
   _showOldActivity=false;
-  // Freeze the lastSeen for this modal session so items don't disappear as "new"
-  // while user is looking at them. Only updates when user closes modal.
-  _activitySessionLastSeen=_getLastSeen();
-  _loadActivity().then(()=>{
-    _renderActivity();
-  });
+  _loadActivity().then(()=>_renderActivity());
   document.getElementById('activity-modal').classList.add('show');
 }
 
 function closeActivity(){
   document.getElementById('activity-modal').classList.remove('show');
-  // NOW mark as seen — when user closes, they've had time to review
-  if(ACTIVITY.length){
-    localStorage.setItem('mem-activity-seen',String(ACTIVITY[0].ts));
-  }
+  // Do NOT mark anything as seen on close — user must explicitly click
+  // "Mark all read" or click an individual item to view it
   _updateActivityBadge();
 }
 
 function _markAllRead(){
   if(ACTIVITY.length)localStorage.setItem('mem-activity-seen',String(ACTIVITY[0].ts));
-  _activitySessionLastSeen=ACTIVITY.length?ACTIVITY[0].ts:Date.now();
+  // Clear dismissed set (no longer needed — lastSeen covers everything)
+  localStorage.removeItem('mem-activity-dismissed');
   _renderActivity();
   _updateActivityBadge();
 }
@@ -2227,12 +2220,11 @@ function _getLastSeen(){return parseInt(localStorage.getItem('mem-activity-seen'
 function _updateActivityBadge(){
   const btn=document.querySelector('[onclick="showActivity()"]');
   if(!btn)return;
-  const lastSeen=_getLastSeen();
-  const newCount=ACTIVITY.filter(a=>a.ts>lastSeen).length;
+  const newCount=ACTIVITY.filter(a=>!_isItemSeen(a.ts)).length;
   // Remove existing badge
   const existing=btn.querySelector('.act-new-badge');
   if(existing)existing.remove();
-  if(newCount>0&&lastSeen>0){
+  if(newCount>0){
     const b=document.createElement('span');
     b.className='act-new-badge';
     b.style.cssText='position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--rd);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg);animation:chipPop .3s ease both';
@@ -2250,15 +2242,13 @@ function _renderActivity(){
   }
   const icons={add:'✨',edit:'✏️',del:'🗑'};
   const verbs={add:'added',edit:'edited',del:'deleted'};
-  // Use SESSION-frozen lastSeen so items stay highlighted while modal is open
-  const lastSeen=_activitySessionLastSeen||_getLastSeen();
-  const newItems=ACTIVITY.filter(a=>a.ts>lastSeen);
-  const oldItems=ACTIVITY.filter(a=>a.ts<=lastSeen);
+  // Per-item seen check (lastSeen OR in dismissed set)
+  const newItems=ACTIVITY.filter(a=>!_isItemSeen(a.ts));
+  const oldItems=ACTIVITY.filter(a=>_isItemSeen(a.ts));
   let h='';
 
-  // CASE 1: Has unread items — show "new" section + collapsed "earlier"
-  if(newItems.length&&lastSeen>0){
-    h+=`<div class="act-section-label" style="color:var(--rd)">⚡ New since your last visit · ${newItems.length}<button onclick="_markAllRead()" style="background:none;border:1.5px solid var(--bd);color:var(--tt);padding:3px 10px;border-radius:12px;font-size:9px;font-weight:700;cursor:pointer;font-family:var(--fd);letter-spacing:.5px;margin-left:4px">✓ Mark all read</button></div>`;
+  if(newItems.length){
+    h+=`<div class="act-section-label" style="color:var(--rd)">⚡ Unread · ${newItems.length}<button onclick="_markAllRead()" style="background:none;border:1.5px solid var(--bd);color:var(--tt);padding:3px 10px;border-radius:12px;font-size:9px;font-weight:700;cursor:pointer;font-family:var(--fd);letter-spacing:.5px;margin-left:4px">✓ Mark all read</button></div>`;
     for(const a of newItems)h+=_actItemHtml(a,icons,verbs,true);
     if(oldItems.length){
       h+=`<div style="padding:14px 4px 4px"><button onclick="_showOldActivity=!_showOldActivity;_renderActivity()" style="background:none;border:none;cursor:pointer;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:1px;padding:0">${_showOldActivity?'▼':'▶'} Earlier · ${oldItems.length}</button></div>`;
@@ -2266,9 +2256,7 @@ function _renderActivity(){
         for(const a of oldItems)h+=_actItemHtml(a,icons,verbs,false);
       }
     }
-  }
-  // CASE 2: No unread — just show everything as a flat list (no banner, no split)
-  else{
+  }else{
     h+=`<div class="act-section-label">Activity · ${ACTIVITY.length}</div>`;
     for(const a of ACTIVITY)h+=_actItemHtml(a,icons,verbs,false);
   }
@@ -2282,7 +2270,8 @@ function _actItemHtml(a,icons,verbs,isNew){
   const catBadge=catMeta?`<span class="act-cat" style="background:var(--${a.cat==='important'?'rd':a.cat==='procedure'?'a3':a.cat==='bestpractice'?'gn':'am'}-s);color:var(--${a.cat==='important'?'rd':a.cat==='procedure'?'a3':a.cat==='bestpractice'?'gn':'am'})">${catMeta.icon} ${catMeta.label}</span>`:'';
   const newDot=isNew?'<span class="act-new-dot"></span>':'';
   const preview=a.preview?`<div class="act-preview">${esc(a.preview)}${a.preview.length>=200?'…':''}</div>`:'';
-  return`<div class="act-item act-${a.action}${isNew?' act-new':''}" ${canOpen?`onclick="closeActivity();viewEntry(${a.id})" style="cursor:pointer"`:''}>
+  const clickHandler=canOpen?`_actItemClick(${a.ts},${a.id})`:'';
+  return`<div class="act-item act-${a.action}${isNew?' act-new':''}" ${clickHandler?`onclick="${clickHandler}" style="cursor:pointer"`:''}>
     <div class="act-icon">${icons[a.action]||'•'}</div>
     <div class="act-body">
       <div class="act-row1"><span class="act-title">${verbs[a.action]||a.action}</span> <span class="act-entry-title">&ldquo;${esc(a.title)}&rdquo;</span>${newDot}</div>
@@ -2290,6 +2279,25 @@ function _actItemHtml(a,icons,verbs,isNew){
       ${preview}
     </div>
   </div>`;
+}
+
+// Per-item dismissed set (by timestamp) stored in localStorage
+function _getDismissed(){
+  try{return new Set(JSON.parse(localStorage.getItem('mem-activity-dismissed'))||[])}catch(e){return new Set()}
+}
+function _saveDismissed(s){localStorage.setItem('mem-activity-dismissed',JSON.stringify([...s]))}
+function _isItemSeen(ts){
+  if(ts<=_getLastSeen())return true;
+  return _getDismissed().has(ts);
+}
+
+// Click an activity item — mark only THIS item as read, then open entry
+function _actItemClick(itemTs,entryId){
+  const dismissed=_getDismissed();
+  dismissed.add(itemTs);
+  _saveDismissed(dismissed);
+  closeActivity();
+  viewEntry(entryId);
 }
 
 function _relTime(ts){
