@@ -30,8 +30,18 @@ input[type=password]:focus{border-color:var(--pri)}
 </head>
 <body>
 
+<div id="lock" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
+  <div style="text-align:center;max-width:320px;padding:40px">
+    <div style="font-size:48px;margin-bottom:16px">🔒</div>
+    <div style="font-size:16px;font-weight:800;color:var(--pri);margin-bottom:4px">Build Bob's Reference Library</div>
+    <div style="font-size:11px;color:var(--tt);margin-bottom:20px">Admin tool — password required</div>
+    <input type="password" id="lock-pw" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')_unlock()" style="width:100%;padding:10px 14px;border:2px solid var(--bd);border-radius:8px;font-size:13px;font-family:inherit;outline:none;text-align:center" onfocus="this.style.borderColor='var(--pri)'">
+    <div id="lock-err" style="font-size:11px;color:var(--rd);margin-top:8px;min-height:16px"></div>
+  </div>
+</div>
+<div id="app-content" style="display:none">
 <h1>🤖 Build Bob's Reference Library</h1>
-<div class="sub">One-time extraction of SM2ARTA Admin Guide + Supply Chain Presentation into Bob's knowledge base.</div>
+<div class="sub">One-time extraction of SM2ARTA Admin Guide + Supply Chain Presentation + Team Guides into Bob's knowledge base.</div>
 
 <div class="card">
   <h2>1. SM2ARTA Admin Guide</h2>
@@ -43,23 +53,15 @@ input[type=password]:focus{border-color:var(--pri)}
 </div>
 
 <div class="card">
-  <h2>2. Supply Chain Presentation</h2>
-  <p>Extracts text from <code>supply-chain-overview.html</code> slides (22 slides).</p>
-  <button onclick="buildPresentation()">Extract Presentation</button>
-  <div class="progress"><div class="progress-bar" id="pb-pr"></div></div>
-  <div class="status" id="st-pr">Not started</div>
-</div>
-
-<div class="card">
-  <h2>3. Team Guides</h2>
-  <p>Extracts all other guides: Bob's Survival Guide, Work Instructions, VLM guides, damage reporting, CAN info sheet, inventory/transactions/roomdata guides, pocket cards.</p>
+  <h2>2. Team Guides (ml3000 guides section)</h2>
+  <p>Extracts all internal guides: Supply Chain Presentation, Bob's Survival Guide, Work Instructions, VLM guides, damage reporting, CAN info sheet, inventory/transactions/roomdata guides, pocket cards.</p>
   <button onclick="buildGuides()">Extract Team Guides</button>
   <div class="progress"><div class="progress-bar" id="pb-gd"></div></div>
   <div class="status" id="st-gd">Not started</div>
 </div>
 
 <div class="card">
-  <h2>4. Upload to Supabase</h2>
+  <h2>3. Upload to Supabase</h2>
   <p>Combines all extracted chunks and uploads to Supabase as <code>mem-refs</code>. Bob will use this automatically.</p>
   <button onclick="uploadRefs()" id="upload-btn" disabled>Upload to Supabase</button>
   <button class="secondary" onclick="downloadRefs()" id="download-btn" disabled>Download JSON</button>
@@ -67,6 +69,29 @@ input[type=password]:focus{border-color:var(--pri)}
 </div>
 
 <div class="log" id="log">Ready.\n</div>
+</div>
+
+<script>
+// ── Password gate ──
+function _unlock(){
+  const inp=document.getElementById('lock-pw');
+  const err=document.getElementById('lock-err');
+  if(inp.value==='comein'){
+    sessionStorage.setItem('build-refs-auth','1');
+    document.getElementById('lock').style.display='none';
+    document.getElementById('app-content').style.display='block';
+  }else{
+    err.textContent='Wrong password';
+    inp.value='';inp.focus();
+  }
+}
+if(sessionStorage.getItem('build-refs-auth')==='1'){
+  document.getElementById('lock').style.display='none';
+  document.getElementById('app-content').style.display='block';
+}else{
+  setTimeout(()=>document.getElementById('lock-pw').focus(),100);
+}
+</script>
 
 <script>
 const SB_URL='https://stwopndhnxcjyomkufii.supabase.co';
@@ -226,63 +251,10 @@ const SM2ARTA_PAGES=[
 ];
 
 // ── PRESENTATION ──
-async function buildPresentation(){
-  setProgress('pr',10,'Fetching presentation...');
-  log('=== Supply Chain Presentation extraction ===','ok');
-  try{
-    // Try several paths since we might be served from different roots
-    let r=null;
-    for(const p of ['supply-chain-overview.html','./supply-chain-overview.html','/guides/supply-chain-overview.html','guides/supply-chain-overview.html']){
-      try{const tr=await fetch(p);if(tr.ok){r=tr;log('Found at: '+p);break}}catch(e){}
-    }
-    if(!r){log('Failed to fetch supply-chain-overview.html from any path','err');return}
-    const html=await r.text();
-    const doc=new DOMParser().parseFromString(html,'text/html');
-    // Each slide is a .S div
-    const slides=doc.querySelectorAll('.S');
-    log(`Found ${slides.length} slides`);
-    const prChunks=[];
-    let done=0;
-    for(const slide of slides){
-      // Remove SVG (visual only) and page numbers
-      slide.querySelectorAll('svg,.sn,.ft,script,style').forEach(el=>el.remove());
-      const title=slide.querySelector('h1,h2')?.textContent?.trim()||`Slide ${done+1}`;
-      let text='';
-      const walk=(node)=>{
-        if(node.nodeType===3){const t=node.textContent.replace(/\s+/g,' ').trim();if(t)text+=t+' '}
-        else if(node.nodeType===1){
-          const tag=node.tagName.toLowerCase();
-          if(['script','style','nav','button'].includes(tag))return;
-          if(['h1','h2','h3','h4','li','p','tr','div'].includes(tag)&&text&&!text.endsWith('\n'))text+='\n';
-          for(const c of node.childNodes)walk(c);
-          if(['h1','h2','h3','h4','p','li','tr'].includes(tag))text+='\n';
-        }
-      };
-      walk(slide);
-      text=text.replace(/\n{3,}/g,'\n\n').replace(/[ \t]+/g,' ').trim();
-      if(text.length>50){
-        prChunks.push({
-          source:'Supply Chain Presentation',
-          heading:`Slide ${done+1}: ${title}`,
-          url:`guides/supply-chain-overview.html#slide-${done+1}`,
-          text:text.slice(0,3000)
-        });
-      }
-      done++;
-      setProgress('pr',Math.round(done/slides.length*100),`${done}/${slides.length} slides`);
-    }
-    CHUNKS=CHUNKS.filter(c=>c.source!=='Supply Chain Presentation').concat(prChunks);
-    log(`Extracted ${prChunks.length} chunks from presentation`,'ok');
-    setProgress('pr',100,`✓ ${prChunks.length} chunks extracted`);
-    _updateUploadBtn();
-  }catch(e){
-    log('Error: '+e.message,'err');
-    setProgress('pr',0,'Failed');
-  }
-}
 
 // ── TEAM GUIDES ──
 const TEAM_GUIDES=[
+  {file:'supply-chain-overview.html',title:"Supply Chain Presentation",pageSelector:'.S'},
   {file:'bobs-survival-guide.html',title:"Bob's Survival Guide",pageSelector:'.P'},
   {file:'work-instructions.html',title:"Work Instructions",pageSelector:'.S'},
   {file:'can-info-sheet.html',title:"CAN Info Sheet"},
@@ -412,21 +384,47 @@ function _updateUploadBtn(){
 }
 
 // ── UPLOAD ──
+// Upload: fetches existing mem-refs from Supabase, keeps chunks from sources
+// we DIDN'T just re-extract, merges with fresh ones, writes back. So running
+// "Extract SM2ARTA" alone doesn't nuke presentation or team guides.
 async function uploadRefs(){
   if(!CHUNKS.length)return;
   const st=document.getElementById('st-up');
-  st.textContent='Uploading...';
-  log('Uploading '+CHUNKS.length+' chunks to Supabase...');
+  st.textContent='Fetching existing refs...';
+  log('Merging with existing Supabase refs...');
   try{
     const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+
+    // Fetch existing
+    let existing=[];
+    try{
+      const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs&select=value`,{headers:hdrs});
+      if(r.ok){
+        const d=await r.json();
+        if(d.length&&d[0].value){
+          let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+          if(Array.isArray(v))existing=v;
+        }
+      }
+    }catch(e){log('Could not fetch existing refs: '+e.message,'err')}
+
+    // Sources we just extracted (these override any existing with same source)
+    const freshSources=new Set(CHUNKS.map(c=>c.source));
+    // Keep existing chunks from sources we DIDN'T extract this session
+    const kept=existing.filter(c=>!freshSources.has(c.source));
+    const merged=[...kept,...CHUNKS];
+    log(`Keeping ${kept.length} existing chunks from other sources + ${CHUNKS.length} new chunks = ${merged.length} total`);
+
+    st.textContent='Uploading...';
     const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-      body:JSON.stringify({id:'mem-refs',value:JSON.stringify(CHUNKS)})});
+      body:JSON.stringify({id:'mem-refs',value:JSON.stringify(merged)})});
     if(!r.ok){
       const err=await r.text();
       throw new Error(`${r.status}: ${err.slice(0,120)}`);
     }
-    log('✓ Uploaded to Supabase!','ok');
-    st.innerHTML=`<span class="ok">✓ Uploaded</span> — ${CHUNKS.length} chunks saved as mem-refs. Bob will use these automatically.`;
+    log('✓ Uploaded!','ok');
+    const sourceList=[...new Set(merged.map(c=>c.source))];
+    st.innerHTML=`<span class="ok">✓ Uploaded</span> — ${merged.length} total chunks. Sources: ${sourceList.map(s=>`<span class="chip">${s}</span>`).join('')}`;
   }catch(e){
     log('Upload failed: '+e.message,'err');
     st.innerHTML=`<span class="err">Upload failed:</span> ${e.message}`;
