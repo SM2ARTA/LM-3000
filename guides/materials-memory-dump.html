@@ -2644,10 +2644,17 @@ async function bobSend(){
   BOB_HISTORY.push({role:'thinking'});
   _bobRender();
 
+  // Always reload refs from Supabase before answering — ensures fresh data
+  await _loadBobRefs();
   // Find relevant context
   const entries=_bobFindRelevant(text,5);
   const terms=_bobFindTerms(text);
-  const refs=_bobFindRefs(text,3);
+  const refs=_bobFindRefs(text,5);
+  // Debug: log to console so admins can see what was retrieved
+  console.log('[Bob] Query:',text);
+  console.log('[Bob] Total in cache: BOB_REFS='+BOB_REFS.length+', BOB_MANUAL_REFS='+BOB_MANUAL_REFS.length+', ENTRIES='+ENTRIES.length+', GLOSSARY='+Object.keys(GLOSSARY).length);
+  console.log('[Bob] Retrieved: entries='+entries.length+', terms='+terms.length+', refs='+refs.length);
+  if(refs.length)console.log('[Bob] Top refs:',refs.map(r=>`${r.source}: ${r.heading}`));
 
   // Build context for AI
   let context='';
