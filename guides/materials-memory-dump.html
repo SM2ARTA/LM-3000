@@ -2583,27 +2583,32 @@ function _bobFindRefs(query,limit=5){
   if(!all.length)return[];
   const words=query.toLowerCase().split(/[\s?.,!]+/).filter(w=>w.length>=2);
   if(!words.length)return[];
-  const stop=new Set(['the','and','for','that','what','how','why','can','do','does','is','are','to','in','of','on','at','it','be','by','an','as','or','if','my','we','us']);
+  const stop=new Set(['the','and','for','that','what','how','why','can','do','does','is','are','to','in','of','on','at','it','be','by','an','as','or','if','my','we','us','this','these','with','from','have','has','will','would','should','need','create','add','make','use','get','set','new','all','who','where','when','which']);
   const meaningful=words.filter(w=>!stop.has(w));
   if(!meaningful.length)return[];
+  // For single-word queries, require stronger match (heading hit OR multiple body hits)
+  const singleWordQuery=meaningful.length===1;
   const scored=all.map(r=>{
     const heading=(r.heading||'').toLowerCase();
-    const hay=(heading+' '+(r.text||'')).toLowerCase();
+    const text=(r.text||'').toLowerCase();
+    const hay=heading+' '+text;
     let score=0;
+    let matchedWords=0;
     for(const w of meaningful){
       const wordEsc=w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
       const headingHit=heading.includes(w);
-      // Use \b word boundary AND raw substring match — substring catches things
-      // like "VLMs" matching "VLM", word boundary scores higher for clean matches
       const wordHits=(hay.match(new RegExp('\\b'+wordEsc,'g'))||[]).length;
-      const subHits=(hay.match(new RegExp(wordEsc,'g'))||[]).length;
-      score+=headingHit?8:0;
+      if(headingHit||wordHits>0)matchedWords++;
+      score+=headingHit?15:0;
       score+=wordHits*2;
-      score+=Math.max(0,subHits-wordHits); // partial matches still count, less
     }
-    if(r._manual&&score>0)score+=3;
+    // Multi-word queries: require at least 2 words to hit
+    if(!singleWordQuery&&matchedWords<2)score=0;
+    // Single-word queries: require either heading hit OR 2+ body hits
+    if(singleWordQuery&&score>0&&score<4)score=0;
+    if(r._manual&&score>0)score+=5;
     return{r,score};
-  }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  }).filter(x=>x.score>=4).sort((a,b)=>b.score-a.score);
   return scored.slice(0,limit).map(x=>x.r);
 }
 
@@ -2755,16 +2760,17 @@ try{const s=sessionStorage.getItem('bob-history');if(s)BOB_HISTORY=JSON.parse(s)
 
 // ── KEYBOARD ──
 document.addEventListener('keydown',e=>{
+  if(!e.key)return; // some special keys (media, dead keys) have no .key
   const inInput=document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'||document.activeElement.tagName==='SELECT';
   const modalOpen=document.querySelector('.modal-bg.show');
+  const k=e.key.toLowerCase();
   if(e.key==='Escape'){closeGlossary();closeView();closeModal();closeActivity();_closeLbox()}
   if(e.key==='/'&&!modalOpen&&!inInput){e.preventDefault();document.getElementById('search').focus()}
-  if(e.key.toLowerCase()==='n'&&!modalOpen&&!inInput){e.preventDefault();showAddModal()}
-  if(e.key.toLowerCase()==='g'&&!modalOpen&&!inInput){e.preventDefault();showGlossary()}
-  if(e.key.toLowerCase()==='b'&&!modalOpen&&!inInput){e.preventDefault();bobToggle()}
-  if(e.key.toLowerCase()==='a'&&!modalOpen&&!inInput){e.preventDefault();showActivity()}
-  if(e.key.toLowerCase()==='t'&&!modalOpen&&!inInput){e.preventDefault();window.open('build-refs.html','_blank')}
-  if(e.key.toLowerCase()==='p'&&e.ctrlKey){/* let browser print handle it */}
+  if(k==='n'&&!modalOpen&&!inInput){e.preventDefault();showAddModal()}
+  if(k==='g'&&!modalOpen&&!inInput){e.preventDefault();showGlossary()}
+  if(k==='b'&&!modalOpen&&!inInput){e.preventDefault();bobToggle()}
+  if(k==='a'&&!modalOpen&&!inInput){e.preventDefault();showActivity()}
+  if(k==='t'&&!modalOpen&&!inInput){e.preventDefault();window.open('build-refs.html','_blank')}
 });
 
 // ── PASSWORD GATE ──
