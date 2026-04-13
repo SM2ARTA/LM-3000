@@ -182,6 +182,54 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .cat-lesson .card-cat{background:var(--am-s);color:var(--am)}
 .cat-lesson{border-left:4px solid var(--am)}
 
+/* ── BOB CHATBOT ── */
+.bob-btn{position:fixed;bottom:24px;right:24px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,var(--pri),#6A1B9A);border:none;cursor:pointer;font-size:28px;box-shadow:0 6px 20px rgba(74,20,140,.35);z-index:90;transition:all .3s cubic-bezier(.34,1.56,.64,1);animation:bobFloat 3s ease-in-out infinite}
+.bob-btn:hover{transform:scale(1.08);box-shadow:0 8px 28px rgba(74,20,140,.5)}
+.bob-btn:active{transform:scale(.94)}
+.bob-btn.hidden{display:none}
+@keyframes bobFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.bob-badge{position:absolute;top:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--rd);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+
+.bob-panel{position:fixed;bottom:24px;right:24px;width:420px;height:600px;max-height:calc(100vh - 48px);max-width:calc(100vw - 32px);background:var(--sf);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);z-index:95;display:none;flex-direction:column;overflow:hidden;animation:modalIn .3s cubic-bezier(.34,1.56,.64,1) both;border:1.5px solid var(--bd)}
+.bob-panel.show{display:flex}
+.bob-head{padding:16px 20px;background:linear-gradient(135deg,var(--pri),#6A1B9A);color:#fff;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.bob-head-icon{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:20px}
+.bob-head-info{flex:1}
+.bob-head-title{font-size:14px;font-weight:800;letter-spacing:-.2px}
+.bob-head-sub{font-size:10px;opacity:.85}
+.bob-head-btn{background:rgba(255,255,255,.15);border:none;cursor:pointer;color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;line-height:1;transition:background .15s}
+.bob-head-btn:hover{background:rgba(255,255,255,.3)}
+.bob-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--bg)}
+.bob-msg{max-width:85%;padding:10px 14px;border-radius:14px;font-size:12.5px;line-height:1.5;animation:fadeSlideUp .3s ease both;word-wrap:break-word}
+.bob-msg.user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
+.bob-msg.bob{align-self:flex-start;background:var(--sf);color:var(--tp);border:1px solid var(--bd);border-bottom-left-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.bob-msg.bob b{color:var(--pri);font-weight:700}
+.bob-msg.bob code{background:var(--bg);padding:1px 5px;border-radius:3px;font-size:11px;font-family:var(--fm)}
+.bob-msg.thinking{align-self:flex-start;background:var(--sf);border:1px solid var(--bd);padding:12px 16px;border-bottom-left-radius:4px}
+.bob-dots{display:inline-flex;gap:4px}
+.bob-dots span{width:6px;height:6px;border-radius:50%;background:var(--pri);animation:bobDot 1.4s ease-in-out infinite}
+.bob-dots span:nth-child(2){animation-delay:.2s}
+.bob-dots span:nth-child(3){animation-delay:.4s}
+@keyframes bobDot{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}
+.bob-cites{margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd);font-size:10px;color:var(--tt)}
+.bob-cite{display:inline-block;padding:2px 8px;margin:2px 2px 0 0;border-radius:6px;background:var(--pri-s);color:var(--pri);cursor:pointer;font-size:10px;font-weight:600;transition:all .15s}
+.bob-cite:hover{background:var(--pri);color:#fff}
+.bob-welcome{text-align:center;color:var(--tt);padding:30px 20px;font-size:12px}
+.bob-welcome-icon{font-size:48px;margin-bottom:8px;animation:lockPulse 3s ease-in-out infinite}
+.bob-suggest{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.bob-suggest-btn{padding:8px 12px;border:1.5px solid var(--bd);border-radius:10px;background:var(--sf);color:var(--ts);font-size:11px;text-align:left;cursor:pointer;font-family:var(--fd);transition:all .15s}
+.bob-suggest-btn:hover{border-color:var(--pri);background:var(--pri-s);color:var(--pri)}
+.bob-input-row{padding:12px;background:var(--sf);border-top:1.5px solid var(--bd);display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+.bob-input{flex:1;padding:10px 14px;border:1.5px solid var(--bd);border-radius:12px;font-size:13px;font-family:var(--fd);outline:none;resize:none;max-height:100px;min-height:40px;line-height:1.4;transition:border-color .2s}
+.bob-input:focus{border-color:var(--pri)}
+.bob-send{width:40px;height:40px;border-radius:50%;border:none;background:var(--pri);color:#fff;cursor:pointer;font-size:16px;flex-shrink:0;transition:all .15s}
+.bob-send:hover{background:#3A1070;transform:scale(1.05)}
+.bob-send:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:600px){
+  .bob-btn{width:52px;height:52px;font-size:24px;bottom:16px;right:16px}
+  .bob-panel{width:100%;height:100%;bottom:0;right:0;max-height:100vh;border-radius:0;max-width:100vw}
+}
+
 /* ── GLOSSARY — dictionary style ── */
 .gl-item{display:flex;gap:0;padding:0;margin-bottom:8px;border-radius:10px;background:var(--sf);border:1.5px solid var(--bd);align-items:stretch;animation:fadeSlideUp .3s ease both;transition:all .2s;overflow:hidden;cursor:pointer}
 .gl-item:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-1px);border-color:var(--pri-b)}
@@ -573,6 +621,25 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
       <button class="m-btn danger" id="del-btn" style="display:none" onclick="deleteEntry()">Delete</button>
       <button class="m-btn primary" onclick="saveEntry()">Save Entry</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ BOB CHATBOT ═══ -->
+<button class="bob-btn" id="bob-btn" onclick="bobToggle()" title="Ask Bob — chat with your knowledge base">💬</button>
+<div class="bob-panel" id="bob-panel">
+  <div class="bob-head">
+    <div class="bob-head-icon">👷</div>
+    <div class="bob-head-info">
+      <div class="bob-head-title">Ask Bob</div>
+      <div class="bob-head-sub">FF&E • Materials • Your team knowledge</div>
+    </div>
+    <button class="bob-head-btn" onclick="bobClear()" title="Clear chat">↻</button>
+    <button class="bob-head-btn" onclick="bobToggle()" title="Close">&times;</button>
+  </div>
+  <div class="bob-msgs" id="bob-msgs"></div>
+  <div class="bob-input-row">
+    <textarea class="bob-input" id="bob-input" placeholder="Ask Bob anything about materials, FF&E, your entries..." rows="1" onkeydown="bobKeydown(event)" oninput="bobAutogrow(this)"></textarea>
+    <button class="bob-send" id="bob-send" onclick="bobSend()" title="Send (Enter)">➤</button>
   </div>
 </div>
 
@@ -1921,6 +1988,234 @@ function _injectGlossaryTips(html){
   });
 }
 
+// ── BOB CHATBOT — retrieval-augmented knowledge assistant ──
+let BOB_HISTORY=[]; // [{role:'user'|'bob',text,cites?:[entryIds]}]
+const BOB_MAX_HISTORY=20;
+
+function bobToggle(){
+  const panel=document.getElementById('bob-panel');
+  const btn=document.getElementById('bob-btn');
+  if(panel.classList.contains('show')){
+    panel.classList.remove('show');
+    btn.classList.remove('hidden');
+  }else{
+    panel.classList.add('show');
+    btn.classList.add('hidden');
+    _bobRender();
+    setTimeout(()=>document.getElementById('bob-input').focus(),200);
+  }
+}
+
+function bobClear(){
+  if(!BOB_HISTORY.length)return;
+  if(!confirm('Clear conversation?'))return;
+  BOB_HISTORY=[];
+  sessionStorage.removeItem('bob-history');
+  _bobRender();
+}
+
+function bobAutogrow(el){
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight,100)+'px';
+}
+
+function bobKeydown(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();bobSend()}
+}
+
+function _bobRender(){
+  const el=document.getElementById('bob-msgs');
+  if(!BOB_HISTORY.length){
+    el.innerHTML=`<div class="bob-welcome">
+      <div class="bob-welcome-icon">👷</div>
+      <div style="font-size:14px;font-weight:700;color:var(--tp);margin-bottom:4px">Hey, I'm Bob</div>
+      <div>I know everything in your Memory Dump, the team Glossary, and general FF&E and materials logistics.</div>
+      <div class="bob-suggest">
+        <button class="bob-suggest-btn" onclick="_bobAsk('What should I do if a container arrives short?')">📦 What should I do if a container arrives short?</button>
+        <button class="bob-suggest-btn" onclick="_bobAsk('Explain the difference between LP and LM')">🚛 Explain the difference between LP and LM</button>
+        <button class="bob-suggest-btn" onclick="_bobAsk('How do I report damaged items?')">⚠️ How do I report damaged items?</button>
+        <button class="bob-suggest-btn" onclick="_bobAsk('What is CORT and how does it work?')">🏷 What is CORT and how does it work?</button>
+      </div>
+    </div>`;
+    return;
+  }
+  let h='';
+  for(const m of BOB_HISTORY){
+    if(m.role==='user'){
+      h+=`<div class="bob-msg user">${esc(m.text)}</div>`;
+    }else if(m.role==='thinking'){
+      h+=`<div class="bob-msg thinking"><span class="bob-dots"><span></span><span></span><span></span></span></div>`;
+    }else{
+      const bodyHtml=_bobFormatResponse(m.text);
+      const cites=(m.cites||[]).map(id=>{
+        const e=ENTRIES.find(x=>x.id===id);
+        if(!e)return'';
+        return`<span class="bob-cite" onclick="bobToggle();viewEntry(${id})">📎 ${esc(e.title)}</span>`;
+      }).filter(Boolean).join('');
+      h+=`<div class="bob-msg bob">${bodyHtml}${cites?`<div class="bob-cites">${cites}</div>`:''}</div>`;
+    }
+  }
+  el.innerHTML=h;
+  el.scrollTop=el.scrollHeight;
+}
+
+// Simple markdown-ish formatting for Bob's responses
+function _bobFormatResponse(text){
+  let s=esc(text);
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  s=s.replace(/\n/g,'<br>');
+  return s;
+}
+
+function _bobAsk(text){
+  document.getElementById('bob-input').value=text;
+  bobSend();
+}
+
+// Find relevant entries for user's question via keyword scoring
+function _bobFindRelevant(query,limit=5){
+  const words=query.toLowerCase().split(/\s+/).filter(w=>w.length>2);
+  if(!words.length)return[];
+  const scored=ENTRIES.map(e=>{
+    const hay=(e.title+' '+(e._raw||'')+' '+e.cat).toLowerCase();
+    let score=0;
+    for(const w of words){
+      const titleHit=e.title.toLowerCase().includes(w);
+      const bodyHits=(hay.match(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'))||[]).length;
+      score+=titleHit?5:0;
+      score+=bodyHits;
+    }
+    return{e,score};
+  }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  return scored.slice(0,limit).map(x=>x.e);
+}
+
+// Find relevant glossary terms
+function _bobFindTerms(query){
+  const low=query.toLowerCase();
+  const hits=[];
+  for(const[term,info]of Object.entries(GLOSSARY)){
+    if(info._deleted||!info.def)continue;
+    const forms=[term,...(info.aliases||[])];
+    if(forms.some(f=>low.includes(f.toLowerCase()))){
+      hits.push({term,def:info.def});
+    }
+  }
+  return hits.slice(0,8);
+}
+
+const BOB_SYSTEM=`You are Bob, a friendly expert assistant for FIFA World Cup 2026 warehouse operations and FF&E (Furniture, Fixtures, Equipment) materials management.
+
+You help Materials Managers with questions about logistics, warehouse procedures, customs, kitting, truck dispatch, receiving, damage reports, and related topics.
+
+KNOWLEDGE SOURCES (in priority order):
+1. Memory Dump entries — the team's documented tribal knowledge (HIGHEST priority — always cite)
+2. Glossary — team terminology
+3. General FF&E/warehouse/logistics expertise — your background knowledge
+
+RESPONSE RULES:
+- If the answer IS in the Memory Dump entries below, base your answer on them and cite the entry titles
+- If NOT in memory dump, clearly say "This isn't in your team's memory dump yet — here's general guidance:" and provide your own expertise
+- Keep responses SHORT: 2-4 sentences max for simple questions, bullet points for steps
+- Use **bold** for key terms, system names, and actions
+- Use \`code\` for specific values or SKU-like identifiers
+- Be conversational but professional — you're Bob, a senior warehouse ops expert
+- When relevant, suggest the user document new cases: "Worth adding to the memory dump!"
+- Never make up entry titles — only cite entries that are explicitly provided in context`;
+
+async function bobSend(){
+  const input=document.getElementById('bob-input');
+  const text=input.value.trim();
+  if(!text)return;
+
+  // Get AI config
+  let cfg=_getAICfg();
+  if(!cfg.key){await loadAIKey();cfg=_getAICfg()}
+  if(!cfg.key){
+    BOB_HISTORY.push({role:'user',text});
+    BOB_HISTORY.push({role:'bob',text:'I need an AI key to answer. Click the ⚙️ settings in the entry editor to set one up.'});
+    _bobRender();
+    input.value='';
+    return;
+  }
+
+  // Add user message
+  BOB_HISTORY.push({role:'user',text});
+  input.value='';
+  input.style.height='auto';
+  BOB_HISTORY.push({role:'thinking'});
+  _bobRender();
+
+  // Find relevant context
+  const entries=_bobFindRelevant(text,5);
+  const terms=_bobFindTerms(text);
+
+  // Build context for AI
+  let context='';
+  if(entries.length){
+    context+='\n\n=== RELEVANT MEMORY DUMP ENTRIES ===\n';
+    for(const e of entries){
+      context+=`\n[Entry: "${e.title}" | Category: ${e.cat}]\n${e._raw||e.body||''}\n`;
+    }
+  }
+  if(terms.length){
+    context+='\n\n=== GLOSSARY TERMS ===\n';
+    for(const t of terms)context+=`${t.term}: ${t.def}\n`;
+  }
+  if(!context)context='\n\n(No matching entries or glossary terms — use your general knowledge.)';
+
+  // Build conversation history (last 6 messages, excluding thinking)
+  const chatHistory=BOB_HISTORY.filter(m=>m.role==='user'||m.role==='bob').slice(-6,-1);
+  const histText=chatHistory.map(m=>`${m.role==='user'?'User':'Bob'}: ${m.text}`).join('\n');
+
+  const userMsg=`${histText?'PRIOR CONVERSATION:\n'+histText+'\n\n':''}CURRENT QUESTION: ${text}${context}`;
+
+  try{
+    const prov=cfg.provider==='openai'?'chatgpt':cfg.provider;
+    const fullPrompt=BOB_SYSTEM+'\n\n'+userMsg;
+    let result;
+    if(prov==='claude')result=await _bobClaude(cfg.key,userMsg);
+    else if(prov==='chatgpt')result=await _bobGPT(cfg.key,userMsg);
+    else result=await _bobGemini(cfg.key,userMsg);
+
+    // Remove thinking message
+    BOB_HISTORY=BOB_HISTORY.filter(m=>m.role!=='thinking');
+    BOB_HISTORY.push({role:'bob',text:result||'(no response)',cites:entries.map(e=>e.id)});
+    if(BOB_HISTORY.length>BOB_MAX_HISTORY*2)BOB_HISTORY=BOB_HISTORY.slice(-BOB_MAX_HISTORY*2);
+    sessionStorage.setItem('bob-history',JSON.stringify(BOB_HISTORY));
+  }catch(e){
+    BOB_HISTORY=BOB_HISTORY.filter(m=>m.role!=='thinking');
+    BOB_HISTORY.push({role:'bob',text:'Sorry, I hit an error: '+e.message});
+  }
+  _bobRender();
+}
+
+async function _bobClaude(key,msg){
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+    headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,system:BOB_SYSTEM,messages:[{role:'user',content:msg}]})});
+  if(!r.ok)throw new Error(r.status===401?'Invalid API key':(await r.text()).slice(0,100));
+  return(await r.json()).content?.[0]?.text||'';
+}
+async function _bobGPT(key,msg){
+  const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',
+    headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
+    body:JSON.stringify({model:'gpt-4.1-mini',max_completion_tokens:600,messages:[{role:'system',content:BOB_SYSTEM},{role:'user',content:msg}]})});
+  if(!r.ok)throw new Error(r.status===401?'Invalid API key':(await r.text()).slice(0,100));
+  return(await r.json()).choices?.[0]?.message?.content||'';
+}
+async function _bobGemini(key,msg){
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({systemInstruction:{parts:[{text:BOB_SYSTEM}]},contents:[{parts:[{text:msg}]}],generationConfig:{maxOutputTokens:600}})});
+  if(!r.ok)throw new Error(r.status===400||r.status===403?'Invalid API key':(await r.text()).slice(0,100));
+  return(await r.json()).candidates?.[0]?.content?.parts?.[0]?.text||'';
+}
+
+// Restore chat from session
+try{const s=sessionStorage.getItem('bob-history');if(s)BOB_HISTORY=JSON.parse(s)}catch(e){}
+
 // ── KEYBOARD ──
 document.addEventListener('keydown',e=>{
   const inInput=document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'||document.activeElement.tagName==='SELECT';
@@ -1929,6 +2224,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'&&!modalOpen&&!inInput){e.preventDefault();document.getElementById('search').focus()}
   if(e.key.toLowerCase()==='n'&&!modalOpen&&!inInput){e.preventDefault();showAddModal()}
   if(e.key.toLowerCase()==='g'&&!modalOpen&&!inInput){e.preventDefault();showGlossary()}
+  if(e.key.toLowerCase()==='b'&&!modalOpen&&!inInput){e.preventDefault();bobToggle()}
   if(e.key.toLowerCase()==='p'&&e.ctrlKey){/* let browser print handle it */}
 });
 
