@@ -1354,23 +1354,29 @@ async function toggleAISettings(){
     document.getElementById('ai-passphrase').value=localStorage.getItem('mem-ai-pass')||'';
     _updateAILink();
     _aiShowStatus('');
-    // If no local key, check if Supabase has an encrypted team key
+    // If no local key, check BOTH tables for encrypted team key
     if(!cfg.key){
-      try{
-        const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}&select=value`,
-          {headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
-        if(r.ok){
-          const d=await r.json();
-          if(d.length&&d[0].value){
-            let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
-            if(v&&v.encrypted){
-              _aiShowStatus('🔓 Team key found on server — enter the team passphrase to unlock');
-              document.getElementById('ai-passphrase').focus();
-              return;
+      const sources=[
+        {table:'memory_dump',id:'ai-config'},
+        {table:'shared_state',id:'mem-dump-ai'}
+      ];
+      for(const src of sources){
+        try{
+          const r=await fetch(`${SB_URL}/rest/v1/${src.table}?id=eq.${src.id}&select=value`,
+            {headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+          if(r.ok){
+            const d=await r.json();
+            if(d.length&&d[0].value){
+              let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+              if(v&&v.encrypted){
+                _aiShowStatus('🔓 Team key found on server — enter the team passphrase to unlock');
+                document.getElementById('ai-passphrase').focus();
+                return;
+              }
             }
           }
-        }
-      }catch(e){}
+        }catch(e){}
+      }
       _aiShowStatus('No key saved yet — enter API key + passphrase to set up team sharing');
     }
   }
@@ -1484,19 +1490,33 @@ async function loadAIKey(){
   const passphrase=localStorage.getItem('mem-ai-pass');
   if(!passphrase)return; // no passphrase saved — user needs to enter it
 
-  try{
-    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}&select=value`,
-      {headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
-    if(!r.ok)return;
-    const d=await r.json();
-    if(!d.length||!d[0].value)return;
-    const {encrypted}=typeof d[0].value==='string'?JSON.parse(d[0].value):d[0].value;
-    if(!encrypted)return;
-
-    const decrypted=JSON.parse(await _decrypt(encrypted,passphrase));
-    localStorage.setItem('mem-ai-cfg',JSON.stringify(decrypted));
-  }catch(e){
-    console.warn('AI key decrypt failed:',e.message);
+  // Try new memory_dump.ai-config first, fall back to shared_state.mem-dump-ai
+  const sources=[
+    {table:'memory_dump',id:'ai-config'},
+    {table:'shared_state',id:'mem-dump-ai'}
+  ];
+  for(const src of sources){
+    try{
+      const r=await fetch(`${SB_URL}/rest/v1/${src.table}?id=eq.${src.id}&select=value`,
+        {headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+      if(!r.ok)continue;
+      const d=await r.json();
+      if(!d.length||!d[0].value)continue;
+      let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+      const encrypted=v?.encrypted;
+      if(!encrypted)continue;
+      const decrypted=JSON.parse(await _decrypt(encrypted,passphrase));
+      localStorage.setItem('mem-ai-cfg',JSON.stringify(decrypted));
+      console.log(`[AI] Loaded key from ${src.table}.${src.id}`);
+      // If we loaded from old location, migrate to new location
+      if(src.table==='shared_state'){
+        const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+        fetch(`${SB_URL}/rest/v1/memory_dump`,{method:'POST',headers:hdrs,
+          body:JSON.stringify({id:'ai-config',value:JSON.stringify({encrypted})})})
+          .then(()=>console.log('[AI] Migrated to memory_dump.ai-config')).catch(()=>{});
+      }
+      return;
+    }catch(e){console.warn(`AI key load from ${src.table}.${src.id} failed:`,e.message)}
   }
 
   // Fallback: try main page's plaintext hs-ai-config key
