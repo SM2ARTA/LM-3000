@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CAN Asset Management & Dissolution | Bob's Field Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+@page { size:5.5in 8.5in; margin:0.4in; }
+:root {
+  --pri: #56042C;
+  --pri-l: #8C1D5B;
+  --gold: #D4A843;
+  --gold-l: #FFF3D6;
+  --teal: #03BFA5;
+  --teal-l: #E0F7F4;
+  --blue: #304FFE;
+  --blue-l: #E8ECFF;
+  --red: #C62A2F;
+  --red-l: #FDEBED;
+  --green: #12804A;
+  --green-l: #E6F5ED;
+  --orange: #C4550A;
+  --orange-l: #FEF3EB;
+  --purple: #6E3FF3;
+  --purple-l: #F0EBFE;
+  --tp: #111318;
+  --ts: #60646C;
+  --tt: #9CA0AA;
+  --bg: #FAFBFC;
+  --sf: #FFF;
+  --bd: #E2E4E9;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--tp); line-height:1.45; font-size:10px; }
+.page { max-width:5.5in; margin:0 auto; padding:16px 14px 40px; }
+.pg-brk { break-before:page; }
+
+/* ── HEADER ── */
+.hero {
+  background: linear-gradient(135deg, var(--pri) 0%, var(--pri-l) 100%);
+  border-radius:12px; padding:24px 20px 20px; color:#fff; position:relative; overflow:hidden;
+  margin-bottom:20px;
+}
+.hero::after {
+  content:''; position:absolute; top:-40px; right:-40px; width:140px; height:140px;
+  background: radial-gradient(circle, rgba(212,168,67,0.15) 0%, transparent 70%);
+  border-radius:50%;
+}
+.hero-badge { display:inline-block; background:var(--gold); color:var(--pri); font-size:7px; font-weight:700;
+  padding:2px 8px; border-radius:12px; letter-spacing:.8px; text-transform:uppercase; margin-bottom:8px; }
+.hero h1 { font-size:20px; font-weight:800; line-height:1.15; margin-bottom:4px; }
+.hero h1 span { color:var(--gold); }
+.hero .sub { font-size:9px; opacity:.8; margin-bottom:10px; }
+.hero .meta { font-size:7px; opacity:.6; font-family:'IBM Plex Mono',monospace; }
+
+/* ── BOB ── */
+.bob-container { display:flex; align-items:flex-start; gap:8px; margin:12px 0; }
+.bob-avatar {
+  flex-shrink:0; width:36px; height:36px; border-radius:50%; position:relative;
+  background: #F4C68A; border:2px solid var(--sf); box-shadow:0 1px 6px rgba(0,0,0,.1);
+  overflow:hidden;
+}
+.bob-avatar .hair { position:absolute; top:0; left:0; right:0; height:14px; background:#5C3A1E; border-radius:50% 50% 0 0; }
+.bob-avatar .hard-hat { position:absolute; top:-2px; left:2px; right:2px; height:11px; background:var(--gold);
+  border-radius:16px 16px 2px 2px; border-bottom:2px solid #B8891F; z-index:2; }
+.bob-avatar .eyes { position:absolute; top:16px; left:50%; transform:translateX(-50%); display:flex; gap:6px; }
+.bob-avatar .eye { width:3px; height:3px; background:#333; border-radius:50%; }
+.bob-avatar .mouth { position:absolute; top:23px; left:50%; transform:translateX(-50%); width:8px; height:4px;
+  border-bottom:2px solid #333; border-radius:0 0 8px 8px; }
+.bob-avatar .vest { position:absolute; bottom:0; left:0; right:0; height:10px; background:#FF6F00;
+  clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%); }
+.bob-avatar .clipboard { position:absolute; bottom:1px; right:1px; width:8px; height:10px; background:#DEB887;
+  border-radius:1px; border:1px solid #B8891F; z-index:3; }
+.bob-avatar .clipboard::after { content:''; position:absolute; top:1px; left:2px; right:2px; height:1px;
+  background:#8B7355; border-radius:1px; }
+.bob { display:inline; } /* shorthand for inline bob references */
+
+.bob-speech {
+  flex:1; background:var(--sf); border:1.5px solid var(--bd); border-radius:10px; padding:8px 10px;
+  position:relative; font-size:9px; box-shadow:0 1px 4px rgba(0,0,0,.03);
+}
+.bob-speech::before {
+  content:''; position:absolute; left:-6px; top:10px; width:0; height:0;
+  border-top:5px solid transparent; border-bottom:5px solid transparent; border-right:6px solid var(--bd);
+}
+.bob-speech::after {
+  content:''; position:absolute; left:-4px; top:11px; width:0; height:0;
+  border-top:4px solid transparent; border-bottom:4px solid transparent; border-right:5px solid var(--sf);
+}
+.bob-speech .bob-name { font-weight:700; color:var(--blue); font-size:7px; text-transform:uppercase;
+  letter-spacing:.4px; margin-bottom:2px; }
+.bob-speech strong { color:var(--pri); }
+
+.bob-excited .bob-speech { border-color:var(--gold); background:var(--gold-l); }
+.bob-excited .bob-speech::before { border-right-color:var(--gold); }
+.bob-excited .bob-speech::after { border-right-color:var(--gold-l); }
+.bob-warn .bob-speech { border-color:var(--orange); background:var(--orange-l); }
+.bob-warn .bob-speech::before { border-right-color:var(--orange); }
+.bob-warn .bob-speech::after { border-right-color:var(--orange-l); }
+.bob-tip .bob-speech { border-color:var(--teal); background:var(--teal-l); }
+.bob-tip .bob-speech::before { border-right-color:var(--teal); }
+.bob-tip .bob-speech::after { border-right-color:var(--teal-l); }
+.bob-alert .bob-speech { border-color:var(--red); background:var(--red-l); }
+.bob-alert .bob-speech::before { border-right-color:var(--red); }
+.bob-alert .bob-speech::after { border-right-color:var(--red-l); }
+
+/* ── SECTIONS ── */
+.sec { margin-bottom:18px; }
+.sec-hd { display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:6px; border-bottom:1.5px solid var(--bd); }
+.sec-icon { width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  font-size:12px; flex-shrink:0; }
+.sec-hd h2 { font-size:13px; font-weight:700; }
+.sec-hd .sec-num { font-family:'IBM Plex Mono',monospace; font-size:7px; color:var(--tt); font-weight:500; }
+
+/* ── CARDS ── */
+.card { background:var(--sf); border:1px solid var(--bd); border-radius:8px; padding:10px 12px; margin-bottom:8px;
+  box-shadow:0 1px 3px rgba(0,0,0,.02); }
+.card-accent { border-left:3px solid; }
+.card h3 { font-size:10px; font-weight:700; margin-bottom:4px; }
+.card h4 { font-size:9px; font-weight:700; margin-bottom:2px; }
+.card p, .card li { font-size:9px; color:var(--ts); }
+.card ul { padding-left:14px; }
+.card li { margin-bottom:2px; }
+
+/* ── WAREHOUSE CARDS ── */
+.wh-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.wh-card { background:var(--sf); border:1px solid var(--bd); border-radius:8px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.03); }
+.wh-full { grid-column:1/-1; }
+.wh-card .wh-top { padding:5px 8px; font-weight:700; font-size:8px; color:#fff; display:flex; align-items:center; gap:4px; }
+.wh-card .wh-body { padding:8px; }
+.wh-card .wh-body p { font-size:8px; color:var(--ts); margin-bottom:3px; }
+.wh-card .wh-label { font-size:6px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--tt); margin-bottom:1px; }
+.wh-card .wh-contact { margin-top:6px; padding-top:6px; border-top:1px solid var(--bd); }
+.wh-card .wh-contact .name { font-weight:600; font-size:8px; color:var(--tp); }
+.wh-card .wh-contact .detail { font-size:7px; color:var(--ts); font-family:'IBM Plex Mono',monospace; }
+
+/* ── CONTACT CARDS ── */
+.team-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.team-card { background:var(--sf); border:1px solid var(--bd); border-radius:8px; padding:8px;
+  display:flex; align-items:center; gap:8px; box-shadow:0 1px 3px rgba(0,0,0,.02); }
+.team-card .avatar-circle { width:26px; height:26px; border-radius:50%; display:flex; align-items:center;
+  justify-content:center; font-weight:700; font-size:8px; color:#fff; flex-shrink:0; }
+.team-card .info { flex:1; min-width:0; }
+.team-card .name { font-weight:700; font-size:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.team-card .role { font-size:7px; color:var(--ts); margin-bottom:1px; }
+.team-card .loc { font-size:6px; font-weight:600; color:var(--tt); text-transform:uppercase; letter-spacing:.3px; }
+.team-card .contact-row { font-size:6.5px; font-family:'IBM Plex Mono',monospace; color:var(--ts); margin-top:2px; }
+.team-card a { color:var(--blue); text-decoration:none; }
+
+/* ── GLOSSARY ── */
+.gloss-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; }
+.gloss-item { background:var(--sf); border:1px solid var(--bd); border-radius:6px; padding:6px 8px; }
+.gloss-item .abbr { font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:9px; color:var(--pri); }
+.gloss-item .def { font-size:7px; color:var(--ts); margin-top:1px; }
+
+/* ── FLOW / SUPPLY CHAIN ── */
+.flow { display:flex; align-items:center; flex-wrap:wrap; gap:2px; margin:8px 0; justify-content:center; }
+.flow-box { padding:4px 8px; border-radius:5px; font-size:7px; font-weight:600; text-align:center; white-space:nowrap; }
+.flow-arrow { color:var(--tt); font-size:10px; }
+
+/* Supply chain SVG diagram */
+.sc-diagram { margin:10px 0; }
+.sc-diagram svg { width:100%; height:auto; }
+
+/* ── PROCESS STEPS ── */
+.steps { counter-reset:step; }
+.step { display:flex; gap:8px; margin-bottom:8px; position:relative; }
+.step::before { counter-increment:step; content:counter(step); width:18px; height:18px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:8px; color:#fff;
+  flex-shrink:0; margin-top:1px; }
+.step .step-body { flex:1; }
+.step .step-body h4 { font-size:9px; font-weight:700; margin-bottom:1px; }
+.step .step-body p, .step .step-body li { font-size:8px; color:var(--ts); }
+.step .step-body ul { padding-left:12px; margin-top:2px; }
+.steps-blue .step::before { background:var(--blue); }
+.steps-teal .step::before { background:var(--teal); }
+.steps-purple .step::before { background:var(--purple); }
+.steps-orange .step::before { background:var(--orange); }
+.steps-green .step::before { background:var(--green); }
+
+/* ── TIMELINE ── */
+.tl { position:relative; padding-left:16px; margin:8px 0; }
+.tl::before { content:''; position:absolute; left:6px; top:2px; bottom:2px; width:1.5px; background:var(--bd); }
+.tl-item { position:relative; margin-bottom:8px; }
+.tl-item::before { content:''; position:absolute; left:-13px; top:3px; width:7px; height:7px;
+  border-radius:50%; border:1.5px solid; background:var(--sf); }
+.tl-item h4 { font-size:9px; font-weight:700; }
+.tl-item p { font-size:8px; color:var(--ts); }
+.tl-pre .tl-item::before { border-color:var(--blue); }
+.tl-event .tl-item::before { border-color:var(--green); }
+.tl-post .tl-item::before { border-color:var(--orange); }
+
+/* ── CALLOUT BOXES ── */
+.callout { border-radius:8px; padding:8px 10px; margin:8px 0; font-size:8px; display:flex; gap:6px; align-items:flex-start; }
+.callout .callout-icon { font-size:12px; flex-shrink:0; line-height:1; }
+.callout-warn { background:#FFF8E1; border:1px solid #FFE082; }
+.callout-info { background:var(--blue-l); border:1px solid #B3C2FF; }
+.callout-danger { background:var(--red-l); border:1px solid #F5B3B5; }
+.callout-success { background:var(--green-l); border:1px solid #B8DFCA; }
+
+/* ── SKU ANATOMY ── */
+.sku-anatomy { display:flex; align-items:center; justify-content:center; gap:0; margin:10px 0; flex-wrap:wrap; }
+.sku-seg { text-align:center; }
+.sku-seg .code { font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px; padding:4px 8px;
+  border-radius:5px; display:block; }
+.sku-seg .label { font-size:6px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; margin-top:2px; color:var(--ts); }
+.sku-dash { font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:700; color:var(--tt); padding-top:4px; }
+
+/* ── CHECKLIST ── */
+.checklist { list-style:none; padding:0; }
+.checklist li { padding:4px 0 4px 18px; position:relative; font-size:8px; border-bottom:1px solid #f0f0f0; }
+.checklist li::before { content:''; position:absolute; left:0; top:5px; width:11px; height:11px;
+  border:1.5px solid var(--bd); border-radius:3px; }
+
+/* ── TABLE OF CONTENTS ── */
+.toc { background:var(--sf); border:1px solid var(--bd); border-radius:8px; padding:12px; margin-bottom:18px; }
+.toc h3 { font-size:9px; font-weight:700; margin-bottom:6px; color:var(--pri); }
+.toc-list { list-style:none; padding:0; columns:2; column-gap:12px; }
+.toc-list li { break-inside:avoid; }
+.toc-list a { display:flex; align-items:center; gap:4px; padding:3px 0; font-size:8px; color:var(--ts);
+  text-decoration:none; border-bottom:1px dotted var(--bd); }
+.toc-list a:hover { color:var(--pri); }
+.toc-list .toc-num { font-family:'IBM Plex Mono',monospace; font-size:7px; color:var(--tt); width:14px; }
+.toc-list .toc-icon { font-size:9px; }
+
+/* ── DOC TYPE BADGES ── */
+.doc-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:4px;
+  font-size:7px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+
+/* ── ZONE MAP ── */
+.zone-map { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:8px 0; }
+.zone { border-radius:8px; padding:8px; text-align:center; border:1.5px solid; }
+.zone .zone-flag { font-size:16px; }
+.zone .zone-name { font-size:9px; font-weight:700; margin-top:2px; }
+.zone .zone-detail { font-size:7px; color:var(--ts); margin-top:2px; }
+.zone .zone-whs { font-size:7px; font-weight:600; margin-top:4px; padding-top:4px; border-top:1px dashed; }
+
+/* ── MISC ── */
+.tag { display:inline-block; padding:2px 6px; border-radius:4px; font-size:7px; font-weight:600; margin:1px; }
+.mono { font-family:'IBM Plex Mono',monospace; }
+.muted { color:var(--ts); }
+.cols-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.role-grid { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+.role-box { flex:1; min-width:100px; padding:6px 8px; border-radius:6px; text-align:center; }
+.role-box .role-icon { font-size:14px; }
+.role-box .role-title { font-weight:700; font-size:8px; margin-top:2px; }
+.role-box .role-desc { font-size:7px; color:var(--ts); }
+
+/* ── MOCK DOCUMENT ── */
+.mock-doc { border:1.5px solid var(--bd); border-radius:6px; overflow:hidden; margin:8px 0; font-size:7px; }
+.mock-doc .md-hd { background:var(--pri); color:#fff; padding:5px 8px; font-weight:700; font-size:9px; text-align:center; }
+.mock-doc .md-row { display:flex; border-bottom:1px solid var(--bd); }
+.mock-doc .md-row:last-child { border-bottom:none; }
+.mock-doc .md-cell { padding:3px 6px; flex:1; border-right:1px solid var(--bd); font-size:7px; }
+.mock-doc .md-cell:last-child { border-right:none; }
+.mock-doc .md-cell.lbl { font-weight:600; background:#F8F9FA; color:var(--ts); font-size:6.5px; }
+.mock-doc .md-tbl-hd { background:var(--pri); color:#fff; }
+.mock-doc .md-tbl-hd .md-cell { font-weight:600; font-size:6.5px; color:#fff; }
+
+/* ── PRINT ── */
+@media print {
+  body { background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .page { max-width:100%; padding:0; }
+  .hero { break-after:avoid; }
+  .sec { break-inside:avoid; }
+  .card { break-inside:avoid; }
+  .bob-container { break-inside:avoid; }
+}
+
+.footer { text-align:center; padding:14px; font-size:7px; color:var(--tt); border-top:1px solid var(--bd); margin-top:18px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ══════════════════════════ COVER ══════════════════════════ -->
+<div class="hero">
+  <div class="hero-badge">FIFA World Cup 2026&trade;</div>
+  <h1>CAN Asset Mgmt<br>& <span>Dissolution</span></h1>
+  <div class="sub">Bob's Illustrated Field Guide to Materials Operations</div>
+  <div class="meta">Prepared by Anthony Bonilla-Lopez &middot; v1.0 &middot; Feb 23, 2026</div>
+</div>
+
+<div class="bob-container bob-excited">
+  <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+  <div class="bob-speech">
+    <div class="bob-name">Bob the Material Planner</div>
+    Hey there! I'm <strong>Bob</strong>, your guide through FF&E asset management for Canadian venues.
+    We'll cover the <strong>entire supply chain</strong> &mdash; from suppliers in Dallas all the way to your venue's logical spaces. Let's go!
+  </div>
+</div>
+
+<div class="toc">
+  <h3>What's Inside</h3>
+  <ol class="toc-list">
+    <li><a href="#glossary"><span class="toc-num">01</span><span class="toc-icon">📖</span> Glossary & Document Types</a></li>
+    <li><a href="#bigpicture"><span class="toc-num">02</span><span class="toc-icon">🌍</span> The Big Picture</a></li>
+    <li><a href="#supplychain"><span class="toc-num">03</span><span class="toc-icon">🔗</span> Supply Chain Flow</a></li>
+    <li><a href="#warehouses"><span class="toc-num">04</span><span class="toc-icon">🏭</span> Warehouses</a></li>
+    <li><a href="#team"><span class="toc-num">05</span><span class="toc-icon">👥</span> Contact Directory</a></li>
+    <li><a href="#scope"><span class="toc-num">06</span><span class="toc-icon">📦</span> Material Scope</a></li>
+    <li><a href="#lifecycle"><span class="toc-num">07</span><span class="toc-icon">🔄</span> Operational Lifecycle</a></li>
+    <li><a href="#sku"><span class="toc-num">08</span><span class="toc-icon">🏷️</span> SKU Codes & Nomenclature</a></li>
+    <li><a href="#inbound"><span class="toc-num">09</span><span class="toc-icon">📥</span> Inbound (ASN)</a></li>
+    <li><a href="#moving"><span class="toc-num">10</span><span class="toc-icon">🚛</span> Moving (OOR)</a></li>
+    <li><a href="#outbound"><span class="toc-num">11</span><span class="toc-icon">📤</span> Outbound Dispatch</a></li>
+    <li><a href="#smarta"><span class="toc-num">12</span><span class="toc-icon">💻</span> SM&sup2;ARTA & ML3K</a></li>
+    <li><a href="#tips"><span class="toc-num">13</span><span class="toc-icon">💡</span> Bob's Pro Tips</a></li>
+  </ol>
+</div>
+
+<!-- ══════════════════════════ §1 GLOSSARY ══════════════════════════ -->
+<div class="sec" id="glossary">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--purple-l);color:var(--purple)">📖</div>
+    <div><div class="sec-num">Section 01</div><h2>Glossary & Document Types</h2></div>
+  </div>
+
+  <div class="gloss-grid">
+    <div class="gloss-item"><div class="abbr">FF&E</div><div class="def">Furniture, Fixtures & Equipment</div></div>
+    <div class="gloss-item"><div class="abbr">FA</div><div class="def">Functional Areas</div></div>
+    <div class="gloss-item"><div class="abbr">LOG</div><div class="def">Logistics</div></div>
+    <div class="gloss-item"><div class="abbr">VLM</div><div class="def">Venue Location Manager</div></div>
+    <div class="gloss-item"><div class="abbr">MLC</div><div class="def">Main Logistics Compound</div></div>
+    <div class="gloss-item"><div class="abbr">WMS</div><div class="def">Warehouse Mgmt System</div></div>
+    <div class="gloss-item"><div class="abbr">UoM</div><div class="def">Unit of Measurement</div></div>
+    <div class="gloss-item"><div class="abbr">OS&D</div><div class="def">Over, Short & Damage report</div></div>
+    <div class="gloss-item"><div class="abbr">MHE</div><div class="def">Material Handling Equip.</div></div>
+  </div>
+
+  <h4 style="font-size:9px;margin:10px 0 6px;color:var(--pri)">Key Document Types</h4>
+  <p style="font-size:8px;color:var(--ts);margin-bottom:6px">The golden rule: <strong>anything IN = ASN. Anything OUT = OOR.</strong></p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+    <div style="padding:5px 8px;background:var(--teal-l);border-radius:5px;border-left:3px solid var(--teal)">
+      <div style="font-weight:700;font-size:8px;color:var(--teal)">ASN &mdash; Advanced Shipping Notification</div>
+      <div style="font-size:7px;color:var(--ts)">Goods coming <strong>IN</strong> to any node. Created in SM&sup2;ARTA. WMS converts it to a <em>Receiving Order</em>.</div>
+    </div>
+    <div style="padding:5px 8px;background:var(--orange-l);border-radius:5px;border-left:3px solid var(--orange)">
+      <div style="font-weight:700;font-size:8px;color:var(--orange)">OOR &mdash; Outbound Order Request</div>
+      <div style="font-size:7px;color:var(--ts)">Goods going <strong>OUT</strong> of any node. Created in SM&sup2;ARTA. WMS converts it to a <em>Shipping Order</em>.</div>
+    </div>
+    <div style="padding:5px 8px;background:var(--blue-l);border-radius:5px;border-left:3px solid var(--blue)">
+      <div style="font-weight:700;font-size:8px;color:var(--blue)">BOL &mdash; Bill of Lading</div>
+      <div style="font-size:7px;color:var(--ts)">Created by <strong>Distribution Team</strong>. Follows each truck. Transport documentation for the carrier.</div>
+    </div>
+    <div style="padding:5px 8px;background:var(--red-l);border-radius:5px;border-left:3px solid var(--red)">
+      <div style="font-weight:700;font-size:8px;color:var(--red)">OS&amp;D &mdash; Over, Short & Damage</div>
+      <div style="font-size:7px;color:var(--ts)">Discrepancies or damaged items. Item stays at node but gets reclassified in SM&sup2;ARTA.</div>
+    </div>
+    <div style="padding:5px 8px;background:var(--purple-l);border-radius:5px;border-left:3px solid var(--purple);grid-column:1/-1">
+      <div style="font-weight:700;font-size:8px;color:var(--purple)">RDS &mdash; Room Data Sheet</div>
+      <div style="font-size:7px;color:var(--ts)">Confirms movement from venue logistics compound to individual <strong>logical spaces</strong> (rooms, zones, FAs).</div>
+    </div>
+  </div>
+
+  <div style="margin-top:8px">
+    <span style="font-size:7px;color:var(--ts);font-weight:600">KEY SUPPLIERS:</span>
+    <span class="tag" style="background:var(--blue-l);color:var(--blue)">RGS</span>
+    <span class="tag" style="background:var(--green-l);color:var(--green)">CORT</span>
+    <span class="tag" style="background:var(--orange-l);color:var(--orange)">STAPLES</span>
+    <span class="tag" style="background:var(--purple-l);color:var(--purple)">ULINE</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §2 BIG PICTURE ══════════════════════════ -->
+<div class="sec pg-brk" id="bigpicture">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--blue-l);color:var(--blue)">🌍</div>
+    <div><div class="sec-num">Section 02</div><h2>The Big Picture</h2></div>
+  </div>
+
+  <div class="bob-container bob-excited" style="margin-bottom:8px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob says</div>
+      <strong>3 countries, 16 cities, 166,000+ items.</strong> Everything is planned by ML3K and moves in two waves:
+    </div>
+  </div>
+
+  <!-- Two phases side by side -->
+  <div style="display:flex;gap:5px;margin-bottom:6px">
+    <div style="flex:1;padding:5px 6px;background:var(--blue-l);border-radius:5px;border-left:3px solid var(--blue)">
+      <div style="font-weight:700;font-size:8px;color:var(--blue)">Phase 1: Load Plan (LP) &mdash; "Push"</div>
+      <div style="font-size:7px;color:var(--ts)">Dallas &rarr; regional warehouses. ~93 trucks, Mar&ndash;Apr.</div>
+    </div>
+    <div style="flex:1;padding:5px 6px;background:var(--green-l);border-radius:5px;border-left:3px solid var(--green)">
+      <div style="font-weight:700;font-size:8px;color:var(--green)">Phase 2: Last Mile (LM) &mdash; "Pull"</div>
+      <div style="font-size:7px;color:var(--ts)">WHS &rarr; venues based on bump-in dates. Apr&ndash;Jun.</div>
+    </div>
+  </div>
+
+  <!-- Three zones compact -->
+  <div class="zone-map" style="margin-bottom:6px">
+    <div class="zone" style="background:var(--blue-l);border-color:#B3C2FF;padding:5px">
+      <div style="font-size:12px">🇨🇦</div>
+      <div class="zone-name" style="color:var(--blue)">Canada</div>
+      <div style="font-size:6px;color:var(--ts)">TOR &middot; VAN &middot; 2 WHS &middot; 55 trucks</div>
+    </div>
+    <div class="zone" style="background:var(--green-l);border-color:#B8DFCA;padding:5px">
+      <div style="font-size:12px">🇺🇸</div>
+      <div class="zone-name" style="color:var(--green)">USA</div>
+      <div style="font-size:6px;color:var(--ts)">11 cities &middot; 8 WHS &middot; 292 + 166 CORT</div>
+    </div>
+    <div class="zone" style="background:var(--orange-l);border-color:#F5D6B8;padding:5px">
+      <div style="font-size:12px">🇲🇽</div>
+      <div class="zone-name" style="color:var(--orange)">Mexico</div>
+      <div style="font-size:6px;color:var(--ts)">CDMX &middot; GDL &middot; MTY &middot; 3 WHS &middot; 122 trucks</div>
+    </div>
+  </div>
+
+  <div class="callout callout-info" style="margin:0;padding:5px 8px">
+    <div class="callout-icon" style="font-size:10px">🇨🇦</div>
+    <div style="font-size:7px"><strong>For Canada:</strong> Dallas &rarr; TOR/VAN regional WHS (~7 days transit) &rarr; 3 days processing &rarr; Last Mile delivery to venues.</div>
+  </div>
+
+  <!-- ML3K compact -->
+  <div style="display:flex;gap:4px;margin-top:6px;padding:5px 8px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;align-items:center">
+    <div style="font-size:10px;flex-shrink:0">🧠</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:8px">ML3K &mdash; The Forecasting Brain</div>
+      <div style="font-size:7px;color:var(--ts)"><strong>Load Plan</strong> (what goes on which truck) &middot; <strong>Last Mile</strong> (venue truck loads + dates) &middot; <strong>Late Engine</strong> (flags delays)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §3 SUPPLY CHAIN FLOW ══════════════════════════ -->
+<div class="sec pg-brk" id="supplychain">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--teal-l);color:var(--teal)">🔗</div>
+    <div><div class="sec-num">Section 03</div><h2>Supply Chain Flow</h2></div>
+  </div>
+
+  <!-- THE SIMPLE RULE - compact -->
+  <div style="display:flex;gap:6px;margin-bottom:8px">
+    <div style="flex:1;text-align:center;padding:6px 4px;background:var(--teal-l);border-radius:6px;border:1.5px solid var(--teal)">
+      <div style="font-size:14px">📥</div>
+      <div style="font-weight:800;font-size:10px;color:var(--teal)">Anything IN = ASN</div>
+      <div style="font-size:6px;color:var(--ts)">Goods arriving at any node</div>
+    </div>
+    <div style="flex:1;text-align:center;padding:6px 4px;background:var(--orange-l);border-radius:6px;border:1.5px solid var(--orange)">
+      <div style="font-size:14px">📤</div>
+      <div style="font-weight:800;font-size:10px;color:var(--orange)">Anything OUT = OOR</div>
+      <div style="font-size:6px;color:var(--ts)">Goods leaving any node</div>
+    </div>
+  </div>
+
+  <!-- SVG Supply Chain Diagram -->
+  <div class="sc-diagram">
+    <svg viewBox="0 0 440 260" xmlns="http://www.w3.org/2000/svg" style="font-family:'DM Sans',sans-serif">
+      <!-- ── NODES (vertical left) ── -->
+      <rect x="10" y="0" width="100" height="22" rx="4" fill="var(--blue-l)" stroke="var(--blue)" stroke-width="1"/>
+      <text x="60" y="14" text-anchor="middle" font-weight="600" font-size="7" fill="var(--blue)">Logical Spaces</text>
+
+      <rect x="10" y="42" width="100" height="36" rx="6" fill="#fff" stroke="var(--bd)" stroke-width="1.5"/>
+      <text x="60" y="58" text-anchor="middle" font-weight="700" font-size="7.5" fill="var(--tp)">Venue Compound</text>
+      <text x="60" y="68" text-anchor="middle" font-size="6" fill="var(--ts)">Stadium / UDAC</text>
+
+      <rect x="10" y="100" width="100" height="36" rx="6" fill="#fff" stroke="var(--bd)" stroke-width="1.5"/>
+      <text x="60" y="116" text-anchor="middle" font-weight="700" font-size="7.5" fill="var(--tp)">Regional WHS</text>
+      <text x="60" y="126" text-anchor="middle" font-size="6" fill="var(--ts)">TOR / VAN</text>
+
+      <rect x="10" y="158" width="100" height="40" rx="8" fill="#1B4F6B" stroke="#0D3447" stroke-width="1.5"/>
+      <text x="60" y="176" text-anchor="middle" fill="#fff" font-weight="700" font-size="8">Dallas (MLC)</text>
+      <text x="60" y="188" text-anchor="middle" fill="#fff" font-size="6" opacity=".7">Central Hub</text>
+
+      <rect x="20" y="218" width="80" height="22" rx="4" fill="#F8F9FA" stroke="var(--bd)" stroke-width="1"/>
+      <text x="60" y="233" text-anchor="middle" font-size="7" font-weight="600" fill="var(--ts)">Suppliers</text>
+
+      <!-- ── ARROWS ── -->
+      <!-- Suppliers → Dallas -->
+      <line x1="60" y1="218" x2="60" y2="200" stroke="var(--teal)" stroke-width="1.5" marker-end="url(#aTeal)"/>
+      <!-- Dallas → WHS -->
+      <line x1="60" y1="158" x2="60" y2="138" stroke="var(--orange)" stroke-width="1.5" marker-end="url(#aOrange)"/>
+      <!-- WHS → Venue -->
+      <line x1="60" y1="100" x2="60" y2="80" stroke="var(--orange)" stroke-width="1.5" marker-end="url(#aOrange)"/>
+      <!-- Venue → Logical Spaces -->
+      <line x1="60" y1="42" x2="60" y2="24" stroke="var(--purple)" stroke-width="1.5" marker-end="url(#aPurple)"/>
+
+      <!-- ── DOC BADGES on arrows ── -->
+      <!-- Suppliers → Dallas: ASN -->
+      <rect x="68" y="203" width="24" height="10" rx="2" fill="var(--teal)"/>
+      <text x="80" y="211" text-anchor="middle" fill="#fff" font-size="5.5" font-weight="700">ASN</text>
+
+      <!-- Dallas → WHS: OOR + ASN (handshake) -->
+      <rect x="68" y="143" width="24" height="10" rx="2" fill="var(--orange)"/>
+      <text x="80" y="151" text-anchor="middle" fill="#fff" font-size="5.5" font-weight="700">OOR</text>
+      <rect x="94" y="143" width="24" height="10" rx="2" fill="var(--teal)"/>
+      <text x="106" y="151" text-anchor="middle" fill="#fff" font-size="5.5" font-weight="700">ASN</text>
+
+      <!-- WHS → Venue: OOR + ASN -->
+      <rect x="68" y="85" width="24" height="10" rx="2" fill="var(--orange)"/>
+      <text x="80" y="93" text-anchor="middle" fill="#fff" font-size="5.5" font-weight="700">OOR</text>
+      <rect x="94" y="85" width="24" height="10" rx="2" fill="var(--teal)"/>
+      <text x="106" y="93" text-anchor="middle" fill="#fff" font-size="5.5" font-weight="700">ASN</text>
+
+      <!-- Venue → LS: RDS -->
+      <rect x="68" y="27" width="24" height="10" rx="2" fill="var(--purple)"/>
+      <text x="80" y="35" text-anchor="middle" fill="#fff" font-size="5.5" font-weight="700">RDS</text>
+
+      <!-- ── RIGHT PANEL ── -->
+      <rect x="150" y="0" width="284" height="248" rx="8" fill="#F8F9FA" stroke="var(--bd)" stroke-width="1"/>
+
+      <!-- Title -->
+      <text x="166" y="18" font-weight="700" font-size="9" fill="var(--tp)">How It Works (for dummies)</text>
+
+      <!-- 1. Inbound -->
+      <rect x="166" y="28" width="10" height="10" rx="2" fill="var(--teal)"/>
+      <text x="182" y="37" font-weight="700" font-size="7.5" fill="var(--teal)">Inbound</text>
+      <text x="218" y="37" font-size="7" fill="var(--ts)">&mdash; supplier delivers to Dallas</text>
+      <text x="182" y="47" font-size="6.5" fill="var(--ts)">You create an <tspan font-weight="700" fill="var(--teal)">ASN</tspan> in SM&sup2;ARTA. WMS auto-creates a Receiving Order.</text>
+      <text x="182" y="56" font-size="6.5" fill="var(--ts)">When goods arrive, WHS checks items &rarr; sends Receipt PDF &rarr; you verify.</text>
+
+      <!-- 2. Moving -->
+      <rect x="166" y="68" width="10" height="10" rx="2" fill="var(--orange)"/>
+      <rect x="178" y="68" width="10" height="10" rx="2" fill="var(--teal)"/>
+      <text x="194" y="77" font-weight="700" font-size="7.5" fill="var(--tp)">Moving</text>
+      <text x="224" y="77" font-size="7" fill="var(--ts)">&mdash; between any two nodes</text>
+      <text x="182" y="88" font-size="6.5" fill="var(--ts)"><tspan font-weight="700">Two docs created at once</tspan> in SM&sup2;ARTA:</text>
+      <text x="182" y="97" font-size="6.5" fill="var(--ts)"><tspan font-weight="700" fill="var(--orange)">OOR</tspan> at the sending side (Dallas/WHS ships out)</text>
+      <text x="182" y="106" font-size="6.5" fill="var(--ts)"><tspan font-weight="700" fill="var(--teal)">ASN</tspan> at the receiving side (WHS/Venue receives)</text>
+      <text x="182" y="115" font-size="6.5" fill="var(--ts)">This is <tspan font-weight="700">"The Moving Handshake"</tspan> &mdash; always a pair.</text>
+
+      <!-- 3. BOL -->
+      <rect x="166" y="126" width="10" height="10" rx="2" fill="var(--blue)"/>
+      <text x="182" y="135" font-weight="700" font-size="7.5" fill="var(--blue)">BOL</text>
+      <text x="200" y="135" font-size="7" fill="var(--ts)">&mdash; follows every truck</text>
+      <text x="182" y="145" font-size="6.5" fill="var(--ts)">Created by the <tspan font-weight="700">Distribution Team</tspan> (not you). It's the carrier's</text>
+      <text x="182" y="154" font-size="6.5" fill="var(--ts)">transport document. You don't create it, but you reference it.</text>
+
+      <!-- 4. RDS -->
+      <rect x="166" y="166" width="10" height="10" rx="2" fill="var(--purple)"/>
+      <text x="182" y="175" font-weight="700" font-size="7.5" fill="var(--purple)">RDS</text>
+      <text x="200" y="175" font-size="7" fill="var(--ts)">&mdash; Room Data Sheet</text>
+      <text x="182" y="185" font-size="6.5" fill="var(--ts)">At the venue: confirms items moved from logistics compound</text>
+      <text x="182" y="194" font-size="6.5" fill="var(--ts)">to each logical space (room, zone, FA area).</text>
+
+      <!-- 5. OS&D -->
+      <rect x="166" y="206" width="10" height="10" rx="2" fill="var(--red)"/>
+      <text x="182" y="215" font-weight="700" font-size="7.5" fill="var(--red)">OS&amp;D</text>
+      <text x="210" y="215" font-size="7" fill="var(--ts)">&mdash; Over, Short &amp; Damage</text>
+      <text x="182" y="225" font-size="6.5" fill="var(--ts)">Something wrong? Items missing, extra, or damaged? File an OS&amp;D.</text>
+      <text x="182" y="234" font-size="6.5" fill="var(--ts)">Item stays at node but gets reclassified in SM&sup2;ARTA.</text>
+
+      <!-- Arrow markers -->
+      <defs>
+        <marker id="aOrange" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--orange)"/></marker>
+        <marker id="aTeal" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--teal)"/></marker>
+        <marker id="aPurple" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--purple)"/></marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="bob-container bob-tip" style="margin-top:6px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob explains</div>
+      I use <strong>ML3K</strong> to figure out what to send. I use <strong>SM&sup2;ARTA</strong> to prove I sent it. And I call <strong>Rock-It Cargo</strong> when they can't find it. If it's not in SM&sup2;ARTA, it didn't happen.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §4 WAREHOUSES ══════════════════════════ -->
+<div class="sec pg-brk" id="warehouses">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--gold-l);color:#B8891F">🏭</div>
+    <div><div class="sec-num">Section 04</div><h2>Warehouse Locations</h2></div>
+  </div>
+
+  <div class="wh-grid">
+    <div class="wh-card wh-full">
+      <div class="wh-top" style="background:linear-gradient(90deg,var(--pri),var(--pri-l))">🏠 Main Logistics Compound (MLC) &mdash; Dallas</div>
+      <div class="wh-body">
+        <p style="font-weight:600;color:var(--tp)">Suite 100, 2250 E I-30 Freeway, Grand Prairie TX 75050</p>
+        <p><span class="mono" style="font-size:6px;color:var(--tt)">32.761134, -96.971956</span> &middot; 192+ SKUs &middot; All 40 containers arrive here first</p>
+      </div>
+    </div>
+    <div class="wh-card">
+      <div class="wh-top" style="background:var(--blue)">🇨🇦 Vancouver &mdash; Aerostream</div>
+      <div class="wh-body">
+        <div class="wh-label">Regional Warehouse</div>
+        <p style="font-weight:600;color:var(--tp);font-size:7.5px">18391 McCartney Way, Richmond BC V6W 0A1</p>
+        <p>8:00 AM &ndash; 4:00 PM PST (Mon&ndash;Fri)</p>
+        <div class="wh-contact">
+          <div class="name">Gautam Sharma (Rock-It Cargo)</div>
+          <div class="detail">+1 236-885-8348 &middot; gautam.sharma@rockitcargo.com</div>
+        </div>
+      </div>
+    </div>
+    <div class="wh-card">
+      <div class="wh-top" style="background:var(--blue)">🇨🇦 Toronto &mdash; CEVA Logistics</div>
+      <div class="wh-body">
+        <div class="wh-label">Regional Warehouse</div>
+        <p style="font-weight:600;color:var(--tp);font-size:7.5px">5650 Keaton Cres Unit A, Mississauga ON L5R 3G3</p>
+        <p>Hours: Eastern Time (TBC)</p>
+        <div class="wh-contact">
+          <div class="name">Ravi Sagar (Rock-It Cargo)</div>
+          <div class="detail">+1 236-885-5735 &middot; ravi.sagar@rockitcargo.com</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-info" style="margin-top:8px">
+    <div class="callout-icon">📦</div>
+    <div><strong>How items reach CAN warehouses:</strong> LP trucks depart Dallas with ~7 days transit. Items are received, processed (~3 days WHS assembly/sorting), then delivered to venues during Last Mile.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §5 TEAM ══════════════════════════ -->
+<div class="sec pg-brk" id="team">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--teal-l);color:var(--teal)">👥</div>
+    <div><div class="sec-num">Section 05</div><h2>The Materials Team</h2></div>
+  </div>
+
+  <div class="bob-container bob-excited" style="margin-bottom:10px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob says</div>
+      Meet the squad! When in doubt, <strong>reach out</strong> &mdash; we don't bite (usually).
+    </div>
+  </div>
+
+  <div class="team-grid">
+    <div class="team-card">
+      <div class="avatar-circle" style="background:var(--pri)">VA</div>
+      <div class="info">
+        <div class="name">Vladislav Abramov</div>
+        <div class="role">Materials Senior Manager</div>
+        <div class="loc">📍 Miami</div>
+        <div class="contact-row">vlad.abramov@fwc2026.org &middot; +1 305-299-9759</div>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="avatar-circle" style="background:var(--blue)">YL</div>
+      <div class="info">
+        <div class="name">Yael Levy</div>
+        <div class="role">Materials Planning Manager</div>
+        <div class="loc">📍 Miami</div>
+        <div class="contact-row">yael.levy@fwc2026.org &middot; +1 645-221-7788</div>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="avatar-circle" style="background:var(--teal)">MP</div>
+      <div class="info">
+        <div class="name">Michael Pugh</div>
+        <div class="role">Regional Manager Materials</div>
+        <div class="loc">📍 Toronto</div>
+        <div class="contact-row">michael.pugh@fwc2026.org &middot; +1 587-991-3571</div>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="avatar-circle" style="background:var(--orange)">AB</div>
+      <div class="info">
+        <div class="name">Anthony Bonilla-Lopez</div>
+        <div class="role">Deputy Asset Mgmt & Dissolution</div>
+        <div class="loc">📍 Vancouver</div>
+        <div class="contact-row">anthony.bonilla-lopez@fwc2026.org</div>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="avatar-circle" style="background:var(--green)">KS</div>
+      <div class="info">
+        <div class="name">Kyli Smithson</div>
+        <div class="role">Procurement & Dissolution Mgr</div>
+        <div class="loc">📍 Miami</div>
+        <div class="contact-row">kyli.smithson@fwc2026.org &middot; +1 786-479-4078</div>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="avatar-circle" style="background:var(--purple)">AA</div>
+      <div class="info">
+        <div class="name">Ashley Alvarez</div>
+        <div class="role">Planning Systems Coordinator</div>
+        <div class="loc">📍 Miami</div>
+        <div class="contact-row">ashley.alvarez@fwc2026.org &middot; +1 645-239-4702</div>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="avatar-circle" style="background:var(--red)">LM</div>
+      <div class="info">
+        <div class="name">Lilibeth Martinez</div>
+        <div class="role">Layout Planning & Design Mgr</div>
+        <div class="loc">📍 Miami</div>
+        <div class="contact-row">lilibeth.martinez@fwc2026.org</div>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="avatar-circle" style="background:#8C1D5B">BB</div>
+      <div class="info">
+        <div class="name">Brittany Berardi</div>
+        <div class="role">Asset Mgmt & Dissolution Mgr</div>
+        <div class="loc">📍 Miami</div>
+        <div class="contact-row">brittany.berardi@fwc2026.org</div>
+      </div>
+    </div>
+    <div class="team-card" style="grid-column:1/-1">
+      <div class="avatar-circle" style="background:#C4550A">KL</div>
+      <div class="info">
+        <div class="name">Karime Lara</div>
+        <div class="role">Deputy Asset Mgmt & Dissolution</div>
+        <div class="loc">📍 Mexico</div>
+        <div class="contact-row">Karime.lara@fwc2026.org</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §6 SCOPE ══════════════════════════ -->
+<div class="sec pg-brk" id="scope">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--blue-l);color:var(--blue)">📦</div>
+    <div><div class="sec-num">Section 06</div><h2>What Does Material Planning Cover?</h2></div>
+  </div>
+
+  <div class="bob-container" style="margin-bottom:10px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob's Analogy</div>
+      Imagine picking up a stadium and <strong>flipping it upside down</strong>. Everything that falls out? That's us. <strong>Tens of thousands</strong> of items.
+    </div>
+  </div>
+
+  <div class="cols-2">
+    <div class="card card-accent" style="border-left-color:var(--green)">
+      <h3 style="color:var(--green)">&#10003; In Scope</h3>
+      <ul>
+        <li><strong>General FF&E</strong> &mdash; Chairs, tables, pylons, power bars, batteries, tools, barriers, couches...</li>
+        <li><strong>Functional Goods</strong> &mdash; Items procured by FAs</li>
+        <li><strong>Kits</strong> &mdash; Bundled office supplies (OSKIT) and FF&E tools/fixtures (FNKIT)</li>
+      </ul>
+    </div>
+    <div class="card card-accent" style="border-left-color:var(--red)">
+      <h3 style="color:var(--red)">&#10007; Out of Scope</h3>
+      <ul>
+        <li>Cleaning and waste assets</li>
+        <li>Furniture and D&eacute;cor</li>
+        <li>Barriers (fencing)</li>
+        <li>Team materials (benches, lockers)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §7 LIFECYCLE ══════════════════════════ -->
+<div class="sec" id="lifecycle">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--green-l);color:var(--green)">🔄</div>
+    <div><div class="sec-num">Section 07</div><h2>Operational Lifecycle</h2></div>
+  </div>
+
+  <div class="bob-container bob-tip" style="margin-bottom:10px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob says</div>
+      Like a match: <strong>warm-up</strong> (pre-event), <strong>90 minutes</strong> (event), <strong>extra time</strong> (dissolution).
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:6px">
+    <h3><span style="color:var(--blue)">&#9654;</span> Pre-Event</h3>
+    <div class="tl tl-pre" style="margin-top:6px">
+      <div class="tl-item"><h4>Material Scoping & Validation</h4></div>
+      <div class="tl-item"><h4>SKU Assignment</h4><p>Every product gets a unique code</p></div>
+      <div class="tl-item"><h4>Supply Chain Forecasting (ML3K)</h4><p>Bottlenecks, capacity, distribution timelines</p></div>
+      <div class="tl-item"><h4>Procurement & Supplier Liaison</h4></div>
+      <div class="tl-item"><h4>Policies & Procedures</h4></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:6px">
+    <h3><span style="color:var(--green)">&#9654;</span> During Event</h3>
+    <div class="tl tl-event" style="margin-top:6px">
+      <div class="tl-item"><h4>Asset Movement Management</h4></div>
+      <div class="tl-item"><h4>Procurement & Replenishment</h4></div>
+      <div class="tl-item"><h4>Asset Tracking & Inventory</h4></div>
+      <div class="tl-item"><h4>Bump-in / Bump-out Coordination</h4></div>
+      <div class="tl-item"><h4>Daily Reporting</h4></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3><span style="color:var(--orange)">&#9654;</span> Post-Event (Dissolution)</h3>
+    <div class="tl tl-post" style="margin-top:6px">
+      <div class="tl-item"><h4>Dissolution Management</h4><p>What stays, goes, gets donated</p></div>
+      <div class="tl-item"><h4>Outbound Routing for unexpected items</h4></div>
+      <div class="tl-item"><h4>Contract Closeout &amp; Final Reporting</h4></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §8 SKU CODES ══════════════════════════ -->
+<div class="sec pg-brk" id="sku">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--red-l);color:var(--red)">🏷️</div>
+    <div><div class="sec-num">Section 08</div><h2>SKU Codes & Nomenclature</h2></div>
+  </div>
+
+  <div class="bob-container" style="margin-bottom:10px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob says</div>
+      Suppliers all use different SKU formats. So we built our own <strong>FIFA nomenclature</strong> with 3 standardized segments. Once you learn the pattern, you can read any SKU at a glance!
+    </div>
+  </div>
+
+  <!-- General SKU anatomy -->
+  <div class="card">
+    <h3>General SKU Anatomy</h3>
+    <p style="font-size:8px;color:var(--ts);margin-bottom:8px">Example: <strong>FN-CHA-002</strong> = a Folding Chair</p>
+    <div class="sku-anatomy">
+      <div class="sku-seg">
+        <span class="code" style="background:var(--blue-l);color:var(--blue)">FN</span>
+        <span class="label">Item Category</span>
+      </div>
+      <div class="sku-dash">-</div>
+      <div class="sku-seg">
+        <span class="code" style="background:var(--red-l);color:var(--red)">CHA</span>
+        <span class="label">Item Type</span>
+      </div>
+      <div class="sku-dash">-</div>
+      <div class="sku-seg">
+        <span class="code" style="background:var(--purple-l);color:var(--purple)">002</span>
+        <span class="label">Item Number</span>
+      </div>
+    </div>
+    <p style="font-size:7px;color:var(--tt);text-align:center;margin-top:4px">Categories: FN (Furniture), OS (Office Supply), FE (Fixture/Equip), etc.</p>
+  </div>
+
+  <!-- Kit SKU -->
+  <div class="card">
+    <h3>Kit SKU Format</h3>
+    <p style="font-size:8px;color:var(--ts);margin-bottom:6px">Kits bundle many individual items under one code for simpler logistics:</p>
+    <div class="sku-anatomy">
+      <div class="sku-seg">
+        <span class="code" style="background:var(--blue-l);color:var(--blue);font-size:12px">OSKIT</span>
+        <span class="label">Kit Type</span>
+      </div>
+      <div class="sku-dash" style="font-size:12px">-</div>
+      <div class="sku-seg">
+        <span class="code" style="background:var(--green-l);color:var(--green);font-size:12px">001</span>
+        <span class="label">Item Type</span>
+      </div>
+      <div class="sku-dash" style="font-size:12px">-</div>
+      <div class="sku-seg">
+        <span class="code" style="background:var(--orange-l);color:var(--orange);font-size:12px">0XX</span>
+        <span class="label">FA Type</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <div style="flex:1;padding:5px 8px;background:#F8F9FA;border-radius:5px;border-left:2px solid var(--blue)">
+        <span style="font-weight:700;font-size:8px;color:var(--blue)">OSKIT</span>
+        <span style="font-size:7px;color:var(--ts)"> = Office Supply Kit (~14 items, packed by Staples)</span>
+      </div>
+      <div style="flex:1;padding:5px 8px;background:#F8F9FA;border-radius:5px;border-left:2px solid var(--green)">
+        <span style="font-weight:700;font-size:8px;color:var(--green)">FNKIT</span>
+        <span style="font-size:7px;color:var(--ts)"> = FF&E Kit (~12 items, tools/fixtures)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">💡</div>
+    <div><strong>Why kits?</strong> Instead of tracking 200 pens and staplers separately, we bundle into <strong>one kit SKU = one OOR line = one box</strong>. ML3K tracks 201 kits across 214 venues.</div>
+  </div>
+
+  <div class="card">
+    <h3>UoM (Unit of Measurement)</h3>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin:4px 0">
+      <span class="tag" style="background:var(--blue-l);color:var(--blue)">Each</span>
+      <span class="tag" style="background:var(--green-l);color:var(--green)">Box</span>
+      <span class="tag" style="background:var(--orange-l);color:var(--orange)">Kit</span>
+      <span class="tag" style="background:var(--purple-l);color:var(--purple)">Pack</span>
+      <span class="tag" style="background:var(--red-l);color:var(--red)">Pair</span>
+    </div>
+    <p style="font-size:8px;color:var(--ts);margin-top:4px"><strong>PPU (Pieces per UoM):</strong> Batteries = 10 per pack (PPU=10). Request 10 batteries &rarr; system converts to <strong>1 pack</strong> automatically. ML3K handles all UoM math in the engine.</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §9 INBOUND (ASN) ══════════════════════════ -->
+<div class="sec pg-brk" id="inbound">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--green-l);color:var(--green)">📥</div>
+    <div><div class="sec-num">Section 09</div><h2>Inbound: ASN Process</h2></div>
+  </div>
+
+  <div class="bob-container" style="margin-bottom:10px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob says</div>
+      Goods arriving at <strong>any</strong> node = ASN. Whether from a supplier to Dallas, or Dallas to your regional WHS &mdash; an ASN must exist <em>before</em> anything arrives. <strong>No ASN = No receiving.</strong>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>ASN Must Include</h3>
+    <ul class="checklist">
+      <li>SM&sup2;ARTA Transaction Number</li>
+      <li>Shipment ref & expected delivery date/time</li>
+      <li>Origin / Supplier name</li>
+      <li>Full item list with nomenclatures + quantities</li>
+      <li>Transport details (carrier, vehicle #, seal #)</li>
+      <li>Delivery docs (BOL, Packing List) if available</li>
+    </ul>
+  </div>
+
+  <!-- Mock ASN Document -->
+  <div class="mock-doc" style="margin-top:8px">
+    <div class="md-hd">Advance Shipment Notification # 4277</div>
+    <div class="md-row">
+      <div class="md-cell lbl">Expected Date/Time:</div>
+      <div class="md-cell">13:30 21.10.2023</div>
+      <div class="md-cell lbl">Shipment Ref:</div>
+      <div class="md-cell">&mdash;</div>
+      <div class="md-cell lbl">Ship from:</div>
+      <div class="md-cell">&mdash;</div>
+    </div>
+    <div class="md-row md-tbl-hd">
+      <div class="md-cell" style="flex:.5">Line #</div>
+      <div class="md-cell" style="flex:1.2">Nomenclature Code</div>
+      <div class="md-cell" style="flex:1.5">Nomenclature Name</div>
+      <div class="md-cell">Item Owner</div>
+      <div class="md-cell" style="flex:.6">UOM</div>
+      <div class="md-cell" style="flex:.8">Expected Qty</div>
+    </div>
+    <div class="md-row">
+      <div class="md-cell" style="flex:.5">1</div>
+      <div class="md-cell mono" style="flex:1.2">FNCHR-001-000</div>
+      <div class="md-cell" style="flex:1.5">Task Chair with Armrests</div>
+      <div class="md-cell">LOGISTICS</div>
+      <div class="md-cell" style="flex:.6">Each</div>
+      <div class="md-cell" style="flex:.8">80</div>
+    </div>
+  </div>
+
+  <div class="callout callout-danger">
+    <div class="callout-icon">🚫</div>
+    <div><strong>No Receiving Order = HOLD.</strong> Shipments without an ASN are held until verified by Material Planning Manager.</div>
+  </div>
+
+  <div class="card">
+    <h3>When the Truck Arrives</h3>
+    <div class="steps steps-green" style="margin-top:6px">
+      <div class="step"><div class="step-body"><h4>📸 Confirm & Photograph</h4><p>Check conditions, nomenclature codes, quantities, UoM</p></div></div>
+      <div class="step"><div class="step-body"><h4>📝 Update WMS</h4><p>Upload photos, docs, verification notes, OS&amp;D refs if applicable</p></div></div>
+      <div class="step"><div class="step-body"><h4>✅ Confirm in WMS</h4><p>Auto-sends confirmation email</p></div></div>
+      <div class="step"><div class="step-body"><h4>🔄 Confirm in SM&sup2;ARTA</h4><p>Enter WMS ref, verify quantities, upload supporting docs, complete transaction</p></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §10 MOVING ══════════════════════════ -->
+<div class="sec" id="moving">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--purple-l);color:var(--purple)">🚛</div>
+    <div><div class="sec-num">Section 10</div><h2>Moving: Internal Transfers (OOR)</h2></div>
+  </div>
+
+  <div class="bob-container bob-warn" style="margin-bottom:8px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob says</div>
+      Internal moves = the <strong>Moving Handshake</strong>: WHS &rarr; Venue, or Venue &harr; Venue. Each move creates an <strong>OOR</strong> (dispatch) + <strong>ASN</strong> (receiving) together. The magic number: <strong style="color:var(--red)">72 hours advance notice!</strong>
+    </div>
+  </div>
+
+  <div class="callout callout-warn">
+    <div class="callout-icon">⏰</div>
+    <div><strong>72-Hour Rule:</strong> All OORs must be created 72+ hours before dispatch. The warehouse needs time to pick, stage, and prepare.</div>
+  </div>
+
+  <!-- Mock OOR Document -->
+  <div class="mock-doc" style="margin-top:8px">
+    <div class="md-hd">Outbound Order Request # 4161</div>
+    <div class="md-row">
+      <div class="md-cell lbl">Delivery Date/Time:</div>
+      <div class="md-cell">09:00 01.03.2023</div>
+      <div class="md-cell lbl">Requestor:</div>
+      <div class="md-cell">t.user</div>
+    </div>
+    <div class="md-row">
+      <div class="md-cell lbl">Ship To:</div>
+      <div class="md-cell">Stadium</div>
+      <div class="md-cell lbl">Reference:</div>
+      <div class="md-cell">4161 &mdash; Totes + bibs</div>
+    </div>
+    <div class="md-row md-tbl-hd">
+      <div class="md-cell" style="flex:.4">Line #</div>
+      <div class="md-cell" style="flex:1">Nom. Code</div>
+      <div class="md-cell" style="flex:1.5">Nomenclature Name</div>
+      <div class="md-cell" style="flex:.5">UOM</div>
+      <div class="md-cell" style="flex:.5">Qty</div>
+      <div class="md-cell" style="flex:.8">Item Owner</div>
+    </div>
+    <div class="md-row">
+      <div class="md-cell" style="flex:.4">1</div>
+      <div class="md-cell mono" style="flex:1">FEBIN-001-000</div>
+      <div class="md-cell" style="flex:1.5">Plastic tote, 60L</div>
+      <div class="md-cell" style="flex:.5">Each</div>
+      <div class="md-cell" style="flex:.5">20</div>
+      <div class="md-cell" style="flex:.8">LOGISTICS</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:8px">
+    <h3>Moving Process</h3>
+    <div class="steps steps-purple" style="margin-top:6px">
+      <div class="step"><div class="step-body"><h4>📋 Export Truck Load from ML3K</h4><p>Last Mile &rarr; City/Venue &rarr; Date &rarr; Expand truck to see items</p></div></div>
+      <div class="step"><div class="step-body"><h4>📝 Create Moving Transaction in SM&sup2;ARTA</h4><p>From (VAN WHS) &rarr; To (VAN Stadium). Add shipping ref / LSR number</p></div></div>
+      <div class="step"><div class="step-body"><h4>📦 Add Items line by line from export</h4></div></div>
+      <div class="step"><div class="step-body"><h4>📤 Download OOR Excel &rarr; Email warehouse + CC distribution</h4></div></div>
+      <div class="step"><div class="step-body"><h4>✅ Confirm with Venue/FA Lead</h4></div></div>
+    </div>
+  </div>
+
+  <div class="bob-container bob-tip">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Pro Tip</div>
+      In ML3K truck tab &mdash; change <strong>pallet qty per truck</strong> and it auto-adjusts truck size. Also: ML3K calculates assembly timelines so you know exactly when items need to leave the WHS!
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §11 OUTBOUND ══════════════════════════ -->
+<div class="sec pg-brk" id="outbound">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--red-l);color:var(--red)">📤</div>
+    <div><div class="sec-num">Section 11</div><h2>Outbound Dispatch</h2></div>
+  </div>
+
+  <div class="bob-container bob-alert" style="margin-bottom:8px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob says</div>
+      The big one &mdash; getting items <strong>out the door</strong> correctly. Each step exists for a reason!
+    </div>
+  </div>
+
+  <div class="card card-accent" style="border-left-color:var(--blue);margin-bottom:6px">
+    <h3>1. Create OOR in SM&sup2;ARTA</h3>
+    <p>Transaction #, destination, date/time, transport details, full item list with nomenclature + qty + UoM. WHS creates Shipping Order in WMS using OOR number.</p>
+    <div class="callout callout-danger" style="margin:4px 0 0">
+      <div class="callout-icon">🚫</div>
+      <div>No valid SM&sup2;ARTA transaction = <strong>dispatch held</strong>.</div>
+    </div>
+  </div>
+
+  <div class="card card-accent" style="border-left-color:var(--purple);margin-bottom:6px">
+    <h3>2. Picking & Staging</h3>
+    <p>Pick per WMS order &rarr; Stage at loading area &rarr; <strong>Second person verifies</strong> codes, qty, UoM &rarr; Pack/wrap &rarr; 📸 Photo staged pallets. Report irregularities <em>before</em> loading.</p>
+  </div>
+
+  <div class="card card-accent" style="border-left-color:var(--teal);margin-bottom:6px">
+    <h3>3. Documentation</h3>
+    <p>Prepare <strong>BOL</strong> (Bill of Lading) with vehicle #, driver name, seal #. All docs reviewed + signed before dispatch.</p>
+  </div>
+
+  <div class="card card-accent" style="border-left-color:var(--orange);margin-bottom:6px">
+    <h3>4. Vehicle Arrival & Loading</h3>
+    <p>Record arrival &rarr; 📸 Photo plates + empty interior &rarr; Verify MHE &rarr; Load per plan (weight/stacking limits) &rarr; Straps + corner boards + wrap &rarr; Seal + record # &rarr; 📸 Photo loading + sealed door</p>
+  </div>
+
+  <div class="card card-accent" style="border-left-color:var(--green);margin-bottom:6px">
+    <h3>5. Verify & Ship</h3>
+    <p>Verify quantities in WMS &rarr; Upload all photos + docs &rarr; Record departure &rarr; Driver signs BOL &rarr; Confirm Shipping Order (auto-email sent)</p>
+  </div>
+
+  <div class="card card-accent" style="border-left-color:var(--pri)">
+    <h3>6. SM&sup2;ARTA Confirmation</h3>
+    <p>Enter WMS ref # &rarr; Verify date/qty/SKUs &rarr; Upload BOL + photos &rarr; Set status to <strong>"In Transit"</strong></p>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §12 SM2ARTA & ML3K ══════════════════════════ -->
+<div class="sec pg-brk" id="smarta">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--purple-l);color:var(--purple)">💻</div>
+    <div><div class="sec-num">Section 12</div><h2>SM&sup2;ARTA & ML3K</h2></div>
+  </div>
+
+  <div class="bob-container bob-excited" style="margin-bottom:10px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob says</div>
+      Two systems, two jobs. <strong>SM&sup2;ARTA</strong> = asset tracking (what you have, where it is). <strong>ML3K</strong> = supply chain forecasting (what goes where, when, on which truck).
+    </div>
+  </div>
+
+  <div class="cols-2">
+    <div class="card" style="border-top:3px solid var(--purple)">
+      <h3 style="color:var(--purple)">SM&sup2;ARTA</h3>
+      <p style="margin-bottom:4px"><strong>Asset Tracking & Transactions</strong></p>
+      <ul>
+        <li>Create ASNs, OORs, Moving transactions</li>
+        <li>Track every item from supplier to venue</li>
+        <li>Nomenclature management</li>
+        <li>Damage reports (OS&amp;D)</li>
+        <li>3 roles: Material Planner, Functional Planner, VLM</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--blue)">
+      <h3 style="color:var(--blue)">ML3K</h3>
+      <p style="margin-bottom:4px"><strong>Supply Chain Forecasting</strong></p>
+      <ul>
+        <li>LP Engine: plans 93+ truck loads to 8 destinations</li>
+        <li>LM Engine: plans per-venue truck loads from WHS</li>
+        <li>Late Engine: flags items that won't arrive on time</li>
+        <li>Assembly Timeline: tracks WHS processing dates</li>
+        <li>Kit management: 201 kits across 214 venues</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:8px">
+    <h3>Creating Nomenclature in SM&sup2;ARTA</h3>
+    <div class="steps steps-blue" style="margin-top:6px">
+      <div class="step"><div class="step-body"><h4>Choose Type</h4><p><strong>LOG goods</strong> (~90%) or <strong>Functional goods</strong>. Mark if consumable, assembled, or branded.</p></div></div>
+      <div class="step"><div class="step-body"><h4>Inherit or Create</h4><p>Click <strong>"Inherit"</strong> to copy existing item data (UoM, price, source SKU), or enter manually + <strong>"Select Code"</strong> for new FIFA SKU.</p></div></div>
+      <div class="step"><div class="step-body"><h4>Set UoM & PPU</h4><p>Unit (Each, Box, Kit...) and pieces per unit. System auto-converts orders.</p></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Asset Registration Form</h3>
+    <p>For mid-tournament purchases that need tracking. Sent as Excel to all FAs and Venue Managers. Required fields:</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:4px;font-size:7px">
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">Name of item</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">Quantity + UoM</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">Price</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">Package dimensions</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">Supplier SKU</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">Country of manufacture</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">HS Code (customs)</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">Dissolution plan</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">FIFA-branded?</div>
+      <div style="padding:2px 4px;background:#F8F9FA;border-radius:3px">Consumable?</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §13 BOB'S TIPS ══════════════════════════ -->
+<div class="sec pg-brk" id="tips">
+  <div class="sec-hd">
+    <div class="sec-icon" style="background:var(--gold-l);color:#B8891F">💡</div>
+    <div><div class="sec-num">Section 13</div><h2>Bob's Pro Tips</h2></div>
+  </div>
+
+  <div class="bob-container bob-excited" style="margin-bottom:10px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob's Final Words</div>
+      Pin these to your wall. Tattoo them on your clipboard. Just <strong>don't forget them</strong>.
+    </div>
+  </div>
+
+  <div style="display:grid;gap:6px">
+    <div class="card card-accent" style="border-left-color:var(--red)">
+      <h3>🚫 72-Hour Rule</h3>
+      <p>Every OOR submitted <strong>72+ hours</strong> before dispatch. No exceptions.</p>
+    </div>
+    <div class="card card-accent" style="border-left-color:var(--blue)">
+      <h3>📸 When in Doubt, Photograph</h3>
+      <p>Arrivals, departures, damage, seals, plates, staged cargo. Photos = insurance.</p>
+    </div>
+    <div class="card card-accent" style="border-left-color:var(--green)">
+      <h3>✅ Double Entry = Double Confirmation</h3>
+      <p>Every transaction in <strong>both WMS and SM&sup2;ARTA</strong>. One system only = not done.</p>
+    </div>
+    <div class="card card-accent" style="border-left-color:var(--purple)">
+      <h3>📄 No Document = No Movement</h3>
+      <p>IN = ASN. OUT = OOR. Between rooms = RDS. Every physical movement has a matching document. Skip it and the warehouse <strong>holds</strong> your shipment.</p>
+    </div>
+    <div class="card card-accent" style="border-left-color:var(--orange)">
+      <h3>📦 Track Everything &mdash; Even Surprises</h3>
+      <p>Mid-tournament purchases? <strong>Asset Registration Form</strong> &rarr; Materials team &rarr; SM&sup2;ARTA.</p>
+    </div>
+    <div class="card card-accent" style="border-left-color:var(--teal)">
+      <h3>🔧 ML3K + SM&sup2;ARTA Together</h3>
+      <p><strong>ML3K</strong> tells you what goes on which truck, when. <strong>SM&sup2;ARTA</strong> creates the OOR and tracks it. Use both!</p>
+    </div>
+  </div>
+
+  <div class="bob-container bob-tip" style="margin-top:12px">
+    <div class="bob-avatar"><div class="hard-hat"></div><div class="hair"></div><div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="mouth"></div><div class="vest"></div><div class="clipboard"></div></div>
+    <div class="bob-speech">
+      <div class="bob-name">Bob's Sign-Off</div>
+      Every chair, table, and battery has a story &mdash; and we write it. 166,000+ items across 3 countries, 16 cities, 214 venues. Now get out there and move some pallets. <strong>See you at kickoff!</strong> &#9917;
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  &copy;2026 FIFA World Cup 2026&trade; &middot; Materials & Logistics Department<br>
+  Prepared by Anthony Bonilla-Lopez &middot; Illustrated by Bob the Material Planner<br>
+  <span style="font-weight:600">SM&sup2;ARTA&trade;</span> &middot; ML3K
+</div>
+
+</div>
+</body>
+</html>
