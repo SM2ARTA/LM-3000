@@ -14542,6 +14542,21 @@ async function _fcSendHandshake(fp){
   window.open('mailto:?cc=materials@fwc2026.org&subject='+subject+'&body='+body);
   LM_renderForecast(document.getElementById('mn'));
 }
+function _fcChipClick(ev,kind,id){
+  const setRef=kind==='c'?_fcCountries:_fcTypes;
+  const all=kind==='c'?(window._fcAllC||['USA','CAN','MEX']):(window._fcAllT||['cluster','stadium','other','cort','stp']);
+  if(id==='all'){
+    if(kind==='c')_fcCountries=new Set(all);else _fcTypes=new Set(all);
+  }else if(ev&&(ev.ctrlKey||ev.metaKey)){
+    // Multi-select: toggle
+    if(setRef.has(id))setRef.delete(id);else setRef.add(id);
+    if(!setRef.size){if(kind==='c')_fcCountries=new Set(all);else _fcTypes=new Set(all)}
+  }else{
+    // Single-select: only this one
+    if(kind==='c')_fcCountries=new Set([id]);else _fcTypes=new Set([id]);
+  }
+  LM_renderForecast(document.getElementById('mn'));
+}
 function _fcFilter(){
   const inp=document.getElementById('fcSearch');if(!inp)return;
   _fcSearchText=inp.value||'';
@@ -14685,11 +14700,13 @@ function LM_renderForecast(el){
   const _tAllOn=_allT.every(t=>_fcTypes.has(t));
   const _re=`LM_renderForecast(document.getElementById('mn'))`;
   const _cChip=(id,label,cnt,flag)=>{
-    if(id==='all'){return`<button onclick="_fcCountries=new Set(${JSON.stringify(_allC)});${_re}" style="padding:4px 14px;border-radius:16px;border:1px solid ${_cAllOn?'var(--ac)':'var(--bd)'};background:${_cAllOn?'var(--as)':'#fff'};color:${_cAllOn?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`}
-    const on=_fcCountries.has(id);return`<button onclick="_fcCountries=new Set(['${id}']);${_re}" style="padding:4px 14px;border-radius:16px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer" oncontextmenu="event.preventDefault();if(_fcCountries.has('${id}'))_fcCountries.delete('${id}');else _fcCountries.add('${id}');if(!_fcCountries.size)_fcCountries=new Set(${JSON.stringify(_allC)});${_re}">${flag} ${label} (${cnt})</button>`};
+    if(id==='all'){return`<button onclick="_fcChipClick(event,'c','all')" style="padding:4px 14px;border-radius:16px;border:1px solid ${_cAllOn?'var(--ac)':'var(--bd)'};background:${_cAllOn?'var(--as)':'#fff'};color:${_cAllOn?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`}
+    const on=_fcCountries.has(id);return`<button onclick="_fcChipClick(event,'c','${id}')" title="Ctrl+click for multi-select" style="padding:4px 14px;border-radius:16px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:11px;font-weight:600;cursor:pointer">${flag} ${label} (${cnt})</button>`};
   const _tChip=(id,label,cnt)=>{
-    if(id==='all'){return`<button onclick="_fcTypes=new Set(${JSON.stringify(_allT)});${_re}" style="padding:3px 10px;border-radius:12px;border:1px solid ${_tAllOn?'var(--ac)':'var(--bd)'};background:${_tAllOn?'var(--as)':'#fff'};color:${_tAllOn?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`}
-    const on=_fcTypes.has(id);return`<button onclick="_fcTypes=new Set(['${id}']);${_re}" style="padding:3px 10px;border-radius:12px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer" oncontextmenu="event.preventDefault();if(_fcTypes.has('${id}'))_fcTypes.delete('${id}');else _fcTypes.add('${id}');if(!_fcTypes.size)_fcTypes=new Set(${JSON.stringify(_allT)});${_re}">${label} (${cnt})</button>`};
+    if(id==='all'){return`<button onclick="_fcChipClick(event,'t','all')" style="padding:3px 10px;border-radius:12px;border:1px solid ${_tAllOn?'var(--ac)':'var(--bd)'};background:${_tAllOn?'var(--as)':'#fff'};color:${_tAllOn?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`}
+    const on=_fcTypes.has(id);return`<button onclick="_fcChipClick(event,'t','${id}')" title="Ctrl+click for multi-select" style="padding:3px 10px;border-radius:12px;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--as)':'#fff'};color:${on?'var(--ac)':'var(--ts)'};font-size:10px;font-weight:600;cursor:pointer">${label} (${cnt})</button>`};
+  // Stash "all" lists so _fcChipClick can reset
+  window._fcAllC=_allC;window._fcAllT=_allT;
   let h='<div class="fin" style="padding:16px">';
   h+=`<h2 style="font-size:16px;font-weight:700;margin:0 0 4px">📋 LM Truck Forecast</h2>`;
   h+=`<p style="font-size:10px;color:var(--tt);margin:0 0 12px">All LM trucks across all countries — grouped by dispatch week</p>`;
