@@ -4960,7 +4960,7 @@ function LP_filterDemand(){
     tr.style.display=(!txt||(tr.dataset.search||'').toLowerCase().includes(txt))?'':'none';
   });
   // Save filter state for restoration after re-render
-  _lpDemFilterState={search:txt,srcs:allSrcsChecked?null:[...selSrcs],dests:allDestsChecked?null:[...selDests]};
+  _lpDemFilterState={search:txt,srcs:null,dests:null};
 }
 function _lpDemRestoreFilters(){
   const st=_lpDemFilterState;if(!st)return;
