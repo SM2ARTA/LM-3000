@@ -14506,6 +14506,7 @@ let _fcLeadMap={};// fingerprint → staffName (persisted, stable across rebuild
 let _fcLegMap={};// fingerprint → 2 (2-leg truck) — absent = 1 leg
 let _fcLeg2Lsr={};// fingerprint → LSR string for leg 2
 let _fcLeg2Date={};// fingerprint → date string for leg 2 dispatch (default: bump-in)
+let _fcSearchText='';
 let _fcHandshakes={};// fingerprint → {token, dest, truckId, disp, plt, skus, lsr, oor, contact:{name,email}, sentAt, status:'pending'|'confirmed'|'reschedule', proposedDate, note, respondedAt, locked}
 async function _fcLoadHandshakes(){
   if(!SB)return;
@@ -14539,6 +14540,14 @@ async function _fcSendHandshake(fp){
   const body=encodeURIComponent('Hi,\n\nPlease confirm the delivery below:\n\nTruck: '+row.truckId+'\nDestination: '+row.dest+'\nDispatch: '+row.disp+'\nPallets: '+row.plt+'\nLSR: '+(row.lsr||'\u2014')+'\nOOR: '+(row.oor||'\u2014')+'\n\nPlease confirm or propose a new date:\n'+hsUrl+'\n\nThank you,\nMaterials Management Team');
   window.open('mailto:?cc=materials@fwc2026.org&subject='+subject+'&body='+body);
   LM_renderForecast(document.getElementById('mn'));
+}
+function _fcFilter(){
+  const inp=document.getElementById('fcSearch');if(!inp)return;
+  _fcSearchText=inp.value||'';
+  const q=_fcSearchText.toLowerCase().trim();
+  document.querySelectorAll('tr[data-fcsearch]').forEach(r=>{
+    r.style.display=(!q||(r.getAttribute('data-fcsearch')||'').includes(q))?'':'none';
+  });
 }
 function _fcControl(fp,lead){
   // Deterministic pseudo-random control that never matches lead
@@ -14698,6 +14707,8 @@ function LM_renderForecast(el){
   if(cntCort)h+=_tChip('cort','CORT',cntCort);
   if(cntStp)h+=_tChip('stp','Staples',cntStp);
   h+=`</div>`;
+  // Search input
+  h+=`<input type="text" class="lp-search" id="fcSearch" placeholder="Search truck, destination, LSR, OOR, lead..." oninput="_fcFilter()" value="${_fcSearchText.replace(/"/g,'&quot;')}" style="margin-bottom:12px">`;
   // KPI summary — truck count includes Leg 2 splits
   const leg2Count=filtered.filter(r=>_fcLegMap[r.fp]===2).length;
   const displayTrucks=totalT+leg2Count;
@@ -14746,7 +14757,7 @@ function LM_renderForecast(el){
         const leadFp=r._leg1Fp||r.fp;
         const lead=_fcLeadMap[leadFp]||'';
         const control=lead?_fcControl(leadFp,lead):'';
-        h+=`<tr style="background:#E3F2FD">
+        h+=`<tr data-fcsearch="${((r.truckId||'')+' '+(r.dest||'')+' '+(r.dispLoc||'')+' '+(r.lsr||'')+' '+(r.oor||'')+' '+(_fcLeadMap[r._leg1Fp||r.fp]||'')+' leg2').toLowerCase()}" style="background:#E3F2FD">
         <td style="font-size:10px;color:#1565C0;font-weight:600">${r.dispLoc}</td>
         <td style="font-size:11px;font-weight:600;color:#1565C0">${r.dest}</td>
         <td class="mono fw6" style="color:#1565C0">${r.truckId} <span style="font-size:8px;font-weight:700;color:#fff;background:#1565C0;padding:1px 4px;border-radius:3px">2nd Leg</span></td>
@@ -14773,7 +14784,7 @@ function LM_renderForecast(el){
       }
       // ── Normal row (Leg 1 or single-leg) ──
       const legLabel=is2Leg?'<span style="font-size:8px;font-weight:700;color:#1565C0;background:#E3F2FD;padding:1px 4px;border-radius:3px">Leg 1</span>':'';
-      h+=`<tr${r.dispatched?' style="background:var(--gs)"':''}>
+      h+=`<tr data-fcsearch="${((r.truckId||'')+' '+(r.dest||'')+' '+(r.cluster||'')+' '+(r.dispLoc||'')+' '+(r.lsr||'')+' '+(r.oor||'')+' '+(_fcLeadMap[r.fp]||'')+' '+(r.vtype||'')+(r.isCort?' cort':'')).toLowerCase()}"${r.dispatched?' style="background:var(--gs)"':''}>
         <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
         <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort&&r.vtype!=='stadium'&&r.clusterLabel?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT Cluster</span>':(r.isCort&&r.vtype!=='stadium'?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':'')+(r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':'')}</td>
         <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${r.vtype==='cort'?' <span style="font-size:8px;font-weight:700;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 4px;border-radius:3px">CORT</span>':''}${r.vtype==='stp'?' <span style="font-size:8px;font-weight:700;color:#EF6C00;background:#FFF8F0;border:1px solid #FFCC80;padding:1px 4px;border-radius:3px">STP</span>':''}${legLabel}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
@@ -14801,6 +14812,7 @@ function LM_renderForecast(el){
   }
   h+=`</div>`;
   el.innerHTML=h;
+  if(_fcSearchText)_fcFilter();
 }
 
 // ── LM DEMAND TAB ──
