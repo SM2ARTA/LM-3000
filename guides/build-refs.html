@@ -339,24 +339,33 @@ async function _loadGuideList(){
 // Some servers return 200 for missing files (SPA fallback), so we also check
 // that the response actually looks like HTML with expected content.
 async function _fetchGuide(file){
-  const paths=[file,'./'+file,'/guides/'+file,'guides/'+file,'../guides/'+file];
+  // Try ALL these path variants — multiple server layouts covered
+  const paths=[
+    file,                          // same directory
+    './'+file,                     // same directory explicit
+    '/guides/'+file,               // absolute /guides/
+    'guides/'+file,                // relative guides/
+    '../guides/'+file,             // parent + guides
+    '/'+file,                      // absolute root
+    '../'+file,                    // parent directory
+    window.location.origin+'/'+file,           // absolute origin + file
+    window.location.origin+'/guides/'+file    // absolute origin + /guides/
+  ];
   const results=[];
   for(const p of paths){
     try{
       const r=await fetch(p);
       if(!r.ok){results.push(`${p}: ${r.status}`);continue}
       const text=await r.text();
-      // Must be real HTML
       if(!text.includes('<')||text.length<500){results.push(`${p}: not HTML (${text.length} chars)`);continue}
-      // Check title to distinguish this file from the Memory Dump falling through
       const titleMatch=text.match(/<title[^>]*>([^<]+)<\/title>/i);
       const title=titleMatch?titleMatch[1].toLowerCase():'';
-      // Reject ONLY if it's specifically the Memory Dump or build-refs page
       if(title.includes('memory dump')||title.includes('bob\'s reference'))continue;
+      log('  ✓ '+file+' at: '+p,'ok');
       return{text,path:p};
     }catch(e){results.push(`${p}: ${e.message}`)}
   }
-  if(results.length)log('  '+file+' → '+results.slice(0,2).join(', '),'err');
+  if(results.length)log('  '+file+' → '+results.slice(0,3).join(' | '),'err');
   return null;
 }
 
