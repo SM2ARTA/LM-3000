@@ -41,12 +41,12 @@ input[type=password]:focus{border-color:var(--pri)}
 </div>
 <div id="app-content" style="display:none">
 <h1>🤖 Build Bob's Reference Library</h1>
-<div class="sub">One-time extraction of SM2ARTA Admin Guide + Supply Chain Presentation + Team Guides into Bob's knowledge base.</div>
+<div class="sub">Feed Bob's knowledge from 3 sources: SM2ARTA Admin Guide, Team Guides, and Manual text.</div>
 
 <div class="card">
   <h2>1. SM2ARTA Admin Guide</h2>
-  <p>Fetches all pages from <b>guide.smmarta.com</b> and extracts text content. Requires the site's password hash.</p>
-  <input type="password" id="pw-hash" placeholder="Password hash (the part after #pwh=)" value="1abe8f5aca6045c7844a07b0e09fb57039cb2c5923de729dfce9d07f28624971">
+  <p>Fetches all pages from <b>guide.smmarta.com</b> and extracts text content.</p>
+  <input type="password" id="pw-hash" placeholder="Guide password hash" value="1abe8f5aca6045c7844a07b0e09fb57039cb2c5923de729dfce9d07f28624971">
   <button onclick="buildSM2ARTA()">Extract SM2ARTA Guide</button>
   <div class="progress"><div class="progress-bar" id="pb-sm"></div></div>
   <div class="status" id="st-sm">Not started</div>
@@ -54,18 +54,33 @@ input[type=password]:focus{border-color:var(--pri)}
 
 <div class="card">
   <h2>2. Team Guides (ml3000 guides section)</h2>
-  <p>Auto-discovers available guides on the server, then extracts them: Supply Chain Presentation, Bob's Survival Guide, Work Instructions, VLM guides, damage reporting, CAN info sheet, inventory/transactions/roomdata guides, pocket cards. Missing files are silently skipped.</p>
+  <p>Auto-discovers available guides on the server: Supply Chain Presentation, Bob's Survival Guide, Work Instructions, VLM guides, damage reporting, CAN info sheet, inventory/transactions/roomdata guides, pocket cards.</p>
   <button onclick="buildGuides()">Extract Team Guides</button>
   <div class="progress"><div class="progress-bar" id="pb-gd"></div></div>
   <div class="status" id="st-gd">Not started</div>
 </div>
 
 <div class="card">
-  <h2>3. Upload to Supabase</h2>
-  <p>Combines all extracted chunks and uploads to Supabase as <code>mem-refs</code>. Bob will use this automatically.</p>
+  <h2>3. Upload Extracted Refs to Supabase</h2>
+  <p>Combines extracted chunks from above and uploads to Supabase as <code>refs</code>. Runs a merge-before-save so it won't wipe out other sources.</p>
   <button onclick="uploadRefs()" id="upload-btn" disabled>Upload to Supabase</button>
   <button class="secondary" onclick="downloadRefs()" id="download-btn" disabled>Download JSON</button>
   <div class="status" id="st-up">Waiting for extraction...</div>
+</div>
+
+<div class="card" style="border:2px solid var(--pri);background:linear-gradient(135deg,#FBF7FF,var(--sf))">
+  <h2 style="color:var(--pri)">🎓 Manual Knowledge — Teach Bob</h2>
+  <p>Paste or upload any text: procedures, emails, policy docs, notes. Each entry is stored separately under <code>refs-manual</code> and merges safely with existing entries (no overwrites).</p>
+  <input type="text" id="teach-title" placeholder="Title (e.g. 'Customs clearance checklist')" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;font-weight:600;margin-bottom:8px;outline:none;font-family:inherit" onfocus="this.style.borderColor='var(--pri)'" onblur="this.style.borderColor='var(--bd)'">
+  <textarea id="teach-body" placeholder="Paste content — procedures, email threads, notes, copied text..." style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-family:inherit;outline:none;min-height:140px;line-height:1.5;resize:vertical;margin-bottom:8px" onfocus="this.style.borderColor='var(--pri)'" onblur="this.style.borderColor='var(--bd)'"></textarea>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+    <input type="file" id="teach-file" accept=".txt,.md,.html,.csv" style="display:none" onchange="_teachFileSelected(event)">
+    <button class="secondary" onclick="document.getElementById('teach-file').click()">📄 Upload file</button>
+    <button onclick="_teachSave()">Save to Bob</button>
+    <div id="teach-status" style="font-size:11px;color:var(--tt);margin-left:auto"></div>
+  </div>
+  <div style="font-size:10px;font-weight:800;color:var(--tt);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Saved manual entries · <span id="teach-count">0</span></div>
+  <div id="teach-list" style="max-height:400px;overflow-y:auto"></div>
 </div>
 
 <div class="log" id="log">Ready.\n</div>
@@ -484,6 +499,155 @@ function downloadRefs(){
   a.href=url;a.download='bob-refs.json';a.click();
   URL.revokeObjectURL(url);
 }
+
+// ── TEACH BOB (manual knowledge) ──
+let MANUAL_REFS=[];
+
+function _relTime(ts){
+  const diff=Date.now()-ts;const m=Math.floor(diff/60000);
+  if(m<1)return'just now';if(m<60)return m+'m ago';
+  const h=Math.floor(m/60);if(h<24)return h+'h ago';
+  const d=Math.floor(h/24);if(d<7)return d+'d ago';
+  return new Date(ts).toLocaleDateString();
+}
+
+async function _loadManualRefs(){
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs-manual&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(r.ok){
+      const d=await r.json();
+      if(d.length&&d[0].value){
+        let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+        if(Array.isArray(v))MANUAL_REFS=v;
+      }
+    }
+  }catch(e){}
+  _renderTeachList();
+}
+
+async function _saveManualRefs(){
+  // Merge-before-save: re-fetch and merge by id + timestamp
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs-manual&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(r.ok){
+      const d=await r.json();
+      if(d.length&&d[0].value){
+        let remote=d[0].value;while(typeof remote==='string'){try{remote=JSON.parse(remote)}catch(e){break}}
+        if(Array.isArray(remote)){
+          const map=new Map();
+          for(const rr of remote)map.set(rr.id,rr);
+          for(const rr of MANUAL_REFS){
+            const ex=map.get(rr.id);
+            if(!ex||(rr._ts||0)>(ex._ts||0))map.set(rr.id,rr);
+          }
+          MANUAL_REFS=[...map.values()].filter(rr=>!rr._deleted);
+        }
+      }
+    }
+  }catch(e){}
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+  await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+    body:JSON.stringify({id:'refs-manual',value:JSON.stringify(MANUAL_REFS)})});
+}
+
+function _renderTeachList(){
+  const el=document.getElementById('teach-list');
+  const items=MANUAL_REFS.filter(r=>!r._deleted);
+  document.getElementById('teach-count').textContent=items.length;
+  if(!items.length){
+    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--tt)"><div style="font-size:32px;margin-bottom:6px">📚</div><div style="font-size:11px">No manual entries yet</div></div>';
+    return;
+  }
+  items.sort((a,b)=>(b._ts||0)-(a._ts||0));
+  el.innerHTML=items.map(r=>{
+    const safeHead=String(r.heading||'Untitled').replace(/</g,'&lt;');
+    const safeBody=String(r.text||'').slice(0,200).replace(/</g,'&lt;');
+    const idSafe=r.id.replace(/'/g,"&#39;");
+    return`<div style="background:var(--sf);border:1.5px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--pri)'" onmouseout="this.style.borderColor='var(--bd)'" onclick="_teachEdit('${idSafe}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
+        <div style="font-weight:700;font-size:12px;color:var(--tp);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeHead}</div>
+        <button onclick="event.stopPropagation();_teachDelete('${idSafe}')" style="background:none;border:none;cursor:pointer;color:var(--tt);font-size:14px;padding:0 4px" title="Delete">&times;</button>
+      </div>
+      <div style="font-size:10px;color:var(--ts);line-height:1.4;max-height:28px;overflow:hidden">${safeBody}${(r.text||'').length>200?'…':''}</div>
+      <div style="font-size:9px;color:var(--tt);margin-top:3px;font-family:'IBM Plex Mono',monospace">${(r.text||'').length} chars · ${_relTime(r._ts||0)}</div>
+    </div>`;
+  }).join('');
+}
+
+async function _teachSave(){
+  const title=document.getElementById('teach-title').value.trim();
+  const body=document.getElementById('teach-body').value.trim();
+  if(!title||!body){
+    const st=document.getElementById('teach-status');
+    st.textContent='⚠ Title and content required';st.style.color='var(--rd)';
+    return;
+  }
+  const st=document.getElementById('teach-status');
+  st.textContent='Saving...';st.style.color='var(--tt)';
+  const existingId=document.getElementById('teach-title').dataset.editId;
+  if(existingId){
+    const e=MANUAL_REFS.find(r=>r.id===existingId);
+    if(e){e.heading=title;e.text=body;e._ts=Date.now();e.source='Manual'}
+    delete document.getElementById('teach-title').dataset.editId;
+  }else{
+    MANUAL_REFS.push({
+      id:'m'+Date.now()+'-'+Math.random().toString(36).slice(2,7),
+      source:'Manual',heading:title,text:body,_ts:Date.now()
+    });
+  }
+  await _saveManualRefs();
+  document.getElementById('teach-title').value='';
+  document.getElementById('teach-body').value='';
+  st.style.color='var(--gn)';st.textContent='✓ Saved — Bob will use this immediately';
+  setTimeout(()=>{st.textContent=''},2500);
+  _renderTeachList();
+}
+
+function _teachEdit(id){
+  const r=MANUAL_REFS.find(x=>x.id===id);if(!r)return;
+  document.getElementById('teach-title').value=r.heading||'';
+  document.getElementById('teach-body').value=r.text||'';
+  document.getElementById('teach-title').dataset.editId=id;
+  document.getElementById('teach-title').scrollIntoView({behavior:'smooth'});
+  document.getElementById('teach-title').focus();
+}
+
+async function _teachDelete(id){
+  const r=MANUAL_REFS.find(x=>x.id===id);if(!r)return;
+  if(!confirm('Delete "'+(r.heading||'Untitled')+'"?'))return;
+  r._deleted=true;r._ts=Date.now();
+  await _saveManualRefs();
+  MANUAL_REFS=MANUAL_REFS.filter(x=>!x._deleted);
+  _renderTeachList();
+}
+
+function _teachFileSelected(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    let text=e.target.result;
+    if(f.name.endsWith('.html')){
+      const doc=new DOMParser().parseFromString(text,'text/html');
+      doc.querySelectorAll('script,style').forEach(el=>el.remove());
+      text=(doc.body?.textContent||'').replace(/\s+/g,' ').trim();
+    }
+    document.getElementById('teach-body').value=text.slice(0,50000);
+    if(!document.getElementById('teach-title').value)document.getElementById('teach-title').value=f.name.replace(/\.[^.]+$/,'');
+  };
+  reader.readAsText(f);
+  ev.target.value='';
+}
+
+// Load manual refs when app unlocked
+setTimeout(()=>{
+  if(document.getElementById('app-content').style.display==='block')_loadManualRefs();
+},600);
+// Also reload on unlock
+const _origUnlock=window._unlock;
+window._unlock=function(){
+  _origUnlock();
+  if(document.getElementById('app-content').style.display==='block')_loadManualRefs();
+};
 </script>
 </body>
 </html>
