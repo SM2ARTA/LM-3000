@@ -14507,6 +14507,7 @@ let _fcLegMap={};// fingerprint → 2 (2-leg truck) — absent = 1 leg
 let _fcLeg2Lsr={};// fingerprint → LSR string for leg 2
 let _fcLeg2Date={};// fingerprint → date string for leg 2 dispatch (default: bump-in)
 let _fcSearchText='';
+let _fcShowPast=false;
 let _fcHandshakes={};// fingerprint → {token, dest, truckId, disp, plt, skus, lsr, oor, contact:{name,email}, sentAt, status:'pending'|'confirmed'|'reschedule', proposedDate, note, respondedAt, locked}
 async function _fcLoadHandshakes(){
   if(!SB)return;
@@ -14734,15 +14735,21 @@ function LM_renderForecast(el){
   const byWeek={};for(const r of allWithLegs){const wk=_weekOf(r.disp);if(!byWeek[wk])byWeek[wk]=[];byWeek[wk].push(r)}
   const weeks=Object.keys(byWeek).sort();
   const _today=new Date().toISOString().slice(0,10);
-  let _wkIdx=0;
-  for(const wk of weeks){
+  // Skip past weeks entirely unless toggle is on (big perf win for hundreds of trucks)
+  const _pastWeeks=weeks.filter(w=>_weekEnd(w)<_today);
+  const _visWeeks=_fcShowPast?weeks:weeks.filter(w=>_weekEnd(w)>=_today);
+  if(_pastWeeks.length){
+    h+=`<div style="margin-bottom:10px;padding:6px 10px;background:#F4F5F7;border:1px solid var(--bd);border-radius:6px;display:flex;align-items:center;gap:8px;font-size:11px">
+      <span style="color:var(--tt)">${_pastWeeks.length} past week${_pastWeeks.length>1?'s':''} hidden</span>
+      <button class="rbtn" onclick="_fcShowPast=${!_fcShowPast};LM_renderForecast(document.getElementById('mn'))" style="font-size:10px;padding:2px 10px">${_fcShowPast?'Hide past':'Show past'}</button>
+    </div>`;
+  }
+  for(const wk of _visWeeks){
     const rows=byWeek[wk];
     const wP=rows.reduce((s,r)=>s+r.plt,0),wFn=rows.reduce((s,r)=>s+r.fnKits,0),wOs=rows.reduce((s,r)=>s+r.osKits,0),wAsm=rows.reduce((s,r)=>s+(r.asmCount||0),0),wLate=rows.reduce((s,r)=>s+(r.lateCount||0),0);
     const _isPast=_weekEnd(wk)<_today;
-    const _wid='fcwk-'+(_wkIdx++);
     h+=`<div style="margin-bottom:12px">
-    <div onclick="const b=document.getElementById('${_wid}');b.style.display=b.style.display==='none'?'':'none';this.querySelector('.fc-toggle').textContent=b.style.display==='none'?'▶':'▼'" style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${_isPast?'#F4F5F7':'var(--bg)'};border-radius:6px;font-size:11px;font-weight:700;color:${_isPast?'var(--tt)':'var(--tp)'};border:1px solid var(--bd);cursor:pointer;user-select:none">
-      <span class="fc-toggle" style="font-size:9px;color:var(--tt)">${_isPast?'▶':'▼'}</span>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${_isPast?'#F4F5F7':'var(--bg)'};border-radius:6px;font-size:11px;font-weight:700;color:${_isPast?'var(--tt)':'var(--tp)'};border:1px solid var(--bd)">
       <span>📅 ${_fmtWk(wk)} — ${_fmtWk(_weekEnd(wk))}${_isPast?' (past)':''}</span>
       <span class="bg bgs bg-bl" style="font-weight:600">${rows.length} trucks</span>
       <span class="bg bgs bg-gy">${Math.round(wP*10)/10} plt</span>
@@ -14751,7 +14758,7 @@ function LM_renderForecast(el){
       ${wAsm?'<span class="bg bgs bg-pu">🔧 '+wAsm+' asm</span>':''}
       ${wLate?'<span class="bg bgs bg-rd">⚠ '+wLate+' late</span>':''}
     </div>
-    <div id="${_wid}" style="display:${_isPast?'none':''}">
+    <div>
     <table class="dtb" style="margin-top:4px"><thead><tr><th>Dispatch From</th><th>Destination</th><th>Truck</th><th>Legs</th><th>OOR</th><th>LSR</th><th style="text-align:center">Handshake</th><th>Dispatch</th><th>Transit</th><th>Est. Arrival</th><th>1st Bump-in</th><th style="text-align:center">Buffer</th><th style="text-align:right">Pallets</th><th style="text-align:center">FF&E</th><th style="text-align:center">STP</th><th style="text-align:center">Assembly</th><th style="text-align:right">Cargo</th><th style="text-align:center">FA</th><th style="text-align:center">Late</th><th>Lead</th><th>Co-Pilot</th></tr></thead><tbody>`;
     for(const r of rows){
       const bufColor=r.buffer!=null?(r.buffer>=7?'var(--gn)':r.buffer>=3?'var(--or)':'var(--rd)'):'var(--tt)';
