@@ -1166,11 +1166,17 @@ function autoFormat(raw){
     if(/^\d+[\.\)]\s/.test(line)){
       const items=[];
       let j=i;
+      // Capture the first number so the list continues correctly if it
+      // was interrupted by a callout earlier (e.g. 1. ... Note: ... 2. 3.)
+      const firstMatch=lines[j].trim().match(/^(\d+)[\.\)]\s/);
+      const startNum=firstMatch?parseInt(firstMatch[1]):1;
       while(j<lines.length&&/^\d+[\.\)]\s/.test(lines[j].trim())){
         items.push(lines[j].trim().replace(/^\d+[\.\)]\s*/,''));
         j++;
       }
-      out.push('<ol>'+items.map(it=>`<li>${_inlineFmt(it)}</li>`).join('')+'</ol>');
+      // counter-reset sets the counter BEFORE any increment, so use startNum-1
+      const olTag=startNum>1?`<ol start="${startNum}" style="counter-reset:steps ${startNum-1}">`:'<ol>';
+      out.push(olTag+items.map(it=>`<li>${_inlineFmt(it)}</li>`).join('')+'</ol>');
       i=j;continue;
     }
 
@@ -1198,7 +1204,17 @@ function autoFormat(raw){
     i++;
   }
 
-  return out.join('<br>');
+  // Only add <br> between inline (non-block) outputs. Block elements (ol, ul, div, table)
+  // already have their own spacing via CSS margin — extra <br> creates ugly gaps.
+  const isBlock=s=>/^<(ol|ul|div|table)\b/.test(s);
+  let out2='';
+  for(let k=0;k<out.length;k++){
+    const cur=out[k];
+    const prev=k>0?out[k-1]:null;
+    if(k>0&&!(isBlock(cur)||isBlock(prev)))out2+='<br>';
+    out2+=cur;
+  }
+  return out2;
 }
 
 // Inline formatting: *bold*, `code`, _italic_
