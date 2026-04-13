@@ -76,6 +76,7 @@ input[type=password]:focus{border-color:var(--pri)}
   <button onclick="uploadRefs()" id="upload-btn" disabled>Upload to Supabase</button>
   <button class="secondary" onclick="downloadRefs()" id="download-btn" disabled>Download JSON</button>
   <div class="status" id="st-up">Waiting for extraction...</div>
+  <div id="current-refs" style="margin-top:10px;font-size:11px;color:var(--ts);background:var(--bg);padding:8px 10px;border-radius:6px"></div>
 </div>
 
 <div class="card" style="border:2px solid var(--pri);background:linear-gradient(135deg,#FBF7FF,var(--sf))">
@@ -541,6 +542,7 @@ async function uploadRefs(){
     log('✓ Uploaded!','ok');
     const sourceList=[...new Set(merged.map(c=>c.source))];
     st.innerHTML=`<span class="ok">✓ Uploaded</span> — ${merged.length} total chunks. Sources: ${sourceList.map(s=>`<span class="chip">${s}</span>`).join('')}`;
+    _showCurrentRefs(); // refresh the persistent status display
   }catch(e){
     log('Upload failed: '+e.message,'err');
     st.innerHTML=`<span class="err">Upload failed:</span> ${e.message}`;
@@ -750,15 +752,35 @@ function _teachFileSelected(ev){
   ev.target.value='';
 }
 
-// Load manual refs + extra guides when app unlocked
+// Show what's currently in Supabase under 'refs'
+async function _showCurrentRefs(){
+  const el=document.getElementById('current-refs');
+  el.textContent='Checking what\'s in Supabase...';
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(!r.ok){el.textContent='No refs found in Supabase yet';return}
+    const d=await r.json();
+    if(!d.length||!d[0].value){el.innerHTML='<span style="color:var(--tt);font-style:italic">No refs in Supabase yet — extract above and upload</span>';return}
+    let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+    if(!Array.isArray(v)||!v.length){el.innerHTML='<span style="color:var(--tt);font-style:italic">Refs row exists but is empty</span>';return}
+    const sources={};
+    for(const c of v)sources[c.source]=(sources[c.source]||0)+1;
+    const total=v.length;
+    const sourceList=Object.entries(sources).sort((a,b)=>b[1]-a[1])
+      .map(([s,n])=>`<span class="chip">${s}: ${n}</span>`).join('');
+    el.innerHTML=`<b style="color:var(--gn)">✓ Currently in Supabase:</b> ${total} chunks ${sourceList}`;
+  }catch(e){el.textContent='Error checking Supabase: '+e.message}
+}
+
+// Load manual refs + extra guides + current Supabase status when app unlocked
 setTimeout(()=>{
-  if(document.getElementById('app-content').style.display==='block'){_loadManualRefs();_loadExtraGuides()}
+  if(document.getElementById('app-content').style.display==='block'){_loadManualRefs();_loadExtraGuides();_showCurrentRefs()}
 },600);
 // Also reload on unlock
 const _origUnlock=window._unlock;
 window._unlock=function(){
   _origUnlock();
-  if(document.getElementById('app-content').style.display==='block'){_loadManualRefs();_loadExtraGuides()}
+  if(document.getElementById('app-content').style.display==='block'){_loadManualRefs();_loadExtraGuides();_showCurrentRefs()}
 };
 </script>
 </body>
