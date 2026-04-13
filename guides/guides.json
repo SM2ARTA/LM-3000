@@ -1,0 +1,14 @@
+{
+  "guides": [
+    {"file":"supply-chain-overview.html","title":"Supply Chain Presentation","pageSelector":".S"},
+    {"file":"bobs-survival-guide.html","title":"Bob's Survival Guide","pageSelector":".P"},
+    {"file":"work-instructions.html","title":"Work Instructions","pageSelector":".S"},
+    {"file":"can-info-sheet.html","title":"CAN Info Sheet"},
+    {"file":"damage-report-guide.html","title":"Damage Report Guide"},
+    {"file":"view-transactions-guide.html","title":"View Transactions Guide"},
+    {"file":"view-inventory-guide.html","title":"View Inventory Guide"},
+    {"file":"export-roomdata-guide.html","title":"Export Room Data Guide"},
+    {"file":"vlm-sm2arta-guide.html","title":"VLM SM2ARTA Guide"},
+    {"file":"vlm-pocket-card.html","title":"VLM Pocket Card"}
+  ]
+}

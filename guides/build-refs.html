@@ -54,10 +54,20 @@ input[type=password]:focus{border-color:var(--pri)}
 
 <div class="card">
   <h2>2. Team Guides (ml3000 guides section)</h2>
-  <p>Auto-discovers available guides on the server: Supply Chain Presentation, Bob's Survival Guide, Work Instructions, VLM guides, damage reporting, CAN info sheet, inventory/transactions/roomdata guides, pocket cards.</p>
+  <p>Loads list from <code>guides/guides.json</code> + user-added guides below. Missing files are skipped.</p>
   <button onclick="buildGuides()">Extract Team Guides</button>
   <div class="progress"><div class="progress-bar" id="pb-gd"></div></div>
   <div class="status" id="st-gd">Not started</div>
+  <div style="border-top:1px solid var(--bd);margin-top:14px;padding-top:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Add extra guide file</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <input type="text" id="gx-file" placeholder="filename.html" style="flex:1;min-width:160px;padding:7px 10px;border:1.5px solid var(--bd);border-radius:6px;font-size:11px;font-family:inherit;outline:none">
+      <input type="text" id="gx-title" placeholder="Nice title" style="flex:1;min-width:140px;padding:7px 10px;border:1.5px solid var(--bd);border-radius:6px;font-size:11px;font-family:inherit;outline:none">
+      <input type="text" id="gx-selector" placeholder=".S or .P (optional)" style="width:120px;padding:7px 10px;border:1.5px solid var(--bd);border-radius:6px;font-size:11px;font-family:var(--fm);outline:none">
+      <button onclick="_addExtraGuide()" style="padding:7px 14px;font-size:11px">Add</button>
+    </div>
+    <div id="gx-list" style="font-size:11px"></div>
+  </div>
 </div>
 
 <div class="card">
@@ -269,7 +279,9 @@ const SM2ARTA_PAGES=[
 
 // ── TEAM GUIDES ──
 // Known guide files + pretty names + page selectors for multi-page ones
-const TEAM_GUIDE_META={
+// Known guide list — loaded dynamically from guides.json + user-added from Supabase.
+// Fallback hardcoded list used only if guides.json is unavailable.
+const FALLBACK_GUIDE_META={
   'supply-chain-overview.html':{title:"Supply Chain Presentation",pageSelector:'.S'},
   'bobs-survival-guide.html':{title:"Bob's Survival Guide",pageSelector:'.P'},
   'work-instructions.html':{title:"Work Instructions",pageSelector:'.S'},
@@ -279,9 +291,49 @@ const TEAM_GUIDE_META={
   'view-inventory-guide.html':{title:"View Inventory Guide"},
   'export-roomdata-guide.html':{title:"Export Room Data Guide"},
   'vlm-sm2arta-guide.html':{title:"VLM SM2ARTA Guide"},
-  'vlm-pocket-card.html':{title:"VLM Pocket Card"},
-  'vlm-pocket-card-print.html':{title:"VLM Pocket Card (Print)"}
+  'vlm-pocket-card.html':{title:"VLM Pocket Card"}
 };
+
+// Load the canonical list from guides.json (editable without code changes)
+async function _loadGuideList(){
+  const merged={};
+  // Try guides.json
+  try{
+    for(const p of ['guides.json','./guides.json','/guides/guides.json']){
+      try{
+        const r=await fetch(p);
+        if(r.ok){
+          const d=await r.json();
+          if(d.guides&&Array.isArray(d.guides)){
+            for(const g of d.guides)merged[g.file]={title:g.title,pageSelector:g.pageSelector};
+            log(`Loaded ${d.guides.length} guides from ${p}`);
+            break;
+          }
+        }
+      }catch(e){}
+    }
+  }catch(e){}
+  // If guides.json failed, use fallback
+  if(!Object.keys(merged).length){
+    log('guides.json not found, using fallback list','err');
+    Object.assign(merged,FALLBACK_GUIDE_META);
+  }
+  // Also load user-added extra guides from Supabase
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs-guides-list&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(r.ok){
+      const d=await r.json();
+      if(d.length&&d[0].value){
+        let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+        if(Array.isArray(v)){
+          for(const g of v)merged[g.file]={title:g.title,pageSelector:g.pageSelector,_userAdded:true};
+          log(`Loaded ${v.length} user-added guides from Supabase`);
+        }
+      }
+    }
+  }catch(e){}
+  return merged;
+}
 
 // Try multiple paths for each guide individually — no pre-discovery needed.
 // Some servers return 200 for missing files (SPA fallback), so we also check
@@ -310,12 +362,14 @@ async function _fetchGuide(file){
 
 async function buildGuides(){
   log('=== Team Guides extraction ===','ok');
-  const total=Object.keys(TEAM_GUIDE_META).length;
+  setProgress('gd',2,'Loading guide list...');
+  const GUIDE_LIST=await _loadGuideList();
+  const total=Object.keys(GUIDE_LIST).length;
   setProgress('gd',5,`Trying ${total} guides...`);
   const gdChunks=[];
   const foundGuides=[];
   let tested=0;
-  for(const[file,meta]of Object.entries(TEAM_GUIDE_META)){
+  for(const[file,meta]of Object.entries(GUIDE_LIST)){
     tested++;
     setProgress('gd',Math.round(tested/total*50),`Testing ${tested}/${total}: ${file}`);
     const fetched=await _fetchGuide(file);
@@ -492,6 +546,63 @@ function downloadRefs(){
   URL.revokeObjectURL(url);
 }
 
+// ── EXTRA GUIDES (user-added, stored in Supabase) ──
+let EXTRA_GUIDES=[];
+
+async function _loadExtraGuides(){
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs-guides-list&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(r.ok){
+      const d=await r.json();
+      if(d.length&&d[0].value){
+        let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+        if(Array.isArray(v))EXTRA_GUIDES=v;
+      }
+    }
+  }catch(e){}
+  _renderExtraGuides();
+}
+
+async function _saveExtraGuides(){
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+  await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+    body:JSON.stringify({id:'refs-guides-list',value:JSON.stringify(EXTRA_GUIDES)})});
+}
+
+function _addExtraGuide(){
+  const file=document.getElementById('gx-file').value.trim();
+  const title=document.getElementById('gx-title').value.trim();
+  const pageSelector=document.getElementById('gx-selector').value.trim()||undefined;
+  if(!file||!title){alert('Filename and title required');return}
+  EXTRA_GUIDES.push({file,title,pageSelector});
+  _saveExtraGuides();
+  document.getElementById('gx-file').value='';
+  document.getElementById('gx-title').value='';
+  document.getElementById('gx-selector').value='';
+  _renderExtraGuides();
+}
+
+function _removeExtraGuide(i){
+  if(!confirm('Remove "'+EXTRA_GUIDES[i].title+'"?'))return;
+  EXTRA_GUIDES.splice(i,1);
+  _saveExtraGuides();
+  _renderExtraGuides();
+}
+
+function _renderExtraGuides(){
+  const el=document.getElementById('gx-list');
+  if(!el)return;
+  if(!EXTRA_GUIDES.length){el.innerHTML='<div style="color:var(--tt);font-style:italic;font-size:10px">No extra guides added</div>';return}
+  el.innerHTML=EXTRA_GUIDES.map((g,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px">
+      <code style="font-size:10px;color:var(--ts)">${g.file}</code>
+      <span style="flex:1;font-weight:600;font-size:11px">${g.title}</span>
+      ${g.pageSelector?`<code style="font-size:9px;color:var(--tt)">${g.pageSelector}</code>`:''}
+      <button onclick="_removeExtraGuide(${i})" style="background:none;border:none;cursor:pointer;color:var(--tt);font-size:14px;padding:0 4px">&times;</button>
+    </div>
+  `).join('');
+}
+
 // ── TEACH BOB (manual knowledge) ──
 let MANUAL_REFS=[];
 
@@ -630,15 +741,15 @@ function _teachFileSelected(ev){
   ev.target.value='';
 }
 
-// Load manual refs when app unlocked
+// Load manual refs + extra guides when app unlocked
 setTimeout(()=>{
-  if(document.getElementById('app-content').style.display==='block')_loadManualRefs();
+  if(document.getElementById('app-content').style.display==='block'){_loadManualRefs();_loadExtraGuides()}
 },600);
 // Also reload on unlock
 const _origUnlock=window._unlock;
 window._unlock=function(){
   _origUnlock();
-  if(document.getElementById('app-content').style.display==='block')_loadManualRefs();
+  if(document.getElementById('app-content').style.display==='block'){_loadManualRefs();_loadExtraGuides()}
 };
 </script>
 </body>
