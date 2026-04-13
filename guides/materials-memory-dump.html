@@ -811,15 +811,16 @@ function renderTags(){
   const el=document.getElementById('tags');
   const titles=_getTitleCounts();
   if(!titles.length){el.innerHTML='';return}
-  // Only show titles that appear more than once, or all if few unique titles
-  const multi=titles.filter(t=>t[1]>1);
-  const show=multi.length?multi:titles.slice(0,12);
+  // Show all unique titles (limit 20 — sorted by count desc, then alpha)
+  const show=titles.slice(0,20);
   let h='<span class="tags-label">Topics:</span>';
   h+=`<span class="tag-chip${activeTag===null?' on':''}" onclick="setTag(null)">All</span>`;
   for(let ti=0;ti<show.length;ti++){
     const[title,count]=show[ti];
     const on=activeTag===title;
-    h+=`<span class="tag-chip${on?' on':''}" data-ti="${ti}" onclick="setTag(_tagTitles[${ti}])">${esc(title)}<span class="tag-count">${count}</span></span>`;
+    // Only show count if >1
+    const countBadge=count>1?`<span class="tag-count">${count}</span>`:'';
+    h+=`<span class="tag-chip${on?' on':''}" data-ti="${ti}" onclick="setTag(_tagTitles[${ti}])">${esc(title)}${countBadge}</span>`;
   }
   window._tagTitles=show.map(s=>s[0]);
   el.innerHTML=h;
