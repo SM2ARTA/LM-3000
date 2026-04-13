@@ -182,6 +182,39 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 .cat-lesson .card-cat{background:var(--am-s);color:var(--am)}
 .cat-lesson{border-left:4px solid var(--am)}
 
+/* ── ATTACHMENTS ── */
+.att-drop{border:2px dashed var(--bd);border-radius:10px;padding:12px;text-align:center;font-size:11px;color:var(--tt);cursor:pointer;transition:all .15s;margin-bottom:8px}
+.att-drop:hover,.att-drop.drag{border-color:var(--pri);background:var(--pri-s);color:var(--pri)}
+.att-list{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.att-thumb{position:relative;width:80px;height:80px;border-radius:6px;border:1.5px solid var(--bd);overflow:hidden;background:var(--bg);cursor:pointer;transition:all .15s}
+.att-thumb:hover{border-color:var(--pri);transform:scale(1.05)}
+.att-thumb img{width:100%;height:100%;object-fit:cover}
+.att-thumb .ft{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:28px;color:var(--pri);text-align:center;padding:2px}
+.att-thumb .ft-name{font-size:8px;color:var(--ts);font-weight:600;margin-top:2px;max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-thumb .rm{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:var(--rd);color:#fff;border:none;cursor:pointer;font-size:11px;line-height:18px;padding:0;opacity:0;transition:opacity .15s}
+.att-thumb:hover .rm{opacity:1}
+.view-att{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.view-att .att-thumb{width:100px;height:100px}
+
+/* ── ACTIVITY FEED ── */
+.act-btn{padding:8px 14px;border-radius:8px;border:2px solid var(--bd);background:var(--sf);color:var(--ts);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fd);transition:all .15s;flex-shrink:0;position:relative}
+.act-btn:hover{border-color:var(--pri);color:var(--pri)}
+.act-feed{max-height:60vh;overflow-y:auto;padding:4px 2px}
+.act-item{padding:10px 12px;margin-bottom:6px;border-radius:8px;background:var(--bg);display:flex;gap:10px;align-items:flex-start;animation:fadeSlideUp .3s ease both}
+.act-icon{width:28px;height:28px;border-radius:50%;background:var(--sf);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.act-body{flex:1;min-width:0;font-size:12px;line-height:1.4}
+.act-title{font-weight:700;color:var(--tp)}
+.act-meta{font-size:10px;color:var(--tt);margin-top:2px}
+.act-add .act-icon{background:var(--gn-s);color:var(--gn)}
+.act-edit .act-icon{background:var(--a3-s);color:var(--a3)}
+.act-del .act-icon{background:var(--rd-s);color:var(--rd)}
+
+/* ── IMAGE LIGHTBOX ── */
+.lbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:300;display:none;align-items:center;justify-content:center;cursor:zoom-out}
+.lbox.show{display:flex;animation:backdropIn .2s}
+.lbox img{max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.lbox .lbox-close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:20px;cursor:pointer}
+
 /* ── BOB CHATBOT ── */
 .bob-btn{position:fixed;bottom:24px;right:24px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,var(--pri),#6A1B9A);border:none;cursor:pointer;font-size:28px;box-shadow:0 6px 20px rgba(74,20,140,.35);z-index:90;transition:all .3s cubic-bezier(.34,1.56,.64,1);animation:bobFloat 3s ease-in-out infinite}
 .bob-btn:hover{transform:scale(1.08);box-shadow:0 8px 28px rgba(74,20,140,.5)}
@@ -448,6 +481,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
       <input type="search" id="search" name="q" placeholder="Search by keyword, SKU, scenario..." oninput="filterCards()" autocomplete="off">
     </form>
     <button class="add-btn" style="background:var(--a4-s);color:var(--a4);border-color:var(--a4-b)" onclick="syncNow(this)" title="Pull latest from team">🔄 Sync</button>
+    <button class="add-btn" onclick="showActivity()" style="background:var(--a3-s);color:var(--a3);border-color:var(--a3-b)" title="Recent activity (A)">⚡ Activity</button>
     <button class="add-btn" onclick="showGlossary()" style="background:var(--am-s);color:var(--am);border-color:var(--am-b)" title="Speak like Bob — terminology glossary (G)">🗣 Glossary</button>
     <button class="add-btn" onclick="window.print()" style="background:var(--bg);color:var(--ts);border-color:var(--bd)" title="Print all entries (Ctrl+P)">🖨</button>
     <button class="add-btn" onclick="showAddModal()" title="New entry (N)">+ New Entry</button>
@@ -511,6 +545,27 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
       <button class="m-btn primary" onclick="_glEditSave()">Save</button>
     </div>
   </div>
+</div>
+
+<!-- ═══ ACTIVITY FEED MODAL ═══ -->
+<div class="modal-bg" id="activity-modal">
+  <div class="view-modal" style="width:620px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:36px;margin-bottom:4px">⚡</div>
+        <h2 style="margin:0;font-size:20px;font-weight:900;color:var(--tp)">Recent Activity</h2>
+        <div style="font-size:11px;color:var(--tt);margin-top:4px">Last 50 changes to the memory dump</div>
+      </div>
+      <button type="button" onclick="closeActivity()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--tt);padding:4px;line-height:1">&times;</button>
+    </div>
+    <div class="act-feed" id="activity-feed"></div>
+  </div>
+</div>
+
+<!-- ═══ IMAGE LIGHTBOX ═══ -->
+<div class="lbox" id="lbox" onclick="_closeLbox()">
+  <button class="lbox-close" onclick="_closeLbox()">&times;</button>
+  <img id="lbox-img" src="" alt="">
 </div>
 
 <!-- ═══ VIEW MODAL ═══ -->
@@ -591,6 +646,14 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
         <div id="ai-status" style="font-size:11px;margin-top:6px;padding:6px 10px;border-radius:6px;display:none;font-weight:600"></div>
       </div>
       <textarea id="f-body" rows="16" placeholder="Just dump your notes here — messy is fine! Then hit ✨ AI Enhance or use the syntax from the cheat sheet below."></textarea>
+    </div>
+    <div class="mf">
+      <label>Attachments <span style="font-weight:400;text-transform:none">(images, PDFs — stored inline)</span></label>
+      <div class="att-drop" id="f-att-drop" onclick="document.getElementById('f-att-input').click()">
+        📎 Click to attach files or drag &amp; drop here
+        <input type="file" id="f-att-input" multiple accept="image/*,.pdf" onchange="_onAttSelect(event)" style="display:none">
+      </div>
+      <div class="att-list" id="f-att-list"></div>
     </div>
     <div class="preview-row">
       <div class="mf" style="flex:1;min-width:0">
@@ -1579,6 +1642,7 @@ function showAddModal(){
   document.getElementById('f-cat').value='procedure';
   _selAttention=new Set(['Everyone']);_renderAttChips();
   document.getElementById('f-body').value='';
+  _selAtts=[];_renderAtts();
   document.getElementById('del-btn').style.display='none';
   document.getElementById('modal').classList.add('show');
   setTimeout(()=>document.getElementById('f-title').focus(),100);
@@ -1592,6 +1656,7 @@ function editEntry(id){
   document.getElementById('f-title').value=e.title;
   document.getElementById('f-cat').value=e.cat;
   _selAttention=new Set(e.attention||['All']);_renderAttChips();
+  _selAtts=e.atts?[...e.atts]:[];_renderAtts();
   // Show raw source if available, otherwise the formatted body (for seed/legacy entries)
   document.getElementById('f-body').value=e._raw||e.body;
   document.getElementById('del-btn').style.display='flex';
@@ -1648,7 +1713,19 @@ function viewEntry(id){
       return`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:10px;font-weight:700;background:${c}18;color:${c};border:1px solid ${c}40"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${p}</span>`;
     }).join('')+'</div>';
   }
-  document.getElementById('view-body').innerHTML=attHtml+_injectGlossaryTips(e.body||'<span style="color:var(--tt);font-style:italic">No content</span>');
+  // Attachments
+  let attFilesHtml='';
+  if(e.atts&&e.atts.length){
+    attFilesHtml='<div class="view-att">'+e.atts.map((a,i)=>{
+      const src=a.url||a.data;
+      if(!src)return'';
+      if(a.type&&a.type.startsWith('image/')){
+        return`<div class="att-thumb" onclick="_openLbox('${esc(src)}')"><img src="${esc(src)}" alt="${esc(a.name)}"></div>`;
+      }
+      return`<div class="att-thumb" onclick="window.open('${esc(src)}','_blank')"><div class="ft">📄<div class="ft-name">${esc(a.name)}</div></div></div>`;
+    }).join('')+'</div>';
+  }
+  document.getElementById('view-body').innerHTML=attHtml+_injectGlossaryTips(e.body||'<span style="color:var(--tt);font-style:italic">No content</span>')+attFilesHtml;
   document.getElementById('view-modal').classList.add('show');
 }
 function closeView(){document.getElementById('view-modal').classList.remove('show');_viewId=null}
@@ -1702,13 +1779,19 @@ function saveEntry(){
   const attention=[..._selAttention];
   const rawBody=document.getElementById('f-body').value.trim();
   const body=autoFormat(rawBody);
+  const atts=[..._selAtts];
   const now=Date.now();
   const editId=parseInt(document.getElementById('edit-id').value);
   if(editId){
     const e=ENTRIES.find(x=>x.id===editId);
-    if(e){Object.assign(e,{title,cat,attention,body,_raw:rawBody,_ts:now})}
+    if(e){
+      Object.assign(e,{title,cat,attention,body,_raw:rawBody,atts,_ts:now});
+      _logActivity('edit',title,editId);
+    }
   }else{
-    ENTRIES.push({id:_nextId++,cat,attention,title,body,_raw:rawBody,date:new Date().toISOString().slice(0,10),_ts:now});
+    const newId=_nextId++;
+    ENTRIES.push({id:newId,cat,attention,title,body,_raw:rawBody,atts,date:new Date().toISOString().slice(0,10),_ts:now});
+    _logActivity('add',title,newId);
   }
   saveEntries();
   closeModal();
@@ -1723,7 +1806,7 @@ function deleteEntry(){
   if(!confirm('Delete this entry?'))return;
   // Soft-delete: mark with _deleted + _ts so it propagates via merge
   const e=ENTRIES.find(x=>x.id===editId);
-  if(e){e._deleted=true;e._ts=Date.now()}
+  if(e){e._deleted=true;e._ts=Date.now();_logActivity('del',e.title,editId)}
   // Save full array WITH tombstone to Supabase so other users pick up the delete
   const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
@@ -1989,6 +2072,150 @@ function _injectGlossaryTips(html){
   });
 }
 
+// ── ATTACHMENTS — stored in Supabase Storage bucket 'mem-dump' ──
+let _selAtts=[]; // [{name,type,url,size,_uploading?}]
+const MAX_ATT_SIZE=10*1024*1024; // 10MB per file
+const ATT_BUCKET='mem-dump';
+
+function _renderAtts(){
+  const el=document.getElementById('f-att-list');
+  if(!_selAtts.length){el.innerHTML='';return}
+  el.innerHTML=_selAtts.map((a,i)=>{
+    const busy=a._uploading?'<div class="ft" style="background:rgba(255,255,255,.85)">⏳<div class="ft-name">uploading...</div></div>':'';
+    if(a.type&&a.type.startsWith('image/')&&a.url){
+      return`<div class="att-thumb" onclick="_openLbox('${esc(a.url)}')"><img src="${esc(a.url)}" alt="${esc(a.name)}">${busy}<button class="rm" onclick="event.stopPropagation();_removeAtt(${i})">&times;</button></div>`;
+    }
+    return`<div class="att-thumb" onclick="${a.url?`window.open('${esc(a.url)}','_blank')`:''}"><div class="ft">📄<div class="ft-name">${esc(a.name)}</div></div>${busy}<button class="rm" onclick="event.stopPropagation();_removeAtt(${i})">&times;</button></div>`;
+  }).join('');
+}
+function _removeAtt(i){_selAtts.splice(i,1);_renderAtts()}
+function _onAttSelect(ev){_addAttFiles(ev.target.files);ev.target.value=''}
+
+async function _addAttFiles(files){
+  for(const f of files){
+    if(f.size>MAX_ATT_SIZE){alert(`${f.name} is too large (max 10MB)`);continue}
+    const idx=_selAtts.length;
+    _selAtts.push({name:f.name,type:f.type,size:f.size,_uploading:true});
+    _renderAtts();
+    try{
+      const url=await _uploadToStorage(f);
+      _selAtts[idx]={name:f.name,type:f.type,size:f.size,url};
+    }catch(e){
+      alert('Upload failed for '+f.name+': '+e.message);
+      _selAtts.splice(idx,1);
+    }
+    _renderAtts();
+  }
+}
+
+async function _uploadToStorage(file){
+  // Generate unique filename: timestamp-random-sanitized
+  const ext=file.name.match(/\.[^.]+$/)?.[0]||'';
+  const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,40);
+  const filename=`${Date.now()}-${Math.random().toString(36).slice(2,8)}-${safeName}${!safeName.endsWith(ext)?ext:''}`;
+  const r=await fetch(`${SB_URL}/storage/v1/object/${ATT_BUCKET}/${filename}`,{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},
+    body:file
+  });
+  if(!r.ok){
+    const err=await r.text();
+    throw new Error(`Supabase ${r.status}: ${err.slice(0,120)}`);
+  }
+  // Return public URL
+  return`${SB_URL}/storage/v1/object/public/${ATT_BUCKET}/${filename}`;
+}
+// Drag-drop
+document.addEventListener('DOMContentLoaded',()=>{
+  const drop=document.getElementById('f-att-drop');
+  if(!drop)return;
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag')}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag')}));
+  drop.addEventListener('drop',e=>{e.preventDefault();_addAttFiles(e.dataTransfer.files)});
+});
+// Also attach immediately (DOMContentLoaded may have already fired since we're at end of script)
+setTimeout(()=>{
+  const drop=document.getElementById('f-att-drop');
+  if(!drop||drop._bound)return;drop._bound=true;
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag')}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag')}));
+  drop.addEventListener('drop',e=>{e.preventDefault();_addAttFiles(e.dataTransfer.files)});
+},100);
+
+// Image lightbox
+function _openLbox(src){document.getElementById('lbox-img').src=src;document.getElementById('lbox').classList.add('show')}
+function _closeLbox(){document.getElementById('lbox').classList.remove('show')}
+function _downloadAtt(entryId,idx){
+  const e=ENTRIES.find(x=>x.id===entryId);if(!e||!e.atts||!e.atts[idx])return;
+  const a=e.atts[idx];
+  const link=document.createElement('a');link.href=a.data;link.download=a.name;link.click();
+}
+
+// ── ACTIVITY FEED ──
+// Stored in Supabase under 'mem-activity' as array of {action,title,id,ts}
+let ACTIVITY=[];
+const MAX_ACTIVITY=50;
+
+async function _loadActivity(){
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-activity&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.length||!d[0].value)return;
+    let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+    if(Array.isArray(v))ACTIVITY=v;
+  }catch(e){}
+}
+function _logActivity(action,title,id){
+  ACTIVITY.unshift({action,title,id,ts:Date.now()});
+  if(ACTIVITY.length>MAX_ACTIVITY)ACTIVITY=ACTIVITY.slice(0,MAX_ACTIVITY);
+  // Save to Supabase (fire and forget)
+  const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+  fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+    body:JSON.stringify({id:'mem-activity',value:JSON.stringify(ACTIVITY)})}).catch(()=>{});
+}
+
+function showActivity(){
+  _loadActivity().then(()=>_renderActivity());
+  document.getElementById('activity-modal').classList.add('show');
+}
+function closeActivity(){document.getElementById('activity-modal').classList.remove('show')}
+
+function _renderActivity(){
+  const el=document.getElementById('activity-feed');
+  if(!ACTIVITY.length){
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--tt)"><div style="font-size:36px;margin-bottom:8px">🌊</div><div style="font-size:12px">No activity yet</div></div>';
+    return;
+  }
+  const icons={add:'✨',edit:'✏️',del:'🗑'};
+  const verbs={add:'added',edit:'edited',del:'deleted'};
+  let h='';
+  for(const a of ACTIVITY){
+    const rel=_relTime(a.ts);
+    const canOpen=a.action!=='del'&&ENTRIES.find(x=>x.id===a.id);
+    h+=`<div class="act-item act-${a.action}" ${canOpen?`onclick="closeActivity();viewEntry(${a.id})" style="cursor:pointer"`:''}>
+      <div class="act-icon">${icons[a.action]||'•'}</div>
+      <div class="act-body">
+        <div><span class="act-title">${verbs[a.action]||a.action}</span> &ldquo;${esc(a.title)}&rdquo;</div>
+        <div class="act-meta">${rel}</div>
+      </div>
+    </div>`;
+  }
+  el.innerHTML=h;
+}
+
+function _relTime(ts){
+  const diff=Date.now()-ts;
+  const m=Math.floor(diff/60000);
+  if(m<1)return'just now';
+  if(m<60)return m+'m ago';
+  const h=Math.floor(m/60);
+  if(h<24)return h+'h ago';
+  const d=Math.floor(h/24);
+  if(d<7)return d+'d ago';
+  return new Date(ts).toLocaleDateString();
+}
+
 // ── BOB CHATBOT — retrieval-augmented knowledge assistant ──
 let BOB_HISTORY=[]; // [{role:'user'|'bob',text,cites?:[entryIds]}]
 const BOB_MAX_HISTORY=20;
@@ -2041,7 +2268,8 @@ function _bobRender(){
     return;
   }
   let h='';
-  for(const m of BOB_HISTORY){
+  for(let mi=0;mi<BOB_HISTORY.length;mi++){
+    const m=BOB_HISTORY[mi];
     if(m.role==='user'){
       h+=`<div class="bob-msg user">${esc(m.text)}</div>`;
     }else if(m.role==='thinking'){
@@ -2053,7 +2281,10 @@ function _bobRender(){
         if(!e)return'';
         return`<span class="bob-cite" onclick="bobToggle();viewEntry(${id})">📎 ${esc(e.title)}</span>`;
       }).filter(Boolean).join('');
-      h+=`<div class="bob-msg bob">${bodyHtml}${cites?`<div class="bob-cites">${cites}</div>`:''}</div>`;
+      // Add "Save as entry" button (uses the preceding user message as title hint)
+      const userQ=mi>0?BOB_HISTORY[mi-1]?.text||'':'';
+      const saveBtn=userQ?`<span class="bob-cite" style="background:var(--gn-s);color:var(--gn);margin-top:6px;display:inline-block" onclick="_bobSaveEntry(${mi})">📝 Save as entry</span>`:'';
+      h+=`<div class="bob-msg bob">${bodyHtml}${cites||saveBtn?`<div class="bob-cites">${cites}${saveBtn}</div>`:''}</div>`;
     }
   }
   el.innerHTML=h;
@@ -2072,6 +2303,23 @@ function _bobFormatResponse(text){
 function _bobAsk(text){
   document.getElementById('bob-input').value=text;
   bobSend();
+}
+
+// Save Bob conversation as an entry
+function _bobSaveEntry(msgIdx){
+  const bobMsg=BOB_HISTORY[msgIdx];
+  const userMsg=BOB_HISTORY[msgIdx-1];
+  if(!bobMsg||!userMsg)return;
+  bobToggle();
+  showAddModal();
+  // Pre-fill with Q&A
+  setTimeout(()=>{
+    // Use question as title (trimmed)
+    const title=userMsg.text.length>60?userMsg.text.slice(0,60)+'...':userMsg.text;
+    document.getElementById('f-title').value=title.replace(/\?$/,'');
+    document.getElementById('f-body').value=`Scenario: ${userMsg.text}\n\n${bobMsg.text}`;
+    document.getElementById('f-body').dispatchEvent(new Event('input'));
+  },350);
 }
 
 // Find relevant entries for user's question via keyword scoring
@@ -2221,11 +2469,12 @@ try{const s=sessionStorage.getItem('bob-history');if(s)BOB_HISTORY=JSON.parse(s)
 document.addEventListener('keydown',e=>{
   const inInput=document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'||document.activeElement.tagName==='SELECT';
   const modalOpen=document.querySelector('.modal-bg.show');
-  if(e.key==='Escape'){closeGlossary();closeView();closeModal()}
+  if(e.key==='Escape'){closeGlossary();closeView();closeModal();closeActivity();_closeLbox()}
   if(e.key==='/'&&!modalOpen&&!inInput){e.preventDefault();document.getElementById('search').focus()}
   if(e.key.toLowerCase()==='n'&&!modalOpen&&!inInput){e.preventDefault();showAddModal()}
   if(e.key.toLowerCase()==='g'&&!modalOpen&&!inInput){e.preventDefault();showGlossary()}
   if(e.key.toLowerCase()==='b'&&!modalOpen&&!inInput){e.preventDefault();bobToggle()}
+  if(e.key.toLowerCase()==='a'&&!modalOpen&&!inInput){e.preventDefault();showActivity()}
   if(e.key.toLowerCase()==='p'&&e.ctrlKey){/* let browser print handle it */}
 });
 
