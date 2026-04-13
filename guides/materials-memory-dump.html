@@ -2415,13 +2415,14 @@ function _bobRender(){
       h+=`<div class="bob-msg thinking"><span class="bob-dots"><span></span><span></span><span></span></span></div>`;
     }else{
       const bodyHtml=_bobFormatResponse(m.text);
-      const cites=(m.cites||[]).map(id=>{
+      // Show top 3 entry citations max — keep UI clean
+      const cites=(m.cites||[]).slice(0,3).map(id=>{
         const e=ENTRIES.find(x=>x.id===id);
         if(!e)return'';
         return`<span class="bob-cite" onclick="bobToggle();viewEntry(${id})">📎 ${esc(e.title)}</span>`;
       }).filter(Boolean).join('');
-      // Reference doc citations (SM2ARTA Guide, Presentation)
-      const refCites=(m.refs||[]).map(r=>{
+      // Show top 3 reference doc citations max
+      const refCites=(m.refs||[]).slice(0,3).map(r=>{
         const icon=r.source.includes('Presentation')?'🎞':'📖';
         const urlSafe=(r.url||'').replace(/"/g,'&quot;');
         const hdgSafe=esc(r.heading);
@@ -2470,26 +2471,34 @@ function _bobSaveEntry(msgIdx){
 }
 
 // Find relevant entries for user's question via keyword scoring
-function _bobFindRelevant(query,limit=5){
-  // Include 2+ char words (covers VLM, LM, LP, ML, etc.)
+function _bobFindRelevant(query,limit=3){
   const words=query.toLowerCase().split(/[\s?.,!]+/).filter(w=>w.length>=2);
   if(!words.length)return[];
-  // Stop words to ignore in scoring
-  const stop=new Set(['the','and','for','that','what','how','why','can','do','does','is','are','to','in','of','on','at','it','be','by','an','as','or','if','my','we','us']);
+  // Common verbs/words that appear in many entries — don't reward matches on these alone
+  const stop=new Set(['the','and','for','that','what','how','why','can','do','does','is','are','to','in','of','on','at','it','be','by','an','as','or','if','my','we','us','this','these','with','from','have','has','will','would','should','need','create','add','make','use','get','set','new','all']);
   const meaningful=words.filter(w=>!stop.has(w));
   if(!meaningful.length)return[];
   const scored=ENTRIES.map(e=>{
-    const hay=((e.title||'')+' '+(e._raw||e.body||'')+' '+(e.cat||'')+' '+(e.attention||[]).join(' ')).toLowerCase();
+    const title=(e.title||'').toLowerCase();
+    const body=((e._raw||e.body||'')+' '+(e.cat||'')+' '+(e.attention||[]).join(' ')).toLowerCase();
     let score=0;
+    let matchedWords=0;
     for(const w of meaningful){
       const wordEsc=w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      const titleHit=(e.title||'').toLowerCase().includes(w);
-      const bodyHits=(hay.match(new RegExp(wordEsc,'g'))||[]).length;
-      score+=titleHit?5:0;
-      score+=bodyHits;
+      const titleHit=title.includes(w);
+      const bodyHits=(body.match(new RegExp('\\b'+wordEsc,'g'))||[]).length;
+      const wordMatched=titleHit||bodyHits>0;
+      if(wordMatched)matchedWords++;
+      score+=titleHit?10:0;
+      score+=bodyHits*2;
     }
+    // Require at least 2 meaningful words to match (or 1 if query has only 1 meaningful word)
+    const required=Math.min(2,meaningful.length);
+    if(matchedWords<required)score=0;
+    // Boost short entries that match — they're more likely on-topic
+    if(score>0&&body.length<800)score*=1.3;
     return{e,score};
-  }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  }).filter(x=>x.score>=8).sort((a,b)=>b.score-a.score);
   return scored.slice(0,limit).map(x=>x.e);
 }
 
