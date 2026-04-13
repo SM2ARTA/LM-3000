@@ -14659,6 +14659,8 @@ function LM_renderForecast(el){
   VN.filter(v=>vcIsCAN(v.cluster)).forEach(v=>{const _cl=(v.cluster||'').replace(/^CAN\s*/i,'').split(/\s*\/\s*/)[0].trim();_addTrucks(v.name,PLAN_CACHE[v.name],'CAN',_cl?_cl+' Warehouse':'Canada Warehouse')});
   // MEX trucks
   VN.filter(v=>vcIsMEX(v.cluster)).forEach(v=>{const _cl=(v.cluster||'').replace(/^MEX\s*/i,'').split(/\s*\/\s*/)[0].trim();_addTrucks(v.name,PLAN_CACHE[v.name],'MEX',_cl?_cl+' Warehouse':'Mexico Warehouse')});
+  // Fallback: any venue with its own PLAN_CACHE trucks not yet covered (e.g. non-stadium members of regular USA clusters)
+  VN.forEach(v=>{if(!PLAN_CACHE[v.name])return;const _c=vcIsCAN(v.cluster)?'CAN':(vcIsMEX(v.cluster)?'MEX':'USA');_addTrucks(v.name,PLAN_CACHE[v.name],_c)});
   // CORT deliveries
   const _cortSeen=new Set();
   for(const v in CORT_CACHE){CORT_CACHE[v].forEach(cd=>{
