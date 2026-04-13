@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Build Bob Reference Docs</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--pri:#4A148C;--pri-s:#F3E5F5;--gn:#12804A;--gn-s:#E8F5E9;--rd:#C62A2F;--rd-s:#FFEBEE;--a3:#304FFE;--a3-s:#E8EAF6;--bg:#F5F5FA;--sf:#FFF;--bd:#E0E0E8;--tp:#1A1A2E;--ts:#5A5A7A;--tt:#9A9AB0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--tp);padding:32px;max-width:900px;margin:0 auto}
+h1{font-size:22px;margin-bottom:6px;color:var(--pri)}
+.sub{color:var(--ts);font-size:13px;margin-bottom:24px}
+.card{background:var(--sf);border:1.5px solid var(--bd);border-radius:12px;padding:20px;margin-bottom:16px}
+.card h2{font-size:14px;font-weight:800;color:var(--tp);margin-bottom:8px}
+.card p{font-size:12px;color:var(--ts);line-height:1.6;margin-bottom:12px}
+button{padding:10px 22px;border:none;border-radius:8px;background:var(--pri);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+button:hover{opacity:.85}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.secondary{background:var(--sf);color:var(--ts);border:1.5px solid var(--bd)}
+.log{background:#111;color:#9CE09C;font-family:'IBM Plex Mono',monospace;font-size:11px;padding:14px;border-radius:8px;max-height:400px;overflow-y:auto;white-space:pre-wrap;margin-top:12px;line-height:1.5}
+.progress{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin:10px 0}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--pri),var(--a3));transition:width .3s;width:0%}
+.status{font-size:12px;color:var(--ts);margin-top:6px;font-family:'IBM Plex Mono',monospace}
+.ok{color:var(--gn);font-weight:700}
+.err{color:var(--rd);font-weight:700}
+.chip{display:inline-block;padding:3px 10px;border-radius:12px;background:var(--pri-s);color:var(--pri);font-size:10px;font-weight:700;margin-right:6px;font-family:'IBM Plex Mono',monospace}
+input[type=password]{width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:8px}
+input[type=password]:focus{border-color:var(--pri)}
+</style>
+</head>
+<body>
+
+<h1>🤖 Build Bob's Reference Library</h1>
+<div class="sub">One-time extraction of SM2ARTA Admin Guide + Supply Chain Presentation into Bob's knowledge base.</div>
+
+<div class="card">
+  <h2>1. SM2ARTA Admin Guide</h2>
+  <p>Fetches all pages from <b>guide.smmarta.com</b> and extracts text content. Requires the site's password hash.</p>
+  <input type="password" id="pw-hash" placeholder="Password hash (the part after #pwh=)" value="1abe8f5aca6045c7844a07b0e09fb57039cb2c5923de729dfce9d07f28624971">
+  <button onclick="buildSM2ARTA()">Extract SM2ARTA Guide</button>
+  <div class="progress"><div class="progress-bar" id="pb-sm"></div></div>
+  <div class="status" id="st-sm">Not started</div>
+</div>
+
+<div class="card">
+  <h2>2. Supply Chain Presentation</h2>
+  <p>Extracts text from <code>supply-chain-overview.html</code> slides.</p>
+  <button onclick="buildPresentation()">Extract Presentation</button>
+  <div class="progress"><div class="progress-bar" id="pb-pr"></div></div>
+  <div class="status" id="st-pr">Not started</div>
+</div>
+
+<div class="card">
+  <h2>3. Upload to Supabase</h2>
+  <p>Combines all extracted chunks and uploads to Supabase as <code>mem-refs</code>. Bob will use this automatically.</p>
+  <button onclick="uploadRefs()" id="upload-btn" disabled>Upload to Supabase</button>
+  <button class="secondary" onclick="downloadRefs()" id="download-btn" disabled>Download JSON</button>
+  <div class="status" id="st-up">Waiting for extraction...</div>
+</div>
+
+<div class="log" id="log">Ready.\n</div>
+
+<script>
+const SB_URL='https://stwopndhnxcjyomkufii.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
+const SB_TABLE='shared_state';
+
+let CHUNKS=[]; // all extracted chunks
+
+function log(msg,cls){
+  const el=document.getElementById('log');
+  const span=document.createElement('span');
+  if(cls)span.className=cls;
+  span.textContent=msg+'\n';
+  el.appendChild(span);
+  el.scrollTop=el.scrollHeight;
+}
+
+function setProgress(id,pct,msg){
+  document.getElementById('pb-'+id).style.width=pct+'%';
+  document.getElementById('st-'+id).textContent=msg;
+}
+
+// Strip HTML and clean text content
+function extractText(html){
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  // Remove scripts, styles, nav, footer
+  doc.querySelectorAll('script,style,nav,footer,.hnd-header,.hnd-topic-header,#hnd-topic-navigation,.hnd-search-container,.hnd-navigation,.hnd-toc').forEach(el=>el.remove());
+  // Get page title from <title>
+  const title=doc.querySelector('title')?.textContent?.trim()||'';
+  // Main content: try #hnd-topic, or body
+  const main=doc.querySelector('#hnd-topic, .hnd-topic, main, .content, #content, body');
+  if(!main)return{title,text:''};
+  // Convert to clean text
+  let text='';
+  const walk=(node,depth=0)=>{
+    if(node.nodeType===3){ // text
+      const t=node.textContent.replace(/\s+/g,' ').trim();
+      if(t)text+=t+' ';
+    }else if(node.nodeType===1){
+      const tag=node.tagName.toLowerCase();
+      if(['script','style','nav','button','a'].includes(tag)){
+        if(tag==='a'){for(const c of node.childNodes)walk(c,depth)}
+        return;
+      }
+      // Headings & lists add newlines
+      if(['h1','h2','h3','h4','li','p','tr','div'].includes(tag)&&text&&!text.endsWith('\n'))text+='\n';
+      if(['h1','h2','h3','h4'].includes(tag))text+='\n# ';
+      for(const c of node.childNodes)walk(c,depth+1);
+      if(['h1','h2','h3','h4','p','li','tr'].includes(tag))text+='\n';
+    }
+  };
+  walk(main);
+  // Clean up
+  text=text.replace(/\n{3,}/g,'\n\n').replace(/[ \t]+/g,' ').trim();
+  return{title,text};
+}
+
+// ── SM2ARTA GUIDE ──
+async function buildSM2ARTA(){
+  const pwHash=document.getElementById('pw-hash').value.trim();
+  if(!pwHash){alert('Enter password hash');return}
+
+  setProgress('sm',5,'Fetching page list...');
+  log('=== SM2ARTA Guide extraction ===','ok');
+
+  // Fetch the index page to find all pages
+  let indexHtml;
+  try{
+    const r=await fetch(`https://guide.smmarta.com/?#pwh=${pwHash}`,{credentials:'omit'});
+    indexHtml=await r.text();
+  }catch(e){
+    log('Error fetching index: '+e.message,'err');
+    setProgress('sm',0,'Failed');
+    return;
+  }
+
+  // Look for table of contents / toc.js to find page list
+  // HelpNDoc usually has a toc.js or a common nav structure
+  const pageNames=await getSM2ARTAPages(pwHash);
+  if(!pageNames.length){
+    log('Could not find page list. Using fallback: scraping hardcoded list.','err');
+    setProgress('sm',0,'No pages found');
+    return;
+  }
+  log('Found '+pageNames.length+' pages');
+
+  const smChunks=[];
+  let done=0;
+  for(const name of pageNames){
+    try{
+      const r=await fetch(`https://guide.smmarta.com/${name}?#pwh=${pwHash}`,{credentials:'omit'});
+      if(!r.ok){log('Skip '+name+' ('+r.status+')','err');continue}
+      const html=await r.text();
+      const{title,text}=extractText(html);
+      if(text&&text.length>50){
+        smChunks.push({
+          source:'SM2ARTA Guide',
+          heading:title,
+          url:`https://guide.smmarta.com/${name}#pwh=${pwHash}`,
+          text:text.slice(0,3000) // cap at 3000 chars per chunk
+        });
+      }
+    }catch(e){log('Error: '+name+' — '+e.message,'err')}
+    done++;
+    setProgress('sm',Math.round(done/pageNames.length*100),`${done}/${pageNames.length} pages`);
+  }
+  CHUNKS=CHUNKS.filter(c=>c.source!=='SM2ARTA Guide').concat(smChunks);
+  log(`Extracted ${smChunks.length} chunks from SM2ARTA Guide`,'ok');
+  setProgress('sm',100,`✓ ${smChunks.length} chunks extracted`);
+  _updateUploadBtn();
+}
+
+async function getSM2ARTAPages(pwHash){
+  // Try common HelpNDoc index files
+  for(const idx of ['toc.js','index.html','default.html','content/toc.json']){
+    try{
+      const r=await fetch(`https://guide.smmarta.com/${idx}?#pwh=${pwHash}`,{credentials:'omit'});
+      if(!r.ok)continue;
+      const txt=await r.text();
+      // Extract href-like patterns from the content
+      const hrefMatches=[...txt.matchAll(/["'](\w+\.html)["']/g)].map(m=>m[1]);
+      if(hrefMatches.length>20){
+        log('Found page list via '+idx);
+        return[...new Set(hrefMatches)].filter(n=>!n.match(/^(index|default|search|about-blank|vendor)/i));
+      }
+    }catch(e){}
+  }
+  // Fallback: hardcoded list from the known file structure
+  log('Using hardcoded page list fallback','err');
+  return SM2ARTA_PAGES;
+}
+
+// Hardcoded fallback — extracted from the repo file list
+const SM2ARTA_PAGES=[
+  'AboutSM2ARTA.html','ActivateUser.html','ActivatingUser.html','AddMaterialstoCatalogue.html',
+  'ArchivingEvent.html','AssetTracking.html','AssetTrackingFunctionality.html','BackupPolicy.html',
+  'BlockPlanning.html','ByVenues.html','Catalogues.html','Categories.html','ChangeManagement.html',
+  'ChangeManagementReport.html','ChangeManagementWorkflow.html','ChangeRequestReview.html',
+  'Clusters.html','ClustersOverview.html','ComponentsOverview.html','ConfigureEvent.html',
+  'CreateCatalogue.html','CreateCategory.html','CreateCluster.html','CreateEvent.html',
+  'CreateLogicalSpace.html','CreateMaterial.html','CreateMaterialsCategory.html',
+  'CreateMaterialsSubcategory.html','CreatePhysicalSpace.html','CreateProject.html','CreateSource.html',
+  'CreateSpacesCategory.html','CreateSpacesSubcategory.html','CreateSubcategory.html','CreateType.html',
+  'CreateUoM.html','CreateUser.html','CreateVenue.html','CreatingEvent.html','CreatingProject.html',
+  'CreatingProjects.html','CreatingUser.html','DamageReporting.html','DataProtectionNotice.html',
+  'Directory.html','DisableUser.html','DisablingUser.html','DispatchingAssetsfromWarehouse.html',
+  'DissolutionandAssetClosure.html','DuplicateCatalogue.html','DuplicateLogicalSpace.html',
+  'DuplicateMaterialsRequest.html','DuplicateUser.html','DuplicateVenue.html','DuplicatingUser.html',
+  'EditCatalogue.html','EditCategory.html','EditCluster.html','EditEvent.html','EditLogicalSpace.html',
+  'EditMaterial.html','EditMaterialsCategory.html','EditMaterialsRequest.html','EditMaterialsSubcategory.html',
+  'EditPhysicalSpace.html','EditProject.html','EditSource.html','EditSpacesCategory.html',
+  'EditSpacesSubcategory.html','EditSubcategory.html','EditType.html','EditUoM.html','EditUserDetails.html',
+  'EditVenue.html','EditingEvent.html','EditingUserDetails.html','EdittingProject.html',
+  'EdittingProjects.html','EnableChangeManagement.html','Events.html','EventsOverview.html',
+  'ExcelImport.html','ExportCatalogueMaterialsList.html','ExportLogicalSpacesList.html',
+  'ExportMaterialsList.html','ExportPhysicalSpacesList.html','ExportUsersList.html'
+];
+
+// ── PRESENTATION ──
+async function buildPresentation(){
+  setProgress('pr',10,'Fetching presentation...');
+  log('=== Supply Chain Presentation extraction ===','ok');
+  try{
+    const r=await fetch('supply-chain-overview.html');
+    if(!r.ok){log('Failed to fetch: '+r.status,'err');return}
+    const html=await r.text();
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    // Each slide is a .S div
+    const slides=doc.querySelectorAll('.S');
+    log(`Found ${slides.length} slides`);
+    const prChunks=[];
+    let done=0;
+    for(const slide of slides){
+      // Remove SVG (visual only) and page numbers
+      slide.querySelectorAll('svg,.sn,.ft,script,style').forEach(el=>el.remove());
+      const title=slide.querySelector('h1,h2')?.textContent?.trim()||`Slide ${done+1}`;
+      let text='';
+      const walk=(node)=>{
+        if(node.nodeType===3){const t=node.textContent.replace(/\s+/g,' ').trim();if(t)text+=t+' '}
+        else if(node.nodeType===1){
+          const tag=node.tagName.toLowerCase();
+          if(['script','style','nav','button'].includes(tag))return;
+          if(['h1','h2','h3','h4','li','p','tr','div'].includes(tag)&&text&&!text.endsWith('\n'))text+='\n';
+          for(const c of node.childNodes)walk(c);
+          if(['h1','h2','h3','h4','p','li','tr'].includes(tag))text+='\n';
+        }
+      };
+      walk(slide);
+      text=text.replace(/\n{3,}/g,'\n\n').replace(/[ \t]+/g,' ').trim();
+      if(text.length>50){
+        prChunks.push({
+          source:'Supply Chain Presentation',
+          heading:`Slide ${done+1}: ${title}`,
+          url:`guides/supply-chain-overview.html#slide-${done+1}`,
+          text:text.slice(0,3000)
+        });
+      }
+      done++;
+      setProgress('pr',Math.round(done/slides.length*100),`${done}/${slides.length} slides`);
+    }
+    CHUNKS=CHUNKS.filter(c=>c.source!=='Supply Chain Presentation').concat(prChunks);
+    log(`Extracted ${prChunks.length} chunks from presentation`,'ok');
+    setProgress('pr',100,`✓ ${prChunks.length} chunks extracted`);
+    _updateUploadBtn();
+  }catch(e){
+    log('Error: '+e.message,'err');
+    setProgress('pr',0,'Failed');
+  }
+}
+
+function _updateUploadBtn(){
+  const btn=document.getElementById('upload-btn');
+  const dlBtn=document.getElementById('download-btn');
+  const st=document.getElementById('st-up');
+  if(CHUNKS.length){
+    btn.disabled=false;dlBtn.disabled=false;
+    const sources=[...new Set(CHUNKS.map(c=>c.source))];
+    const size=new Blob([JSON.stringify(CHUNKS)]).size;
+    st.innerHTML=`<span class="ok">Ready:</span> ${CHUNKS.length} chunks from ${sources.length} sources (${(size/1024).toFixed(0)} KB) `+
+      sources.map(s=>`<span class="chip">${s}: ${CHUNKS.filter(c=>c.source===s).length}</span>`).join('');
+  }
+}
+
+// ── UPLOAD ──
+async function uploadRefs(){
+  if(!CHUNKS.length)return;
+  const st=document.getElementById('st-up');
+  st.textContent='Uploading...';
+  log('Uploading '+CHUNKS.length+' chunks to Supabase...');
+  try{
+    const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+      body:JSON.stringify({id:'mem-refs',value:JSON.stringify(CHUNKS)})});
+    if(!r.ok){
+      const err=await r.text();
+      throw new Error(`${r.status}: ${err.slice(0,120)}`);
+    }
+    log('✓ Uploaded to Supabase!','ok');
+    st.innerHTML=`<span class="ok">✓ Uploaded</span> — ${CHUNKS.length} chunks saved as mem-refs. Bob will use these automatically.`;
+  }catch(e){
+    log('Upload failed: '+e.message,'err');
+    st.innerHTML=`<span class="err">Upload failed:</span> ${e.message}`;
+  }
+}
+
+function downloadRefs(){
+  const blob=new Blob([JSON.stringify(CHUNKS,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='bob-refs.json';a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

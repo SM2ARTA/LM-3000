@@ -783,6 +783,8 @@ async function init(){
   _loadGlossary();
   // Load activity feed and update "new" badge
   _loadActivity().then(_updateActivityBadge);
+  // Load Bob reference docs
+  _loadBobRefs();
 }
 
 // ── PERSISTENCE ──
@@ -2377,10 +2379,18 @@ function _bobRender(){
         if(!e)return'';
         return`<span class="bob-cite" onclick="bobToggle();viewEntry(${id})">📎 ${esc(e.title)}</span>`;
       }).filter(Boolean).join('');
-      // Add "Save as entry" button (uses the preceding user message as title hint)
+      // Reference doc citations (SM2ARTA Guide, Presentation)
+      const refCites=(m.refs||[]).map(r=>{
+        const icon=r.source.includes('Presentation')?'🎞':'📖';
+        const urlSafe=(r.url||'').replace(/"/g,'&quot;');
+        const hdgSafe=esc(r.heading);
+        const srcSafe=esc(r.source);
+        return`<span class="bob-cite" style="background:var(--a3-s);color:var(--a3)" onclick="window.open('${urlSafe}','_blank')" title="${srcSafe}">${icon} ${hdgSafe}</span>`;
+      }).join('');
       const userQ=mi>0?BOB_HISTORY[mi-1]?.text||'':'';
       const saveBtn=userQ?`<span class="bob-cite" style="background:var(--gn-s);color:var(--gn);margin-top:6px;display:inline-block" onclick="_bobSaveEntry(${mi})">📝 Save as entry</span>`:'';
-      h+=`<div class="bob-msg bob">${bodyHtml}${cites||saveBtn?`<div class="bob-cites">${cites}${saveBtn}</div>`:''}</div>`;
+      const allCites=cites+refCites+saveBtn;
+      h+=`<div class="bob-msg bob">${bodyHtml}${allCites?`<div class="bob-cites">${allCites}</div>`:''}</div>`;
     }
   }
   el.innerHTML=h;
@@ -2450,24 +2460,67 @@ function _bobFindTerms(query){
   return hits.slice(0,8);
 }
 
+// ── REFERENCE DOCS (SM2ARTA Guide + Presentation) ──
+let BOB_REFS=[]; // [{source,heading,url,text}]
+
+async function _loadBobRefs(){
+  // Try localStorage cache first
+  try{const s=localStorage.getItem('mem-refs');if(s)BOB_REFS=JSON.parse(s)}catch(e){}
+  // Fetch from Supabase (update if remote is newer)
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.length||!d[0].value)return;
+    let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+    if(Array.isArray(v)&&v.length){
+      BOB_REFS=v;
+      localStorage.setItem('mem-refs',JSON.stringify(BOB_REFS));
+    }
+  }catch(e){console.warn('Bob refs load failed:',e)}
+}
+
+// Find relevant reference chunks via keyword scoring
+function _bobFindRefs(query,limit=3){
+  if(!BOB_REFS.length)return[];
+  const words=query.toLowerCase().split(/\s+/).filter(w=>w.length>2);
+  if(!words.length)return[];
+  const scored=BOB_REFS.map(r=>{
+    const hay=(r.heading+' '+r.text).toLowerCase();
+    let score=0;
+    for(const w of words){
+      const headingHit=r.heading.toLowerCase().includes(w);
+      const wordEsc=w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const bodyHits=(hay.match(new RegExp('\\b'+wordEsc,'g'))||[]).length;
+      score+=headingHit?8:0;
+      score+=bodyHits;
+    }
+    return{r,score};
+  }).filter(x=>x.score>2).sort((a,b)=>b.score-a.score);
+  return scored.slice(0,limit).map(x=>x.r);
+}
+
 const BOB_SYSTEM=`You are Bob, a friendly expert assistant for FIFA World Cup 2026 warehouse operations and FF&E (Furniture, Fixtures, Equipment) materials management.
 
 You help Materials Managers with questions about logistics, warehouse procedures, customs, kitting, truck dispatch, receiving, damage reports, and related topics.
 
 KNOWLEDGE SOURCES (in priority order):
-1. Memory Dump entries — the team's documented tribal knowledge (HIGHEST priority — always cite)
-2. Glossary — team terminology
-3. General FF&E/warehouse/logistics expertise — your background knowledge
+1. Memory Dump entries — the team's tribal knowledge (HIGHEST — always cite when relevant)
+2. SM2ARTA Admin Guide — official system documentation
+3. Supply Chain Presentation — high-level project overview with stats, flows, timelines
+4. Glossary — team terminology
+5. General FF&E/warehouse/logistics expertise — your background knowledge
 
 RESPONSE RULES:
-- If the answer IS in the Memory Dump entries below, base your answer on them and cite the entry titles
-- If NOT in memory dump, clearly say "This isn't in your team's memory dump yet — here's general guidance:" and provide your own expertise
-- Keep responses SHORT: 2-4 sentences max for simple questions, bullet points for steps
+- Prefer Memory Dump answers first. If not there, check SM2ARTA Guide and Presentation.
+- Cite the source: "From Memory Dump: 'Short Shipment Process'" or "From SM2ARTA Guide: Damage Reporting"
+- If NOT in any provided source, say "Not in your docs — here's general guidance:" and use your own expertise
+- Keep responses SHORT: 2-4 sentences for simple questions, bullet points for steps
 - Use **bold** for key terms, system names, and actions
 - Use \`code\` for specific values or SKU-like identifiers
 - Be conversational but professional — you're Bob, a senior warehouse ops expert
-- When relevant, suggest the user document new cases: "Worth adding to the memory dump!"
-- Never make up entry titles — only cite entries that are explicitly provided in context`;
+- When relevant, suggest: "Worth adding to the memory dump!"
+- Never make up source titles — only cite sources explicitly provided in context`;
 
 async function bobSend(){
   const input=document.getElementById('bob-input');
@@ -2495,6 +2548,7 @@ async function bobSend(){
   // Find relevant context
   const entries=_bobFindRelevant(text,5);
   const terms=_bobFindTerms(text);
+  const refs=_bobFindRefs(text,3);
 
   // Build context for AI
   let context='';
@@ -2504,11 +2558,17 @@ async function bobSend(){
       context+=`\n[Entry: "${e.title}" | Category: ${e.cat}]\n${e._raw||e.body||''}\n`;
     }
   }
+  if(refs.length){
+    context+='\n\n=== REFERENCE DOCS ===\n';
+    for(const r of refs){
+      context+=`\n[${r.source}: "${r.heading}"]\n${r.text}\n`;
+    }
+  }
   if(terms.length){
     context+='\n\n=== GLOSSARY TERMS ===\n';
     for(const t of terms)context+=`${t.term}: ${t.def}\n`;
   }
-  if(!context)context='\n\n(No matching entries or glossary terms — use your general knowledge.)';
+  if(!context)context='\n\n(No matching entries or reference docs — use your general knowledge.)';
 
   // Build conversation history (last 6 messages, excluding thinking)
   const chatHistory=BOB_HISTORY.filter(m=>m.role==='user'||m.role==='bob').slice(-6,-1);
@@ -2526,7 +2586,7 @@ async function bobSend(){
 
     // Remove thinking message
     BOB_HISTORY=BOB_HISTORY.filter(m=>m.role!=='thinking');
-    BOB_HISTORY.push({role:'bob',text:result||'(no response)',cites:entries.map(e=>e.id)});
+    BOB_HISTORY.push({role:'bob',text:result||'(no response)',cites:entries.map(e=>e.id),refs:refs.map(r=>({source:r.source,heading:r.heading,url:r.url}))});
     if(BOB_HISTORY.length>BOB_MAX_HISTORY*2)BOB_HISTORY=BOB_HISTORY.slice(-BOB_MAX_HISTORY*2);
     sessionStorage.setItem('bob-history',JSON.stringify(BOB_HISTORY));
   }catch(e){
