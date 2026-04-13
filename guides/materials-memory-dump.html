@@ -770,6 +770,8 @@ async function init(){
   loadAIKey();
   // Load glossary
   _loadGlossary();
+  // Load activity feed and update "new" badge
+  _loadActivity().then(_updateActivityBadge);
 }
 
 // ── PERSISTENCE ──
@@ -2167,19 +2169,52 @@ async function _loadActivity(){
   }catch(e){}
 }
 function _logActivity(action,title,id){
-  ACTIVITY.unshift({action,title,id,ts:Date.now()});
+  const ts=Date.now();
+  ACTIVITY.unshift({action,title,id,ts});
   if(ACTIVITY.length>MAX_ACTIVITY)ACTIVITY=ACTIVITY.slice(0,MAX_ACTIVITY);
+  // Mark as already seen by THIS user (their own action — not "new" to them)
+  localStorage.setItem('mem-activity-seen',String(ts));
   // Save to Supabase (fire and forget)
   const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
     body:JSON.stringify({id:'mem-activity',value:JSON.stringify(ACTIVITY)})}).catch(()=>{});
+  _updateActivityBadge();
 }
 
+let _showOldActivity=false;
+
 function showActivity(){
-  _loadActivity().then(()=>_renderActivity());
+  _showOldActivity=false;
+  _loadActivity().then(()=>{
+    _renderActivity();
+    // Mark as seen (store this user's last-viewed timestamp locally)
+    localStorage.setItem('mem-activity-seen',String(Date.now()));
+    _updateActivityBadge();
+  });
   document.getElementById('activity-modal').classList.add('show');
 }
 function closeActivity(){document.getElementById('activity-modal').classList.remove('show')}
+
+function _getLastSeen(){return parseInt(localStorage.getItem('mem-activity-seen'))||0}
+
+// Update the small badge on the Activity button with count of new items
+function _updateActivityBadge(){
+  const btn=document.querySelector('[onclick="showActivity()"]');
+  if(!btn)return;
+  const lastSeen=_getLastSeen();
+  const newCount=ACTIVITY.filter(a=>a.ts>lastSeen).length;
+  // Remove existing badge
+  const existing=btn.querySelector('.act-new-badge');
+  if(existing)existing.remove();
+  if(newCount>0&&lastSeen>0){
+    const b=document.createElement('span');
+    b.className='act-new-badge';
+    b.style.cssText='position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--rd);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg);animation:chipPop .3s ease both';
+    b.textContent=newCount>9?'9+':String(newCount);
+    btn.style.position='relative';
+    btn.appendChild(b);
+  }
+}
 
 function _renderActivity(){
   const el=document.getElementById('activity-feed');
@@ -2189,19 +2224,43 @@ function _renderActivity(){
   }
   const icons={add:'✨',edit:'✏️',del:'🗑'};
   const verbs={add:'added',edit:'edited',del:'deleted'};
+  const lastSeen=_getLastSeen();
+  const newItems=ACTIVITY.filter(a=>a.ts>lastSeen);
+  const oldItems=ACTIVITY.filter(a=>a.ts<=lastSeen);
   let h='';
-  for(const a of ACTIVITY){
-    const rel=_relTime(a.ts);
-    const canOpen=a.action!=='del'&&ENTRIES.find(x=>x.id===a.id);
-    h+=`<div class="act-item act-${a.action}" ${canOpen?`onclick="closeActivity();viewEntry(${a.id})" style="cursor:pointer"`:''}>
-      <div class="act-icon">${icons[a.action]||'•'}</div>
-      <div class="act-body">
-        <div><span class="act-title">${verbs[a.action]||a.action}</span> &ldquo;${esc(a.title)}&rdquo;</div>
-        <div class="act-meta">${rel}</div>
-      </div>
-    </div>`;
+
+  // Show "new for you" section
+  if(newItems.length&&lastSeen>0){
+    h+=`<div style="font-size:10px;font-weight:700;color:var(--rd);text-transform:uppercase;letter-spacing:1px;padding:8px 4px 6px">New since your last visit (${newItems.length})</div>`;
+    for(const a of newItems)h+=_actItemHtml(a,icons,verbs,true);
+  }else if(!newItems.length&&lastSeen>0){
+    h+=`<div style="text-align:center;padding:16px;color:var(--tt);font-size:11px;background:var(--gn-s);border-radius:8px;margin-bottom:10px">✓ You're all caught up</div>`;
+  }
+
+  // Show older items (collapsed by default if there are new items)
+  if(oldItems.length){
+    if(newItems.length&&lastSeen>0){
+      h+=`<div style="padding:12px 4px 6px"><button onclick="_showOldActivity=!_showOldActivity;_renderActivity()" style="background:none;border:none;cursor:pointer;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:1px;padding:0">${_showOldActivity?'▼':'▶'} Earlier (${oldItems.length})</button></div>`;
+    }
+    if(!newItems.length||!lastSeen||_showOldActivity){
+      if(!newItems.length||!lastSeen)h+=`<div style="font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:1px;padding:8px 4px 6px">Activity (${ACTIVITY.length})</div>`;
+      for(const a of oldItems)h+=_actItemHtml(a,icons,verbs,false);
+    }
   }
   el.innerHTML=h;
+}
+
+function _actItemHtml(a,icons,verbs,isNew){
+  const rel=_relTime(a.ts);
+  const canOpen=a.action!=='del'&&ENTRIES.find(x=>x.id===a.id);
+  const newDot=isNew?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--rd);margin-left:6px;vertical-align:middle"></span>':'';
+  return`<div class="act-item act-${a.action}" ${canOpen?`onclick="closeActivity();viewEntry(${a.id})" style="cursor:pointer"`:''}>
+    <div class="act-icon">${icons[a.action]||'•'}</div>
+    <div class="act-body">
+      <div><span class="act-title">${verbs[a.action]||a.action}</span> &ldquo;${esc(a.title)}&rdquo;${newDot}</div>
+      <div class="act-meta">${rel}</div>
+    </div>
+  </div>`;
 }
 
 function _relTime(ts){
