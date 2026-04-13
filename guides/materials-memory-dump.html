@@ -540,7 +540,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
           Other team members enter the same passphrase to decrypt. Key is never stored or transmitted in plain text.<br>
           Without the passphrase, the key is unreadable — even in the database.
         </div>
-        <div id="ai-status" style="font-size:9px;margin-top:4px;display:none"></div>
+        <div id="ai-status" style="font-size:11px;margin-top:6px;padding:6px 10px;border-radius:6px;display:none;font-weight:600"></div>
       </div>
       <textarea id="f-body" rows="16" placeholder="Just dump your notes here — messy is fine! Then hit ✨ AI Enhance or use the syntax from the cheat sheet below."></textarea>
     </div>
@@ -1156,7 +1156,7 @@ function _resetVoiceBtn(){
   btn.classList.remove('voice-on');
 }
 
-function toggleAISettings(){
+async function toggleAISettings(){
   const el=document.getElementById('ai-settings');
   el.style.display=el.style.display==='none'?'block':'none';
   if(el.style.display==='block'){
@@ -1166,6 +1166,25 @@ function toggleAISettings(){
     document.getElementById('ai-passphrase').value=localStorage.getItem('mem-ai-pass')||'';
     _updateAILink();
     _aiShowStatus('');
+    // If no local key, check if Supabase has an encrypted team key
+    if(!cfg.key){
+      try{
+        const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.${_AI_SB_KEY}&select=value`,
+          {headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+        if(r.ok){
+          const d=await r.json();
+          if(d.length&&d[0].value){
+            let v=d[0].value;while(typeof v==='string'){try{v=JSON.parse(v)}catch(e){break}}
+            if(v&&v.encrypted){
+              _aiShowStatus('🔓 Team key found on server — enter the team passphrase to unlock');
+              document.getElementById('ai-passphrase').focus();
+              return;
+            }
+          }
+        }
+      }catch(e){}
+      _aiShowStatus('No key saved yet — enter API key + passphrase to set up team sharing');
+    }
   }
 }
 
@@ -1177,7 +1196,11 @@ function _aiShowStatus(msg,isErr){
   const el=document.getElementById('ai-status');
   if(!msg){el.style.display='none';return}
   el.style.display='block';
-  el.style.color=isErr?'var(--rd)':'var(--gn)';
+  if(isErr){
+    el.style.background='var(--rd-s)';el.style.color='var(--rd)';el.style.border='1px solid var(--rd-b)';
+  }else{
+    el.style.background='var(--a3-s)';el.style.color='var(--a3)';el.style.border='1px solid var(--a3-b)';
+  }
   el.textContent=msg;
 }
 
@@ -1245,14 +1268,18 @@ async function saveAIKey(){
 
     // Save encrypted to Supabase (upsert — creates or updates)
     const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
-    await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
       body:JSON.stringify({id:_AI_SB_KEY,value:JSON.stringify({encrypted})})});
+    if(!r.ok){
+      const errText=await r.text();
+      throw new Error(`Supabase ${r.status}: ${errText.slice(0,100)}`);
+    }
 
     // Cache plain in localStorage + remember passphrase
     localStorage.setItem('mem-ai-cfg',JSON.stringify({provider,key}));
     localStorage.setItem('mem-ai-pass',passphrase);
 
-    _aiShowStatus('Saved & shared with team');
+    _aiShowStatus('✓ Saved & shared with team');
     setTimeout(()=>{document.getElementById('ai-settings').style.display='none'},1500);
   }catch(e){
     _aiShowStatus('Save failed: '+e.message,true);
