@@ -54,7 +54,7 @@ input[type=password]:focus{border-color:var(--pri)}
 
 <div class="card">
   <h2>2. Team Guides (ml3000 guides section)</h2>
-  <p>Extracts all internal guides: Supply Chain Presentation, Bob's Survival Guide, Work Instructions, VLM guides, damage reporting, CAN info sheet, inventory/transactions/roomdata guides, pocket cards.</p>
+  <p>Auto-discovers available guides on the server, then extracts them: Supply Chain Presentation, Bob's Survival Guide, Work Instructions, VLM guides, damage reporting, CAN info sheet, inventory/transactions/roomdata guides, pocket cards. Missing files are silently skipped.</p>
   <button onclick="buildGuides()">Extract Team Guides</button>
   <div class="progress"><div class="progress-bar" id="pb-gd"></div></div>
   <div class="status" id="st-gd">Not started</div>
@@ -253,31 +253,77 @@ const SM2ARTA_PAGES=[
 // ── PRESENTATION ──
 
 // ── TEAM GUIDES ──
-const TEAM_GUIDES=[
-  {file:'supply-chain-overview.html',title:"Supply Chain Presentation",pageSelector:'.S'},
-  {file:'bobs-survival-guide.html',title:"Bob's Survival Guide",pageSelector:'.P'},
-  {file:'work-instructions.html',title:"Work Instructions",pageSelector:'.S'},
-  {file:'can-info-sheet.html',title:"CAN Info Sheet"},
-  {file:'damage-report-guide.html',title:"Damage Report Guide"},
-  {file:'view-transactions-guide.html',title:"View Transactions Guide"},
-  {file:'view-inventory-guide.html',title:"View Inventory Guide"},
-  {file:'export-roomdata-guide.html',title:"Export Room Data Guide"},
-  {file:'vlm-sm2arta-guide.html',title:"VLM SM2ARTA Guide"},
-  {file:'vlm-pocket-card.html',title:"VLM Pocket Card"}
-];
+// Known guide files + pretty names + page selectors for multi-page ones
+const TEAM_GUIDE_META={
+  'supply-chain-overview.html':{title:"Supply Chain Presentation",pageSelector:'.S'},
+  'bobs-survival-guide.html':{title:"Bob's Survival Guide",pageSelector:'.P'},
+  'work-instructions.html':{title:"Work Instructions",pageSelector:'.S'},
+  'can-info-sheet.html':{title:"CAN Info Sheet"},
+  'damage-report-guide.html':{title:"Damage Report Guide"},
+  'view-transactions-guide.html':{title:"View Transactions Guide"},
+  'view-inventory-guide.html':{title:"View Inventory Guide"},
+  'export-roomdata-guide.html':{title:"Export Room Data Guide"},
+  'vlm-sm2arta-guide.html':{title:"VLM SM2ARTA Guide"},
+  'vlm-pocket-card.html':{title:"VLM Pocket Card"},
+  'vlm-pocket-card-print.html':{title:"VLM Pocket Card (Print)"}
+};
+
+// Try to discover which guides actually exist on this server — try each base path
+async function _discoverGuides(){
+  // Try to find the right base path by probing with a known file
+  const bases=['','./','/guides/','guides/','../guides/'];
+  let workingBase=null;
+  for(const base of bases){
+    try{
+      const r=await fetch(base+'bobs-survival-guide.html',{method:'HEAD'});
+      if(r.ok){workingBase=base;log('Guides base path: "'+base+'"');break}
+    }catch(e){}
+  }
+  if(workingBase===null){
+    // Try GET instead of HEAD (some servers don't support HEAD)
+    for(const base of bases){
+      try{
+        const r=await fetch(base+'bobs-survival-guide.html');
+        if(r.ok){workingBase=base;log('Guides base path (GET): "'+base+'"');break}
+      }catch(e){}
+    }
+  }
+  if(workingBase===null){
+    log('Could not find guides folder. Tried: '+bases.map(b=>`"${b}"`).join(', '),'err');
+    return{base:null,files:[]};
+  }
+  // Now test each known file
+  const available=[];
+  for(const[file,meta]of Object.entries(TEAM_GUIDE_META)){
+    try{
+      const r=await fetch(workingBase+file,{method:'HEAD'});
+      if(r.ok){available.push({file,...meta})}
+      else{
+        // fallback to GET
+        const r2=await fetch(workingBase+file);
+        if(r2.ok){available.push({file,...meta})}
+      }
+    }catch(e){}
+  }
+  log('Found '+available.length+' of '+Object.keys(TEAM_GUIDE_META).length+' guides');
+  return{base:workingBase,files:available};
+}
 
 async function buildGuides(){
   log('=== Team Guides extraction ===','ok');
-  setProgress('gd',5,'Fetching guides...');
+  setProgress('gd',5,'Discovering guides...');
+  const{base,files:TEAM_GUIDES}=await _discoverGuides();
+  if(!TEAM_GUIDES.length){
+    setProgress('gd',0,'No guides found');
+    return;
+  }
+  setProgress('gd',10,`Extracting ${TEAM_GUIDES.length} guides...`);
   const gdChunks=[];
   let done=0;
   for(const g of TEAM_GUIDES){
     try{
-      let r=null;
-      for(const p of [g.file,'./'+g.file,'/guides/'+g.file,'guides/'+g.file]){
-        try{const tr=await fetch(p);if(tr.ok){r=tr;break}}catch(e){}
-      }
-      if(!r){log('Skip '+g.file+' (not found)','err');continue}
+      const r=await fetch(base+g.file);
+      if(!r.ok){log('Skip '+g.file+' ('+r.status+')','err');continue}
       const html=await r.text();
       const doc=new DOMParser().parseFromString(html,'text/html');
       // Remove SVG, scripts, styles
