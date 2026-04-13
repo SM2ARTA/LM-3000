@@ -199,15 +199,26 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 /* ── ACTIVITY FEED ── */
 .act-btn{padding:8px 14px;border-radius:8px;border:2px solid var(--bd);background:var(--sf);color:var(--ts);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--fd);transition:all .15s;flex-shrink:0;position:relative}
 .act-btn:hover{border-color:var(--pri);color:var(--pri)}
-.act-feed{max-height:60vh;overflow-y:auto;padding:4px 2px}
-.act-item{padding:10px 12px;margin-bottom:6px;border-radius:8px;background:var(--bg);display:flex;gap:10px;align-items:flex-start;animation:fadeSlideUp .3s ease both}
-.act-icon{width:28px;height:28px;border-radius:50%;background:var(--sf);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
-.act-body{flex:1;min-width:0;font-size:12px;line-height:1.4}
-.act-title{font-weight:700;color:var(--tp)}
-.act-meta{font-size:10px;color:var(--tt);margin-top:2px}
-.act-add .act-icon{background:var(--gn-s);color:var(--gn)}
-.act-edit .act-icon{background:var(--a3-s);color:var(--a3)}
-.act-del .act-icon{background:var(--rd-s);color:var(--rd)}
+.act-feed{max-height:70vh;overflow-y:auto;padding:4px 2px}
+.act-section-label{font-size:10px;font-weight:800;color:var(--tt);text-transform:uppercase;letter-spacing:1.5px;padding:4px 4px 8px;display:flex;align-items:center;gap:8px}
+.act-section-label::after{content:'';flex:1;height:1px;background:var(--bd)}
+.act-item{padding:12px 14px;margin-bottom:8px;border-radius:10px;background:var(--bg);display:flex;gap:12px;align-items:flex-start;animation:fadeSlideUp .3s ease both;transition:all .15s;border:1.5px solid transparent}
+.act-item:hover{background:#EDEEF4;border-color:var(--bd)}
+.act-item.act-new{background:linear-gradient(90deg,var(--rd-s),#FFFAFA);border-color:var(--rd-b)}
+.act-item.act-new:hover{background:linear-gradient(90deg,#FDE1E3,#FFF5F5)}
+.act-icon{width:32px;height:32px;border-radius:50%;background:var(--sf);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;border:1px solid var(--bd)}
+.act-body{flex:1;min-width:0;font-size:12.5px;line-height:1.4}
+.act-row1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.act-title{font-weight:800;color:var(--tp);text-transform:capitalize}
+.act-entry-title{color:var(--tp);font-weight:600}
+.act-new-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--rd);animation:lockPulse 1.5s ease-in-out infinite}
+.act-meta{font-size:10px;color:var(--tt);margin-top:3px;display:flex;align-items:center;gap:4px}
+.act-cat{display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.3px}
+.act-preview{font-size:11.5px;color:var(--ts);margin-top:8px;padding:8px 10px;background:var(--sf);border-radius:6px;border-left:3px solid var(--bd);line-height:1.5;max-height:80px;overflow:hidden;position:relative;font-family:var(--fd);white-space:pre-wrap;word-wrap:break-word}
+.act-new .act-preview{border-left-color:var(--rd)}
+.act-add .act-icon{background:var(--gn-s);color:var(--gn);border-color:var(--gn-b)}
+.act-edit .act-icon{background:var(--a3-s);color:var(--a3);border-color:var(--a3-b)}
+.act-del .act-icon{background:var(--rd-s);color:var(--rd);border-color:var(--rd-b)}
 
 /* ── IMAGE LIGHTBOX ── */
 .lbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:300;display:none;align-items:center;justify-content:center;cursor:zoom-out}
@@ -549,7 +560,7 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 
 <!-- ═══ ACTIVITY FEED MODAL ═══ -->
 <div class="modal-bg" id="activity-modal">
-  <div class="view-modal" style="width:620px">
+  <div class="view-modal" style="width:900px;max-height:85vh">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
       <div>
         <div style="font-size:36px;margin-bottom:4px">⚡</div>
@@ -1788,12 +1799,12 @@ function saveEntry(){
     const e=ENTRIES.find(x=>x.id===editId);
     if(e){
       Object.assign(e,{title,cat,attention,body,_raw:rawBody,atts,_ts:now});
-      _logActivity('edit',title,editId);
+      _logActivity('edit',title,editId,rawBody);
     }
   }else{
     const newId=_nextId++;
     ENTRIES.push({id:newId,cat,attention,title,body,_raw:rawBody,atts,date:new Date().toISOString().slice(0,10),_ts:now});
-    _logActivity('add',title,newId);
+    _logActivity('add',title,newId,rawBody);
   }
   saveEntries();
   closeModal();
@@ -2168,12 +2179,11 @@ async function _loadActivity(){
     if(Array.isArray(v))ACTIVITY=v;
   }catch(e){}
 }
-function _logActivity(action,title,id){
+function _logActivity(action,title,id,preview){
   const ts=Date.now();
-  ACTIVITY.unshift({action,title,id,ts});
+  const snippet=preview?String(preview).slice(0,200):'';
+  ACTIVITY.unshift({action,title,id,ts,preview:snippet,cat:ENTRIES.find(x=>x.id===id)?.cat});
   if(ACTIVITY.length>MAX_ACTIVITY)ACTIVITY=ACTIVITY.slice(0,MAX_ACTIVITY);
-  // Mark as already seen by THIS user (their own action — not "new" to them)
-  localStorage.setItem('mem-activity-seen',String(ts));
   // Save to Supabase (fire and forget)
   const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
@@ -2182,18 +2192,34 @@ function _logActivity(action,title,id){
 }
 
 let _showOldActivity=false;
+let _activitySessionLastSeen=0; // locks lastSeen during this modal session
 
 function showActivity(){
   _showOldActivity=false;
+  // Freeze the lastSeen for this modal session so items don't disappear as "new"
+  // while user is looking at them. Only updates when user closes modal.
+  _activitySessionLastSeen=_getLastSeen();
   _loadActivity().then(()=>{
     _renderActivity();
-    // Mark as seen (store this user's last-viewed timestamp locally)
-    localStorage.setItem('mem-activity-seen',String(Date.now()));
-    _updateActivityBadge();
   });
   document.getElementById('activity-modal').classList.add('show');
 }
-function closeActivity(){document.getElementById('activity-modal').classList.remove('show')}
+
+function closeActivity(){
+  document.getElementById('activity-modal').classList.remove('show');
+  // NOW mark as seen — when user closes, they've had time to review
+  if(ACTIVITY.length){
+    localStorage.setItem('mem-activity-seen',String(ACTIVITY[0].ts));
+  }
+  _updateActivityBadge();
+}
+
+function _markAllRead(){
+  if(ACTIVITY.length)localStorage.setItem('mem-activity-seen',String(ACTIVITY[0].ts));
+  _activitySessionLastSeen=ACTIVITY.length?ACTIVITY[0].ts:Date.now();
+  _renderActivity();
+  _updateActivityBadge();
+}
 
 function _getLastSeen(){return parseInt(localStorage.getItem('mem-activity-seen'))||0}
 
@@ -2224,28 +2250,27 @@ function _renderActivity(){
   }
   const icons={add:'✨',edit:'✏️',del:'🗑'};
   const verbs={add:'added',edit:'edited',del:'deleted'};
-  const lastSeen=_getLastSeen();
+  // Use SESSION-frozen lastSeen so items stay highlighted while modal is open
+  const lastSeen=_activitySessionLastSeen||_getLastSeen();
   const newItems=ACTIVITY.filter(a=>a.ts>lastSeen);
   const oldItems=ACTIVITY.filter(a=>a.ts<=lastSeen);
   let h='';
 
-  // Show "new for you" section
+  // CASE 1: Has unread items — show "new" section + collapsed "earlier"
   if(newItems.length&&lastSeen>0){
-    h+=`<div style="font-size:10px;font-weight:700;color:var(--rd);text-transform:uppercase;letter-spacing:1px;padding:8px 4px 6px">New since your last visit (${newItems.length})</div>`;
+    h+=`<div class="act-section-label" style="color:var(--rd)">⚡ New since your last visit · ${newItems.length}<button onclick="_markAllRead()" style="background:none;border:1.5px solid var(--bd);color:var(--tt);padding:3px 10px;border-radius:12px;font-size:9px;font-weight:700;cursor:pointer;font-family:var(--fd);letter-spacing:.5px;margin-left:4px">✓ Mark all read</button></div>`;
     for(const a of newItems)h+=_actItemHtml(a,icons,verbs,true);
-  }else if(!newItems.length&&lastSeen>0){
-    h+=`<div style="text-align:center;padding:16px;color:var(--tt);font-size:11px;background:var(--gn-s);border-radius:8px;margin-bottom:10px">✓ You're all caught up</div>`;
+    if(oldItems.length){
+      h+=`<div style="padding:14px 4px 4px"><button onclick="_showOldActivity=!_showOldActivity;_renderActivity()" style="background:none;border:none;cursor:pointer;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:1px;padding:0">${_showOldActivity?'▼':'▶'} Earlier · ${oldItems.length}</button></div>`;
+      if(_showOldActivity){
+        for(const a of oldItems)h+=_actItemHtml(a,icons,verbs,false);
+      }
+    }
   }
-
-  // Show older items (collapsed by default if there are new items)
-  if(oldItems.length){
-    if(newItems.length&&lastSeen>0){
-      h+=`<div style="padding:12px 4px 6px"><button onclick="_showOldActivity=!_showOldActivity;_renderActivity()" style="background:none;border:none;cursor:pointer;font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:1px;padding:0">${_showOldActivity?'▼':'▶'} Earlier (${oldItems.length})</button></div>`;
-    }
-    if(!newItems.length||!lastSeen||_showOldActivity){
-      if(!newItems.length||!lastSeen)h+=`<div style="font-size:10px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:1px;padding:8px 4px 6px">Activity (${ACTIVITY.length})</div>`;
-      for(const a of oldItems)h+=_actItemHtml(a,icons,verbs,false);
-    }
+  // CASE 2: No unread — just show everything as a flat list (no banner, no split)
+  else{
+    h+=`<div class="act-section-label">Activity · ${ACTIVITY.length}</div>`;
+    for(const a of ACTIVITY)h+=_actItemHtml(a,icons,verbs,false);
   }
   el.innerHTML=h;
 }
@@ -2253,12 +2278,16 @@ function _renderActivity(){
 function _actItemHtml(a,icons,verbs,isNew){
   const rel=_relTime(a.ts);
   const canOpen=a.action!=='del'&&ENTRIES.find(x=>x.id===a.id);
-  const newDot=isNew?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--rd);margin-left:6px;vertical-align:middle"></span>':'';
-  return`<div class="act-item act-${a.action}" ${canOpen?`onclick="closeActivity();viewEntry(${a.id})" style="cursor:pointer"`:''}>
+  const catMeta=a.cat?CAT_META[a.cat]:null;
+  const catBadge=catMeta?`<span class="act-cat" style="background:var(--${a.cat==='important'?'rd':a.cat==='procedure'?'a3':a.cat==='bestpractice'?'gn':'am'}-s);color:var(--${a.cat==='important'?'rd':a.cat==='procedure'?'a3':a.cat==='bestpractice'?'gn':'am'})">${catMeta.icon} ${catMeta.label}</span>`:'';
+  const newDot=isNew?'<span class="act-new-dot"></span>':'';
+  const preview=a.preview?`<div class="act-preview">${esc(a.preview)}${a.preview.length>=200?'…':''}</div>`:'';
+  return`<div class="act-item act-${a.action}${isNew?' act-new':''}" ${canOpen?`onclick="closeActivity();viewEntry(${a.id})" style="cursor:pointer"`:''}>
     <div class="act-icon">${icons[a.action]||'•'}</div>
     <div class="act-body">
-      <div><span class="act-title">${verbs[a.action]||a.action}</span> &ldquo;${esc(a.title)}&rdquo;${newDot}</div>
-      <div class="act-meta">${rel}</div>
+      <div class="act-row1"><span class="act-title">${verbs[a.action]||a.action}</span> <span class="act-entry-title">&ldquo;${esc(a.title)}&rdquo;</span>${newDot}</div>
+      <div class="act-meta">${rel}${catBadge?' · '+catBadge:''}</div>
+      ${preview}
     </div>
   </div>`;
 }
