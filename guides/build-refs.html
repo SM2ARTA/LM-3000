@@ -288,18 +288,23 @@ const TEAM_GUIDE_META={
 // that the response actually looks like HTML with expected content.
 async function _fetchGuide(file){
   const paths=[file,'./'+file,'/guides/'+file,'guides/'+file,'../guides/'+file];
+  const results=[];
   for(const p of paths){
     try{
       const r=await fetch(p);
-      if(!r.ok)continue;
+      if(!r.ok){results.push(`${p}: ${r.status}`);continue}
       const text=await r.text();
-      // Validate: must contain HTML tags AND not be the Memory Dump index
-      if(!text.includes('<')||!text.includes('</')||text.length<500)continue;
-      // Skip if this is actually the memory-dump or build-refs page by mistake
-      if(text.includes('Bob\'s Memory Dump')||text.includes('Build Bob\'s Reference Library'))continue;
+      // Must be real HTML
+      if(!text.includes('<')||text.length<500){results.push(`${p}: not HTML (${text.length} chars)`);continue}
+      // Check title to distinguish this file from the Memory Dump falling through
+      const titleMatch=text.match(/<title[^>]*>([^<]+)<\/title>/i);
+      const title=titleMatch?titleMatch[1].toLowerCase():'';
+      // Reject ONLY if it's specifically the Memory Dump or build-refs page
+      if(title.includes('memory dump')||title.includes('bob\'s reference'))continue;
       return{text,path:p};
-    }catch(e){}
+    }catch(e){results.push(`${p}: ${e.message}`)}
   }
+  if(results.length)log('  '+file+' → '+results.slice(0,2).join(', '),'err');
   return null;
 }
 
