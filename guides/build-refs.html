@@ -96,7 +96,7 @@ if(sessionStorage.getItem('build-refs-auth')==='1'){
 <script>
 const SB_URL='https://stwopndhnxcjyomkufii.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
-const SB_TABLE='shared_state';
+const SB_TABLE='memory_dump';
 
 let CHUNKS=[]; // all extracted chunks
 
@@ -444,7 +444,7 @@ async function uploadRefs(){
     // Fetch existing
     let existing=[];
     try{
-      const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs&select=value`,{headers:hdrs});
+      const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs&select=value`,{headers:hdrs});
       if(r.ok){
         const d=await r.json();
         if(d.length&&d[0].value){
@@ -463,7 +463,7 @@ async function uploadRefs(){
 
     st.textContent='Uploading...';
     const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-      body:JSON.stringify({id:'mem-refs',value:JSON.stringify(merged)})});
+      body:JSON.stringify({id:'refs',value:JSON.stringify(merged)})});
     if(!r.ok){
       const err=await r.text();
       throw new Error(`${r.status}: ${err.slice(0,120)}`);

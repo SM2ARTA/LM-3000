@@ -754,8 +754,17 @@ body{font-family:var(--fd);background:var(--bg);color:var(--tp);min-height:100vh
 
 const SB_URL='https://stwopndhnxcjyomkufii.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0d29wbmRobnhjanlvbWt1ZmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDgyNjgsImV4cCI6MjA4ODQ4NDI2OH0.YNhp7z5kxnzpX15Vw8NVVWaZG1-Lj3Q9uaZDiKmBvf8';
-const SB_TABLE='shared_state';
-const SB_KEY_ID='mem-dump';
+const SB_TABLE='memory_dump';
+const SB_KEY_ID='entries';
+// Key-name migration map (old → new). Used to rewrite all existing key references.
+const _KEY_MAP={
+  'mem-dump':'entries',
+  'mem-activity':'activity',
+  'mem-glossary':'glossary',
+  'mem-dump-ai':'ai-config',
+  'mem-refs':'refs',
+  'mem-refs-manual':'refs-manual'
+};
 
 const CAT_META={
   important:{label:'Important',icon:'🚨',color:'var(--rd)'},
@@ -785,9 +794,40 @@ const _SEED_TITLES=new Set([
 ]);
 
 // ── INIT ──
+// ── ONE-TIME MIGRATION: copy from shared_state to memory_dump ──
+// Idempotent: only copies keys that are missing in memory_dump.
+// Safe to run repeatedly. Doesn't delete from shared_state.
+async function _migrateIfNeeded(){
+  // Skip if we've already marked migration as done on this browser
+  if(localStorage.getItem('mem-migrated-v1')==='1')return;
+  try{
+    const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+    // Check what's already in memory_dump
+    const r=await fetch(`${SB_URL}/rest/v1/memory_dump?select=id`,{headers:hdrs});
+    const existing=new Set((r.ok?await r.json():[]).map(x=>x.id));
+    let copied=0;
+    for(const[oldKey,newKey]of Object.entries(_KEY_MAP)){
+      if(existing.has(newKey))continue; // already migrated
+      // Fetch from shared_state
+      const r2=await fetch(`${SB_URL}/rest/v1/shared_state?id=eq.${oldKey}&select=value`,{headers:hdrs});
+      if(!r2.ok)continue;
+      const data=await r2.json();
+      if(!data.length||!data[0].value)continue;
+      // Write to memory_dump
+      const w=await fetch(`${SB_URL}/rest/v1/memory_dump`,{method:'POST',headers:hdrs,
+        body:JSON.stringify({id:newKey,value:data[0].value})});
+      if(w.ok){copied++;console.log(`[migrate] ${oldKey} → ${newKey}`)}
+    }
+    if(copied>0)console.log(`[migrate] Copied ${copied} keys from shared_state to memory_dump`);
+    localStorage.setItem('mem-migrated-v1','1');
+  }catch(e){console.warn('[migrate] failed:',e)}
+}
+
 async function init(){
   // Clear any browser-restored search value
   document.getElementById('search').value='';
+  // One-time migration from shared_state to memory_dump (first user on new table)
+  await _migrateIfNeeded();
   // Load from localStorage first
   try{const s=localStorage.getItem('mem-dump');if(s)ENTRIES=JSON.parse(s)}catch(e){}
   // Then load from Supabase (await so we have data before rendering)
@@ -1244,7 +1284,7 @@ function _extractLabel2(line, candidates){
 }
 
 // ── AI ENHANCE — encrypted key sharing via Supabase ──
-const _AI_SB_KEY='mem-dump-ai'; // Supabase shared_state key for encrypted AI config
+const _AI_SB_KEY='ai-config'; // Supabase memory_dump key for encrypted AI config
 
 const _AI_LINKS={
   claude:{url:'https://console.anthropic.com/settings/keys',label:'Get Claude API key',color:'#D97706'},
@@ -1912,7 +1952,7 @@ const _KNOWN_TERMS={
 };
 
 let GLOSSARY={}; // {term: {def, source:'auto'|'manual', from?:entryTitle}}
-const _GL_SB_KEY='mem-glossary';
+const _GL_SB_KEY='glossary';
 
 async function _loadGlossary(){
   try{const s=localStorage.getItem('mem-glossary');if(s)GLOSSARY=JSON.parse(s)}catch(e){}
@@ -2202,7 +2242,7 @@ const MAX_ACTIVITY=50;
 
 async function _loadActivity(){
   try{
-    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-activity&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.activity&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
     if(!r.ok)return;
     const d=await r.json();
     if(!d.length||!d[0].value)return;
@@ -2218,7 +2258,7 @@ function _logActivity(action,title,id,preview){
   // Save to Supabase (fire and forget)
   const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-    body:JSON.stringify({id:'mem-activity',value:JSON.stringify(ACTIVITY)})}).catch(()=>{});
+    body:JSON.stringify({id:'activity',value:JSON.stringify(ACTIVITY)})}).catch(()=>{});
   _updateActivityBadge();
 }
 
@@ -2497,7 +2537,7 @@ async function _loadBobRefs(){
   // Auto refs
   try{const s=localStorage.getItem('mem-refs');if(s)BOB_REFS=JSON.parse(s)}catch(e){}
   try{
-    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
     if(r.ok){
       const d=await r.json();
       if(d.length&&d[0].value){
@@ -2509,7 +2549,7 @@ async function _loadBobRefs(){
   // Manual refs
   try{const s=localStorage.getItem('mem-refs-manual');if(s)BOB_MANUAL_REFS=JSON.parse(s)}catch(e){}
   try{
-    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs-manual&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs-manual&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
     if(r.ok){
       const d=await r.json();
       if(d.length&&d[0].value){
@@ -2524,7 +2564,7 @@ async function _saveManualRefs(){
   // Always fetch fresh from Supabase first and merge, to avoid overwriting
   // other users' or other sessions' additions
   try{
-    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.mem-refs-manual&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
+    const r=await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?id=eq.refs-manual&select=value`,{headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}});
     if(r.ok){
       const d=await r.json();
       if(d.length&&d[0].value){
@@ -2546,7 +2586,7 @@ async function _saveManualRefs(){
   const hdrs={'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
   try{
     await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`,{method:'POST',headers:hdrs,
-      body:JSON.stringify({id:'mem-refs-manual',value:JSON.stringify(BOB_MANUAL_REFS)})});
+      body:JSON.stringify({id:'refs-manual',value:JSON.stringify(BOB_MANUAL_REFS)})});
   }catch(e){console.warn('manual refs save failed:',e)}
 }
 
