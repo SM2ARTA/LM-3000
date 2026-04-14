@@ -14812,23 +14812,46 @@ async function _fcSendHandshake(fp){
     const{error}=await SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now});
     if(error){console.warn('HS save error:',error)}
   }
-  // Build cargo manifest as a plain-text pipe-delimited table
+  // Build cargo manifest. Email clients render text and HTML clipboard separately:
+  //  • The mailto body gets a plain-text manifest (fallback if clipboard paste not used)
+  //  • An HTML <table> + matching plain TSV is copied to the clipboard so admin can
+  //    paste a proper formatted table into the email compose window.
   let manifest='';
   const items=row.items||[];
+  let clipboardCopied=false;
   if(items.length){
-    const pad=(s,n)=>{s=String(s==null?'':s);return s.length>=n?s.substring(0,n-1)+'…':s+' '.repeat(n-s.length)};
-    const padR=(s,n)=>{s=String(s==null?'':s);return s.length>=n?s:' '.repeat(n-s.length)+s};
-    const wSku=16,wName=42,wQty=6,wTag=9;
-    const head=pad('SKU',wSku)+' | '+pad('Item',wName)+' | '+padR('Qty',wQty)+' | '+pad('Tag',wTag);
-    const sep='-'.repeat(wSku)+'-+-'+'-'.repeat(wName)+'-+-'+'-'.repeat(wQty)+'-+-'+'-'.repeat(wTag);
-    const lines=[head,sep];
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const tagOf=it=>it.fa?'FA':(it.manual?'MANUAL':(it.isKit?'KIT':(it.kitChild?'part':'')));
+    // Plain-text lines (mailto fallback) — simple list, no alignment attempts
+    const txtLines=[];
     for(const it of items){
-      const prefix=it.kitChild?'  ':(it.isKit?'* ':'');
-      const tag=it.fa?'FA':(it.manual?'MANUAL':(it.isKit?'KIT':(it.kitChild?'part':'')));
-      lines.push(pad(prefix+(it.sku||''),wSku)+' | '+pad(it.name||'',wName)+' | '+padR(it.qty||0,wQty)+' | '+pad(tag,wTag));
+      const prefix=it.kitChild?'    ':(it.isKit?'• ':'• ');
+      const tag=tagOf(it);
+      txtLines.push(prefix+(it.sku||'')+' — '+(it.name||'')+' (Qty '+(it.qty||0)+')'+(tag?' ['+tag+']':''));
     }
-    manifest='\n\nCargo manifest ('+items.length+' lines):\n'+lines.join('\n');
+    manifest='\n\nCargo manifest ('+items.length+' lines):\n'+txtLines.join('\n');
+    // HTML table for clipboard paste
+    const rowsHtml=items.map(it=>{
+      const tag=tagOf(it);
+      const bg=it.isKit?'#F0EBFE':(it.kitChild?'#F8F7FC':'#FFFFFF');
+      const indent=it.kitChild?'padding-left:24px;':'';
+      return `<tr style="background:${bg}"><td style="padding:4px 8px;border:1px solid #E2E4E9;font-family:Consolas,monospace;font-size:11px;${indent}">${esc(it.sku||'')}</td><td style="padding:4px 8px;border:1px solid #E2E4E9;font-size:11px">${esc(it.name||'')}</td><td style="padding:4px 8px;border:1px solid #E2E4E9;font-size:11px;text-align:right;font-family:Consolas,monospace">${esc(it.qty||0)}</td><td style="padding:4px 8px;border:1px solid #E2E4E9;font-size:10px;color:#60646C">${esc(tag)}</td></tr>`;
+    }).join('');
+    const html=`<table style="border-collapse:collapse;border:1px solid #E2E4E9;font-family:Arial,sans-serif"><thead><tr style="background:#F4F5F7"><th style="padding:6px 8px;border:1px solid #E2E4E9;text-align:left;font-size:11px">SKU</th><th style="padding:6px 8px;border:1px solid #E2E4E9;text-align:left;font-size:11px">Item</th><th style="padding:6px 8px;border:1px solid #E2E4E9;text-align:right;font-size:11px">Qty</th><th style="padding:6px 8px;border:1px solid #E2E4E9;text-align:left;font-size:11px">Tag</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+    const tsv='SKU\tItem\tQty\tTag\n'+items.map(it=>[(it.kitChild?'    ':'')+(it.sku||''),(it.name||'').replace(/[\t\r\n]/g,' '),it.qty||0,tagOf(it)].join('\t')).join('\n');
+    try{
+      if(navigator.clipboard&&window.ClipboardItem){
+        const blobH=new Blob([html],{type:'text/html'});
+        const blobT=new Blob([tsv],{type:'text/plain'});
+        await navigator.clipboard.write([new ClipboardItem({'text/html':blobH,'text/plain':blobT})]);
+        clipboardCopied=true;
+      }else if(navigator.clipboard&&navigator.clipboard.writeText){
+        await navigator.clipboard.writeText(tsv);
+        clipboardCopied=true;
+      }
+    }catch(e){console.warn('[HS] clipboard copy failed:',e)}
   }
+  const pasteHint=clipboardCopied?'\n\n📋 Cargo manifest copied to clipboard — paste into the email below as a formatted table (Ctrl+V / Cmd+V).\n':'';
   const subject='FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')';
   const bodyLines=[
     'Hi,',
@@ -14843,6 +14866,7 @@ async function _fcSendHandshake(fp){
     'SKUs:         '+(row.skus||items.length||0),
     'LSR:          '+(row.lsr||'—'),
     'OOR:          '+(row.oor||'—'),
+    pasteHint,
     manifest,
     '',
     'Thank you,',
