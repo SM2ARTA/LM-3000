@@ -8956,7 +8956,7 @@ function enterApp(){
       _hsLoadAIConfig().catch(()=>{}),
       _fcLoadHandshakes().catch(()=>{}),
       FA_loadLinked().catch(()=>{}),
-      (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{};_fcLeg2Date=v.leg2date||{}}else{_fcLeadMap=v}console.log('[FC] Loaded',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'2-leg trucks')}}catch(e){}})()
+      (async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{};_fcLeg2Oor=v.leg2oor||{};_fcLeg2Date=v.leg2date||{}}else{_fcLeadMap=v}console.log('[FC] Loaded',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'2-leg trucks')}}catch(e){}})()
     ]);
     // Now build venues and trucks AFTER all config is loaded
     if(hasLmData&&Object.keys(NOM).length&&RW.length){LM_injectAll();LM_applyNomOverrides();bV();if(VN.length){_stpValidateVenues();numberAll();sel="";cv="forecast";lmOk=true}}
@@ -9112,7 +9112,7 @@ async function syncLM(){
     if(nomV)NOM=nomV;if(rwV){RW=rwV;_rwEnrichEffQty()}if(vsV)VS=vsV;
     if(exV)LM_excluded=new Set(exV);if(eoV)LM_excludeUserOvr=eoV;
     await Promise.all([stockReportLoad().catch(()=>{}),LM_loadDateOverrides().catch(()=>{}),MI_load().catch(()=>{}),LM_loadPalletCfg().catch(()=>{}),LM_loadClusterTA().catch(()=>{})]);
-    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{}),FA_loadLinked().catch(()=>{}),_fcLoadHandshakes().catch(()=>{}),(async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{};_fcLeg2Date=v.leg2date||{}}else{_fcLeadMap=v}}}catch(e){}})()]);
+    await Promise.all([LM_loadManualDemand().catch(()=>{}),LM_loadKits().catch(()=>{}),LM_loadStpDeliveries().catch(()=>{}),LM_loadStpStrategy().catch(()=>{}),DIST_loadOverrides().catch(()=>{}),LM_loadDemandAdj().catch(()=>{}),LM_loadNomOverrides().catch(()=>{}),FA_loadLinked().catch(()=>{}),_fcLoadHandshakes().catch(()=>{}),(async()=>{try{const{data}=await SB.from('shared_state').select('value').eq('id','fm-fc-leads').maybeSingle();if(data){const v=JSON.parse(data.value)||{};if(v.leads){_fcLeadMap=v.leads;_fcLegMap=v.legs||{};_fcLeg2Lsr=v.leg2lsr||{};_fcLeg2Oor=v.leg2oor||{};_fcLeg2Date=v.leg2date||{}}else{_fcLeadMap=v}}}catch(e){}})()]);
     LM_injectAll();LM_applyNomOverrides();bV();numberAll();
     rT();rVL();rMain();applyRole();
   });
@@ -14780,6 +14780,7 @@ const _FC_STAFF=['Ashley','Kyli','Yael','Brittany'];
 let _fcLeadMap={};// fingerprint → staffName (persisted, stable across rebuilds)
 let _fcLegMap={};// fingerprint → 2 (2-leg truck) — absent = 1 leg
 let _fcLeg2Lsr={};// fingerprint → LSR string for leg 2
+let _fcLeg2Oor={};// fingerprint → OOR string for leg 2 (separate from truck's OOR)
 let _fcLeg2Date={};// fingerprint → date string for leg 2 dispatch (default: bump-in)
 let _fcSearchText='';
 let _fcShowPast=false;
@@ -14849,8 +14850,8 @@ function _fcControl(fp,lead){
 function _fcSave(){
   if(!SB)return;
   const now=new Date().toISOString();
-  const payload={leads:_fcLeadMap,legs:_fcLegMap,leg2lsr:_fcLeg2Lsr,leg2date:_fcLeg2Date};
-  console.log('[FC] Saving:',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'legs,',Object.keys(_fcLeg2Lsr).length,'leg2lsr');
+  const payload={leads:_fcLeadMap,legs:_fcLegMap,leg2lsr:_fcLeg2Lsr,leg2oor:_fcLeg2Oor,leg2date:_fcLeg2Date};
+  console.log('[FC] Saving:',Object.keys(_fcLeadMap).length,'leads,',Object.keys(_fcLegMap).length,'legs,',Object.keys(_fcLeg2Lsr).length,'leg2lsr,',Object.keys(_fcLeg2Oor).length,'leg2oor');
   SB.from('shared_state').upsert({id:'fm-fc-leads',value:JSON.stringify(payload),updated_at:now}).then(({error})=>{if(error)console.warn('FC save error:',error)});
 }
 function _fcSetLead(fp,val){
@@ -14860,13 +14861,54 @@ function _fcSetLead(fp,val){
 }
 function _fcSetLegs(fp,val){
   if(ROLE==='viewer')return;
-  if(val===2)_fcLegMap[fp]=2;else{delete _fcLegMap[fp];delete _fcLeg2Lsr[fp]}
+  if(val===2)_fcLegMap[fp]=2;else{delete _fcLegMap[fp];delete _fcLeg2Lsr[fp];delete _fcLeg2Oor[fp];delete _fcLeg2Date[fp]}
   _fcSave();LM_renderForecast(document.getElementById('mn'));
 }
 function _fcSetLeg2Lsr(fp,val){
   if(ROLE==='viewer')return;
   if(val)_fcLeg2Lsr[fp]=val;else delete _fcLeg2Lsr[fp];
   _fcSave();
+}
+function _fcSetLeg2Oor(fp,val){
+  if(ROLE==='viewer')return;
+  if(val)_fcLeg2Oor[fp]=val;else delete _fcLeg2Oor[fp];
+  _fcSave();
+}
+// Leg 2 detail modal — lets user set Leg 2's own OOR, LSR, and dispatch date.
+// Leg 2 is a virtual row (not a real truck in PLAN_CACHE), so there's no items
+// table — the payload is the same as Leg 1, only the routing leg differs.
+function _fcOpenLeg2(fp,truckId,dest){
+  const fpEsc=fp.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const l2Date=_fcLeg2Date[fp]||'';
+  const l2Lsr=_fcLeg2Lsr[fp]||'';
+  const l2Oor=_fcLeg2Oor[fp]||'';
+  const lead=_fcLeadMap[fp]||'';
+  const isAdm=ROLE==='admin';
+  const h=`<div class="mo" onclick="if(event.target.classList.contains('mo')){document.getElementById('mr').innerHTML='';if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}}"><div class="mdi" onclick="event.stopPropagation()" style="max-width:520px">
+    <div class="mdh"><div>
+      <h3>🚛 ${truckId} <span style="font-size:11px;font-weight:700;color:#fff;background:#1565C0;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle">2nd Leg</span></h3>
+      <div class="mds">${dest} · from Satellite WHS to venue</div>
+    </div><button class="mdc" onclick="document.getElementById('mr').innerHTML='';if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}">✕</button></div>
+    <div class="mdb" style="padding:16px 20px">
+      <div style="font-size:11px;color:var(--ts);margin-bottom:10px">Leg 2 runs from the satellite warehouse to the venue on the bump-in date. It carries a separate OOR and LSR from the main (Leg 1) truck.</div>
+      ${isAdm?`<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;padding:12px;background:var(--bg);border-radius:8px">
+        <label style="font-size:11px;color:var(--ts)">Dispatch date</label>
+        <input type="date" value="${l2Date}" onchange="_fcSetLeg2Date('${fpEsc}',this.value)" style="font-size:11px;font-family:var(--fm);padding:5px 8px;border:1px solid #1565C0;border-radius:6px;color:#1565C0;width:150px">
+        <label style="font-size:11px;color:#2563eb">OOR</label>
+        <input type="text" value="${l2Oor}" placeholder="OOR#" onchange="_fcSetLeg2Oor('${fpEsc}',this.value.trim())" style="font-size:11px;font-family:var(--fm);padding:5px 8px;border:1px solid ${l2Oor?'#2563eb':'var(--bd)'};border-radius:6px;color:#2563eb;width:150px">
+        <label style="font-size:11px;color:var(--pu)">LSR</label>
+        <input type="text" value="${l2Lsr}" placeholder="LSR#" onchange="_fcSetLeg2Lsr('${fpEsc}',this.value.trim())" style="font-size:11px;font-family:var(--fm);padding:5px 8px;border:1px solid ${l2Lsr?'var(--pu)':'var(--bd)'};border-radius:6px;color:var(--pu);width:150px">
+        ${lead?`<label style="font-size:11px;color:var(--gn)">Lead</label><div style="font-size:11px;color:var(--gn);font-weight:600">${lead}</div>`:''}
+      </div>`:`<div style="padding:12px;background:var(--bg);border-radius:8px;font-size:11px;color:var(--ts)">
+        <div>Dispatch: <b>${l2Date||'—'}</b></div>
+        <div>OOR: <span class="mono" style="color:#2563eb">${l2Oor||'—'}</span></div>
+        <div>LSR: <span class="mono" style="color:var(--pu)">${l2Lsr||'—'}</span></div>
+      </div>`}
+      <div style="display:flex;justify-content:flex-end;margin-top:14px">
+        <button class="mbtn mbtn-primary" onclick="document.getElementById('mr').innerHTML='';if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}">Close</button>
+      </div>
+    </div></div></div>`;
+  document.getElementById('mr').innerHTML=h;
 }
 function _fcSetLeg2Date(fp,val){
   if(ROLE==='viewer')return;
@@ -15058,7 +15100,7 @@ function LM_renderForecast(el){
     if(_fcLegMap[r.fp]!==2||!r.firstBI)continue;
     const _satName=(()=>{const d=r.dest||'';if(d.includes('Stadium')||d.includes('Broadcast')){const city=d.replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();return city+' Satellite WHS'}return'Satellite WHS'})();
     const l2d=_fcLeg2Date[r.fp]||r.firstBI;
-    allWithLegs.push({...r,_leg2:true,_leg1Fp:r.fp,disp:l2d,transit:0,arrDate:l2d,firstBI:l2d,buffer:0,dispLoc:_satName,lsr:_fcLeg2Lsr[r.fp]||'',lateCount:0,faCount:0});
+    allWithLegs.push({...r,_leg2:true,_leg1Fp:r.fp,disp:l2d,transit:0,arrDate:l2d,firstBI:l2d,buffer:0,dispLoc:_satName,lsr:_fcLeg2Lsr[r.fp]||'',oor:_fcLeg2Oor[r.fp]||'',lateCount:0,faCount:0});
   }
   allWithLegs.sort((a,b)=>a.disp.localeCompare(b.disp)||a.truckId.localeCompare(b.truckId)||(a._leg2?1:0)-(b._leg2?1:0));
   // Group by week
@@ -15100,15 +15142,17 @@ function LM_renderForecast(el){
         const leadFp=r._leg1Fp||r.fp;
         const lead=_fcLeadMap[leadFp]||'';
         const control=lead?_fcControl(leadFp,lead):'';
-        h+=`<tr data-fcsearch="${((r.truckId||'')+' '+(r.dest||'')+' '+(r.dispLoc||'')+' '+(r.lsr||'')+' '+(r.oor||'')+' '+(_fcLeadMap[r._leg1Fp||r.fp]||'')+' leg2').toLowerCase()}" style="background:#E3F2FD">
+        const _l2DestEsc=(r.dest||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const _l2TidEsc=(r.truckId||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        h+=`<tr data-fcsearch="${((r.truckId||'')+' '+(r.dest||'')+' '+(r.dispLoc||'')+' '+(r.lsr||'')+' '+(r.oor||'')+' '+(_fcLeadMap[r._leg1Fp||r.fp]||'')+' leg2').toLowerCase()}" onclick="_fcOpenLeg2('${_fp}','${_l2TidEsc}','${_l2DestEsc}')" style="background:#E3F2FD;cursor:pointer">
         <td style="font-size:10px;color:#1565C0;font-weight:600">${r.dispLoc}</td>
         <td style="font-size:11px;font-weight:600;color:#1565C0">${r.dest}</td>
         <td class="mono fw6" style="color:#1565C0">${r.truckId} <span style="font-size:8px;font-weight:700;color:#fff;background:#1565C0;padding:1px 4px;border-radius:3px">2nd Leg</span></td>
         <td></td>
         <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
-        <td class="mono" style="font-size:10px;color:var(--pu)" onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="text" value="${l2Lsr}" placeholder="LSR#" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid ${l2Lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:80px" onchange="_fcSetLeg2Lsr('${_fp}',this.value.trim())">`:`<span>${l2Lsr||''}</span>`}</td>
+        <td class="mono" style="font-size:10px;color:var(--pu)">${l2Lsr||''}</td>
         <td></td>
-        <td onclick="event.stopPropagation()">${ROLE==='admin'?`<input type="date" value="${r.disp}" style="font-size:10px;font-family:var(--fm);padding:2px 4px;border:1px solid #1565C0;border-radius:4px;color:#1565C0;width:115px" onchange="_fcSetLeg2Date('${_fp}',this.value)">`:`<span style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</span>`}</td>
+        <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
         <td class="mono" style="text-align:center;color:#1565C0">0d</td>
         <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
         <td style="font-weight:600;color:#1565C0">${_fmtD(r.disp)}</td>
