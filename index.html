@@ -14870,12 +14870,34 @@ async function _fcSendHandshake(fp,leg){
   const _satCity=(row.dest||'').replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();
   const satOrigin=(_satCity?_satCity+' ':'')+'Satellite WHS';
   const subject=isL2
-    ?'FF&E Delivery Confirmation - '+row.truckId+' Leg 2 | '+satOrigin+' -> '+row.dest+' ('+l2Date+')'
-    :'FF&E Delivery Confirmation - '+row.truckId+' to '+row.dest+' ('+row.disp+')';
-  const bodyLines=isL2?[
-    'Hi,',
+    ?'Action Required: Upcoming Truck '+(l2Lsr||row.truckId)+' (Leg 2) Delivery to '+row.dest
+    :'Action Required: Upcoming Truck '+(row.lsr||row.truckId)+' Delivery to '+row.dest;
+  const truckLine=isL2
+    ?'- Truck #'+row.truckId+' (Leg 2) | LSR '+(l2Lsr||'-')+' | Delivery Date: '+l2Date
+    :'- Truck #'+row.truckId+' | LSR '+(row.lsr||'-')+' | Delivery Date: '+row.disp;
+  const introCommon=[
+    'Hello,',
     '',
-    'Please confirm receipt of the below 2nd-leg delivery (cross-dock from satellite WHS to venue on bump-in day). Reply with "CONFIRMED" or propose a different date.',
+    "I hope you're doing well. As part of our weekly dispatch review, I'm reaching out to give you advance notice of the following truck deliveries scheduled to be dispatched to your venue next week:",
+    '',
+    truckLine,
+    '',
+    'To ensure a smooth delivery, I need your written confirmation on the following points:',
+    '1. Acknowledgment - You have reviewed and are aware of the incoming items included in the truck(s) listed above.',
+    '2. Date Confirmation - The scheduled delivery date(s) work for your team.',
+    '3. Indicate preferred delivery time -',
+    '4. Receiving Capacity - Your team is able to receive all incoming items in full.',
+    '5. Labor Availability - You have sufficient labor on-site to receive the delivery on the scheduled date(s).',
+    '6. Functional Area Notification - The relevant functional area(s) have been notified that their items will be delivered.',
+    '7. Space Availability - You have adequate space to store or stage the items upon arrival, or a plan in place until space becomes available.',
+    '',
+    'Please reply to this email confirming each of the six points above at your earliest convenience, and no later than 4 days before the delivery date.',
+    '',
+    'If there are any concerns or conflicts with the information above, please flag them immediately so we can work to resolve them before the dispatch date.',
+    '',
+    'Thank you for your cooperation - I appreciate your help keeping these deliveries on track.'
+  ];
+  const legDetails=isL2?[
     '',
     '--- Leg 2 (Satellite WHS -> Venue) ---',
     'Truck:        '+row.truckId+' (Leg 2)',
@@ -14896,15 +14918,8 @@ async function _fcSendHandshake(fp,leg){
     'OOR:          '+(row.oor||'-'),
     '',
     'Pallets:      '+row.plt,
-    'SKUs:         '+(row.skus||items.length||0),
-    manifest,
-    '',
-    'Thank you,',
-    'Materials Management Team'
-  ].join('\n'):[
-    'Hi,',
-    '',
-    'Please confirm receipt of the below delivery. Reply to this email with "CONFIRMED" or propose a different date.',
+    'SKUs:         '+(row.skus||items.length||0)
+  ]:[
     '',
     'Truck:        '+row.truckId,
     'Destination:  '+row.dest,
@@ -14913,13 +14928,11 @@ async function _fcSendHandshake(fp,leg){
     'Pallets:      '+row.plt,
     'SKUs:         '+(row.skus||items.length||0),
     'LSR:          '+(row.lsr||'-'),
-    'OOR:          '+(row.oor||'-'),
-    manifest,
-    '',
-    'Thank you,',
-    'Materials Management Team'
-  ].join('\n');
-  const mailto='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(bodyLines);
+    'OOR:          '+(row.oor||'-')
+  ];
+  const bodyLines=introCommon.concat(legDetails).concat([manifest,'','Materials Management Team']).join('\n');
+  const cc='distribution@fwc2026.org;materials@fwc2026.org';
+  const mailto='mailto:?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(bodyLines);
   window.open(mailto);
   LM_renderForecast(document.getElementById('mn'));
 }
