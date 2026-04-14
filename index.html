@@ -14812,17 +14812,22 @@ async function _fcSendHandshake(fp){
     const{error}=await SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now});
     if(error){console.warn('HS save error:',error)}
   }
-  // Build cargo manifest body
+  // Build cargo manifest as a plain-text pipe-delimited table
   let manifest='';
   const items=row.items||[];
   if(items.length){
-    manifest='\n\nCargo manifest ('+items.length+' lines):\n';
+    const pad=(s,n)=>{s=String(s==null?'':s);return s.length>=n?s.substring(0,n-1)+'…':s+' '.repeat(n-s.length)};
+    const padR=(s,n)=>{s=String(s==null?'':s);return s.length>=n?s:' '.repeat(n-s.length)+s};
+    const wSku=16,wName=42,wQty=6,wTag=9;
+    const head=pad('SKU',wSku)+' | '+pad('Item',wName)+' | '+padR('Qty',wQty)+' | '+pad('Tag',wTag);
+    const sep='-'.repeat(wSku)+'-+-'+'-'.repeat(wName)+'-+-'+'-'.repeat(wQty)+'-+-'+'-'.repeat(wTag);
+    const lines=[head,sep];
     for(const it of items){
-      const indent=it.kitChild?'    - ':(it.isKit?'  📦 ':'  • ');
-      const faTag=it.fa?' [FA]':'';
-      const manTag=it.manual?' [MANUAL]':'';
-      manifest+=indent+it.sku+(it.name?' — '+it.name:'')+' ('+(it.qty||0)+')'+faTag+manTag+'\n';
+      const prefix=it.kitChild?'  ':(it.isKit?'* ':'');
+      const tag=it.fa?'FA':(it.manual?'MANUAL':(it.isKit?'KIT':(it.kitChild?'part':'')));
+      lines.push(pad(prefix+(it.sku||''),wSku)+' | '+pad(it.name||'',wName)+' | '+padR(it.qty||0,wQty)+' | '+pad(tag,wTag));
     }
+    manifest='\n\nCargo manifest ('+items.length+' lines):\n'+lines.join('\n');
   }
   const subject='FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')';
   const bodyLines=[
