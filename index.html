@@ -14840,7 +14840,7 @@ async function _fcSendHandshake(fp,leg){
       const indent=it.kitChild?'    ':'';
       const faCode=typeof it.fa==='string'?it.fa:(it.fa?'FA':'');
       const tag=faCode?' ['+faCode+']':(it.manual?' [MANUAL]':(it.isKit?' [KIT]':''));
-      lines.push(indent+(it.qty||0)+'× '+(it.sku||'')+' '+(it.name||'')+tag);
+      lines.push(indent+(it.qty||0)+'x '+(it.sku||'')+' '+(it.name||'')+tag);
     }
     manifest='\n\nCargo manifest ('+items.length+' lines):\n'+lines.join('\n');
   }
@@ -14852,30 +14852,30 @@ async function _fcSendHandshake(fp,leg){
   const _satCity=(row.dest||'').replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();
   const satOrigin=(_satCity?_satCity+' ':'')+'Satellite WHS';
   const subject=isL2
-    ?'FF&E Delivery Confirmation — '+row.truckId+' Leg 2 · '+satOrigin+' → '+row.dest+' ('+l2Date+')'
-    :'FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')';
+    ?'FF&E Delivery Confirmation - '+row.truckId+' Leg 2 | '+satOrigin+' -> '+row.dest+' ('+l2Date+')'
+    :'FF&E Delivery Confirmation - '+row.truckId+' to '+row.dest+' ('+row.disp+')';
   const bodyLines=isL2?[
     'Hi,',
     '',
     'Please confirm receipt of the below 2nd-leg delivery (cross-dock from satellite WHS to venue on bump-in day). Reply with "CONFIRMED" or propose a different date.',
     '',
-    '── Leg 2 (Satellite WHS → Venue) ──',
+    '--- Leg 2 (Satellite WHS -> Venue) ---',
     'Truck:        '+row.truckId+' (Leg 2)',
     'From:         '+satOrigin,
     'To:           '+row.dest,
     'Dispatch:     '+l2Date,
-    'Bump-in:      '+(row.firstBI||'—'),
-    'LSR:          '+(l2Lsr||'—'),
-    'OOR:          '+(l2Oor||'—'),
+    'Bump-in:      '+(row.firstBI||'-'),
+    'LSR:          '+(l2Lsr||'-'),
+    'OOR:          '+(l2Oor||'-'),
     '',
-    '── Leg 1 (Dallas → Satellite WHS, for reference) ──',
+    '--- Leg 1 (Dallas -> Satellite WHS, for reference) ---',
     'Truck:        '+row.truckId+' (Leg 1)',
     'From:         '+(row.dispLoc||'Dallas'),
     'To:           '+satOrigin,
     'Dispatch:     '+row.disp,
-    'Est. Arrival: '+(row.arrDate||'—'),
-    'LSR:          '+(row.lsr||'—'),
-    'OOR:          '+(row.oor||'—'),
+    'Est. Arrival: '+(row.arrDate||'-'),
+    'LSR:          '+(row.lsr||'-'),
+    'OOR:          '+(row.oor||'-'),
     '',
     'Pallets:      '+row.plt,
     'SKUs:         '+(row.skus||items.length||0),
@@ -14891,11 +14891,11 @@ async function _fcSendHandshake(fp,leg){
     'Truck:        '+row.truckId,
     'Destination:  '+row.dest,
     'Dispatch:     '+row.disp,
-    'Bump-in:      '+(row.firstBI||'—'),
+    'Bump-in:      '+(row.firstBI||'-'),
     'Pallets:      '+row.plt,
     'SKUs:         '+(row.skus||items.length||0),
-    'LSR:          '+(row.lsr||'—'),
-    'OOR:          '+(row.oor||'—'),
+    'LSR:          '+(row.lsr||'-'),
+    'OOR:          '+(row.oor||'-'),
     manifest,
     '',
     'Thank you,',
