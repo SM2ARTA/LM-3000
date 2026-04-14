@@ -14824,7 +14824,7 @@ async function _fcSendHandshake(fp){
       // Drop placeholder [FA] rows from the truck items to avoid double-counting
       for(let i=items.length-1;i>=0;i--){if(items[i].fa&&!items[i].kitChild)items.splice(i,1)}
       for(const fi of faDetail){
-        items.push({sku:fi.sku,name:fi.name||'',qty:fi.qty||0,fa:true});
+        items.push({sku:fi.sku,name:fi.name||'',qty:fi.qty||0,fa:fi.fa||'FA'});
       }
     }
   }catch(e){console.warn('[HS] FA expand failed:',e)}
@@ -14832,7 +14832,8 @@ async function _fcSendHandshake(fp){
     const lines=[];
     for(const it of items){
       const indent=it.kitChild?'    ':'';
-      const tag=it.fa?' [FA]':(it.manual?' [MANUAL]':(it.isKit?' [KIT]':''));
+      const faCode=typeof it.fa==='string'?it.fa:(it.fa?'FA':'');
+      const tag=faCode?' ['+faCode+']':(it.manual?' [MANUAL]':(it.isKit?' [KIT]':''));
       lines.push(indent+(it.qty||0)+'× '+(it.sku||'')+' '+(it.name||'')+tag);
     }
     manifest='\n\nCargo manifest ('+items.length+' lines):\n'+lines.join('\n');
