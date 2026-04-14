@@ -15029,7 +15029,16 @@ function _fcOpenLeg2(fp,truckId,dest,clusterLabel){
   const fpEsc=fp.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   const clEsc=(clusterLabel||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   const tidEsc=(truckId||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-  const l2Date=_fcLeg2Date[fp]||'';
+  // Default leg 2 dispatch = venue bump-in (when leg 2 actually rolls). Fall back
+  // to _fcPendingRows[fp].firstBI, then PLAN_CACHE lookup, so the input is
+  // pre-filled even when the user hasn't explicitly overridden the date.
+  const pendRow=_fcPendingRows[fp]||{};
+  let _defaultDate=pendRow.firstBI||'';
+  if(!_defaultDate&&clusterLabel&&PLAN_CACHE[clusterLabel]){
+    const _t=(PLAN_CACHE[clusterLabel].allT||[]).find(x=>LM_fp(x)===fp);
+    if(_t)_defaultDate=_t.origBiK||_t.biK||_t.dd||'';
+  }
+  const l2Date=_fcLeg2Date[fp]||_defaultDate||'';
   const l2Lsr=_fcLeg2Lsr[fp]||'';
   const l2Oor=_fcLeg2Oor[fp]||'';
   const lead=_fcLeadMap[fp]||'';
