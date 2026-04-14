@@ -14860,7 +14860,7 @@ async function _fcSendHandshake(fp,leg){
       const latePrefix=_isItemLate(it)?'[LATE] ':'';
       lines.push(indent+latePrefix+(it.qty||0)+'x '+(it.sku||'')+' '+(it.name||'')+tag);
     }
-    manifest='\n\nCargo manifest ('+items.length+' lines):\n'+lines.join('\n');
+    manifest='Cargo manifest ('+items.length+' lines):\n'+lines.join('\n');
   }
   // Leg 2 uses its own LSR/OOR/date + satellite-WHS origin label
   const isL2=leg===2;
@@ -14872,24 +14872,19 @@ async function _fcSendHandshake(fp,leg){
   const subject=isL2
     ?'Action Required: Upcoming Truck '+(l2Lsr||row.truckId)+' (Leg 2) Delivery to '+row.dest
     :'Action Required: Upcoming Truck '+(row.lsr||row.truckId)+' Delivery to '+row.dest;
-  const truckLine=isL2
-    ?'- Truck #'+row.truckId+' (Leg 2) | LSR '+(l2Lsr||'-')+' | Delivery Date: '+l2Date
-    :'- Truck #'+row.truckId+' | LSR '+(row.lsr||'-')+' | Delivery Date: '+row.disp;
   const introCommon=[
     'Hello,',
     '',
     "I hope you're doing well. As part of our weekly dispatch review, I'm reaching out to give you advance notice of the following truck deliveries scheduled to be dispatched to your venue next week:",
     '',
-    truckLine,
-    '',
     'To ensure a smooth delivery, I need your written confirmation on the following points:',
-    '1. Acknowledgment - You have reviewed and are aware of the incoming items included in the truck(s) listed above.',
+    '1. Acknowledgment - You have reviewed the incoming items on the truck(s) listed above.',
     '2. Date Confirmation - The scheduled delivery date(s) work for your team.',
     '3. Indicate preferred delivery time -',
-    '4. Receiving Capacity - Your team is able to receive all incoming items in full.',
-    '5. Labor Availability - You have sufficient labor on-site to receive the delivery on the scheduled date(s).',
-    '6. Functional Area Notification - The relevant functional area(s) have been notified that their items will be delivered;',
-    '7. Space Availability - You have adequate space to store or stage the items upon arrival, or a plan in place until space becomes available.',
+    '4. Receiving Capacity - Your team can receive all incoming items in full.',
+    '5. Labor Availability - Sufficient labor is on-site to receive the delivery.',
+    '6. Functional Area Notification - Relevant functional area(s) are notified.',
+    '7. Space Availability - Adequate space is available to store or stage items.',
     '',
     'Please reply to this email confirming each of the six points above at your earliest convenience, and no later than 4 days before the delivery date.',
     '',
