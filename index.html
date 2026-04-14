@@ -14835,12 +14835,30 @@ async function _fcSendHandshake(fp,leg){
     }
   }catch(e){console.warn('[HS] FA expand failed:',e)}
   if(items.length){
+    // Lateness check — mirrors forecast row logic. Skip for STP/CT sources and FA
+    // items (different supply chains). LP-fed clusters use LM_kitArrivedOnTime,
+    // non-LP fall back to LM_kitInStock when a stock report exists.
+    const _cluster=row.cluster;
+    const _lpAbbrs=(_cluster&&LM_isLPFed(_cluster))?LM_getLPDestAbbrs(_cluster):[];
+    const _disp=row.disp;
+    const _isLpMode=_lpAbbrs.length>0&&_disp&&Object.keys(LP_ARRIVAL_MAP).length>0;
+    const _isStockMode=STOCK_SKUS.size>0;
+    const _isItemLate=(it)=>{
+      if(it.fa)return false;
+      const n=NOM[it.sku];
+      const src=(n?.src||'').toUpperCase();
+      if(src.startsWith('STP')||src.startsWith('CT'))return false;
+      if(_isLpMode)return!LM_kitArrivedOnTime(it.sku,_lpAbbrs,_disp);
+      if(_isStockMode)return!LM_kitInStock(it.sku);
+      return false;
+    };
     const lines=[];
     for(const it of items){
       const indent=it.kitChild?'    ':'';
       const faCode=typeof it.fa==='string'?it.fa:(it.fa?'FA':'');
       const tag=faCode?' ['+faCode+']':(it.manual?' [MANUAL]':(it.isKit?' [KIT]':''));
-      lines.push(indent+(it.qty||0)+'x '+(it.sku||'')+' '+(it.name||'')+tag);
+      const latePrefix=_isItemLate(it)?'[LATE] ':'';
+      lines.push(indent+latePrefix+(it.qty||0)+'x '+(it.sku||'')+' '+(it.name||'')+tag);
     }
     manifest='\n\nCargo manifest ('+items.length+' lines):\n'+lines.join('\n');
   }
