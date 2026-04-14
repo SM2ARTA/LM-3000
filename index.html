@@ -11654,13 +11654,15 @@ function LM_setOor(truckIdx,val){if(ROLE==='viewer')return;const t=LP?.allT?.[tr
 // Five protections: cross-tab lease, load-gate, version/OCC, shrink
 // guard, post-save verification. See CLAUDE.md → LM Safety section.
 // ══════════════════════════════════════════════════════════════════
-let _lmLoadState='unknown';// 'unknown'|'started'|'succeeded'|'failed'
-let _lmLoadedVersion=0;// server version after last successful load
-let _lmLoadedCardinality={oor:0,disp:0,lsr:0,snap:0,dates:0,holds:0,rel:0};
-let _lmTabId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():('tab-'+Date.now()+'-'+Math.random().toString(36).slice(2,10));
-let _lmLeaseOwner=false;// does THIS tab hold the lease?
-let _lmLeaseChan=null;
-let _lmLeaseHeartbeatTimer=null;
+// var (not let) so autoLogin→enterApp→_lmLeaseInit can reach these before
+// the declaration line executes (IIFE runs synchronously before this line).
+var _lmLoadState='unknown';// 'unknown'|'started'|'succeeded'|'failed'
+var _lmLoadedVersion=0;// server version after last successful load
+var _lmLoadedCardinality={oor:0,disp:0,lsr:0,snap:0,dates:0,holds:0,rel:0};
+var _lmTabId=null;// lazy-init inside _lmLeaseInit (avoids TDZ)
+var _lmLeaseOwner=false;// does THIS tab hold the lease?
+var _lmLeaseChan=null;
+var _lmLeaseHeartbeatTimer=null;
 const _LM_LEASE_KEY='ml3k-lm-lease';
 const _LM_LEASE_STALE_MS=15000;
 const _LM_LEASE_HEARTBEAT_MS=5000;
@@ -11753,6 +11755,10 @@ window._lmLeaseTakeover=_lmLeaseTakeover;
 
 function _lmLeaseInit(){
   if(ROLE==='viewer')return;// viewers don't need a lease
+  // Lazy-init tab ID (var declared early; assigned here on first init)
+  if(!_lmTabId){
+    _lmTabId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():('tab-'+Date.now()+'-'+Math.random().toString(36).slice(2,10));
+  }
   // BroadcastChannel for cross-tab notifications
   try{
     if(typeof BroadcastChannel!=='undefined'){
