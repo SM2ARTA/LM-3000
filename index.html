@@ -17785,12 +17785,13 @@ function LM_emailOor(truckIdx){
     const nm=(it.nm||n.name||'').replace(/[\r\n\t]/g,' ');
     asmLines.push(' - '+q+'x '+it.sku+' '+nm);
   }
-  const oorTxt=oor?'# '+oor:'(number tbd)';
+  const oorTxt=oor?'#'+oor:'(number tbd)';
   const ref=t.id+(lsr?' '+lsr:'');
+  const introLine='Please find attached the OOR '+oorTxt+' for '+ref+', the truck going to the '+dest+'.'+(ddStr?' Dispatch is scheduled to leave WHS on '+ddStr+'.':'');
   const bodyLines=[
     'Hello,',
     '',
-    'Please find attached the OOR '+oorTxt+' - '+ref+' for truck going to '+dest+(ddStr?' dispatching to leave WHS on '+ddStr:'')+'.',
+    introLine,
     '',
     'Items requiring assembly:',
     asmLines.length?asmLines.join('\n'):'  (none)',
