@@ -14784,7 +14784,7 @@ let _fcLeg2Oor={};// fingerprint → OOR string for leg 2 (separate from truck's
 let _fcLeg2Date={};// fingerprint → date string for leg 2 dispatch (default: bump-in)
 let _fcSearchText='';
 let _fcShowPast=false;
-let _fcHandshakes={};// fingerprint → {sent:bool, sentAt:'YYYY-MM-DD', confirmed:bool, confirmedAt:'YYYY-MM-DD'} — simplified manual email flow
+let _fcHandshakes={};// fingerprint → {sent,sentAt,confirmed,confirmedAt, leg2:{sent,sentAt,confirmed,confirmedAt}} — main truck + optional leg 2
 async function _fcLoadHandshakes(){
   if(!SB)return;
   try{
@@ -14801,13 +14801,19 @@ let _fcPendingRows={};// temp store for row data keyed by fp (avoids JSON in onc
 // Manual handshake flow: generate a pre-filled mailto with the full cargo manifest.
 // No tokens, no links, no receiver-side webapp. Confirmation is tracked by a simple
 // persistent checkbox that admins tick after receiving email confirmation.
-async function _fcSendHandshake(fp){
+async function _fcSendHandshake(fp,leg){
   // Viewers ARE allowed to send the email + tick confirm (fm-fc-handshakes is a
   // forecast-isolated key — no impact on planner state or atomic dispatch blob).
+  leg=leg===2?2:1;
   const row=_fcPendingRows[fp];if(!row){console.warn('[HS] No row data for',fp);return}
   const today=new Date().toISOString().slice(0,10);
   const existing=_fcHandshakes[fp]||{};
-  _fcHandshakes[fp]={...existing,sent:true,sentAt:today,confirmed:!!existing.confirmed,confirmedAt:existing.confirmedAt||''};
+  if(leg===2){
+    const l2=existing.leg2||{};
+    _fcHandshakes[fp]={...existing,leg2:{...l2,sent:true,sentAt:today,confirmed:!!l2.confirmed,confirmedAt:l2.confirmedAt||''}};
+  }else{
+    _fcHandshakes[fp]={...existing,sent:true,sentAt:today,confirmed:!!existing.confirmed,confirmedAt:existing.confirmedAt||''};
+  }
   if(SB){
     const now=new Date().toISOString();
     const{error}=await SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now});
@@ -14838,8 +14844,35 @@ async function _fcSendHandshake(fp){
     }
     manifest='\n\nCargo manifest ('+items.length+' lines):\n'+lines.join('\n');
   }
-  const subject='FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')';
-  const bodyLines=[
+  // Leg 2 uses its own LSR/OOR/date + satellite-WHS origin label
+  const isL2=leg===2;
+  const l2Date=_fcLeg2Date[fp]||row.firstBI||row.disp;
+  const l2Lsr=_fcLeg2Lsr[fp]||'';
+  const l2Oor=_fcLeg2Oor[fp]||'';
+  const _satCity=(row.dest||'').replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();
+  const satOrigin=(_satCity?_satCity+' ':'')+'Satellite WHS';
+  const subject=isL2
+    ?'FF&E Delivery Confirmation — '+row.truckId+' Leg 2 · '+satOrigin+' → '+row.dest+' ('+l2Date+')'
+    :'FF&E Delivery Confirmation — '+row.truckId+' to '+row.dest+' ('+row.disp+')';
+  const bodyLines=isL2?[
+    'Hi,',
+    '',
+    'Please confirm receipt of the below 2nd-leg delivery (cross-dock from satellite WHS to venue on bump-in day). Reply with "CONFIRMED" or propose a different date.',
+    '',
+    'Truck:        '+row.truckId+' (Leg 2)',
+    'From:         '+satOrigin,
+    'To:           '+row.dest,
+    'Dispatch:     '+l2Date,
+    'Bump-in:      '+(row.firstBI||'—'),
+    'Pallets:      '+row.plt,
+    'SKUs:         '+(row.skus||items.length||0),
+    'LSR:          '+(l2Lsr||'—'),
+    'OOR:          '+(l2Oor||'—'),
+    manifest,
+    '',
+    'Thank you,',
+    'Materials Management Team'
+  ].join('\n'):[
     'Hi,',
     '',
     'Please confirm receipt of the below delivery. Reply to this email with "CONFIRMED" or propose a different date.',
@@ -14861,11 +14894,17 @@ async function _fcSendHandshake(fp){
   window.open(mailto);
   LM_renderForecast(document.getElementById('mn'));
 }
-async function _fcToggleConfirm(fp,checked){
+async function _fcToggleConfirm(fp,checked,leg){
   // Viewers ARE allowed to tick confirm (forecast-isolated key, no planner impact)
+  leg=leg===2?2:1;
   const today=new Date().toISOString().slice(0,10);
   const existing=_fcHandshakes[fp]||{};
-  _fcHandshakes[fp]={...existing,confirmed:!!checked,confirmedAt:checked?today:''};
+  if(leg===2){
+    const l2=existing.leg2||{};
+    _fcHandshakes[fp]={...existing,leg2:{...l2,confirmed:!!checked,confirmedAt:checked?today:''}};
+  }else{
+    _fcHandshakes[fp]={...existing,confirmed:!!checked,confirmedAt:checked?today:''};
+  }
   if(SB){
     const now=new Date().toISOString();
     SB.from('shared_state').upsert({id:'fm-fc-handshakes',value:JSON.stringify(_fcHandshakes),updated_at:now}).then(({error})=>{if(error)console.warn('HS confirm save error:',error)});
@@ -15004,6 +15043,18 @@ function _fcOpenLeg2(fp,truckId,dest,clusterLabel){
         <div>OOR: <span class="mono" style="color:#2563eb">${l2Oor||'—'}</span></div>
         <div>LSR: <span class="mono" style="color:var(--pu)">${l2Lsr||'—'}</span></div>
       </div>`}
+      ${(()=>{const hs2=(_fcHandshakes[fp]||{}).leg2||{};const pendRow=_fcPendingRows[fp];if(!pendRow){/* forecast not rendered yet — leg 2 modal still works, just pull minimal row */_fcPendingRows[fp]={dest:dest,cluster:clusterLabel||'',truckId:truckId,disp:l2Date,plt:0,skus:0,lsr:l2Lsr,oor:l2Oor,firstBI:l2Date,items:[]}}return`<div style="margin-top:14px;padding:12px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:#1565C0;margin-bottom:8px">📨 Leg 2 Handshake</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="rbtn" onclick="_fcSendHandshake('${fpEsc}',2)" style="font-size:10px;padding:4px 10px;color:var(--ac);border-color:var(--ab)" title="${hs2.sent?'Resend leg 2 email':'Open pre-filled leg 2 email'}">📧 ${hs2.sent?'Resend':'Email'}</button>
+          <label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;cursor:pointer" title="Tick when receiver confirms leg 2 by reply">
+            <input type="checkbox" ${hs2.confirmed?'checked':''} onchange="_fcToggleConfirm('${fpEsc}',this.checked,2);this.nextElementSibling.textContent=this.checked?'Confirmed':'Confirmed?';this.nextElementSibling.style.color=this.checked?'var(--gn)':'var(--tt)';this.nextElementSibling.style.fontWeight=this.checked?'600':'400'" style="cursor:pointer">
+            <span style="color:${hs2.confirmed?'var(--gn)':'var(--tt)'};font-weight:${hs2.confirmed?'600':'400'}">${hs2.confirmed?'Confirmed':'Confirmed?'}</span>
+          </label>
+          ${hs2.sent?`<span style="font-size:9px;color:var(--tt)">✉ sent ${hs2.sentAt||''}</span>`:''}
+          ${hs2.confirmed?`<span style="font-size:9px;color:var(--gn)">✅ ${hs2.confirmedAt||''}</span>`:''}
+        </div>
+      </div>`})()}
       <div style="display:flex;justify-content:flex-end;margin-top:14px">
         <button class="mbtn mbtn-primary" onclick="document.getElementById('mr').innerHTML='';if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}">Close</button>
       </div>
