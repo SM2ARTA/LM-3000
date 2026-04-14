@@ -8802,6 +8802,17 @@ window._rtChannel=null;// single subscription instance
 window._rtLastLocalSave=0;// timestamp of last local save (ms)
 window._rtSyncing=false;// prevent duplicate syncs
 window._remoteDataStale=false;
+// ── LM Safety Layer state (hoisted early to avoid TDZ in autoLogin→enterApp path) ──
+var _lmLoadState='unknown';// 'unknown'|'started'|'succeeded'|'failed'
+var _lmLoadedVersion=0;// server version after last successful load
+var _lmLoadedCardinality={oor:0,disp:0,lsr:0,snap:0,dates:0,holds:0,rel:0};
+var _lmTabId=null;// lazy-init inside _lmLeaseInit
+var _lmLeaseOwner=false;// does THIS tab hold the lease?
+var _lmLeaseChan=null;
+var _lmLeaseHeartbeatTimer=null;
+var _LM_LEASE_KEY='ml3k-lm-lease';
+var _LM_LEASE_STALE_MS=15000;
+var _LM_LEASE_HEARTBEAT_MS=5000;
 function _rtMarkLocalSave(){window._rtLastLocalSave=Date.now()}
 function _rtStartRealtime(){
   if(!SB||window._rtChannel)return;// already subscribed or no DB
@@ -11653,19 +11664,10 @@ function LM_setOor(truckIdx,val){if(ROLE==='viewer')return;const t=LP?.allT?.[tr
 // LM Safety Layer (incident 2026-04 — ~43 OORs silently wiped)
 // Five protections: cross-tab lease, load-gate, version/OCC, shrink
 // guard, post-save verification. See CLAUDE.md → LM Safety section.
+// State vars + constants moved to top of file (line ~8800) so the
+// synchronous autoLogin→enterApp→_lmLeaseInit path can use them
+// without TDZ errors or late-assignment resets.
 // ══════════════════════════════════════════════════════════════════
-// var (not let) so autoLogin→enterApp→_lmLeaseInit can reach these before
-// the declaration line executes (IIFE runs synchronously before this line).
-var _lmLoadState='unknown';// 'unknown'|'started'|'succeeded'|'failed'
-var _lmLoadedVersion=0;// server version after last successful load
-var _lmLoadedCardinality={oor:0,disp:0,lsr:0,snap:0,dates:0,holds:0,rel:0};
-var _lmTabId=null;// lazy-init inside _lmLeaseInit (avoids TDZ)
-var _lmLeaseOwner=false;// does THIS tab hold the lease?
-var _lmLeaseChan=null;
-var _lmLeaseHeartbeatTimer=null;
-const _LM_LEASE_KEY='ml3k-lm-lease';
-const _LM_LEASE_STALE_MS=15000;
-const _LM_LEASE_HEARTBEAT_MS=5000;
 
 function _lmLog(msg,extra){if(extra!==undefined)console.log('[LM Safety]',msg,extra);else console.log('[LM Safety]',msg)}
 function _lmWarn(msg,extra){if(extra!==undefined)console.warn('[LM Safety]',msg,extra);else console.warn('[LM Safety]',msg)}
