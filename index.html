@@ -14883,52 +14883,29 @@ function _fcSetOorByFp(fp,val){
   if(val)LM_oorNumbers[fp]=val;else delete LM_oorNumbers[fp];
   LM_saveDateOverrides();
 }
-// Open a read-friendly truck detail modal straight from the forecast table (no view change)
+// Open the full LM truck-detail modal (showM) straight from the forecast table.
+// Reuses the same rich card (FA block, OOR export, lock/date/LSR, readiness) — we
+// swap sel/selCluster/LP to the truck's cluster for showM and restore them on close.
+// Outside-click close is disabled so accidental backdrop clicks don't dismiss edits.
 function _fcOpenTruck(fp,clusterLabel){
-  // Find truck in PLAN_CACHE[cluster] by fingerprint
   const P=PLAN_CACHE[clusterLabel];
   if(!P||!P.allT){alert('Truck data not loaded for '+clusterLabel);return}
-  const t=P.allT.find(x=>LM_fp(x)===fp);
-  if(!t){alert('Truck not found.');return}
-  const tCap=t.tCap||P.tCap||26;
-  const dest=t.destDisplay||t.dest||clusterLabel;
-  const lsr=LM_getLsr(t),oor=LM_getOor(t);
-  const isDisp=LM_isDispatched(t);
-  const dd=t.dd||'';
-  const fpEsc=fp.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-  let itemsRows='';
-  for(const it of (t.items||[])){
-    const n=NOM[it.sku]||{};const q=it.loadQty!=null?it.loadQty:(it.qty||0);
-    const isKit=n._kitNom||it._kitNom;
-    itemsRows+=`<tr><td class="mono" style="font-size:10px">${it.sku}${isKit?' 📦':''}</td><td style="font-size:11px">${n.name||it.nm||it.name||''}</td><td class="mono" style="text-align:right;font-size:11px">${q.toLocaleString()}</td></tr>`;
-  }
-  const plt=Number.isInteger(t.pallets)?t.pallets:(t.pallets||0).toFixed(1);
-  const pcs=(t.items||[]).reduce((s,it)=>s+(it.loadQty!=null?it.loadQty:(it.qty||0)),0);
-  const h=`<div style="padding:16px 22px;max-width:720px;max-height:80vh;overflow:auto">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <span style="font-size:18px">${isDisp?'🔒':'🚛'}</span>
-      <div style="font-size:16px;font-weight:700">${t.id} — ${dest}</div>
-      ${isDisp?'<span class="bg bgs bg-gn">Locked</span>':''}
-    </div>
-    <div style="font-size:11px;color:var(--ts);margin-bottom:10px">${plt}/${tCap} pallets · ${pcs.toLocaleString()} qty · ${(t.items||[]).length} SKUs</div>
-    ${ROLE==='admin'?`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;margin-bottom:12px">
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#2563eb">OOR
-        <input type="text" value="${oor}" placeholder="OOR#" onchange="_fcSetOorByFp('${fpEsc}',this.value.trim())" style="font-size:11px;font-family:var(--fm);padding:3px 6px;border:1px solid ${oor?'#2563eb':'var(--bd)'};border-radius:4px;color:#2563eb;width:100px">
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--pu)">LSR
-        <input type="text" value="${lsr}" placeholder="LSR#" onchange="_fcSetLsrByFp('${fpEsc}',this.value.trim())" style="font-size:11px;font-family:var(--fm);padding:3px 6px;border:1px solid ${lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:120px">
-      </label>
-      <span style="color:var(--bd)">|</span>
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ts)">Dispatch
-        <span class="mono" style="font-size:11px;color:var(--tp)">${dd||'—'}</span>
-      </label>
-    </div>`:''}
-    <table class="dtb" style="width:100%"><thead><tr><th>SKU</th><th>Item</th><th style="text-align:right">Qty</th></tr></thead><tbody>${itemsRows}</tbody></table>
-    <div style="display:flex;justify-content:flex-end;margin-top:14px">
-      <button class="mbtn mbtn-primary" onclick="document.getElementById('mr').innerHTML=''">Close</button>
-    </div>
-  </div>`;
-  openModal(h,'760px');
+  const idx=P.allT.findIndex(x=>LM_fp(x)===fp);
+  if(idx<0){alert('Truck not found.');return}
+  const _prev={sel,selCluster,LP};
+  const _isCluster=!!CLUSTERS[clusterLabel];
+  selCluster=_isCluster?clusterLabel:'';
+  sel=_isCluster?((CLUSTERS[clusterLabel].venues&&CLUSTERS[clusterLabel].venues[0])||clusterLabel):clusterLabel;
+  LP=P;
+  const _origClM=window.clM;
+  let _restored=false;
+  const _restore=()=>{if(_restored)return;_restored=true;sel=_prev.sel;selCluster=_prev.selCluster;LP=_prev.LP;window.clM=_origClM};
+  window.clM=function(e){
+    if(e&&e.target&&e.target.classList&&e.target.classList.contains("mo"))return;
+    _restore();_origClM(e);
+  };
+  showM(idx);
+  const mo=document.querySelector('#mr .mo');if(mo)mo.onclick=null;
 }
 function LM_renderForecast(el){
   if(!Object.keys(PLAN_CACHE).length){el.innerHTML='<div class="lp-empty">No plan data. Generate from Dashboard first.</div>';return}
