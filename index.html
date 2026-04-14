@@ -14914,7 +14914,7 @@ async function _fcSendHandshake(fp,leg){
     'LSR:          '+(row.lsr||'-'),
     'OOR:          '+(row.oor||'-')
   ];
-  const bodyLines=introCommon.concat(legDetails).concat([manifest,'','Materials Management Team']).join('\n');
+  const bodyLines=introCommon.concat(legDetails).concat(['',manifest,'','Materials Management Team']).join('\n');
   const cc='distribution@fwc2026.org;materials@fwc2026.org';
   const mailto='mailto:?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(bodyLines);
   window.open(mailto);
