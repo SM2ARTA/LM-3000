@@ -14813,8 +14813,20 @@ async function _fcSendHandshake(fp){
     if(error){console.warn('HS save error:',error)}
   }
   // Build cargo manifest: "Qty× SKU Name [tag]" — one line per item, no alignment.
+  // Expand FA capacity-reservations into the actual FA goods contained in the group.
   let manifest='';
-  const items=row.items||[];
+  const items=(row.items||[]).slice();
+  // Append actual FA items (not just capacity placeholders)
+  try{
+    const faDetail=_faItemsForTruck(row.truckId,row.dest,row.lsr)||[];
+    if(faDetail.length){
+      // Drop placeholder [FA] rows from the truck items to avoid double-counting
+      for(let i=items.length-1;i>=0;i--){if(items[i].fa&&!items[i].kitChild)items.splice(i,1)}
+      for(const fi of faDetail){
+        items.push({sku:fi.sku,name:fi.name||'',qty:fi.qty||0,fa:true});
+      }
+    }
+  }catch(e){console.warn('[HS] FA expand failed:',e)}
   if(items.length){
     const lines=[];
     for(const it of items){
