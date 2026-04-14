@@ -14802,7 +14802,8 @@ let _fcPendingRows={};// temp store for row data keyed by fp (avoids JSON in onc
 // No tokens, no links, no receiver-side webapp. Confirmation is tracked by a simple
 // persistent checkbox that admins tick after receiving email confirmation.
 async function _fcSendHandshake(fp){
-  if(ROLE==='viewer')return;
+  // Viewers ARE allowed to send the email + tick confirm (fm-fc-handshakes is a
+  // forecast-isolated key — no impact on planner state or atomic dispatch blob).
   const row=_fcPendingRows[fp];if(!row){console.warn('[HS] No row data for',fp);return}
   const today=new Date().toISOString().slice(0,10);
   const existing=_fcHandshakes[fp]||{};
@@ -14860,7 +14861,7 @@ async function _fcSendHandshake(fp){
   LM_renderForecast(document.getElementById('mn'));
 }
 async function _fcToggleConfirm(fp,checked){
-  if(ROLE==='viewer')return;
+  // Viewers ARE allowed to tick confirm (forecast-isolated key, no planner impact)
   const today=new Date().toISOString().slice(0,10);
   const existing=_fcHandshakes[fp]||{};
   _fcHandshakes[fp]={...existing,confirmed:!!checked,confirmedAt:checked?today:''};
@@ -15279,7 +15280,7 @@ function LM_renderForecast(el){
         <td onclick="event.stopPropagation()">${ROLE==='admin'?`<select style="font-size:10px;padding:2px 4px;border:1px solid ${is2Leg?'#1565C0':'var(--bd)'};border-radius:4px;color:${is2Leg?'#1565C0':'var(--tt)'};background:#fff" onchange="_fcSetLegs('${_fp}',parseInt(this.value))"><option value="1"${!is2Leg?' selected':''}>1</option><option value="2"${is2Leg?' selected':''}>2</option></select>`:`<span style="font-size:10px;color:var(--tt)">${is2Leg?'2':'1'}</span>`}</td>
         <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
         <td class="mono" style="font-size:10px;color:var(--pu)">${r.lsr||''}</td>
-        <td style="text-align:center;white-space:nowrap" onclick="event.stopPropagation()">${(()=>{_fcPendingRows[r.fp]={dest:r.dest,cluster:r.cluster,truckId:r.truckId,disp:r.disp,plt:r.plt,skus:r.skus||0,lsr:r.lsr,oor:r.oor,firstBI:r.firstBI,items:r.items};const hs=_fcHandshakes[r.fp]||{};const sentTag=hs.sent?`<span style="font-size:8px;color:var(--tt);margin-left:4px" title="Sent ${hs.sentAt||''}">✉ ${hs.sentAt||''}</span>`:'';if(ROLE!=='admin'){return hs.confirmed?`<span style="font-size:10px;color:var(--gn);font-weight:600">✅ ${hs.confirmedAt||''}</span>`:(hs.sent?`<span style="font-size:9px;color:var(--or)">⏳ sent</span>`:'—')}const emailBtn=`<button class="rbtn" onclick="_fcSendHandshake('${_fp}')" style="font-size:9px;padding:2px 8px;color:var(--ac);border-color:var(--ab)" title="${hs.sent?'Resend email':'Open pre-filled email'}">📧 ${hs.sent?'Resend':'Email'}</button>`;const confirmBox=`<label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;margin-left:6px;cursor:pointer" title="Tick when receiver confirms by reply"><input type="checkbox" ${hs.confirmed?'checked':''} onchange="_fcToggleConfirm('${_fp}',this.checked);this.closest('label').querySelector('.hs-lbl').textContent=this.checked?'Confirmed':'Confirmed?'" style="cursor:pointer"><span class="hs-lbl" style="color:${hs.confirmed?'var(--gn)':'var(--tt)'};font-weight:${hs.confirmed?'600':'400'}">${hs.confirmed?'Confirmed':'Confirmed?'}</span></label>`;return emailBtn+confirmBox+sentTag})()}</td>
+        <td style="text-align:center;white-space:nowrap" onclick="event.stopPropagation()">${(()=>{_fcPendingRows[r.fp]={dest:r.dest,cluster:r.cluster,truckId:r.truckId,disp:r.disp,plt:r.plt,skus:r.skus||0,lsr:r.lsr,oor:r.oor,firstBI:r.firstBI,items:r.items};const hs=_fcHandshakes[r.fp]||{};const sentTag=hs.sent?`<span style="font-size:8px;color:var(--tt);margin-left:4px" title="Sent ${hs.sentAt||''}">✉ ${hs.sentAt||''}</span>`:'';const emailBtn=`<button class="rbtn" onclick="_fcSendHandshake('${_fp}')" style="font-size:9px;padding:2px 8px;color:var(--ac);border-color:var(--ab)" title="${hs.sent?'Resend email':'Open pre-filled email'}">📧 ${hs.sent?'Resend':'Email'}</button>`;const confirmBox=`<label style="display:inline-flex;align-items:center;gap:3px;font-size:10px;margin-left:6px;cursor:pointer" title="Tick when receiver confirms by reply"><input type="checkbox" ${hs.confirmed?'checked':''} onchange="_fcToggleConfirm('${_fp}',this.checked);this.closest('label').querySelector('.hs-lbl').textContent=this.checked?'Confirmed':'Confirmed?'" style="cursor:pointer"><span class="hs-lbl" style="color:${hs.confirmed?'var(--gn)':'var(--tt)'};font-weight:${hs.confirmed?'600':'400'}">${hs.confirmed?'Confirmed':'Confirmed?'}</span></label>`;return emailBtn+confirmBox+sentTag})()}</td>
         <td>${_fmtD(r.disp)}</td>
         <td class="mono" style="text-align:center">${r.transit}d</td>
         <td style="color:var(--gn);font-weight:600">${_fmtD(r.arrDate)}</td>
