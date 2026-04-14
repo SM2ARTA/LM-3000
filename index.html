@@ -14899,7 +14899,7 @@ function _fcOpenTruck(fp,clusterLabel){
   LP=P;
   const _origClM=window.clM;
   let _restored=false;
-  const _restore=()=>{if(_restored)return;_restored=true;sel=_prev.sel;selCluster=_prev.selCluster;LP=_prev.LP;window.clM=_origClM};
+  const _restore=()=>{if(_restored)return;_restored=true;sel=_prev.sel;selCluster=_prev.selCluster;LP=_prev.LP;window.clM=_origClM;if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}};
   window.clM=function(e){
     if(e&&e.target&&e.target.classList&&e.target.classList.contains("mo"))return;
     _restore();_origClM(e);
