@@ -13382,7 +13382,7 @@ const _mCountry=LM_venueCountry(selCluster||'',sel||'');
 const _mLpAbbrs=LM_isLPFed(_mCacheKey)?LM_getLPDestAbbrs(_mCacheKey):[];
 const _mIsLpFed=_mLpAbbrs.length>0&&Object.keys(LP_ARRIVAL_MAP).length>0;
 let h=`<div class="mo" onclick="clM(event)"><div class="mdi" onclick="event.stopPropagation()">
-<div class="mdh"><div><h3>🚛 ${t.id}${t._faTruck?' <span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📐 FA Truck</span>':''}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
+<div class="mdh"><div><h3>🚛 ${t.id}${t._faTruck?' <span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📐 FA Truck</span>':''}${t.isOverflow?' <span class="bg bgs bg-or">Overflow</span>':''}</h3><div class="mds">Dispatch: ${fF(new Date(t.dd+"T12:00:00"))}${ovLabel}</div></div><div style="display:flex;align-items:center;gap:6px"><button class="rbtn" onclick="LM_emailOor(${i})" style="background:var(--as);color:var(--ac);border-color:var(--ab);font-size:11px" title="Compose OOR email with assembly items">📧 OOR Email</button><button class="rbtn" onclick="exportTruck(${i})" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="mdc" onclick="clM()">✕</button></div></div>
 <div class="mdb"><div class="mst"><span>📦 <strong>${pDisp}/${_showTCap}</strong> pallets (${fp}%)</span><span>📋 <strong>${t.items.reduce((s,it)=>s+(it.loadQty||0),0).toLocaleString()}</strong> qty</span><span>🏷️ <strong>${t.items.length}</strong> SKUs</span>${(()=>{const ac=t.items.filter(it=>!NOM[it.sku]?._kitNom&&LM_isAssembled(it.sku,_mVt,_mCountry)).length;return ac>0?`<span style="color:var(--or)">🔧 <strong>${ac}</strong> assembly</span>`:''})()}</div>${PB(t.pallets,_showTCap)}
 ${ROLE!=="viewer"?`<div style="display:flex;align-items:center;gap:8px;margin:10px 0;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:11px;flex-wrap:wrap">
   <input type="checkbox" ${LM_isDispatched(t)?'checked':''} onchange="LM_toggleDispatchTruck(${i},this.checked);clM()"><span style="font-weight:600">${LM_isDispatched(t)?'🔒 Locked':'Lock'}</span>
@@ -17756,6 +17756,51 @@ async function LM_exportLateArrivals(){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='Late_LP_Arrivals_'+new Date().toISOString().slice(0,10)+'.xlsx';a.click();URL.revokeObjectURL(a.href);
   }catch(e){console.error('Late arrivals export error:',e);alert('Export failed: '+e.message)}
+}
+// Compose a pre-filled OOR email — subject carries OOR# / truck ID / LSR / dest,
+// body lists SKUs that require assembly at the warehouse. ASCII-only (Outlook-safe).
+function LM_emailOor(truckIdx){
+  const t=LP?.allT?.[truckIdx];if(!t)return;
+  const dest=t.destDisplay||t.dest||(selCluster&&CLUSTERS[selCluster]?clDisp(selCluster):clDisp(sel))||'';
+  const lsr=LM_getLsr(t)||'';
+  const oor=LM_getOor(t)||'';
+  const subjParts=[];
+  if(oor)subjParts.push('OOR#'+oor);
+  subjParts.push(t.id);
+  if(lsr)subjParts.push(lsr);
+  if(dest)subjParts.push(dest);
+  const subject=subjParts.join(' ');
+  // "April 9" style date
+  const ddStr=t.dd?new Date(t.dd+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric'}):'';
+  // Assembly items (non-kit SKUs that LM_isAssembled() flags)
+  const _vt=LM_vtMap[sel]||'';
+  const _country=LM_venueCountry(selCluster||'',sel||'');
+  const asmLines=[];
+  for(const it of (t.items||[])){
+    const n=NOM[it.sku]||{};
+    if(n._kitNom)continue;// kits handle their own component assembly elsewhere
+    if(!LM_isAssembled(it.sku,_vt,_country))continue;
+    const q=it.loadQty!=null?it.loadQty:(it.qty||0);
+    if(q<=0)continue;
+    const nm=(it.nm||n.name||'').replace(/[\r\n\t]/g,' ');
+    asmLines.push(' - '+q+'x '+it.sku+' '+nm);
+  }
+  const oorTxt=oor?'# '+oor:'(number tbd)';
+  const ref=t.id+(lsr?' '+lsr:'');
+  const bodyLines=[
+    'Hello,',
+    '',
+    'Please find attached the OOR '+oorTxt+' - '+ref+' for truck going to '+dest+(ddStr?' dispatching to leave WHS on '+ddStr:'')+'.',
+    '',
+    'Items requiring assembly:',
+    asmLines.length?asmLines.join('\n'):'  (none)',
+    '',
+    'Thanks,'
+  ];
+  const body=bodyLines.join('\n');
+  const cc='materials@fwc2026.org;distribution@fwc2026.org';
+  const mailto='mailto:?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  window.open(mailto);
 }
 async function exportTruck(truckIdx){
   const t=LP.allT[truckIdx];if(!t)return;
