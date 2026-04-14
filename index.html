@@ -505,6 +505,7 @@ details.lp-cont>summary>.lp-arr{transition:transform .15s;display:inline-block}d
 <footer class="app-footer">©2026 Vladislav Abramov | <span>SM²ARTA™</span> licensed to SM2ARTA LLC</footer>
 </div>
 <div id="mr"></div>
+<div id="lmSafetyBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:150;padding:10px 18px;font-family:var(--fd);font-size:12px;border-bottom:1px solid;box-shadow:0 2px 8px rgba(0,0,0,.08)"></div>
 <div id="LP" style="position:relative">
 <div class="hd"><div class="hl"><div class="sm-logo sm-logo-sm"><img src="ml3k-favicon.svg" style="width:100%;height:100%"></div><div><div style="font-size:14px;font-weight:700">ML3K <span id="roleBadgeLP"></span> <span id="sbStatusLP" class="sb-status checking"><span class="dot"></span>Checking...</span> <span class="sys-reset" onclick="resetLP()" title="Reset Load Plan data">↻</span></div><div style="font-size:10px;color:var(--tt)" id="lpSubtitle">Load Plan Module</div></div></div><div style="display:flex;align-items:center;gap:6px"><button class="sys-sync" onclick="syncLP()" title="Refresh from server"><span class="sync-icon">⟳</span> Sync</button><button class="rbtn" onclick="window.open('https://sm2arta.github.io/WHS/?pw=viewme','_blank')" title="FF&E Supply Chain Dashboard" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">Sitrep</button><button class="rbtn admin-only" onclick="generateDailyDigest()" title="Generate Outlook email with daily digest" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">Digest</button><button class="rbtn" onclick="window.open('/fa-goods.html?role='+ROLE,'_blank')" title="FA Goods tracking module" style="background:#ECFEFF;color:#0891B2;border-color:#A5F3FC">FA Goods</button><div class="mod-sw"><button class="mod-btn" onclick="switchMod('v26')">🌍 Vision</button><button class="mod-btn on" onclick="switchMod('lp')">📦 Load Plan</button><button class="mod-btn" onclick="switchMod('lm')">🚛 Last Mile</button></div></div></div>
 <div class="lp-body">
@@ -8906,7 +8907,8 @@ function logout(){
 function enterApp(){
   document.getElementById("LS").style.display="none";
   document.getElementById("pov").style.display="flex";
-  
+  // Initialize LM cross-tab lease (safety layer)
+  try{_lmLeaseInit()}catch(e){console.warn('[LM Safety] lease init failed:',e)}
   // Try loading both modules from Supabase
   const loadBoth=async()=>{
     let lmOk=false,lpOk=false,hasLmData=false;
@@ -11647,20 +11649,273 @@ function LM_getLsr(t){return LM_lsrNumbers[LM_fp(t)]||''}
 function LM_setLsr(truckIdx,val){if(ROLE==='viewer')return;const t=LP?.allT?.[truckIdx];if(!t)return;const fp=LM_fp(t);if(val)LM_lsrNumbers[fp]=val;else delete LM_lsrNumbers[fp];LM_saveDateOverrides()}
 function LM_getOor(t){return LM_oorNumbers[LM_fp(t)]||''}
 function LM_setOor(truckIdx,val){if(ROLE==='viewer')return;const t=LP?.allT?.[truckIdx];if(!t)return;const fp=LM_fp(t);if(val)LM_oorNumbers[fp]=val;else delete LM_oorNumbers[fp];LM_saveDateOverrides()}
-async function LM_saveDateOverrides(){
+// ══════════════════════════════════════════════════════════════════
+// LM Safety Layer (incident 2026-04 — ~43 OORs silently wiped)
+// Five protections: cross-tab lease, load-gate, version/OCC, shrink
+// guard, post-save verification. See CLAUDE.md → LM Safety section.
+// ══════════════════════════════════════════════════════════════════
+let _lmLoadState='unknown';// 'unknown'|'started'|'succeeded'|'failed'
+let _lmLoadedVersion=0;// server version after last successful load
+let _lmLoadedCardinality={oor:0,disp:0,lsr:0,snap:0,dates:0,holds:0,rel:0};
+let _lmTabId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():('tab-'+Date.now()+'-'+Math.random().toString(36).slice(2,10));
+let _lmLeaseOwner=false;// does THIS tab hold the lease?
+let _lmLeaseChan=null;
+let _lmLeaseHeartbeatTimer=null;
+const _LM_LEASE_KEY='ml3k-lm-lease';
+const _LM_LEASE_STALE_MS=15000;
+const _LM_LEASE_HEARTBEAT_MS=5000;
+
+function _lmLog(msg,extra){if(extra!==undefined)console.log('[LM Safety]',msg,extra);else console.log('[LM Safety]',msg)}
+function _lmWarn(msg,extra){if(extra!==undefined)console.warn('[LM Safety]',msg,extra);else console.warn('[LM Safety]',msg)}
+
+function _lmBanner(kind,msg,actions){
+  // kind: 'readonly'|'loadfail'|'verifyfail'|'stale'|''(clear)
+  const el=document.getElementById('lmSafetyBanner');if(!el)return;
+  if(!kind){el.style.display='none';el.innerHTML='';return}
+  const palette={
+    readonly:{bg:'var(--os)',fg:'var(--or)',bd:'#F5D6B8'},
+    loadfail:{bg:'var(--rs)',fg:'var(--rd)',bd:'#F5B5B8'},
+    verifyfail:{bg:'var(--rs)',fg:'var(--rd)',bd:'#F5B5B8'},
+    stale:{bg:'var(--os)',fg:'var(--or)',bd:'#F5D6B8'}
+  }[kind]||{bg:'var(--rs)',fg:'var(--rd)',bd:'#F5B5B8'};
+  el.style.background=palette.bg;el.style.color=palette.fg;el.style.borderColor=palette.bd;
+  const actHtml=(actions||[]).map(a=>`<button class="rbtn" style="margin-left:8px" onclick="${a.onclick}">${a.label}</button>`).join('');
+  el.innerHTML=`<span style="font-weight:600">${msg}</span>${actHtml}`;
+  el.style.display='block';
+}
+
+function _lmConfirmModal(title,bodyHtml,confirmLabel,onConfirm,requireTypeWord){
+  const uid='lmmod_'+Date.now();
+  const typeGate=requireTypeWord?`<div style="margin-top:14px"><label style="font-size:11px;color:var(--ts)">Type <b>${requireTypeWord}</b> to confirm:</label><input id="${uid}_in" style="width:100%;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;font-family:var(--fm);margin-top:4px" oninput="document.getElementById('${uid}_ok').disabled=(this.value!=='${requireTypeWord}')"></div>`:'';
+  const disabled=requireTypeWord?'disabled':'';
+  const h=`<div style="padding:18px 22px">
+    <div style="font-size:15px;font-weight:700;color:var(--rd);margin-bottom:10px">${title}</div>
+    <div style="font-size:12px;color:var(--tp);line-height:1.5">${bodyHtml}</div>
+    ${typeGate}
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+      <button class="mbtn" onclick="document.getElementById('mr').innerHTML=''">Cancel</button>
+      <button id="${uid}_ok" class="mbtn mbtn-danger" ${disabled} onclick="document.getElementById('mr').innerHTML='';(${onConfirm})()">${confirmLabel}</button>
+    </div>
+  </div>`;
+  openModal(h,'480px');
+}
+
+function _lmBlockingReloadModal(title,body){
+  const h=`<div style="padding:18px 22px">
+    <div style="font-size:15px;font-weight:700;color:var(--rd);margin-bottom:10px">${title}</div>
+    <div style="font-size:12px;color:var(--tp);line-height:1.5">${body}</div>
+    <div style="display:flex;justify-content:flex-end;margin-top:18px">
+      <button class="mbtn mbtn-primary" onclick="location.reload()">Reload</button>
+    </div>
+  </div>`;
+  openModal(h,'480px');
+}
+
+// ── Lease (single-writer across tabs) ──
+function _lmLeaseRead(){try{const s=localStorage.getItem(_LM_LEASE_KEY);if(!s)return null;const p=JSON.parse(s);if(!p||typeof p.ts!=='number')return null;return p}catch(e){return null}}
+function _lmLeaseWrite(p){try{localStorage.setItem(_LM_LEASE_KEY,JSON.stringify(p))}catch(e){}}
+function _lmLeaseIsStale(p){return!p||(Date.now()-p.ts>_LM_LEASE_STALE_MS)}
+
+function _lmLeaseClaim(force){
+  const cur=_lmLeaseRead();
+  if(!force&&cur&&cur.tabId!==_lmTabId&&!_lmLeaseIsStale(cur))return false;
+  _lmLeaseWrite({tabId:_lmTabId,ts:Date.now()});
+  _lmLeaseOwner=true;
+  try{if(_lmLeaseChan)_lmLeaseChan.postMessage({type:'claim',tabId:_lmTabId,ts:Date.now()})}catch(e){}
+  _lmBanner('');// clear any read-only banner
+  return true;
+}
+
+function _lmLeaseHeartbeat(){
+  if(!_lmLeaseOwner)return;
+  const cur=_lmLeaseRead();
+  if(cur&&cur.tabId!==_lmTabId&&!_lmLeaseIsStale(cur)){
+    // Another tab took over
+    _lmLeaseOwner=false;
+    _lmLog('Lease taken over by another tab');
+    _lmShowReadOnlyBanner();
+    return;
+  }
+  _lmLeaseWrite({tabId:_lmTabId,ts:Date.now()});
+}
+
+function _lmShowReadOnlyBanner(){
+  _lmBanner('readonly',
+    '⚠ Another editing session is open for LM. This tab is read-only to prevent data loss.',
+    [{label:'Take Over Editing',onclick:'_lmLeaseTakeover()'}]);
+}
+
+function _lmLeaseTakeover(){
+  _lmLog('Takeover performed');
+  _lmLeaseClaim(true);
+}
+window._lmLeaseTakeover=_lmLeaseTakeover;
+
+function _lmLeaseInit(){
+  if(ROLE==='viewer')return;// viewers don't need a lease
+  // BroadcastChannel for cross-tab notifications
+  try{
+    if(typeof BroadcastChannel!=='undefined'){
+      _lmLeaseChan=new BroadcastChannel('ml3k-lm-lease');
+      _lmLeaseChan.onmessage=(ev)=>{
+        const d=ev.data||{};
+        if(d.type==='claim'&&d.tabId!==_lmTabId){
+          if(_lmLeaseOwner){
+            _lmLeaseOwner=false;
+            _lmLog('Lease taken over by another tab');
+            _lmShowReadOnlyBanner();
+          }
+        }
+      };
+    }
+  }catch(e){}
+  // Try initial claim
+  const cur=_lmLeaseRead();
+  if(!cur||_lmLeaseIsStale(cur)||cur.tabId===_lmTabId){
+    _lmLeaseClaim(false);
+    _lmLog('Lease acquired');
+  }else{
+    _lmLeaseOwner=false;
+    _lmLog('Lease denied, this tab read-only');
+    _lmShowReadOnlyBanner();
+  }
+  // Heartbeat
+  if(_lmLeaseHeartbeatTimer)clearInterval(_lmLeaseHeartbeatTimer);
+  _lmLeaseHeartbeatTimer=setInterval(_lmLeaseHeartbeat,_LM_LEASE_HEARTBEAT_MS);
+  // Release on unload (best-effort)
+  window.addEventListener('beforeunload',()=>{
+    if(_lmLeaseOwner){try{localStorage.removeItem(_LM_LEASE_KEY)}catch(e){}}
+  });
+}
+
+function _lmCardinality(){
+  return{
+    oor:Object.keys(LM_oorNumbers||{}).length,
+    disp:(LM_dispatched&&LM_dispatched.size)||0,
+    lsr:Object.keys(LM_lsrNumbers||{}).length,
+    snap:Object.keys(LM_lockedSnapshots||{}).length,
+    dates:Object.keys(LM_dateOverrides||{}).length,
+    holds:(LM_holds&&LM_holds.size)||0,
+    rel:Object.keys(LM_holdReleased||{}).length
+  };
+}
+
+function _lmShrinkCheck(before,after){
+  // Returns {ok:bool, reasons:[...]}
+  const reasons=[];
+  const keys=['oor','disp','lsr','snap','dates','holds','rel'];
+  for(const k of keys){
+    const b=before[k]||0,a=after[k]||0;
+    if(b>=1&&a===0)reasons.push(`${k}: ${b} → 0 (full wipe)`);
+    else if(b>=5&&a<=b*0.5)reasons.push(`${k}: ${b} → ${a} (≥50% drop)`);
+  }
+  // Asymmetric: OOR drops ≥50% but dispatched/snapshots unchanged
+  if(before.oor>=2&&after.oor<=before.oor*0.5&&after.disp===before.disp&&after.snap===before.snap){
+    reasons.push(`OOR sibling collapse: ${before.oor}→${after.oor} while dispatched/snapshots unchanged`);
+  }
+  return{ok:reasons.length===0,reasons};
+}
+
+async function _lmFetchCurrentVersion(){
+  // Returns {version:N, exists:bool} or throws
+  const {data,error}=await SB.from('shared_state').select('value').eq('id','fm-lm-dispatch').maybeSingle();
+  if(error)throw error;
+  if(!data)return{version:0,exists:false};
+  try{const p=JSON.parse(data.value);return{version:(p&&typeof p.__v==='number')?p.__v:0,exists:true,payload:p}}
+  catch(e){throw e}
+}
+
+async function LM_saveDateOverrides(opts){
   if(ROLE==="viewer"||!SB)return;
+  opts=opts||{};
+  // Gate 1 — load state
+  if(_lmLoadState!=='succeeded'){
+    _lmWarn('Save blocked: load not complete (state='+_lmLoadState+')');
+    _lmBanner('loadfail','Cannot save — LM data never loaded successfully. Refresh to retry.',[{label:'Retry Load',onclick:'LM_loadDateOverrides()'}]);
+    return;
+  }
+  // Gate 2 — lease ownership
+  if(!_lmLeaseOwner){
+    _lmWarn('Save blocked: not lease owner');
+    _lmShowReadOnlyBanner();
+    return;
+  }
+  // Gate 3 — shrink guard (unless explicitly overridden)
+  const after=_lmCardinality();
+  if(!opts.skipShrinkGuard){
+    const chk=_lmShrinkCheck(_lmLoadedCardinality,after);
+    if(!chk.ok){
+      _lmWarn('Save blocked: suspicious shrink',{before:_lmLoadedCardinality,after,reasons:chk.reasons});
+      console.trace('[LM Safety] shrink-block stack');
+      const body=`<div style="margin-bottom:8px">The save would drastically reduce LM data. This may indicate stale state or a bug.</div>
+        <ul style="margin:6px 0 8px 18px;font-family:var(--fm);font-size:11px;color:var(--rd)">${chk.reasons.map(r=>`<li>${r}</li>`).join('')}</ul>
+        <div style="font-size:11px;color:var(--ts)">Cancel is the safe choice. Override only if this reduction is intentional.</div>`;
+      _lmConfirmModal('⚠ Suspicious data reduction — save blocked',body,'Override and Save',
+        "()=>{LM_saveDateOverrides({skipShrinkGuard:true})}",'SAVE');
+      return;
+    }
+  }
+  // Capture undo before write
   UNDO_capture();
   try{
+    // Gate 4 — optimistic concurrency: refetch, compare versions
+    const cur=await _lmFetchCurrentVersion();
+    if(cur.version!==_lmLoadedVersion){
+      _lmWarn('Save blocked: version conflict (loaded='+_lmLoadedVersion+', current='+cur.version+')');
+      _lmBlockingReloadModal('Data was updated in another session',
+        `The LM data on the server has changed since this tab loaded (loaded v${_lmLoadedVersion}, current v${cur.version}). To prevent overwriting another user\'s changes, this tab must reload before saving.`);
+      return;
+    }
+    const newVersion=_lmLoadedVersion+1;
+    const payload={__v:newVersion,dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides,lsrNumbers:LM_lsrNumbers,oorNumbers:LM_oorNumbers,lockedSnapshots:LM_lockedSnapshots,holds:[...LM_holds],holdReleased:LM_holdReleased};
     const now=new Date().toISOString();
-    await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify({dispatched:[...LM_dispatched],dateOverrides:LM_dateOverrides,lsrNumbers:LM_lsrNumbers,oorNumbers:LM_oorNumbers,lockedSnapshots:LM_lockedSnapshots,holds:[...LM_holds],holdReleased:LM_holdReleased}),updated_at:now});
-  }catch(e){console.warn('LM dispatch save error:',e)}
+    const{error}=await SB.from('shared_state').upsert({id:'fm-lm-dispatch',value:JSON.stringify(payload),updated_at:now});
+    if(error)throw error;
+    // Gate 5 — verify
+    const verify=await _lmFetchCurrentVersion();
+    const vp=verify.payload||{};
+    const vOor=Object.keys(vp.oorNumbers||{}).length;
+    const vDisp=(vp.dispatched||[]).length;
+    const vSnap=Object.keys(vp.lockedSnapshots||{}).length;
+    const expOor=Object.keys(LM_oorNumbers).length;
+    const expDisp=LM_dispatched.size;
+    const expSnap=Object.keys(LM_lockedSnapshots).length;
+    if(verify.version!==newVersion||vOor!==expOor||vDisp!==expDisp||vSnap!==expSnap){
+      _lmWarn('Save verification FAILED',{expected:{version:newVersion,oor:expOor,disp:expDisp,snap:expSnap},got:{version:verify.version,oor:vOor,disp:vDisp,snap:vSnap}});
+      _lmBanner('verifyfail','⚠ Save verification failed — your LM changes may not have persisted. Reload to confirm server state.',[{label:'Reload',onclick:'location.reload()'}]);
+      return;
+    }
+    // Success — advance loaded-version + cardinality
+    _lmLoadedVersion=newVersion;
+    _lmLoadedCardinality=after;
+    _lmLog('Save verified OK version='+newVersion);
+  }catch(e){
+    console.warn('LM dispatch save error:',e);
+    _lmBanner('verifyfail','⚠ LM save failed: '+(e&&e.message?e.message:'network error')+'. Changes may not have persisted.',[{label:'Reload',onclick:'location.reload()'},{label:'Dismiss',onclick:"_lmBanner('')"}]);
+  }
 }
+
 async function LM_loadDateOverrides(){
-  if(!SB)return;
+  if(!SB){_lmLoadState='failed';return}
+  _lmLoadState='started';
+  _lmBanner('');// clear prior banners
   try{
-    const {data}=await SB.from('shared_state').select('value').eq('id','fm-lm-dispatch').single();
+    const {data,error}=await SB.from('shared_state').select('value').eq('id','fm-lm-dispatch').maybeSingle();
+    if(error){
+      // Real fetch/network error — do NOT fall through to empty defaults
+      _lmLoadState='failed';
+      _lmWarn('Load failed (fetch error):',error);
+      _lmBanner('loadfail','⚠ Failed to load LM data from server. Saves are disabled until reload succeeds.',[{label:'Retry',onclick:'LM_loadDateOverrides()'}]);
+      return;
+    }
     if(data){
-      const p=JSON.parse(data.value);
+      let p;
+      try{p=JSON.parse(data.value)}catch(pe){
+        _lmLoadState='failed';
+        _lmWarn('Load failed (parse error):',pe);
+        _lmBanner('loadfail','⚠ LM data on server is corrupt (parse error). Saves disabled.',[{label:'Retry',onclick:'LM_loadDateOverrides()'}]);
+        return;
+      }
       LM_dispatched=new Set(p.dispatched||[]);
       LM_dateOverrides=p.dateOverrides||{};
       LM_lsrNumbers=p.lsrNumbers||{};
@@ -11668,8 +11923,19 @@ async function LM_loadDateOverrides(){
       LM_lockedSnapshots=p.lockedSnapshots||{};
       LM_holds=new Set(p.holds||[]);
       LM_holdReleased=p.holdReleased||{};
+      _lmLoadedVersion=(typeof p.__v==='number')?p.__v:0;
+    }else{
+      // Row genuinely does not exist (first-ever load) — legitimate empty
+      _lmLoadedVersion=0;
     }
-  }catch(e){/* no data yet */}
+    _lmLoadedCardinality=_lmCardinality();
+    _lmLoadState='succeeded';
+    _lmLog('Load OK version='+_lmLoadedVersion+' cardinality='+JSON.stringify(_lmLoadedCardinality));
+  }catch(e){
+    _lmLoadState='failed';
+    _lmWarn('Load failed (exception):',e);
+    _lmBanner('loadfail','⚠ Failed to load LM data from server. Saves are disabled until reload succeeds.',[{label:'Retry',onclick:'LM_loadDateOverrides()'}]);
+  }
 }
 async function LM_saveDemandAdj(){
   if(ROLE==='viewer'||!SB)return;
