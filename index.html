@@ -14874,11 +14874,58 @@ function _fcSetLeg2Oor(fp,val){
   if(val)_fcLeg2Oor[fp]=val;else delete _fcLeg2Oor[fp];
   _fcSave();
 }
+// Build + download OOR.xlsx for a 2nd-leg run — same item lists as the main
+// truck, but dispatch date, LSR, and OOR come from the Leg 2 state.
+async function _fcExportLeg2(fp,clusterLabel,truckId){
+  const P=PLAN_CACHE[clusterLabel];
+  if(!P||!P.allT){alert('Truck data not loaded for '+clusterLabel);return}
+  const t=P.allT.find(x=>LM_fp(x)===fp);
+  if(!t){alert('Truck not found.');return}
+  const dest=t.destDisplay||t.dest||clusterLabel;
+  const venue=clusterLabel||dest;
+  const l2Date=_fcLeg2Date[fp]||t.biK||t.dd||'';
+  const l2Lsr=_fcLeg2Lsr[fp]||'';
+  const l2Oor=_fcLeg2Oor[fp]||'';
+  const dispDate=l2Date?fF(new Date(l2Date+'T12:00:00')):'';
+  // Leg 2 dispatch = venue bump-in day; delivery same day (short hop from satellite WHS)
+  const oorOpts={dispatchDate:dispDate,deliveryDate:dispDate,lsr:l2Lsr,oor:l2Oor};
+  const _expFP=LM_fp(t);const _expSnap=LM_lockedSnapshots[_expFP];const _expRet=_expSnap?._returned||{};
+  const kitItems=t.items.filter(it=>{const eff=Math.max(0,(it.loadQty||0)-(_expRet[it.sku]||0));return eff>0}).map(it=>{
+    const n=NOM[it.sku]||{};
+    const isKit=!!n._kitNom;
+    const effQty=Math.max(0,(isKit?1:(it.loadQty||0))-(_expRet[it.sku]||0));
+    return{sku:it.sku,name:it.nm||n.nm||it.sku,src:n.src||'',uom:isKit?'Kit':(n.uom||'Each'),qty:effQty};
+  }).filter(it=>it.qty>0);
+  for(const mi of MI_get(MI_lmKey(t))){kitItems.push({sku:mi.sku,name:mi.name||'',src:'MANUAL',uom:'Each',qty:mi.qty||0})}
+  const wb=new ExcelJS.Workbook();
+  _oorSheet(wb,'Kit',truckId+' Leg 2',dest,venue,kitItems,oorOpts);
+  // All tab — expand kits
+  const allMap={};
+  t.items.filter(it=>{const eff=Math.max(0,(it.loadQty||0)-(_expRet[it.sku]||0));return eff>0}).forEach(it=>{
+    const n=NOM[it.sku]||{};
+    const effQty=Math.max(0,(it.loadQty||0)-(_expRet[it.sku]||0));
+    if(n._kitNom||it._kitNom){
+      const _fki=it._kitItems;const kitSrc=_fki||(n._kitId?LM_getKitById(n._kitId)?.items:null);
+      if(kitSrc){kitSrc.forEach(ci=>{const cn=NOM[ci.sku]||{};const k=ci.sku;if(!allMap[k])allMap[k]={sku:k,name:cn.nm||ci.sku,src:cn.src||'',uom:cn.uom||'Each',qty:0};allMap[k].qty+=ci.qty*effQty});return}
+    }
+    const k=it.sku;if(!allMap[k])allMap[k]={sku:k,name:it.nm||n.nm||it.sku,src:n.src||'',uom:n.uom||'Each',qty:0};
+    allMap[k].qty+=effQty;
+  });
+  for(const mi of MI_get(MI_lmKey(t))){const k=mi.sku;if(!allMap[k])allMap[k]={sku:k,name:mi.name||'',src:'MANUAL',uom:'Each',qty:0};allMap[k].qty+=(mi.qty||0)}
+  const allItems=Object.values(allMap).sort((a,b)=>a.sku.localeCompare(b.sku));
+  _oorSheet(wb,'All',truckId+' Leg 2',dest,venue,allItems,oorOpts);
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=truckId+'_Leg2_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_OOR.xlsx';a.click();URL.revokeObjectURL(a.href);
+}
 // Leg 2 detail modal — lets user set Leg 2's own OOR, LSR, and dispatch date.
 // Leg 2 is a virtual row (not a real truck in PLAN_CACHE), so there's no items
 // table — the payload is the same as Leg 1, only the routing leg differs.
-function _fcOpenLeg2(fp,truckId,dest){
+function _fcOpenLeg2(fp,truckId,dest,clusterLabel){
   const fpEsc=fp.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const clEsc=(clusterLabel||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const tidEsc=(truckId||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   const l2Date=_fcLeg2Date[fp]||'';
   const l2Lsr=_fcLeg2Lsr[fp]||'';
   const l2Oor=_fcLeg2Oor[fp]||'';
@@ -14888,7 +14935,7 @@ function _fcOpenLeg2(fp,truckId,dest){
     <div class="mdh"><div>
       <h3>🚛 ${truckId} <span style="font-size:11px;font-weight:700;color:#fff;background:#1565C0;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle">2nd Leg</span></h3>
       <div class="mds">${dest} · from Satellite WHS to venue</div>
-    </div><button class="mdc" onclick="document.getElementById('mr').innerHTML='';if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}">✕</button></div>
+    </div><div style="display:flex;align-items:center;gap:6px">${clusterLabel?`<button class="rbtn" onclick="_fcExportLeg2('${fpEsc}','${clEsc}','${tidEsc}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button>`:''}<button class="mdc" onclick="document.getElementById('mr').innerHTML='';if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}">✕</button></div></div>
     <div class="mdb" style="padding:16px 20px">
       <div style="font-size:11px;color:var(--ts);margin-bottom:10px">Leg 2 runs from the satellite warehouse to the venue on the bump-in date. It carries a separate OOR and LSR from the main (Leg 1) truck.</div>
       ${isAdm?`<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;padding:12px;background:var(--bg);border-radius:8px">
@@ -15144,7 +15191,8 @@ function LM_renderForecast(el){
         const control=lead?_fcControl(leadFp,lead):'';
         const _l2DestEsc=(r.dest||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
         const _l2TidEsc=(r.truckId||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        h+=`<tr data-fcsearch="${((r.truckId||'')+' '+(r.dest||'')+' '+(r.dispLoc||'')+' '+(r.lsr||'')+' '+(r.oor||'')+' '+(_fcLeadMap[r._leg1Fp||r.fp]||'')+' leg2').toLowerCase()}" onclick="_fcOpenLeg2('${_fp}','${_l2TidEsc}','${_l2DestEsc}')" style="background:#E3F2FD;cursor:pointer">
+        const _l2ClEsc=(r.cluster||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        h+=`<tr data-fcsearch="${((r.truckId||'')+' '+(r.dest||'')+' '+(r.dispLoc||'')+' '+(r.lsr||'')+' '+(r.oor||'')+' '+(_fcLeadMap[r._leg1Fp||r.fp]||'')+' leg2').toLowerCase()}" onclick="_fcOpenLeg2('${_fp}','${_l2TidEsc}','${_l2DestEsc}','${_l2ClEsc}')" style="background:#E3F2FD;cursor:pointer">
         <td style="font-size:10px;color:#1565C0;font-weight:600">${r.dispLoc}</td>
         <td style="font-size:11px;font-weight:600;color:#1565C0">${r.dest}</td>
         <td class="mono fw6" style="color:#1565C0">${r.truckId} <span style="font-size:8px;font-weight:700;color:#fff;background:#1565C0;padding:1px 4px;border-radius:3px">2nd Leg</span></td>
