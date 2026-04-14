@@ -15303,7 +15303,7 @@ function LM_renderForecast(el){
         <td></td>
         <td class="mono" style="font-size:10px;color:#2563eb">${r.oor||''}</td>
         <td class="mono" style="font-size:10px;color:var(--pu)">${l2Lsr||''}</td>
-        <td></td>
+        <td style="text-align:center">${(()=>{const hs2=(_fcHandshakes[r._leg1Fp||r.fp]||{}).leg2||{};if(hs2.confirmed)return'<span style="font-size:10px;color:var(--gn);font-weight:600">✅</span><span style="font-size:8px;color:var(--tt);margin-left:2px">'+(hs2.confirmedAt||'')+'</span>';if(hs2.sent)return'<span style="font-size:9px;color:var(--or)">⏳ '+(hs2.sentAt||'')+'</span>';return'<span style="font-size:9px;color:var(--tt)">—</span>'})()}</td>
         <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
         <td class="mono" style="text-align:center;color:#1565C0">0d</td>
         <td style="color:#1565C0;font-weight:600">${_fmtD(r.disp)}</td>
