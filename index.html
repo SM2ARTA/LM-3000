@@ -8893,7 +8893,7 @@ async function checkSB(){
 function doLogin(){
   const u=document.getElementById("lu").value.trim().toLowerCase();
   const p=document.getElementById("lp").value;
-  if(u==="come"&&p==="in"){ROLE="admin";document.cookie="ml3k_role=admin;path=/;max-age=2592000";enterApp()}
+  if(u==="super"&&p==="bob"){ROLE="admin";document.cookie="ml3k_role=admin;path=/;max-age=2592000";enterApp()}
   else if(u==="view"&&p==="me"){ROLE="viewer";document.cookie="ml3k_role=viewer;path=/;max-age=2592000";enterApp()}
   else{document.getElementById("lerr").textContent="Invalid username or password"}
 }
