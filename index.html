@@ -14864,6 +14864,64 @@ function _fcSetLeg2Date(fp,val){
   if(val)_fcLeg2Date[fp]=val;else delete _fcLeg2Date[fp];
   _fcSave();LM_renderForecast(document.getElementById('mn'));
 }
+// FP-keyed LSR/OOR setters (used by the forecast truck-detail modal — no LP.allT dependency)
+function _fcSetLsrByFp(fp,val){
+  if(ROLE==='viewer')return;
+  if(val)LM_lsrNumbers[fp]=val;else delete LM_lsrNumbers[fp];
+  LM_saveDateOverrides();
+}
+function _fcSetOorByFp(fp,val){
+  if(ROLE==='viewer')return;
+  if(val)LM_oorNumbers[fp]=val;else delete LM_oorNumbers[fp];
+  LM_saveDateOverrides();
+}
+// Open a read-friendly truck detail modal straight from the forecast table (no view change)
+function _fcOpenTruck(fp,clusterLabel){
+  // Find truck in PLAN_CACHE[cluster] by fingerprint
+  const P=PLAN_CACHE[clusterLabel];
+  if(!P||!P.allT){alert('Truck data not loaded for '+clusterLabel);return}
+  const t=P.allT.find(x=>LM_fp(x)===fp);
+  if(!t){alert('Truck not found.');return}
+  const tCap=t.tCap||P.tCap||26;
+  const dest=t.destDisplay||t.dest||clusterLabel;
+  const lsr=LM_getLsr(t),oor=LM_getOor(t);
+  const isDisp=LM_isDispatched(t);
+  const dd=t.dd||'';
+  const fpEsc=fp.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  let itemsRows='';
+  for(const it of (t.items||[])){
+    const n=NOM[it.sku]||{};const q=it.loadQty!=null?it.loadQty:(it.qty||0);
+    const isKit=n._kitNom||it._kitNom;
+    itemsRows+=`<tr><td class="mono" style="font-size:10px">${it.sku}${isKit?' 📦':''}</td><td style="font-size:11px">${n.name||it.nm||it.name||''}</td><td class="mono" style="text-align:right;font-size:11px">${q.toLocaleString()}</td></tr>`;
+  }
+  const plt=Number.isInteger(t.pallets)?t.pallets:(t.pallets||0).toFixed(1);
+  const pcs=(t.items||[]).reduce((s,it)=>s+(it.loadQty!=null?it.loadQty:(it.qty||0)),0);
+  const h=`<div style="padding:16px 22px;max-width:720px;max-height:80vh;overflow:auto">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-size:18px">${isDisp?'🔒':'🚛'}</span>
+      <div style="font-size:16px;font-weight:700">${t.id} — ${dest}</div>
+      ${isDisp?'<span class="bg bgs bg-gn">Locked</span>':''}
+    </div>
+    <div style="font-size:11px;color:var(--ts);margin-bottom:10px">${plt}/${tCap} pallets · ${pcs.toLocaleString()} qty · ${(t.items||[]).length} SKUs</div>
+    ${ROLE==='admin'?`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#2563eb">OOR
+        <input type="text" value="${oor}" placeholder="OOR#" onchange="_fcSetOorByFp('${fpEsc}',this.value.trim())" style="font-size:11px;font-family:var(--fm);padding:3px 6px;border:1px solid ${oor?'#2563eb':'var(--bd)'};border-radius:4px;color:#2563eb;width:100px">
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--pu)">LSR
+        <input type="text" value="${lsr}" placeholder="LSR#" onchange="_fcSetLsrByFp('${fpEsc}',this.value.trim())" style="font-size:11px;font-family:var(--fm);padding:3px 6px;border:1px solid ${lsr?'var(--pu)':'var(--bd)'};border-radius:4px;color:var(--pu);width:120px">
+      </label>
+      <span style="color:var(--bd)">|</span>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ts)">Dispatch
+        <span class="mono" style="font-size:11px;color:var(--tp)">${dd||'—'}</span>
+      </label>
+    </div>`:''}
+    <table class="dtb" style="width:100%"><thead><tr><th>SKU</th><th>Item</th><th style="text-align:right">Qty</th></tr></thead><tbody>${itemsRows}</tbody></table>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="mbtn mbtn-primary" onclick="document.getElementById('mr').innerHTML=''">Close</button>
+    </div>
+  </div>`;
+  openModal(h,'760px');
+}
 function LM_renderForecast(el){
   if(!Object.keys(PLAN_CACHE).length){el.innerHTML='<div class="lp-empty">No plan data. Generate from Dashboard first.</div>';return}
   const allRows=[];const _seen=new Set();
@@ -15083,7 +15141,9 @@ function LM_renderForecast(el){
       }
       // ── Normal row (Leg 1 or single-leg) ──
       const legLabel=is2Leg?'<span style="font-size:8px;font-weight:700;color:#1565C0;background:#E3F2FD;padding:1px 4px;border-radius:3px">Leg 1</span>':'';
-      h+=`<tr data-fcsearch="${((r.truckId||'')+' '+(r.dest||'')+' '+(r.cluster||'')+' '+(r.dispLoc||'')+' '+(r.lsr||'')+' '+(r.oor||'')+' '+(_fcLeadMap[r.fp]||'')+' '+(r.vtype||'')+(r.isCort?' cort':'')).toLowerCase()}"${r.dispatched?' style="background:var(--gs)"':''}>
+      const _fcClickable=r.vtype!=='cort'&&r.vtype!=='stp';
+      const _fcClusterEsc=(r.cluster||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      h+=`<tr data-fcsearch="${((r.truckId||'')+' '+(r.dest||'')+' '+(r.cluster||'')+' '+(r.dispLoc||'')+' '+(r.lsr||'')+' '+(r.oor||'')+' '+(_fcLeadMap[r.fp]||'')+' '+(r.vtype||'')+(r.isCort?' cort':'')).toLowerCase()}"${_fcClickable?` onclick="_fcOpenTruck('${_fp}','${_fcClusterEsc}')" style="cursor:pointer${r.dispatched?';background:var(--gs)':''}"`:(r.dispatched?' style="background:var(--gs)"':'')}>
         <td style="font-size:10px;color:var(--ts)">${r.dispLoc}</td>
         <td style="font-size:11px;font-weight:600">${r.dest}${r.isCort&&r.vtype!=='stadium'&&r.clusterLabel?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT Cluster</span>':(r.isCort&&r.vtype!=='stadium'?' <span style="font-size:9px;font-weight:600;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 5px;border-radius:4px;margin-left:3px">CORT</span>':'')+(r.clusterLabel?' <span style="font-size:9px;color:var(--tt)">Cluster</span>':'')}</td>
         <td class="mono fw6">${r.truckId}${r.dispatched?' 🔒':''}${r.vtype==='cort'?' <span style="font-size:8px;font-weight:700;color:#E31837;background:#FFF8F8;border:1px solid #F5C6C7;padding:1px 4px;border-radius:3px">CORT</span>':''}${r.vtype==='stp'?' <span style="font-size:8px;font-weight:700;color:#EF6C00;background:#FFF8F0;border:1px solid #FFCC80;padding:1px 4px;border-radius:3px">STP</span>':''}${legLabel}${(r.faTruck||r.faCount>0)?' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;border:1px solid #A5F3FC;padding:1px 4px;border-radius:3px">📐 FA</span>':''}</td>
