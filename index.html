@@ -15173,7 +15173,9 @@ function _fcEmailLeg2Oor(fp,clusterLabel,truckId){
   ];
   const body=['Hello,','',introLine,'',...leg1Block,'','Items requiring assembly:',asmLines.length?asmLines.join('\n'):'  (none)','','Thanks,'].join('\n');
   const cc='materials@fwc2026.org;distribution@fwc2026.org';
-  const mailto='mailto:?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  // TO: city WHS team — Leg 2 origin and destination are the same city
+  const _to=_oorCityTo(dest)||_oorCityTo(satOrigin);
+  const mailto='mailto:'+encodeURIComponent(_to)+'?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
   window.open(mailto);
 }
 function _fcSetLeg2Date(fp,val){
@@ -17852,6 +17854,31 @@ async function LM_exportLateArrivals(){
     a.download='Late_LP_Arrivals_'+new Date().toISOString().slice(0,10)+'.xlsx';a.click();URL.revokeObjectURL(a.href);
   }catch(e){console.error('Late arrivals export error:',e);alert('Export failed: '+e.message)}
 }
+// Per-city WHS recipient lookup for OOR emails. Keys are lowercase city tokens
+// stripped of "Stadium"/"Broadcast"/"International". Multi-recipient values are
+// already semicolon-delimited per Outlook convention.
+const _OOR_CITY_TO=[
+  {match:/\btoronto\b/i,                      to:'YYZ.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\bvancouver\b/i,                    to:'YVR.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\bguadalajara\b/i,                  to:'manuel.terrones@rockitcargo.com;cein.cabrera@rockitcargo.com'},
+  {match:/\bmexico\s*city\b/i,                to:'ismael.gonzalez@rockitcargo.com;cein.cabrera@rockitcargo.com'},
+  {match:/\bmonterrey\b/i,                    to:'juan.manqueros@rockitcargo.com;cein.cabrera@rockitcargo.com'},
+  {match:/\b(new\s*york|nynj|new\s*jersey)\b/i,to:'NYNJ.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\bkansas\s*city\b/i,                to:'KC.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\bhouston\b/i,                      to:'HOU.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\batlanta\b/i,                      to:'ATL.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\blos\s*angeles\b/i,                to:'LA.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\bmiami\b/i,                        to:'MIA.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\bphiladelphia\b/i,                 to:'PHL.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\bseattle\b/i,                      to:'SEA.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\b(san\s*francisco|sfba|bay\s*area)\b/i,to:'SFBA.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\bboston\b/i,                       to:'BOS.FIFAWH@ROCKITCOMPANY.COM'}
+];
+function _oorCityTo(label){
+  if(!label)return'';
+  for(const r of _OOR_CITY_TO){if(r.match.test(label))return r.to}
+  return'';
+}
 // Compose a pre-filled OOR email — subject carries OOR# / truck ID / LSR / dest,
 // body lists SKUs that require assembly at the warehouse. ASCII-only (Outlook-safe).
 function LM_emailOor(truckIdx){
@@ -17900,7 +17927,9 @@ function LM_emailOor(truckIdx){
   ];
   const body=bodyLines.join('\n');
   const cc='materials@fwc2026.org;distribution@fwc2026.org';
-  const mailto='mailto:?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  // TO: city WHS team derived from venue/destination (covers both single-leg and 2-leg Leg 1)
+  const _to=_oorCityTo(venueDest)||_oorCityTo(dest);
+  const mailto='mailto:'+encodeURIComponent(_to)+'?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
   window.open(mailto);
 }
 async function exportTruck(truckIdx){
