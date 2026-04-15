@@ -5327,7 +5327,9 @@ function LP_renderPlan(el){
     // Add FA group cargo value
     for(const sk of aggSkus){if(_lpIsFaSku(sk.sku)){const fg=(LP_FA_GROUPS||[]).find(g=>g.sku===sk.sku);if(fg&&fg.value)_cargoVal+=fg.value}}
     const oorNum=LP_oorNumbers[t.id]||'';
-    let h='<div class="lp-truck'+dispClass+'" data-search="'+t.id+' LP-'+t.id+' '+t.dest+' '+clDisp(t.dest)+' '+lsr+' '+oorNum+' '+aggSkus.map(s=>s.sku+' '+s.name).join(' ')+'" data-ready="'+(_isReady?1:0)+'" data-full="'+(_isReadyFull?1:0)+'" data-locked="'+(isDisp?1:0)+'" data-oor="'+(isOOR?1:0)+'" data-lsr="'+(lsr?1:0)+'" onclick="LP_showTruckModal('+t.id+')">';
+    const _searchRaw=t.id+' LP-'+t.id+' '+t.dest+' '+clDisp(t.dest)+' '+lsr+' '+oorNum+' '+aggSkus.map(s=>s.sku+' '+s.name).join(' ');
+    const _searchAttr=_searchRaw.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let h='<div class="lp-truck'+dispClass+'" data-search="'+_searchAttr+'" data-ready="'+(_isReady?1:0)+'" data-full="'+(_isReadyFull?1:0)+'" data-locked="'+(isDisp?1:0)+'" data-oor="'+(isOOR?1:0)+'" data-lsr="'+(lsr?1:0)+'" onclick="LP_showTruckModal('+t.id+')">';
     // Row 1: icon + ID + dest badge (wraps naturally)
     h+='<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">';
     h+='<span>'+(isDisp?'🔒':'🚛')+'</span>';
