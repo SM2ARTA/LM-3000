@@ -10332,14 +10332,9 @@ function build(venue,venueList,skipNoBi){
     const deduct=dateLd||totalLd;
     if(deduct)it.qty=Math.max(0,it.qty-deduct);
   }
-  // Re-aggregate by SKU for the attach step
-  const noPBySku={};
-  Object.values(_noPByDateSku).filter(x=>x.qty>0).forEach(np=>{
-    if(!noPBySku[np.sku]){noPBySku[np.sku]={sku:np.sku,nm:np.nm,qty:0,biK:np.biK}}
-    noPBySku[np.sku].qty+=np.qty;
-    if(np.biK<noPBySku[np.sku].biK)noPBySku[np.sku].biK=np.biK;
-  });
-  const noPDated=Object.values(noPBySku).filter(x=>x.qty>0);
+  // Keep per-date entries so each bump-in gets exactly its scheduled qty.
+  // (Old behavior re-aggregated by SKU alone, dumping every date's qty onto the earliest biK.)
+  const noPDated=Object.values(_noPByDateSku).filter(x=>x.qty>0);
 
   // Aggregate undated no-BI no-pallet by SKU (always include - skipNoBi only blocks pool/pallet mop-up trucks)
   const noPUndated=noBiNoP.filter(x=>!isCort(x.sku));
