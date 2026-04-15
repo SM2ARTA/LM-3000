@@ -9843,7 +9843,10 @@ function build(venue,venueList,skipNoBi){
       pool[it.sku].remaining-=qty;
     }
     if(loaded.length>0){
-      const n=Math.max(1,Math.ceil(ep/tCap));
+      // Honor per-date override on the early path too (bug fix: used to always use tCap)
+      const _earlyDovr=_dateOvr[biK]||{};
+      const earlyTCap=_earlyDovr.tc||tCap;
+      const n=Math.max(1,Math.ceil(ep/earlyTCap));
       const trucks=Array.from({length:n},()=>({items:[],pallets:0,pcs:0}));
       [...loaded].sort((a,b)=>b.loadPlt-a.loadPlt).forEach(it=>{
         let rem={...it};
@@ -9851,11 +9854,11 @@ function build(venue,venueList,skipNoBi){
           // Find truck with enough space
           let best=null,br=Infinity;
           const remPlt=(rem.loadQty/rem.pq)*rem.ps;
-          for(const t of trucks){const sp=tCap-t.pallets;if(sp>=remPlt-0.001&&sp<br){best=t;br=sp}}
+          for(const t of trucks){const sp=earlyTCap-t.pallets;if(sp>=remPlt-0.001&&sp<br){best=t;br=sp}}
           if(!best){
             // No truck fits entire item — find truck with most space
-            best=trucks.reduce((a,b)=>(tCap-a.pallets)>(tCap-b.pallets)?a:b);
-            const space=tCap-best.pallets;
+            best=trucks.reduce((a,b)=>(earlyTCap-a.pallets)>(earlyTCap-b.pallets)?a:b);
+            const space=earlyTCap-best.pallets;
             if(space>=rem.ps-0.001&&rem.pq>0){
               // Fit as many full pallets as possible
               const fitPallets=Math.floor(space/rem.ps);
