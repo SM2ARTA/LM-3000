@@ -14869,9 +14869,12 @@ async function _fcSendHandshake(fp,leg){
   const l2Oor=_fcLeg2Oor[fp]||'';
   const _satCity=(row.dest||'').replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();
   const satOrigin=(_satCity?_satCity+' ':'')+'Satellite WHS';
+  // For 2-leg trucks, Leg 1 goes to the satellite WHS (not the venue).
+  const _is2LegTruck=_fcLegMap&&_fcLegMap[fp]===2;
+  const leg1Dest=_is2LegTruck?satOrigin:row.dest;
   const subject=isL2
     ?'Action Required: Upcoming Truck '+(l2Lsr||row.truckId)+' (Leg 2) Delivery to '+row.dest
-    :'Action Required: Upcoming Truck '+(row.lsr||row.truckId)+' Delivery to '+row.dest;
+    :'Action Required: Upcoming Truck '+(row.lsr||row.truckId)+(_is2LegTruck?' (Leg 1)':'')+' Delivery to '+leg1Dest;
   const introCommon=[
     'Hello,',
     '',
@@ -14905,8 +14908,8 @@ async function _fcSendHandshake(fp,leg){
     'OOR:          '+(l2Oor||'-')
   ]:[
     '',
-    'Truck:        '+row.truckId,
-    'Destination:  '+row.dest,
+    'Truck:        '+row.truckId+(_is2LegTruck?' (Leg 1)':''),
+    'Destination:  '+leg1Dest,
     'Dispatch:     '+row.disp,
     'Bump-in:      '+(row.firstBI||'-'),
     'Pallets:      '+row.plt,
@@ -17815,12 +17818,17 @@ async function LM_exportLateArrivals(){
 // body lists SKUs that require assembly at the warehouse. ASCII-only (Outlook-safe).
 function LM_emailOor(truckIdx){
   const t=LP?.allT?.[truckIdx];if(!t)return;
-  const dest=t.destDisplay||t.dest||(selCluster&&CLUSTERS[selCluster]?clDisp(selCluster):clDisp(sel))||'';
+  const venueDest=t.destDisplay||t.dest||(selCluster&&CLUSTERS[selCluster]?clDisp(selCluster):clDisp(sel))||'';
+  // For 2-leg trucks, Leg 1 goes to the satellite WHS (not the final venue).
+  const _fp=LM_fp(t);
+  const is2Leg=_fcLegMap&&_fcLegMap[_fp]===2;
+  const _satCity=(venueDest||'').replace(/\s*Stadium\s*$/i,'').replace(/\s*Broadcast\s*$/i,'').replace(/International\s*/i,'').trim();
+  const dest=is2Leg?((_satCity?_satCity+' ':'')+'Satellite WHS'):venueDest;
   const lsr=LM_getLsr(t)||'';
   const oor=LM_getOor(t)||'';
   const subjParts=[];
   if(oor)subjParts.push('OOR#'+oor);
-  subjParts.push(t.id);
+  subjParts.push(t.id+(is2Leg?' (Leg 1)':''));
   if(lsr)subjParts.push(lsr);
   if(dest)subjParts.push(dest);
   const subject=subjParts.join(' ');
@@ -17840,7 +17848,7 @@ function LM_emailOor(truckIdx){
     asmLines.push(' - '+q+'x '+it.sku+' '+nm);
   }
   const oorTxt=oor?'#'+oor:'(number tbd)';
-  const ref=t.id+(lsr?' '+lsr:'');
+  const ref=t.id+(is2Leg?' (Leg 1)':'')+(lsr?' '+lsr:'');
   const introLine='Please find attached the OOR '+oorTxt+' for '+ref+', the truck going to the '+dest+'.'+(ddStr?' Dispatch is scheduled to leave WHS on '+ddStr+'.':'');
   const bodyLines=[
     'Hello,',
