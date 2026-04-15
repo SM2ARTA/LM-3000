@@ -15070,6 +15070,13 @@ function _fcOpenLeg2(fp,truckId,dest,clusterLabel){
   const l2Date=_fcLeg2Date[fp]||_defaultDate||'';
   const l2Lsr=_fcLeg2Lsr[fp]||'';
   const l2Oor=_fcLeg2Oor[fp]||'';
+  // Leg 1 LSR/OOR — pulled from truck-level state so the user can see what was
+  // already set on the main truck without having to open it separately.
+  const _l1Trk=(clusterLabel&&PLAN_CACHE[clusterLabel]&&PLAN_CACHE[clusterLabel].allT)
+    ?PLAN_CACHE[clusterLabel].allT.find(x=>LM_fp(x)===fp):null;
+  const l1Lsr=_l1Trk?(LM_getLsr(_l1Trk)||''):(LM_lsrNumbers[fp]||'');
+  const l1Oor=_l1Trk?(LM_getOor(_l1Trk)||''):(LM_oorNumbers[fp]||'');
+  const l1Disp=_l1Trk?(_l1Trk.dd||''):'';
   const lead=_fcLeadMap[fp]||'';
   const isAdm=ROLE==='admin';
   const h=`<div class="mo" onclick="if(event.target.classList.contains('mo')){document.getElementById('mr').innerHTML='';if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}}"><div class="mdi" onclick="event.stopPropagation()" style="max-width:520px">
@@ -15079,6 +15086,14 @@ function _fcOpenLeg2(fp,truckId,dest,clusterLabel){
     </div><div style="display:flex;align-items:center;gap:6px">${clusterLabel?`<button class="rbtn" onclick="_fcExportLeg2('${fpEsc}','${clEsc}','${tidEsc}')" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">⬇ Excel</button><button class="rbtn" onclick="_fcEmailLeg2Oor('${fpEsc}','${clEsc}','${tidEsc}')" style="background:var(--as);color:var(--ac);border-color:var(--ab);font-size:11px" title="Email OOR for Leg 2">📧 OOR</button>`:''}<button class="mdc" onclick="document.getElementById('mr').innerHTML='';if(cv==='forecast'){try{LM_renderForecast(document.getElementById('mn'))}catch(e){}}">✕</button></div></div>
     <div class="mdb" style="padding:16px 20px">
       <div style="font-size:11px;color:var(--ts);margin-bottom:10px">Leg 2 runs from the satellite warehouse to the venue on the bump-in date. It carries a separate OOR and LSR from the main (Leg 1) truck.</div>
+      <div style="margin-bottom:10px;padding:10px 12px;background:#F4F5F7;border:1px solid var(--bd);border-radius:8px;font-size:11px;color:var(--ts)">
+        <div style="font-size:10px;font-weight:700;color:var(--tt);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Leg 1 (Dallas → Satellite WHS)</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <span>Dispatch: <b>${l1Disp||'—'}</b></span>
+          <span>OOR: <span class="mono" style="color:#2563eb">${l1Oor||'—'}</span></span>
+          <span>LSR: <span class="mono" style="color:var(--pu)">${l1Lsr||'—'}</span></span>
+        </div>
+      </div>
       ${isAdm?`<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;padding:12px;background:var(--bg);border-radius:8px">
         <label style="font-size:11px;color:var(--ts)">Dispatch date</label>
         <input type="date" value="${l2Date}" onchange="_fcSetLeg2Date('${fpEsc}',this.value)" style="font-size:11px;font-family:var(--fm);padding:5px 8px;border:1px solid #1565C0;border-radius:6px;color:#1565C0;width:150px">
@@ -15144,7 +15159,19 @@ function _fcEmailLeg2Oor(fp,clusterLabel,truckId){
   const oorTxt=oor?'#'+oor:'(number tbd)';
   const ref=truckId+' (Leg 2)'+(lsr?' '+lsr:'');
   const introLine='Please find attached the OOR '+oorTxt+' for '+ref+', the 2nd-leg truck going from '+satOrigin+' to the '+dest+'.'+(ddStr?' Dispatch is scheduled to leave WHS on '+ddStr+'.':'');
-  const body=['Hello,','',introLine,'','Items requiring assembly:',asmLines.length?asmLines.join('\n'):'  (none)','','Thanks,'].join('\n');
+  // Leg 1 reference info — same source as the modal display
+  const _l1Lsr=LM_getLsr(t)||'';
+  const _l1Oor=LM_getOor(t)||'';
+  const _l1Dd=t.dd||'';
+  const _l1DdStr=_l1Dd?new Date(_l1Dd+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric'}):'';
+  const leg1Block=[
+    'Leg 1 reference (Dallas -> '+satOrigin+'):',
+    ' - Truck:    '+truckId+' (Leg 1)',
+    ' - Dispatch: '+(_l1DdStr||'-'),
+    ' - LSR:      '+(_l1Lsr||'-'),
+    ' - OOR:      '+(_l1Oor||'-')
+  ];
+  const body=['Hello,','',introLine,'',...leg1Block,'','Items requiring assembly:',asmLines.length?asmLines.join('\n'):'  (none)','','Thanks,'].join('\n');
   const cc='materials@fwc2026.org;distribution@fwc2026.org';
   const mailto='mailto:?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
   window.open(mailto);
