@@ -14841,36 +14841,34 @@ async function _fcSendHandshake(fp,leg){
     const _disp=row.disp;
     const _isLpMode=_lpAbbrs.length>0&&_disp&&Object.keys(LP_ARRIVAL_MAP).length>0;
     const _isStockMode=STOCK_SKUS.size>0;
-    // Returns days late (positive int) or 0 if on time / unknown.
-    // LP mode: days = max(arrival - dispatch). Stock mode: 1 (we know it's late but no date).
-    const _itemDaysLate=(it)=>{
-      if(it.fa)return 0;
+    // Returns {late:boolean, days:number|null}. days=null when late but no arrival date known.
+    const _itemLateInfo=(it)=>{
+      if(it.fa)return{late:false,days:null};
       const n=NOM[it.sku];
       const src=(n?.src||'').toUpperCase();
-      if(src.startsWith('STP')||src.startsWith('CT'))return 0;
+      if(src.startsWith('STP')||src.startsWith('CT'))return{late:false,days:null};
       if(_isLpMode){
-        if(LM_kitArrivedOnTime(it.sku,_lpAbbrs,_disp))return 0;
-        // Compute days late: latest arrival across kit components vs dispatch
+        if(LM_kitArrivedOnTime(it.sku,_lpAbbrs,_disp))return{late:false,days:null};
         const skus=(n?._kitNom)?(LM_getKitById(n._kitId)?.items||[]).map(x=>x.sku):[it.sku];
         let latest=null;
         for(const s of skus){
           const arr=LM_getSkuLPArrival(s,_lpAbbrs);
           if(arr&&(!latest||arr>latest))latest=arr;
         }
-        if(!latest)return 1;
+        if(!latest)return{late:true,days:null};
         const days=Math.round((new Date(latest+'T12:00:00')-new Date(_disp+'T12:00:00'))/86400000);
-        return days>0?days:0;
+        return{late:true,days:days>0?days:null};
       }
-      if(_isStockMode)return LM_kitInStock(it.sku)?0:1;
-      return 0;
+      if(_isStockMode)return{late:!LM_kitInStock(it.sku),days:null};
+      return{late:false,days:null};
     };
     const lines=[];
     for(const it of items){
       const indent=it.kitChild?'    ':'';
       const faCode=typeof it.fa==='string'?it.fa:(it.fa?'FA':'');
       const tag=faCode?' ['+faCode+']':(it.manual?' [MANUAL]':(it.isKit?' [KIT]':''));
-      const dl=_itemDaysLate(it);
-      const latePrefix=dl>0?('[LATE'+(_isLpMode?' - '+dl+' day'+(dl===1?'':'s'):'')+'] '):'';
+      const li=_itemLateInfo(it);
+      const latePrefix=li.late?('[LATE'+(li.days?' - '+li.days+' day'+(li.days===1?'':'s'):'')+'] '):'';
       lines.push(indent+latePrefix+(it.qty||0)+'x '+(it.sku||'')+' '+(it.name||'')+tag);
     }
     manifest='Cargo manifest ('+items.length+' lines):\n'+lines.join('\n');
