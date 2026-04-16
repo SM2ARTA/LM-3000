@@ -6124,7 +6124,7 @@ function LP_showTruckModal(truckId){
   let mh=modalHeader(
     `${isDisp?'🔒':'🚛'} LP-${truckId}${_lsr?' <span class="mono" style="color:var(--pu);font-size:12px;background:var(--ps);padding:1px 6px;border-radius:3px;margin-left:6px">'+_lsr+'</span>':''}${isDisp?' <span style="color:var(--gn);font-size:12px">Locked</span>':''}`,
     `${first.date} · <span style="color:${dc.color}">${clDisp(first.destination)}</span> · <span style="color:var(--ac)">📍 Arrives ${_mArrDisp} (${_mTransit}d)</span>`,
-    `<button class="rbtn" onclick="LP_exportSingleTruck(${truckId})" style="background:var(--as);color:var(--ac);border-color:var(--ab);font-size:11px">⬇ OOR</button><button class="rbtn" onclick="LP_exportCI(${truckId})" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-size:11px">📄 CI</button>${_a10IsMex(first.destination)?'<button class="rbtn" onclick="LP_exportA10('+truckId+')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:11px">📋 A10</button>':''}`
+    `<button class="rbtn" onclick="LP_exportSingleTruck(${truckId})" style="background:var(--as);color:var(--ac);border-color:var(--ab);font-size:11px">⬇ OOR</button><button class="rbtn" onclick="LP_emailOor(${truckId})" title="Email pre-filled OOR handoff (opens in Outlook)" style="background:var(--gs);color:var(--gn);border-color:#B8DFCA;font-size:11px">✉ Email</button><button class="rbtn" onclick="LP_exportCI(${truckId})" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE;font-size:11px">📄 CI</button>${_a10IsMex(first.destination)?'<button class="rbtn" onclick="LP_exportA10('+truckId+')" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80;font-size:11px">📋 A10</button>':''}`
   );
   mh+=`<div class="mdb">
         <div class="mst">
@@ -6954,6 +6954,40 @@ async function LP_exportA10(truckId){
     URL.revokeObjectURL(url);
   }catch(e){alert('A10 export error: '+e.message);console.error(e)}
   if(pov)pov.style.display='none';
+}
+// ── LP OOR Email — opens Outlook with a pre-filled OOR handoff message ──
+// Format mirrors the Houston example: subject "OOR # {oor}- LP-{id} {lsr} - {City}",
+// body "Please find attached the OOR # {oor}- LP-{id} {lsr} for truck going to {City}
+// leaving WHS on {Month D}." TO is the Dallas outbound carrier (all LP trucks leave
+// Dallas), CC is the FWC26 distribution / customs / management team.
+const _LP_OOR_TO='dfw-2@cosiclogistics.com';
+const _LP_OOR_CC=[
+  'Material Management Team (FIFA26) <materials@fwc2026.org>',
+  'Allen, Mikhail (FIFA26) <mikhail.allen@fwc2026.org>',
+  'Matt Underwood <matt.underwood@gcl.global>',
+  'Distribution Logistics (FIFA26) <distribution@fwc2026.org>',
+  'Customs FWC2026 <customs@fwc2026.org>'
+].join(';');
+const _LP_CITY_NAMES={TOR:'Toronto',VAN:'Vancouver',CDMX:'Mexico City',GDL:'Guadalajara',MTY:'Monterrey',HOU:'Houston',KC:'Kansas City',NY:'New York / New Jersey'};
+function LP_emailOor(truckId){
+  const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
+  if(!rawPlan.length)return;
+  const first=rawPlan[0];
+  const lsr=LP_lsrNumbers[truckId]||'';
+  const oor=LP_oorNumbers[truckId]||'';
+  const abbr=LP_matchTransitAbbr(first.destination);
+  const city=_LP_CITY_NAMES[abbr]||clDisp(first.destination)||first.destination||'';
+  const ddStr=first.date?new Date(first.date+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric'}):'';
+  // Subject: "OOR # 399- LP-333 LSR632-009 - Houston"
+  const subjPrefix=oor?'OOR # '+oor+'- ':'';
+  const lsrSuffix=lsr?' '+lsr:'';
+  const subject=subjPrefix+'LP-'+truckId+lsrSuffix+' - '+city;
+  // Body
+  const oorPhrase=oor?'the OOR # '+oor+'- LP-'+truckId+lsrSuffix:'the OOR for LP-'+truckId+lsrSuffix;
+  const whenPhrase=ddStr?' leaving WHS on '+ddStr:'';
+  const body=['Hello,','','Please find attached '+oorPhrase+' for truck going to '+city+whenPhrase+'.','','Thanks,'].join('\n');
+  const mailto='mailto:'+encodeURIComponent(_LP_OOR_TO)+'?cc='+encodeURIComponent(_LP_OOR_CC)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  window.open(mailto);
 }
 async function LP_exportCI(truckId){
   const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
