@@ -6938,13 +6938,32 @@ async function LP_exportCI(truckId){
   const rawPlan=LP_STATE.generatedPlan.filter(r=>r.truckId===truckId);
   if(!rawPlan.length)return;
   const first=rawPlan[0];
-  let agg=LP_aggregateTruck(rawPlan).filter(s=>!_lpIsFaSku(s.sku));// exclude FA capacity reserves
+  let agg=LP_aggregateTruck(rawPlan).filter(s=>!_lpIsFaSku(s.sku));// exclude FA capacity reserves (real items appended below)
   agg.forEach(it=>{const ret=LP_returned[truckId]?.[it.sku]||0;it.qty=Math.max(0,_lpEffQty(it.sku,it.qty)-ret)});
   agg=agg.filter(it=>it.qty>0);// remove fully returned items
   // Append manual items
   for(const mi of MI_get(MI_lpKey(truckId))){
     agg.push({sku:mi.sku,name:mi.name||'',qty:mi.qty||0,pallets:mi.pallets||0});
   }
+  // Append FA group items (real SKUs from FA capacity reserves). Per-group pallets
+  // are assigned to the first item only so line pallets sum to the truck total.
+  try{
+    const faItems=_faItemsForTruck('LP-'+truckId,first.destination,LP_lsrNumbers[truckId]||'');
+    const _seenGroupPlt=new Set();
+    const _aggBySku={};for(const it of agg)_aggBySku[it.sku]=it;
+    for(const fi of (faItems||[])){
+      if(!fi||!fi.sku||(fi.qty||0)<=0)continue;
+      let plt=fi.pallets||0;
+      if(fi._groupSku&&!_seenGroupPlt.has(fi._groupSku)){
+        plt=Math.max(plt,fi._groupPlt||0);
+        _seenGroupPlt.add(fi._groupSku);
+      }else if(fi._groupSku){
+        plt=0;
+      }
+      if(_aggBySku[fi.sku]){_aggBySku[fi.sku].qty+=fi.qty;_aggBySku[fi.sku].pallets=(_aggBySku[fi.sku].pallets||0)+plt}
+      else{const row={sku:fi.sku,name:fi.name||'',qty:fi.qty,pallets:plt};agg.push(row);_aggBySku[fi.sku]=row}
+    }
+  }catch(e){console.warn('CI FA items:',e)}
   const totalPlt=rawPlan.reduce((s,r)=>s+(r.pallets||0),0)+MI_get(MI_lpKey(truckId)).reduce((s,m)=>s+(m.pallets||0),0);
   const nomenclature=LP_STATE.nomenclature;
   const dest=first.destination,date=first.date;
@@ -6957,7 +6976,8 @@ function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   const wb=XLSX.utils.book_new();let tQ=0,tV=0;
   let tPlt=0;
   const rows=agg.map(it=>{const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;tPlt+=it.pallets||0;
-    return{'# PACKAGES':+it.pallets.toFixed(2),'DESCRIPTION':cd.desc,'ITEM #':it.sku,'HS CODE':cd.hsCode,'COUNTRY':cd.country,'UNIT QTY':it.qty,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv};});
+    const desc=(cd.desc&&cd.desc!==it.sku)?cd.desc:(it.name||it.sku);
+    return{'# PACKAGES':+it.pallets.toFixed(2),'DESCRIPTION':desc,'ITEM #':it.sku,'HS CODE':cd.hsCode,'COUNTRY':cd.country,'UNIT QTY':it.qty,'CURRENCY':'USD','UNIT VALUE':up,'TOTAL VALUE':tv};});
   rows.push({'# PACKAGES':+tPlt.toFixed(2),'DESCRIPTION':'TOTAL','ITEM #':'','HS CODE':'','COUNTRY':'','UNIT QTY':tQ,'CURRENCY':'','UNIT VALUE':'','TOTAL VALUE':tV});
   const pty=LP_getCIParties(dest);
   const ciData=[['COMBINED INVOICE AND PACKING LIST'],[''],['DATE:',date,'','INVOICE #:','LP-'+truckId+'-'+date],['DELIVERY LOCATION:',dest],['Incoterms:','DDP','Terms of Payment:','Freight Prepaid'],['Mode of Transport:','Road'],[''],['SHIPPER:','FWC2026 US, Inc, 396 Alhambra Circle, Ste# 400, Coral Gables, FL 33134, USA'],['CONSIGNEE:',pty.consignee.filter(Boolean).join(', ')],['CUSTOMS BROKER:',pty.broker.filter(Boolean).join(', ')],['']];
@@ -6965,7 +6985,7 @@ function LP_exportCI_SheetJS(truckId,agg,dest,date,totalPlt,nomenclature){
   ws['!cols']=[{wch:12},{wch:36},{wch:22},{wch:16},{wch:20},{wch:10},{wch:8},{wch:12},{wch:14}];
   XLSX.utils.book_append_sheet(wb,ws,'Commercial Invoice');
   const plData=[['PACKING LIST'],[''],['Truck:','LP-'+truckId,'Date:',date,'Destination:',dest],['Items:',tQ,'Pallets:',+totalPlt.toFixed(2),'Total Value:',tV],['']];
-  const plRows=agg.map((it,i)=>{const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;return{'#':i+1,'Code':it.sku,'Name':cd.desc,'Qty':it.qty,'Pallets':+it.pallets.toFixed(3),'HS Code':cd.hsCode,'Country':cd.country,'Unit Price':up,'Line Total':up*it.qty}});
+  const plRows=agg.map((it,i)=>{const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const nm=(cd.desc&&cd.desc!==it.sku)?cd.desc:(it.name||it.sku);return{'#':i+1,'Code':it.sku,'Name':nm,'Qty':it.qty,'Pallets':+it.pallets.toFixed(3),'HS Code':cd.hsCode,'Country':cd.country,'Unit Price':up,'Line Total':up*it.qty}});
   plRows.push({'#':'','Code':'','Name':'TOTAL','Qty':tQ,'Pallets':+totalPlt.toFixed(2),'HS Code':'','Country':'','Unit Price':'','Line Total':tV});
   const ps=XLSX.utils.aoa_to_sheet(plData);XLSX.utils.sheet_add_json(ps,plRows,{origin:'A6'});
   ps['!cols']=[{wch:4},{wch:22},{wch:36},{wch:8},{wch:10},{wch:16},{wch:14},{wch:10},{wch:14}];
@@ -7107,7 +7127,8 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
     const cd=_custForDest(it.sku,dest);const up=cd.unitPrice||0;const tv=it.qty*up;tQ+=it.qty;tV+=tv;tPlt+=it.pallets||0;
     const rn=DS+idx;ws.getRow(rn).height=19;
     const bg=idx%2===1?fillL1:fillWh;
-    const vals=[+it.pallets.toFixed(2),cd.desc,it.sku,cd.hsCode,cd.country,'','','','','','',it.qty,'USD',up,tv,''];
+    const _desc=(cd.desc&&cd.desc!==it.sku)?cd.desc:(it.name||it.sku);
+    const vals=[+it.pallets.toFixed(2),_desc,it.sku,cd.hsCode,cd.country,'','','','','','',it.qty,'USD',up,tv,''];
     vals.forEach((v,i)=>{
       const al=i===0?alC:(i===11?alC:(i===12?alC:([13,14].includes(i)?alR:alL)));
       const fmt=i===13?'#,##0.00':(i===14?'$ #,##0.00':null);
@@ -7159,7 +7180,8 @@ async function LP_exportCI_ExcelJS(truckId,items,dest,date,totalPlt,nomenclature
   p.getRow(7).height=28;['#','Nomenclature Code','Nomenclature Name','Qty','Pallets','HS Code','Country','Unit Price','Line Total'].forEach((h,i)=>{const cl=p.getRow(7).getCell(i+1);cl.value=h;cl.font=fHdr;cl.fill=fillDark;cl.border=brdMed;cl.alignment=alW});
   items.forEach((it,idx)=>{const cd=_custForDest(it.sku,dest);const rn=8+idx;p.getRow(rn).height=18;const bg=idx%2===1?fillL1:fillWh;
     const _up=cd.unitPrice||0;
-    [idx+1,it.sku,cd.desc,it.qty,+it.pallets.toFixed(3),cd.hsCode,cd.country,_up,_up*it.qty].forEach((v,i)=>{
+    const _pName=(cd.desc&&cd.desc!==it.sku)?cd.desc:(it.name||it.sku);
+    [idx+1,it.sku,_pName,it.qty,+it.pallets.toFixed(3),cd.hsCode,cd.country,_up,_up*it.qty].forEach((v,i)=>{
       const al=i===0?alC:([7,8].includes(i)?alR:alL);const fmt=i===7?'#,##0.00':(i===8?'$ #,##0.00':null);
       pc(rn,i+1,v,fData,al,bg,brdThin,fmt);
     });
