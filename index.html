@@ -722,23 +722,26 @@ function _faItemsForTruck(truckId,dest,lsr){
       }
     }
   }
-  // Engine-injected FA items on LP trucks (match FA SKU in plan → expand to real items)
+  // Engine-injected FA items on LP trucks (match FA SKU in plan → expand to real items).
+  // A stale plan row alone is NOT sufficient — the group must still be engine-eligible
+  // AND either unlinked (engine-auto) or linked to THIS truck. Any other state means
+  // the user excluded the group (0 pallets, deleted items, moved to another truck, or
+  // hard-deleted) and exports must match.
   if(truckId&&truckId.startsWith('LP-')){
     const lpId=parseInt(truckId.replace('LP-',''));
     const _rawGroups=FA_LINKED._groups||[];
     for(const r of (LP_STATE.generatedPlan||[])){
       if(r.truckId!==lpId)continue;
       if(!_lpIsFaSku(r.sku)||seenSkus.has(r.sku))continue;
-      // If the group still exists but has 0 pallets / 0 items, treat as excluded —
-      // the plan row is stale; skip entirely so OOR/CI stay consistent with engine.
-      const _rg=_rawGroups.find(g=>g.sku===r.sku);
-      if(_rg&&((_rg.pallets||0)<=0||!(_rg.items||[]).length)){seenSkus.add(r.sku);continue;}
       seenSkus.add(r.sku);
-      const g=groups.find(g=>g.sku===r.sku);
-      if(g){const gi=_faGroupItems(g.id);if(gi.length){result.push(...gi);continue}}
-      // Fallback: show dummy SKU only when the group is truly orphaned (not in FA_LINKED)
-      if(!_rg)continue;
-      result.push({sku:r.sku,name:r.name||'FA Reserve',qty:1,pallets:r.pallets||0,biDate:'',venue:'',src:'FA',uom:'Each'});
+      const _rg=_rawGroups.find(g=>g.sku===r.sku);
+      if(!_rg)continue;// group deleted from FA Goods — skip stale plan row
+      if((_rg.pallets||0)<=0)continue;// explicitly excluded via 0 pallets
+      if(!(_rg.items||[]).length)continue;// all demand items removed from group
+      if(_rg.linkedLP&&_rg.linkedLP!==truckId)continue;// user reassigned to another LP truck
+      const gi=_faGroupItems(_rg.id);
+      if(!gi.length)continue;// all referenced demand items deleted
+      result.push(...gi);
     }
   }
   // Engine-injected FA items on LM trucks (via _faGroup → detail items)
