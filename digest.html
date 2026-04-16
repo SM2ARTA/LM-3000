@@ -500,7 +500,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _wkOutC={USA:{},CAN:{},MEX:{}};
   for(const cc of['USA','CAN','MEX'])for(let i=0;i<_showDays;i++)_wkOutC[cc][_weekDays[i]]=[];
   const _wkOutTot={USA:0,CAN:0,MEX:0};
-  for(const d in _wkOut){for(const t of _wkOut[d]){const cc=_countryOf(t.dest);_wkOutC[cc][d].push(t);_wkOutTot[cc]++}}
+  for(const d in _wkOut){for(const t of _wkOut[d]){const cc=t.type==='LP'?'USA':_countryOf(t.dest);_wkOutC[cc][d].push(t);_wkOutTot[cc]++}}
 
   // Weekend helper
   const _isWeekend=i=>i>=5;
@@ -694,7 +694,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _nwOutC={USA:{},CAN:{},MEX:{}};
   for(const cc of['USA','CAN','MEX'])for(const d of _nwDays)_nwOutC[cc][d]=[];
   const _nwOutTot={USA:0,CAN:0,MEX:0};
-  for(const d of _nwDays){for(const t of _nwOut[d]){const cc=_countryOf(t.dest);_nwOutC[cc][d].push(t);_nwOutTot[cc]++}}
+  for(const d of _nwDays){for(const t of _nwOut[d]){const cc=t.type==='LP'?'USA':_countryOf(t.dest);_nwOutC[cc][d].push(t);_nwOutTot[cc]++}}
   if(_nwTotal>0||_nwTotalIn>0){
     html+=_sec('&#128666;','Next Week &#8212; '+_nwLabel,'#304FFE');
     html+='<tr><td style="padding:0 32px 20px">';
