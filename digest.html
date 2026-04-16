@@ -423,13 +423,16 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   const _totalItems=D.lmTotalItems>0?D.lmTotalItems:lmItems;
   const _venues=D.venueCount||217;
   const _allTrucks=lpTotal+lmTrucks+lmCort+_stpCount;
-  const _segDisp=_allTrucks>0?Math.round(lpDispatched/_allTrucks*100):0;
+  const _lmDispOverall=_lm.dispatched||0;
+  const _totalDispOverall=lpDispatched+_lmDispOverall;
+  const _overallPct=_allTrucks>0?Math.round(_totalDispOverall/_allTrucks*100):0;
+  const _segDisp=_allTrucks>0?Math.round(_totalDispOverall/_allTrucks*100):0;
   const _segReady=_allTrucks>0?Math.round(lpReady/_allTrucks*100):0;
 
   // ── Overall ──
   html+=_sec('&#127758;','Overall Project Status','#00897B');
   html+='<tr><td style="padding:0 32px 20px"><table width="100%" cellpadding="0" cellspacing="0" bgcolor="#E0F7F3" style="'+_T+'">';
-  html+='<tr>'+_stat('items',_totalItems.toLocaleString(),'#00897B')+_stat('venues',_venues,'#4A148C')+_stat('trucks',_allTrucks,'#304FFE')+_stat('dispatched',lpDispatched,'#12804A')+'</tr>';
+  html+='<tr>'+_stat('items',_totalItems.toLocaleString(),'#00897B')+_stat('venues',_venues,'#4A148C')+_stat('trucks',_allTrucks,'#304FFE')+_stat('dispatched ('+_overallPct+'%)',_totalDispOverall,'#12804A')+'</tr>';
   html+='<tr><td colspan="4" style="padding:8px 16px 12px">';
   html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#E8E8ED" style="height:10px;padding:0">';
   html+='<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed"><tr>';
@@ -438,7 +441,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+='<td style="height:10px;padding:0;font-size:1px">&nbsp;</td>';
   html+='</tr></table></td></tr></table>';
   html+='<table cellpadding="0" cellspacing="0" align="center" style="margin-top:4px"><tr>';
-  html+='<td bgcolor="#12804A" style="width:10px;height:10px;font-size:1px">&nbsp;</td><td style="padding:0 12px 0 4px;font-size:10px;font-weight:600">'+lpDispatched+' dispatched</td>';
+  html+='<td bgcolor="#12804A" style="width:10px;height:10px;font-size:1px">&nbsp;</td><td style="padding:0 12px 0 4px;font-size:10px;font-weight:600">'+_totalDispOverall+' dispatched</td>';
   html+='<td bgcolor="#304FFE" style="width:10px;height:10px;font-size:1px">&nbsp;</td><td style="padding:0 0 0 4px;font-size:10px;font-weight:600">'+lpReady+' ready</td>';
   html+='</tr></table>';
   html+='</td></tr></table></td></tr>';
