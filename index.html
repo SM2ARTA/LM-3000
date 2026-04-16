@@ -6984,8 +6984,8 @@ function LP_emailOor(truckId){
   const subject=subjPrefix+'LP-'+truckId+lsrSuffix+' - '+city;
   // Body
   const oorPhrase=oor?'the OOR # '+oor+'- LP-'+truckId+lsrSuffix:'the OOR for LP-'+truckId+lsrSuffix;
-  const whenPhrase=ddStr?' leaving WHS on '+ddStr:'';
-  const body=['Hello,','','Please find attached '+oorPhrase+' for truck going to '+city+whenPhrase+'.','','Thanks,'].join('\n');
+  const whenPhrase=ddStr?', leaving WHS on '+ddStr:'';
+  const body=['Hello,','','Please find attached '+oorPhrase+' for the truck going to '+city+whenPhrase+'.','','Thanks,'].join('\n');
   const mailto='mailto:'+encodeURIComponent(_LP_OOR_TO)+'?cc='+encodeURIComponent(_LP_OOR_CC)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
   window.open(mailto);
 }
