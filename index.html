@@ -704,6 +704,10 @@ function _faItemsForTruck(truckId,dest,lsr){
   const result=[];const seenSkus=new Set();
   if(groups.length){
     const itemById={};for(const it of items)itemById[it.id]=it;
+    // Per-truck FA reserve returns = user's "exclude from docs" signal
+    const _lpIdForRet=(truckId&&truckId.startsWith('LP-'))?parseInt(truckId.replace('LP-',''),10):null;
+    const _retMapA=(_lpIdForRet!=null&&typeof LP_returned!=='undefined'&&LP_returned[_lpIdForRet])||{};
+    const _lpPlanQty=(_lpIdForRet!=null)?(LP_STATE?.generatedPlan||[]).reduce((m,r)=>{if(r.truckId===_lpIdForRet&&_lpIsFaSku(r.sku))m[r.sku]=(m[r.sku]||0)+(r.qty||0);return m},{}):{};
     for(const g of groups){
       let match=false;
       if(g.linkedLP&&g.linkedLP===truckId)match=true;
@@ -714,6 +718,9 @@ function _faItemsForTruck(truckId,dest,lsr){
         if(!hasRef&&dest&&g.linkedLM==='LM '+dest)match=true;
       }
       if(match){
+        // If the FA reserve row was fully returned on this LP truck, treat as excluded
+        const _pq=_lpPlanQty[g.sku]||0;const _rq=_retMapA[g.sku]||0;
+        if(_pq>0&&_rq>=_pq){seenSkus.add(g.sku);continue;}
         seenSkus.add(g.sku);
         const _lpFg=(LP_FA_GROUPS||[]).find(fg=>fg.sku===g.sku);
         const _gPlt=_lpFg?.pallets||g.pallets||0;
@@ -723,17 +730,18 @@ function _faItemsForTruck(truckId,dest,lsr){
     }
   }
   // Engine-injected FA items on LP trucks (match FA SKU in plan → expand to real items).
-  // A stale plan row alone is NOT sufficient — the group must still be engine-eligible
-  // AND either unlinked (engine-auto) or linked to THIS truck. Any other state means
-  // the user excluded the group (0 pallets, deleted items, moved to another truck, or
-  // hard-deleted) and exports must match.
+  // Skip when: group deleted / excluded / reassigned, OR the FA reserve row was
+  // fully returned on this truck (LP_returned — user's "exclude from docs" signal).
   if(truckId&&truckId.startsWith('LP-')){
     const lpId=parseInt(truckId.replace('LP-',''));
     const _rawGroups=FA_LINKED._groups||[];
+    const _retMap=(typeof LP_returned!=='undefined'&&LP_returned[lpId])||{};
     for(const r of (LP_STATE.generatedPlan||[])){
       if(r.truckId!==lpId)continue;
       if(!_lpIsFaSku(r.sku)||seenSkus.has(r.sku))continue;
       seenSkus.add(r.sku);
+      // Returned FA reserve = user excluded this group from the truck's docs
+      if((_retMap[r.sku]||0)>=(r.qty||0)&&(r.qty||0)>0)continue;
       const _rg=_rawGroups.find(g=>g.sku===r.sku);
       if(!_rg)continue;// group deleted from FA Goods — skip stale plan row
       if((_rg.pallets||0)<=0)continue;// explicitly excluded via 0 pallets
