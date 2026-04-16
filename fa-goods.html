@@ -942,6 +942,10 @@ function _faPasteFilterVenue(selId,q){
 // ── Step 3: Confirm and add ──
 function _faConfirmPaste(){
   const P=window._faPaste;if(!P||!P.items.length){alert('Run Preview first.');return}
+  // Re-read FA input at confirm time — user may have edited it after Preview.
+  // The input value at "Add Items" is the authoritative FA for all pasted items.
+  const _faLive=(document.getElementById('_faPasteFa')?.value||'').trim();
+  const _faApply=_faLive||'TEC';
   const exist={};FA_DEMAND.forEach(d=>{exist[d.sku+'|'+d.venue]=true});
   let added=0,skipped=0,overwritten=0;
   const byVenue={};for(const it of P.items){if(!byVenue[it.venue])byVenue[it.venue]=[];byVenue[it.venue].push(it)}
@@ -961,7 +965,7 @@ function _faConfirmPaste(){
     for(const it of grp){
       const asmKey=rv+'|'+it.sku;const mixKey=rv+'|'+it.sku;
       const isAsm=!!P.asmMap?.[asmKey];const isMixed=!!P.mixMap?.[mixKey];
-      FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:mapped,fa:it.fa,qty:it.qty,biDate:bi||it.biDate||'',note:'',
+      FA_DEMAND.push({id:FA_nextDemId++,sku:it.sku,name:it.name,venue:mapped,fa:_faApply,qty:it.qty,biDate:bi||it.biDate||'',note:'',
         _asm:isAsm||undefined,
         _mixed:isMixed||undefined,
         created:new Date().toISOString()});
