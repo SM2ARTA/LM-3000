@@ -695,8 +695,12 @@ function _faGroupItems(groupId){
   return result;
 }
 function _faItemsForTruck(truckId,dest,lsr){
-  // Match via groups: find groups whose linkedLP or linkedLM matches this truck
-  const groups=FA_LINKED._groups||[];const items=FA_LINKED._items||[];
+  // Match via groups: find groups whose linkedLP or linkedLM matches this truck.
+  // Groups with 0 pallets are excluded from engine injection (see CLAUDE.md) so they
+  // must also be excluded from truck docs (OOR / CI) — otherwise removing a group
+  // in FA Goods leaves a stale link and the cargo keeps appearing in exports.
+  const groups=(FA_LINKED._groups||[]).filter(g=>(g.pallets||0)>0&&(g.items||[]).length>0);
+  const items=FA_LINKED._items||[];
   const result=[];const seenSkus=new Set();
   if(groups.length){
     const itemById={};for(const it of items)itemById[it.id]=it;
@@ -721,13 +725,19 @@ function _faItemsForTruck(truckId,dest,lsr){
   // Engine-injected FA items on LP trucks (match FA SKU in plan → expand to real items)
   if(truckId&&truckId.startsWith('LP-')){
     const lpId=parseInt(truckId.replace('LP-',''));
+    const _rawGroups=FA_LINKED._groups||[];
     for(const r of (LP_STATE.generatedPlan||[])){
       if(r.truckId!==lpId)continue;
       if(!_lpIsFaSku(r.sku)||seenSkus.has(r.sku))continue;
+      // If the group still exists but has 0 pallets / 0 items, treat as excluded —
+      // the plan row is stale; skip entirely so OOR/CI stay consistent with engine.
+      const _rg=_rawGroups.find(g=>g.sku===r.sku);
+      if(_rg&&((_rg.pallets||0)<=0||!(_rg.items||[]).length)){seenSkus.add(r.sku);continue;}
       seenSkus.add(r.sku);
       const g=groups.find(g=>g.sku===r.sku);
       if(g){const gi=_faGroupItems(g.id);if(gi.length){result.push(...gi);continue}}
-      // Fallback: show dummy SKU if group items can't be resolved
+      // Fallback: show dummy SKU only when the group is truly orphaned (not in FA_LINKED)
+      if(!_rg)continue;
       result.push({sku:r.sku,name:r.name||'FA Reserve',qty:1,pallets:r.pallets||0,biDate:'',venue:'',src:'FA',uom:'Each'});
     }
   }
