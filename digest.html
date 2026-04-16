@@ -595,15 +595,17 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     {cc:'CAN',flag:'&#127464;&#127462;',labelClr:'#0D47A1'},
     {cc:'MEX',flag:'&#127474;&#127485;',labelClr:'#1B5E20'}
   ];
-  const _anyCountryOut=_cRows.some(r=>_wkOutTot[r.cc]>0);
-  for(let ri=0;ri<_cRows.length;ri++){
-    const cRow=_cRows[ri];
-    if(!_wkOutTot[cRow.cc])continue;// skip countries with no trucks this week
-    const isLast=ri===_cRows.length-1||!_cRows.slice(ri+1).some(r=>_wkOutTot[r.cc]>0);
+  const _rendCRows=_cRows.filter(r=>_wkOutTot[r.cc]>0);
+  const _anyCountryOut=_rendCRows.length>0;
+  for(let ri=0;ri<_rendCRows.length;ri++){
+    const cRow=_rendCRows[ri];
+    const isLast=ri===_rendCRows.length-1;
     const bottomBrd=isLast?'':'1px solid #E2E4E9';
     html+='<tr>';
-    html+='<td bgcolor="#F4F5F7" style="padding:8px 6px;font-size:10px;font-weight:700;color:'+cRow.labelClr+';text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'"><span style="font-size:18px">'+cRow.flag+'</span></td>';
-    html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'"><span style="font-size:18px;font-weight:800;color:'+cRow.labelClr+';font-family:Courier New,monospace">'+_wkOutTot[cRow.cc]+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
+    if(ri===0){
+      html+='<td rowspan="'+_rendCRows.length+'" bgcolor="#F4F5F7" style="padding:10px 6px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px">&#128228;</span><br><span style="font-size:10px;font-weight:700;color:#4A148C">OUT</span><br><span style="font-size:22px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">'+_wkTotalOut+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
+    }
+    html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'"><span style="font-size:13px;font-weight:700;color:'+cRow.labelClr+'">'+cRow.flag+'</span><br><span style="font-size:18px;font-weight:800;color:'+cRow.labelClr+';font-family:Courier New,monospace">'+_wkOutTot[cRow.cc]+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
     for(let i=0;i<_showDays;i++){
       const d=_weekDays[i];const trucks=_wkOutC[cRow.cc][d];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
       const wkndEmpty=wknd&&trucks.length===0;
@@ -642,8 +644,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // If no country has any outbounds this week, emit a single empty OUT row so grid stays valid
   if(!_anyCountryOut){
     html+='<tr>';
-    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:10px;font-weight:700;color:#4A148C;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px">&#128228;</span><br>OUT</td>';
-    html+='<td bgcolor="#F4F5F7" style="padding:10px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:18px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">0</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px">&#128228;</span><br><span style="font-size:10px;font-weight:700;color:#4A148C">OUT</span><br><span style="font-size:22px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">0</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:10px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td>';
     for(let i=0;i<_showDays;i++){
       const d=_weekDays[i];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
       const cellBg=isPast?'#F4F5F7':isToday?'#FFF8E1':wknd?'#FAFAFA':'#ffffff';
@@ -753,17 +755,21 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
       {cc:'CAN',flag:'&#127464;&#127462;',labelClr:'#0D47A1'},
       {cc:'MEX',flag:'&#127474;&#127485;',labelClr:'#1B5E20'}
     ];
-    const _nwAnyOut=_nwCRows.some(r=>_nwOutTot[r.cc]>0);
-    for(let ri=0;ri<_nwCRows.length;ri++){
-      const cRow=_nwCRows[ri];
-      if(!_nwOutTot[cRow.cc])continue;
+    const _nwRendCRows=_nwCRows.filter(r=>_nwOutTot[r.cc]>0);
+    const _nwAnyOut=_nwRendCRows.length>0;
+    for(let ri=0;ri<_nwRendCRows.length;ri++){
+      const cRow=_nwRendCRows[ri];
+      const isLast=ri===_nwRendCRows.length-1;
+      const bottomBrd=isLast?'':'1px solid #E2E4E9';
       html+='<tr>';
-      html+='<td bgcolor="#F4F5F7" style="padding:8px 6px;font-size:10px;font-weight:700;color:'+cRow.labelClr+';text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:18px">'+cRow.flag+'</span></td>';
-      html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:18px;font-weight:800;color:'+cRow.labelClr+';font-family:Courier New,monospace">'+_nwOutTot[cRow.cc]+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
+      if(ri===0){
+        html+='<td rowspan="'+_nwRendCRows.length+'" bgcolor="#F4F5F7" style="padding:10px 6px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px">&#128228;</span><br><span style="font-size:10px;font-weight:700;color:#304FFE">OUT</span><br><span style="font-size:22px;font-weight:800;color:#304FFE;font-family:Courier New,monospace">'+_nwTotal+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
+      }
+      html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'"><span style="font-size:13px;font-weight:700;color:'+cRow.labelClr+'">'+cRow.flag+'</span><br><span style="font-size:18px;font-weight:800;color:'+cRow.labelClr+';font-family:Courier New,monospace">'+_nwOutTot[cRow.cc]+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
       for(let i=0;i<7;i++){
         const trucks=_nwOutC[cRow.cc][_nwDays[i]];const wknd=i>=5;
         const cellBg=wknd?'#FAFAFA':'#ffffff';
-        html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED">';
+        html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'">';
         if(trucks.length===0){
           if(wknd)html+='';
           else html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>';
@@ -789,8 +795,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     }
     if(!_nwAnyOut){
       html+='<tr>';
-      html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:10px;font-weight:700;color:#304FFE;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px">&#128228;</span><br>OUT</td>';
-      html+='<td bgcolor="#F4F5F7" style="padding:10px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:18px;font-weight:800;color:#304FFE;font-family:Courier New,monospace">0</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
+      html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px">&#128228;</span><br><span style="font-size:10px;font-weight:700;color:#304FFE">OUT</span><br><span style="font-size:22px;font-weight:800;color:#304FFE;font-family:Courier New,monospace">0</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
+      html+='<td bgcolor="#F4F5F7" style="padding:10px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td>';
       for(let i=0;i<7;i++){
         const wknd=i>=5;const cellBg=wknd?'#FAFAFA':'#ffffff';
         html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table></td>';
