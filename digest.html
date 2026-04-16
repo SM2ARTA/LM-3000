@@ -489,6 +489,19 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   for(const t of lpList){if(lsrNumbers[t.id]&&_wkOut[t.date]!==undefined)_wkOut[t.date].push({id:'LP-'+t.id,dest:clDisp(t.dest),date:t.date,pallets:t.plt,type:'LP',lsr:lsrNumbers[t.id]||''})}
   for(const t of lmTruckData){if(t.lsr&&t.dd&&_wkOut[t.dd]!==undefined)_wkOut[t.dd].push({id:t.id,dest:t.dest,date:t.dd,pallets:t.pallets,type:'LM',lsr:t.lsr||''})}
 
+  // Classify destination → country code
+  const _countryOf=dest=>{
+    const d=(dest||'').toUpperCase();
+    if(d.includes('MEX')||d.includes('CDMX')||d.includes('GUADALAJARA')||d.includes('MONTERREY')||/\bGDL\b/.test(d)||/\bMTY\b/.test(d)||/\bMEXICO\s*CITY\b/.test(d))return'MEX';
+    if(/\bCAN\b/.test(d)||d.includes('TORONTO')||d.includes('VANCOUVER')||/\bTOR\b/.test(d)||/\bVAN\b/.test(d))return'CAN';
+    return'USA';
+  };
+  // Per-country daily buckets (mirrors _wkOut structure)
+  const _wkOutC={USA:{},CAN:{},MEX:{}};
+  for(const cc of['USA','CAN','MEX'])for(let i=0;i<_showDays;i++)_wkOutC[cc][_weekDays[i]]=[];
+  const _wkOutTot={USA:0,CAN:0,MEX:0};
+  for(const d in _wkOut){for(const t of _wkOut[d]){const cc=_countryOf(t.dest);_wkOutC[cc][d].push(t);_wkOutTot[cc]++}}
+
   // Weekend helper
   const _isWeekend=i=>i>=5;
 
@@ -511,6 +524,12 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+='<td bgcolor="#E6F5ED" style="padding:5px 14px;font-size:11px;font-weight:700;color:#12804A;border:none">&#128229; '+_wkTotalIn+' inbound</td>';
   html+='<td style="width:8px"></td>';
   html+='<td bgcolor="#F0EBFE" style="padding:5px 14px;font-size:11px;font-weight:700;color:#4A148C;border:none">&#128228; '+_wkTotalOut+' outbound</td>';
+  html+='<td style="width:10px"></td>';
+  html+='<td bgcolor="#EDE7F6" style="padding:5px 10px;font-size:11px;font-weight:700;color:#4A148C;border:none">&#127482;&#127480; '+_wkOutTot.USA+'</td>';
+  html+='<td style="width:4px"></td>';
+  html+='<td bgcolor="#E3F2FD" style="padding:5px 10px;font-size:11px;font-weight:700;color:#0D47A1;border:none">&#127464;&#127462; '+_wkOutTot.CAN+'</td>';
+  html+='<td style="width:4px"></td>';
+  html+='<td bgcolor="#E8F5E9" style="padding:5px 10px;font-size:11px;font-weight:700;color:#1B5E20;border:none">&#127474;&#127485; '+_wkOutTot.MEX+'</td>';
   html+='</tr></table></td></tr>';
 
   // Header row
@@ -568,43 +587,66 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   }
   html+='</tr>';
 
-  // Outbound row
-  html+='<tr>';
-  html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#4A148C;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9">&#128228; OUT<br><span style="font-size:14px;font-weight:800">'+_wkTotalOut+'</span></td>';
-  for(let i=0;i<_showDays;i++){
-    const d=_weekDays[i];const trucks=_wkOut[d];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
-    const wkndEmpty=wknd&&trucks.length===0&&_wkIn[d].length===0;
-    const cellBg=isPast?'#F4F5F7':isToday?'#FFF8E1':wknd?'#FAFAFA':'#ffffff';
-    html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED">';
-    if(wkndEmpty){html+=''}
-    else if(trucks.length===0){html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>'}
-    else{
-      for(const t of trucks){
-        const isLM=t.type==='LM';
-        const isDisp=isLM?(t.lsr&&t.date<=dShort):(dispatched.has(parseInt(t.id.replace('LP-',''))&&t.lsr&&t.date<=dShort));
-        const isReady=!isDisp&&t.lsr;
-        const dc=isPast?['#999999','#F0F0F0']:_dClr(t.dest);
-        const lsr=t.lsr||'';
-        const statusIcon=isDisp?'&#10004;':isReady?'&#9654;':'&#9203;';
-        const statusBg=isPast?'#E8E8E8':(isDisp?'#C8E6C9':isReady?'#BBDEFB':'#FFE0B2');
-        const statusClr=isPast?'#999999':(isDisp?'#1B5E20':isReady?'#0D47A1':'#E65100');
-        const destClr=isPast?'#AAAAAA':'#444444';
-        const lsrClr=isPast?'#CCCCCC':'#888888';
-        const typeClr=isLM?'#304FFE':'#4A148C';
-        const typeBg=isLM?'#E3F2FD':'#F0EBFE';
-        html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px"><tr>';
-        html+='<td bgcolor="'+dc[1]+'" style="padding:5px 7px;border-left:4px solid '+dc[0]+'">';
-        html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">'+t.id+'</span>';
-        html+=' <span style="font-size:8px;font-weight:700;color:'+typeClr+';background:'+typeBg+';padding:1px 4px">'+t.type+'</span>';
-        html+=' <span style="font-size:9px;font-weight:700;color:'+statusClr+';background:'+statusBg+';padding:1px 5px">'+statusIcon+'</span>';
-        html+='<br><span style="font-size:10px;color:'+destClr+';font-weight:600">'+t.dest+'</span>';
-        if(lsr)html+='<br><span style="font-size:9px;color:'+lsrClr+';font-family:Courier New,monospace">LSR '+lsr+'</span>';
-        html+='</td></tr></table>';
+  // Outbound rows — one per country (USA/CAN/MEX), only render countries with activity this week
+  const _cRows=[
+    {cc:'USA',flag:'&#127482;&#127480;',labelClr:'#4A148C'},
+    {cc:'CAN',flag:'&#127464;&#127462;',labelClr:'#0D47A1'},
+    {cc:'MEX',flag:'&#127474;&#127485;',labelClr:'#1B5E20'}
+  ];
+  const _anyCountryOut=_cRows.some(r=>_wkOutTot[r.cc]>0);
+  for(let ri=0;ri<_cRows.length;ri++){
+    const cRow=_cRows[ri];
+    if(!_wkOutTot[cRow.cc])continue;// skip countries with no trucks this week
+    const isLast=ri===_cRows.length-1||!_cRows.slice(ri+1).some(r=>_wkOutTot[r.cc]>0);
+    const bottomBrd=isLast?'':'1px solid #E2E4E9';
+    html+='<tr>';
+    html+='<td bgcolor="#F4F5F7" style="padding:8px 6px;font-size:10px;font-weight:700;color:'+cRow.labelClr+';text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'"><span style="font-size:14px">'+cRow.flag+'</span><br><span style="font-size:9px">'+cRow.cc+'</span><br><span style="font-size:13px;font-weight:800">'+_wkOutTot[cRow.cc]+'</span></td>';
+    for(let i=0;i<_showDays;i++){
+      const d=_weekDays[i];const trucks=_wkOutC[cRow.cc][d];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
+      const wkndEmpty=wknd&&trucks.length===0;
+      const cellBg=isPast?'#F4F5F7':isToday?'#FFF8E1':wknd?'#FAFAFA':'#ffffff';
+      html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'">';
+      if(wkndEmpty){html+=''}
+      else if(trucks.length===0){html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>'}
+      else{
+        for(const t of trucks){
+          const isLM=t.type==='LM';
+          const isDisp=isLM?(t.lsr&&t.date<=dShort):(dispatched.has(parseInt(t.id.replace('LP-',''))&&t.lsr&&t.date<=dShort));
+          const isReady=!isDisp&&t.lsr;
+          const dc=isPast?['#999999','#F0F0F0']:_dClr(t.dest);
+          const lsr=t.lsr||'';
+          const statusIcon=isDisp?'&#10004;':isReady?'&#9654;':'&#9203;';
+          const statusBg=isPast?'#E8E8E8':(isDisp?'#C8E6C9':isReady?'#BBDEFB':'#FFE0B2');
+          const statusClr=isPast?'#999999':(isDisp?'#1B5E20':isReady?'#0D47A1':'#E65100');
+          const destClr=isPast?'#AAAAAA':'#444444';
+          const lsrClr=isPast?'#CCCCCC':'#888888';
+          const typeClr=isLM?'#304FFE':'#4A148C';
+          const typeBg=isLM?'#E3F2FD':'#F0EBFE';
+          html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px"><tr>';
+          html+='<td bgcolor="'+dc[1]+'" style="padding:5px 7px;border-left:4px solid '+dc[0]+'">';
+          html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">'+t.id+'</span>';
+          html+=' <span style="font-size:8px;font-weight:700;color:'+typeClr+';background:'+typeBg+';padding:1px 4px">'+t.type+'</span>';
+          html+=' <span style="font-size:9px;font-weight:700;color:'+statusClr+';background:'+statusBg+';padding:1px 5px">'+statusIcon+'</span>';
+          html+='<br><span style="font-size:10px;color:'+destClr+';font-weight:600">'+t.dest+'</span>';
+          if(lsr)html+='<br><span style="font-size:9px;color:'+lsrClr+';font-family:Courier New,monospace">LSR '+lsr+'</span>';
+          html+='</td></tr></table>';
+        }
       }
+      html+='</td>';
     }
-    html+='</td>';
+    html+='</tr>';
   }
-  html+='</tr>';
+  // If no country has any outbounds this week, emit a single empty OUT row so grid stays valid
+  if(!_anyCountryOut){
+    html+='<tr>';
+    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#4A148C;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9">&#128228; OUT<br><span style="font-size:14px;font-weight:800">0</span></td>';
+    for(let i=0;i<_showDays;i++){
+      const d=_weekDays[i];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
+      const cellBg=isPast?'#F4F5F7':isToday?'#FFF8E1':wknd?'#FAFAFA':'#ffffff';
+      html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table></td>';
+    }
+    html+='</tr>';
+  }
 
   html+='</table>';
 
@@ -642,6 +684,11 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   }
 
   let _nwTotal=0;for(const d of _nwDays)_nwTotal+=_nwOut[d].length;
+  // Per-country buckets for next week (reuse _countryOf defined above)
+  const _nwOutC={USA:{},CAN:{},MEX:{}};
+  for(const cc of['USA','CAN','MEX'])for(const d of _nwDays)_nwOutC[cc][d]=[];
+  const _nwOutTot={USA:0,CAN:0,MEX:0};
+  for(const d of _nwDays){for(const t of _nwOut[d]){const cc=_countryOf(t.dest);_nwOutC[cc][d].push(t);_nwOutTot[cc]++}}
   if(_nwTotal>0||_nwTotalIn>0){
     html+=_sec('&#128666;','Next Week &#8212; '+_nwLabel,'#304FFE');
     html+='<tr><td style="padding:0 32px 20px">';
@@ -649,7 +696,15 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     // Chips
     html+='<tr><td colspan="8" style="padding:0 0 4px 0"><table cellpadding="0" cellspacing="0" border="0"><tr>';
     if(_nwTotalIn>0)html+='<td bgcolor="#E6F5ED" style="padding:5px 14px;font-size:11px;font-weight:700;color:#12804A;border:none">&#128229; '+_nwTotalIn+' inbound</td><td style="width:8px"></td>';
-    if(_nwTotal>0)html+='<td bgcolor="#E3F2FD" style="padding:5px 14px;font-size:11px;font-weight:700;color:#304FFE;border:none">&#128228; '+_nwTotal+' truck'+(_nwTotal>1?'s':'')+' with LSR</td>';
+    if(_nwTotal>0){
+      html+='<td bgcolor="#E3F2FD" style="padding:5px 14px;font-size:11px;font-weight:700;color:#304FFE;border:none">&#128228; '+_nwTotal+' truck'+(_nwTotal>1?'s':'')+' with LSR</td>';
+      html+='<td style="width:10px"></td>';
+      html+='<td bgcolor="#EDE7F6" style="padding:5px 10px;font-size:11px;font-weight:700;color:#4A148C;border:none">&#127482;&#127480; '+_nwOutTot.USA+'</td>';
+      html+='<td style="width:4px"></td>';
+      html+='<td bgcolor="#E3F2FD" style="padding:5px 10px;font-size:11px;font-weight:700;color:#0D47A1;border:none">&#127464;&#127462; '+_nwOutTot.CAN+'</td>';
+      html+='<td style="width:4px"></td>';
+      html+='<td bgcolor="#E8F5E9" style="padding:5px 10px;font-size:11px;font-weight:700;color:#1B5E20;border:none">&#127474;&#127485; '+_nwOutTot.MEX+'</td>';
+    }
     html+='</tr></table></td></tr>';
     // Header
     html+='<tr><td bgcolor="#F4F5F7" style="padding:10px 10px;width:52px;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9"></td>';
@@ -686,35 +741,54 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     }
     html+='</tr>';
 
-    // Outbound row
-    html+='<tr>';
-    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#304FFE;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9">&#128228; OUT<br><span style="font-size:14px;font-weight:800">'+_nwTotal+'</span></td>';
-    for(let i=0;i<7;i++){
-      const trucks=_nwOut[_nwDays[i]];const wknd=i>=5;
-      const cellBg=wknd?'#FAFAFA':'#ffffff';
-      html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED">';
-      if(trucks.length===0){
-        if(wknd)html+='';
-        else html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>';
-      } else {
-        for(const t of trucks){
-          const dc=t.type==='LP'?_dClr(t.dest):['#304FFE','#E3F2FD'];
-          const dest=clDisp(t.dest);
-          const prefix=t.type==='LP'?'LP-':'';
-          html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px"><tr>';
-          html+='<td bgcolor="'+dc[1]+'" style="padding:5px 7px;border-left:4px solid '+dc[0]+'">';
-          const _nwFa=t.type==='LP'?_faForLP(parseInt(String(t.id).replace('LP-',''))):_faForLM(t.dest,t.lsr);
-          html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">'+prefix+t.id+'</span>';
-          html+=' <span style="font-size:9px;font-weight:700;color:#304FFE;background:#BBDEFB;padding:1px 5px">&#9654;</span>';
-          if(_nwFa){const _nwFas=[...new Set(_nwFa.map(i=>i.fa||'FA'))].join(', ');html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">'+_nwFas+'</span>';}
-          html+='<br><span style="font-size:10px;color:#444;font-weight:600">'+dest+'</span>';
-          html+='<br><span style="font-size:9px;color:#888;font-family:Courier New,monospace">LSR '+t.lsr+'</span>';
-          html+='</td></tr></table>';
+    // Outbound rows — one per country (USA/CAN/MEX), only render countries with activity
+    const _nwCRows=[
+      {cc:'USA',flag:'&#127482;&#127480;',labelClr:'#4A148C'},
+      {cc:'CAN',flag:'&#127464;&#127462;',labelClr:'#0D47A1'},
+      {cc:'MEX',flag:'&#127474;&#127485;',labelClr:'#1B5E20'}
+    ];
+    const _nwAnyOut=_nwCRows.some(r=>_nwOutTot[r.cc]>0);
+    for(let ri=0;ri<_nwCRows.length;ri++){
+      const cRow=_nwCRows[ri];
+      if(!_nwOutTot[cRow.cc])continue;
+      html+='<tr>';
+      html+='<td bgcolor="#F4F5F7" style="padding:8px 6px;font-size:10px;font-weight:700;color:'+cRow.labelClr+';text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:14px">'+cRow.flag+'</span><br><span style="font-size:9px">'+cRow.cc+'</span><br><span style="font-size:13px;font-weight:800">'+_nwOutTot[cRow.cc]+'</span></td>';
+      for(let i=0;i<7;i++){
+        const trucks=_nwOutC[cRow.cc][_nwDays[i]];const wknd=i>=5;
+        const cellBg=wknd?'#FAFAFA':'#ffffff';
+        html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED">';
+        if(trucks.length===0){
+          if(wknd)html+='';
+          else html+='<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table>';
+        } else {
+          for(const t of trucks){
+            const dc=t.type==='LP'?_dClr(t.dest):['#304FFE','#E3F2FD'];
+            const dest=clDisp(t.dest);
+            const prefix=t.type==='LP'?'LP-':'';
+            html+='<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px"><tr>';
+            html+='<td bgcolor="'+dc[1]+'" style="padding:5px 7px;border-left:4px solid '+dc[0]+'">';
+            const _nwFa=t.type==='LP'?_faForLP(parseInt(String(t.id).replace('LP-',''))):_faForLM(t.dest,t.lsr);
+            html+='<span style="font-size:11px;font-weight:800;color:'+dc[0]+';font-family:Courier New,monospace">'+prefix+t.id+'</span>';
+            html+=' <span style="font-size:9px;font-weight:700;color:#304FFE;background:#BBDEFB;padding:1px 5px">&#9654;</span>';
+            if(_nwFa){const _nwFas=[...new Set(_nwFa.map(i=>i.fa||'FA'))].join(', ');html+=' <span style="font-size:8px;font-weight:700;color:#0891B2;background:#ECFEFF;padding:1px 4px;border:1px solid #A5F3FC">'+_nwFas+'</span>';}
+            html+='<br><span style="font-size:10px;color:#444;font-weight:600">'+dest+'</span>';
+            html+='<br><span style="font-size:9px;color:#888;font-family:Courier New,monospace">LSR '+t.lsr+'</span>';
+            html+='</td></tr></table>';
+          }
         }
+        html+='</td>';
       }
-      html+='</td>';
+      html+='</tr>';
     }
-    html+='</tr>';
+    if(!_nwAnyOut){
+      html+='<tr>';
+      html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#304FFE;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9">&#128228; OUT<br><span style="font-size:14px;font-weight:800">0</span></td>';
+      for(let i=0;i<7;i++){
+        const wknd=i>=5;const cellBg=wknd?'#FAFAFA':'#ffffff';
+        html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table></td>';
+      }
+      html+='</tr>';
+    }
     html+='</table></td></tr>';
   }
   }catch(e){console.error('Next week section error:',e)}
