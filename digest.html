@@ -399,8 +399,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   let html='<!--[if mso]><style type="text/css">table{border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt}td{mso-line-height-rule:exactly;border:none}img{-ms-interpolation-mode:bicubic}</style><![endif]-->'+
   '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F0F0F5" style="'+_T+'margin:0;padding:0;width:100%;background:#F0F0F5;font-family:Segoe UI,Helvetica,Arial,sans-serif">'+
   '<tr><td align="center" valign="top" bgcolor="#F0F0F5" style="padding:20px 10px;background:#F0F0F5;border:none">'+
-  '<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="800" align="center" style="'+_T+'"><tr><td style="border:none"><![endif]-->'+
-  '<table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="'+_T+'margin:0 auto;max-width:800px;width:100%">'+
+  '<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="960" align="center" style="'+_T+'"><tr><td style="border:none"><![endif]-->'+
+  '<table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="'+_T+'margin:0 auto;max-width:960px;width:100%">'+
   '<tr><td bgcolor="#4A148C" style="padding:28px 32px;color:#ffffff;font-family:Segoe UI,Helvetica,Arial,sans-serif;'+_B+'">'+
     '<span style="font-size:11px;color:#C5B3E6">FIFA WORLD CUP 2026&#8482; &middot; FF&amp;E SUPPLY CHAIN</span><br>'+
     '<b style="font-size:26px;color:#ffffff">FF&amp;E Daily Digest</b><br>'+
@@ -519,7 +519,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
 
   // Week summary chips row
-  html+='<tr><td colspan="'+(_showDays+1)+'" style="padding:0 0 4px 0">';
+  html+='<tr><td colspan="'+(_showDays+2)+'" style="padding:0 0 4px 0">';
   html+='<table cellpadding="0" cellspacing="0" border="0"><tr>';
   html+='<td bgcolor="#E6F5ED" style="padding:5px 14px;font-size:11px;font-weight:700;color:#12804A;border:none">&#128229; '+_wkTotalIn+' inbound</td>';
   html+='<td style="width:8px"></td>';
@@ -534,7 +534,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
   // Header row
   html+='<tr>';
-  html+='<td bgcolor="#F4F5F7" style="padding:10px 10px;width:52px;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9"></td>';
+  html+='<td bgcolor="#F4F5F7" style="padding:10px 10px;width:44px;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9"></td>';
+  html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;width:72px;font-size:9px;font-weight:700;color:#666;text-align:center;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9;letter-spacing:0.5px">TOTAL</td>';
   for(let i=0;i<_showDays;i++){
     const isToday=_weekDays[i]===dShort;
     const dateLabel=(new Date(_weekDays[i]+'T12:00:00')).toLocaleDateString('en-US',{month:'short',day:'numeric'});
@@ -561,7 +562,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
 
   // Inbound row
   html+='<tr>';
-  html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#12804A;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9;border-bottom:2px solid #E2E4E9">&#128229; IN<br><span style="font-size:14px;font-weight:800">'+_wkTotalIn+'</span></td>';
+  html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:10px;font-weight:700;color:#12804A;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9;border-bottom:2px solid #E2E4E9"><span style="font-size:16px">&#128229;</span><br>IN</td>';
+  html+='<td bgcolor="#F4F5F7" style="padding:10px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9;border-bottom:2px solid #E2E4E9"><span style="font-size:18px;font-weight:800;color:#12804A;font-family:Courier New,monospace">'+_wkTotalIn+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">INBOUND</span></td>';
   for(let i=0;i<_showDays;i++){
     const d=_weekDays[i];const items=_wkIn[d];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
     const wkndEmpty=wknd&&items.length===0&&_wkOut[d].length===0;
@@ -600,7 +602,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     const isLast=ri===_cRows.length-1||!_cRows.slice(ri+1).some(r=>_wkOutTot[r.cc]>0);
     const bottomBrd=isLast?'':'1px solid #E2E4E9';
     html+='<tr>';
-    html+='<td bgcolor="#F4F5F7" style="padding:8px 6px;font-size:10px;font-weight:700;color:'+cRow.labelClr+';text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'"><span style="font-size:14px">'+cRow.flag+'</span><br><span style="font-size:9px">'+cRow.cc+'</span><br><span style="font-size:13px;font-weight:800">'+_wkOutTot[cRow.cc]+'</span></td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:8px 6px;font-size:10px;font-weight:700;color:'+cRow.labelClr+';text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'"><span style="font-size:18px">'+cRow.flag+'</span></td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9'+(bottomBrd?';border-bottom:'+bottomBrd:'')+'"><span style="font-size:18px;font-weight:800;color:'+cRow.labelClr+';font-family:Courier New,monospace">'+_wkOutTot[cRow.cc]+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
     for(let i=0;i<_showDays;i++){
       const d=_weekDays[i];const trucks=_wkOutC[cRow.cc][d];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
       const wkndEmpty=wknd&&trucks.length===0;
@@ -639,7 +642,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
   // If no country has any outbounds this week, emit a single empty OUT row so grid stays valid
   if(!_anyCountryOut){
     html+='<tr>';
-    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#4A148C;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9">&#128228; OUT<br><span style="font-size:14px;font-weight:800">0</span></td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:10px;font-weight:700;color:#4A148C;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px">&#128228;</span><br>OUT</td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:10px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:18px;font-weight:800;color:#4A148C;font-family:Courier New,monospace">0</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
     for(let i=0;i<_showDays;i++){
       const d=_weekDays[i];const isPast=d<dShort;const isToday=d===dShort;const wknd=_isWeekend(i);
       const cellBg=isPast?'#F4F5F7':isToday?'#FFF8E1':wknd?'#FAFAFA':'#ffffff';
@@ -694,7 +698,7 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     html+='<tr><td style="padding:0 32px 20px">';
     html+='<table width="100%" cellpadding="0" cellspacing="0" border="0" style="'+_T+'">';
     // Chips
-    html+='<tr><td colspan="8" style="padding:0 0 4px 0"><table cellpadding="0" cellspacing="0" border="0"><tr>';
+    html+='<tr><td colspan="9" style="padding:0 0 4px 0"><table cellpadding="0" cellspacing="0" border="0"><tr>';
     if(_nwTotalIn>0)html+='<td bgcolor="#E6F5ED" style="padding:5px 14px;font-size:11px;font-weight:700;color:#12804A;border:none">&#128229; '+_nwTotalIn+' inbound</td><td style="width:8px"></td>';
     if(_nwTotal>0){
       html+='<td bgcolor="#E3F2FD" style="padding:5px 14px;font-size:11px;font-weight:700;color:#304FFE;border:none">&#128228; '+_nwTotal+' truck'+(_nwTotal>1?'s':'')+' with LSR</td>';
@@ -707,7 +711,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     }
     html+='</tr></table></td></tr>';
     // Header
-    html+='<tr><td bgcolor="#F4F5F7" style="padding:10px 10px;width:52px;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9"></td>';
+    html+='<tr><td bgcolor="#F4F5F7" style="padding:10px 10px;width:44px;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9"></td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;width:72px;font-size:9px;font-weight:700;color:#666;text-align:center;border-right:1px solid #E2E4E9;border-bottom:1px solid #E2E4E9;letter-spacing:0.5px">TOTAL</td>';
     for(let i=0;i<7;i++){
       const dl=(new Date(_nwDays[i]+'T12:00:00')).toLocaleDateString('en-US',{month:'short',day:'numeric'});
       const dn=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i];
@@ -717,7 +722,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     html+='</tr>';
     // Inbound row
     html+='<tr>';
-    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#12804A;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9;border-bottom:2px solid #E2E4E9">&#128229; IN<br><span style="font-size:14px;font-weight:800">'+_nwTotalIn+'</span></td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:10px;font-weight:700;color:#12804A;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9;border-bottom:2px solid #E2E4E9"><span style="font-size:16px">&#128229;</span><br>IN</td>';
+    html+='<td bgcolor="#F4F5F7" style="padding:10px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9;border-bottom:2px solid #E2E4E9"><span style="font-size:18px;font-weight:800;color:#12804A;font-family:Courier New,monospace">'+_nwTotalIn+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">INBOUND</span></td>';
     for(let i=0;i<7;i++){
       const items=_nwIn[_nwDays[i]];const wknd=i>=5;
       const cellBg=wknd?'#FAFAFA':'#ffffff';
@@ -752,7 +758,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
       const cRow=_nwCRows[ri];
       if(!_nwOutTot[cRow.cc])continue;
       html+='<tr>';
-      html+='<td bgcolor="#F4F5F7" style="padding:8px 6px;font-size:10px;font-weight:700;color:'+cRow.labelClr+';text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:14px">'+cRow.flag+'</span><br><span style="font-size:9px">'+cRow.cc+'</span><br><span style="font-size:13px;font-weight:800">'+_nwOutTot[cRow.cc]+'</span></td>';
+      html+='<td bgcolor="#F4F5F7" style="padding:8px 6px;font-size:10px;font-weight:700;color:'+cRow.labelClr+';text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:18px">'+cRow.flag+'</span></td>';
+      html+='<td bgcolor="#F4F5F7" style="padding:8px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:18px;font-weight:800;color:'+cRow.labelClr+';font-family:Courier New,monospace">'+_nwOutTot[cRow.cc]+'</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
       for(let i=0;i<7;i++){
         const trucks=_nwOutC[cRow.cc][_nwDays[i]];const wknd=i>=5;
         const cellBg=wknd?'#FAFAFA':'#ffffff';
@@ -782,7 +789,8 @@ body{margin:0;font-family:'Segoe UI',sans-serif;background:#F0F0F5}
     }
     if(!_nwAnyOut){
       html+='<tr>';
-      html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:9px;font-weight:700;color:#304FFE;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9">&#128228; OUT<br><span style="font-size:14px;font-weight:800">0</span></td>';
+      html+='<td bgcolor="#F4F5F7" style="padding:10px 6px;font-size:10px;font-weight:700;color:#304FFE;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:16px">&#128228;</span><br>OUT</td>';
+      html+='<td bgcolor="#F4F5F7" style="padding:10px 4px;text-align:center;vertical-align:middle;border-right:1px solid #E2E4E9"><span style="font-size:18px;font-weight:800;color:#304FFE;font-family:Courier New,monospace">0</span><br><span style="font-size:8px;color:#666;font-weight:600;letter-spacing:0.5px">TRUCKS</span></td>';
       for(let i=0;i<7;i++){
         const wknd=i>=5;const cellBg=wknd?'#FAFAFA':'#ffffff';
         html+='<td bgcolor="'+cellBg+'" style="padding:8px 5px;vertical-align:top;border-right:1px solid #E8E8ED"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:8px 4px;text-align:center"><span style="font-size:16px;color:#E0E0E0">&#8212;</span></td></tr></table></td>';
