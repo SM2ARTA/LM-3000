@@ -898,8 +898,9 @@ function _faRenderPasteCards(){
       const ps=P.psOvr[it.sku]!==undefined?P.psOvr[it.sku]:nomPs;
       const hasData=pq>0&&ps>0;
       const rawPlt=hasData?(it.qty/pq)*ps:0;
+      const unmixedPlt=hasData?Math.ceil(it.qty/pq)*ps:0;
       const dispPlt=rawPlt>0?Math.round(rawPlt*100)/100:0;
-      if(rawPlt>0){if(isMixed)mixedRaw+=rawPlt;else unmixedSum+=Math.ceil(rawPlt)}
+      if(rawPlt>0){if(isMixed)mixedRaw+=rawPlt;else unmixedSum+=unmixedPlt}
       const pqIsOvr=P.pqOvr[it.sku]!==undefined;
       const psIsOvr=P.psOvr[it.sku]!==undefined;
       const svKey=mapped?(it.sku+'|'+mapped):'';
@@ -916,7 +917,7 @@ function _faRenderPasteCards(){
       h+=`<td><input type="number" value="${pq||''}" min="0" step="1" style="${_inp}border:1px solid ${pqIsOvr?'var(--pu)':hasData?'var(--bd)':'var(--rd)'};color:${pqIsOvr?'var(--pu)':hasData?'var(--tp)':'var(--rd)'}" onchange="window._faPaste.pqOvr['${it.sku}']=parseFloat(this.value)||0;_faRenderPasteCards()" placeholder="—"></td>`;
       h+=`<td><input type="number" value="${ps||''}" min="0" step="0.1" style="${_inp}border:1px solid ${psIsOvr?'var(--pu)':hasData?'var(--bd)':'var(--rd)'};color:${psIsOvr?'var(--pu)':hasData?'var(--tp)':'var(--rd)'}" onchange="window._faPaste.psOvr['${it.sku}']=parseFloat(this.value)||0;_faRenderPasteCards()" placeholder="—"></td>`;
       const pltColor=!hasData?'var(--rd)':isMixed?'var(--cy)':'var(--ac)';
-      const pltDisp=!hasData?'—':isMixed?dispPlt+' ↗':Math.ceil(rawPlt);
+      const pltDisp=!hasData?'—':isMixed?dispPlt+' ↗':unmixedPlt;
       h+=`<td class="mono fw6" style="text-align:right;color:${pltColor}">${pltDisp}</td>`;
       h+=`</tr>`;
     }
@@ -1157,10 +1158,11 @@ function FA_editGroup(id){
     const pq=isAsm?(fn.pqA||mn.pqA||fn.pq||mn.pq||0):(fn.pq||mn.pq||0);
     const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
     const rawPlt=pq>0&&ps>0?(d.qty/pq)*ps:0;
+    const unmixedPlt=pq>0&&ps>0?Math.ceil(d.qty/pq)*ps:0;
     const dispPlt=rawPlt>0?Math.round(rawPlt*100)/100:0;
-    if(rawPlt>0){if(isMixed)mixedRaw+=rawPlt;else unmixedTotal+=Math.ceil(rawPlt)}
+    if(rawPlt>0){if(isMixed)mixedRaw+=rawPlt;else unmixedTotal+=unmixedPlt}
     const pltColor=rawPlt<=0?'var(--rd)':isMixed?'var(--cy)':'var(--ac)';
-    const pltDisp=rawPlt<=0?'—':isMixed?dispPlt+' ↗':Math.ceil(rawPlt);
+    const pltDisp=rawPlt<=0?'—':isMixed?dispPlt+' ↗':unmixedPlt;
     itemRows+=`<tr><td><input type="checkbox" ${isAsm?'checked':''} onchange="FA_toggleItemAsm(${d.id},this.checked,${g.id})" ${isLocked?'disabled':''}></td><td><input type="checkbox" ${isMixed?'checked':''} onchange="FA_toggleItemMixed(${d.id},this.checked,${g.id})" ${isLocked?'disabled':''}></td><td class="mono fw6">${d.sku}</td><td>${d.name}</td><td class="mono" style="text-align:right">${d.qty}</td><td class="mono" style="text-align:right;color:${pq?'var(--ts)':'var(--rd)'}">${pq||'—'}</td><td class="mono" style="text-align:right;color:${ps?'var(--ts)':'var(--rd)'}">${ps||'—'}</td><td class="mono fw6" style="text-align:right;color:${pltColor}">${pltDisp}</td></tr>`;
   }
   const compTotal=(mixedRaw>0?Math.ceil(mixedRaw):0)+unmixedTotal;
@@ -1276,9 +1278,8 @@ function FA_computeGroupPallets(g){
     const pq=isAsm?(fn.pqA||mn.pqA||fn.pq||mn.pq||0):(fn.pq||mn.pq||0);
     const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
     if(pq<=0||ps<=0)continue;
-    const raw=(d.qty/pq)*ps;
-    if(d._mixed)mixedRaw+=raw;
-    else unmixedTotal+=Math.ceil(raw);
+    if(d._mixed)mixedRaw+=(d.qty/pq)*ps;
+    else unmixedTotal+=Math.ceil(d.qty/pq)*ps;
   }
   return Math.round((Math.ceil(mixedRaw)+unmixedTotal)*100)/100;
 }
@@ -1307,6 +1308,16 @@ function _faItemPallets(d){
   const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
   return(pq>0&&ps>0)?(d.qty/pq)*ps:0;
 }
+// Unmixed pallet footprint: ceil(pallets) first, then × pallet-spaces.
+// Partial pallets still occupy their full pallet-space footprint.
+function _faItemPalletsUnmixed(d){
+  const ml3kNom=window._faML3KNom||{};
+  const fn=FA_NOM[d.sku]||{};const mn=ml3kNom[d.sku]||{};
+  const isAsm=!!d._asm;
+  const pq=isAsm?(fn.pqA||mn.pqA||fn.pq||mn.pq||0):(fn.pq||mn.pq||0);
+  const ps=isAsm?(fn.psA||mn.psA||fn.ps||mn.ps||0):(fn.ps||mn.ps||0);
+  return(pq>0&&ps>0)?Math.ceil(d.qty/pq)*ps:0;
+}
 
 // Split a group into sub-groups that fit within capacity.
 // Returns array of {items:[], pallets} — items are demand IDs.
@@ -1318,9 +1329,8 @@ function FA_splitGroup(g, cap){
   const mixed=[],unmixed=[];
   for(const did of g.items){
     const d=FA_DEMAND.find(x=>x.id===did);if(!d)continue;
-    const plt=_faItemPallets(d);
-    if(d._mixed)mixed.push({did,plt});
-    else unmixed.push({did,plt:Math.ceil(plt)});
+    if(d._mixed)mixed.push({did,plt:_faItemPallets(d)});
+    else unmixed.push({did,plt:_faItemPalletsUnmixed(d)});
   }
   // Mixed block is indivisible — ceil of sum
   const mixedPlt=mixed.length?Math.ceil(mixed.reduce((s,m)=>s+m.plt,0)):0;
