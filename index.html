@@ -15174,7 +15174,8 @@ function _fcEmailLeg2Oor(fp,clusterLabel,truckId){
     ' - OOR:      '+(_l1Oor||'-')
   ];
   const body=['Hello,','',introLine,'',...leg1Block,'','Items requiring assembly:',asmLines.length?asmLines.join('\n'):'  (none)','','Thanks,'].join('\n');
-  const cc='materials@fwc2026.org;distribution@fwc2026.org';
+  const _cityCc=_oorCityCc(dest)||_oorCityCc(satOrigin);
+  const cc=(_cityCc?_cityCc+';':'')+'materials@fwc2026.org;distribution@fwc2026.org';
   // TO: city WHS team — Leg 2 origin and destination are the same city
   const _to=_oorCityTo(dest)||_oorCityTo(satOrigin);
   const mailto='mailto:'+encodeURIComponent(_to)+'?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
@@ -17860,7 +17861,7 @@ async function LM_exportLateArrivals(){
 // stripped of "Stadium"/"Broadcast"/"International". Multi-recipient values are
 // already semicolon-delimited per Outlook convention.
 const _OOR_CITY_TO=[
-  {match:/\btoronto\b/i,                      to:'YYZ.FIFAWH@ROCKITCOMPANY.COM'},
+  {match:/\btoronto\b/i,                      to:'zachary.membrere@sosglobal.com;Sophia.Oyedijo@rockitcargo.com;fifa.canada@rockitcargo.com',cc:'YYZ.FIFAWH@ROCKITCOMPANY.COM;Dave.Samaroo@rockitcargo.com'},
   {match:/\bvancouver\b/i,                    to:'YVR.FIFAWH@ROCKITCOMPANY.COM'},
   {match:/\bguadalajara\b/i,                  to:'manuel.terrones@rockitcargo.com;cein.cabrera@rockitcargo.com'},
   {match:/\bmexico\s*city\b/i,                to:'ismael.gonzalez@rockitcargo.com;cein.cabrera@rockitcargo.com'},
@@ -17879,6 +17880,11 @@ const _OOR_CITY_TO=[
 function _oorCityTo(label){
   if(!label)return'';
   for(const r of _OOR_CITY_TO){if(r.match.test(label))return r.to}
+  return'';
+}
+function _oorCityCc(label){
+  if(!label)return'';
+  for(const r of _OOR_CITY_TO){if(r.match.test(label))return r.cc||''}
   return'';
 }
 // Compose a pre-filled OOR email — subject carries OOR# / truck ID / LSR / dest,
@@ -17928,7 +17934,8 @@ function LM_emailOor(truckIdx){
     'Thanks,'
   ];
   const body=bodyLines.join('\n');
-  const cc='materials@fwc2026.org;distribution@fwc2026.org';
+  const _cityCc=_oorCityCc(venueDest)||_oorCityCc(dest);
+  const cc=(_cityCc?_cityCc+';':'')+'materials@fwc2026.org;distribution@fwc2026.org';
   // TO: city WHS team derived from venue/destination (covers both single-leg and 2-leg Leg 1)
   const _to=_oorCityTo(venueDest)||_oorCityTo(dest);
   const mailto='mailto:'+encodeURIComponent(_to)+'?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
