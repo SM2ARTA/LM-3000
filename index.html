@@ -2459,7 +2459,18 @@ function _mxCustNom(sku){
       return{mxDesc:priceMatch[0].d,mxHsCode:priceMatch[0].hs,mxNico:priceMatch[0].ni,mxPrice:priceMatch[0].p};
     }
   }
-  // 2nd priority: name keyword match (no price match found)
+  // 2nd priority: HS code prefix match (6-digit heading from regular customs data)
+  const _hs6=(cn.hsCode||'').replace(/\./g,'').slice(0,6);
+  if(_hs6.length>=6){
+    const hsMatches=_MX_APPROVED.filter(mx=>mx.hs.slice(0,6)===_hs6);
+    if(hsMatches.length===1)return{mxDesc:hsMatches[0].d,mxHsCode:hsMatches[0].hs,mxNico:hsMatches[0].ni,mxPrice:hsMatches[0].p};
+    if(hsMatches.length>1){
+      // Disambiguate by closest price
+      const byPrice=[...hsMatches].sort((a,b)=>Math.abs(a.p-price)-Math.abs(b.p-price));
+      return{mxDesc:byPrice[0].d,mxHsCode:byPrice[0].hs,mxNico:byPrice[0].ni,mxPrice:byPrice[0].p};
+    }
+  }
+  // 3rd priority: name keyword match (English vs Spanish — low hit rate)
   let best=null,bestScore=0;
   for(const mx of _MX_APPROVED){
     let score=0;
