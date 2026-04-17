@@ -2435,11 +2435,9 @@ function _mxCustNom(sku){
   if(co.mxDesc||co.mxHsCode||co.mxPrice!==undefined){
     return{mxDesc:co.mxDesc||'',mxHsCode:co.mxHsCode||'',mxNico:co.mxNico||'',mxPrice:co.mxPrice!==undefined?co.mxPrice:0};
   }
-  // Auto-match for approved sources only (RGS, FCWC25, STP USA, THD, ULINE)
+  // Auto-match any item against the MX approved list by price + name.
+  // All items going to Mexico need customs data for A10 regardless of source.
   const nom=LP_STATE.nomenclature[sku]||{};
-  const src=(nom.source||'').toUpperCase().trim();
-  const _mxSrcOk=src==='RGS'||src==='FCWC25'||src==='THD'||src==='ULINE'||src==='STP USA';
-  if(!_mxSrcOk)return{mxDesc:'',mxHsCode:'',mxNico:'',mxPrice:0};
   const cn=_lpCustNom(sku);
   const price=cn.unitPrice||0;
   const name=(cn.customsName||cn.name||nom.name||'').toLowerCase();
