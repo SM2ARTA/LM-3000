@@ -2485,7 +2485,8 @@ function _mxCustNom(sku){
 // Get customs data for a SKU+destination. For MEX dests, uses MX approved fields when available.
 function _custForDest(sku,dest){
   const nm=_lpCustNom(sku);
-  const isMex=(dest||'').toUpperCase().includes('MEX');
+  const _cd=(dest||'').toUpperCase();
+  const isMex=_cd.includes('MEX')||_cd.includes('GUADALAJARA')||_cd.includes('MONTERREY')||_CCI_MEX_ABBRS.has(LP_matchTransitAbbr(dest));
   if(!isMex)return{desc:nm.customsName||nm.name||sku,hsCode:nm.hsCode||'',country:nm.country||'',unitPrice:nm.unitPrice||0,nico:''};
   const mx=_mxCustNom(sku);
   return{
