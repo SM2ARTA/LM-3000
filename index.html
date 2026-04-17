@@ -6780,6 +6780,7 @@ function LP_showCombinedCIModal(){
       <label id="cciSepLabel" style="display:none;font-size:11px;color:var(--ts);cursor:pointer;margin-right:auto;user-select:none"><input type="checkbox" id="cciSepTabs" style="margin-right:4px;vertical-align:middle">Separate tabs per destination</label>
       <button class="mbtn" onclick="LP_previewCombinedCI()">🔍 Preview</button>
       <button class="mbtn" onclick="LP_exportCombinedCI()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">📄 Export CI</button>
+      <button class="mbtn" onclick="LP_exportCombinedA10()" style="background:#FFF3E0;color:#EF6C00;border-color:#FFCC80">📋 Combined A10</button>
     </div>
   </div>
 </div></div>`;
@@ -7028,6 +7029,73 @@ async function LP_exportA10(truckId){
     const blob=new Blob([rezipped],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
     const url=URL.createObjectURL(blob);const a=document.createElement('a');
     a.href=url;a.download='A10_LP-'+truckId+'_'+dest.replace(/[^a-zA-Z0-9]/g,'_')+'_'+date+'.docx';a.click();
+    URL.revokeObjectURL(url);
+  }catch(e){alert('A10 export error: '+e.message);console.error(e)}
+  if(pov)pov.style.display='none';
+}
+// ── Combined A10 — aggregates MEX-bound demand from Combined CI selection ──
+async function LP_exportCombinedA10(){
+  const{selDests,selSrcs}=_cciGetSelections();
+  // Filter to MEX destinations only
+  const mexDests=selDests.filter(a=>_CCI_MEX_ABBRS.has(a));
+  if(!mexDests.length){alert('No Mexican destinations selected. A10 applies to MEX only (CDMX, GDL, MTY).');return;}
+  if(!selSrcs.length){alert('Select at least one source.');return;}
+  const agg=_cciAggregateItems(mexDests,selSrcs);
+  if(!agg.length){alert('No demand items match the selection.');return;}
+  // Build A10 items with MX customs data (same as single-truck A10)
+  const items=agg.map(s=>{
+    const cd=_custForDest(s.sku,'MEX');
+    return{sku:s.sku,spanishName:cd.desc,hsCode:(cd.hsCode||'').replace('.',''),nico:cd.nico||'',qty:s.qty,unitPrice:cd.unitPrice||0};
+  }).filter(it=>it.qty>0);
+  if(!items.length){alert('No items with customs data for A10.');return;}
+  const pov=document.getElementById('pov');if(pov)pov.style.display='flex';
+  clM();
+  try{
+    const totalValue=items.reduce((s,it)=>s+(it.qty*(it.unitPrice||0)),0);
+    const resp=await fetch('a10_template.docx');
+    if(!resp.ok)throw new Error('A10 template not found');
+    const tplBuf=new Uint8Array(await resp.arrayBuffer());
+    const unzipped=fflate.unzipSync(tplBuf);
+    const docXml=fflate.strFromU8(unzipped['word/document.xml']);
+    const markerIdx=docXml.indexOf('Silla operativa');
+    if(markerIdx<0)throw new Error('Template marker not found');
+    const firstRowStart=docXml.lastIndexOf('<w:tr ',markerIdx);
+    const tblEnd=docXml.indexOf('</w:tbl>',markerIdx);
+    const lastRowEnd=docXml.lastIndexOf('</w:tr>',tblEnd)+7;
+    const firstRowEnd=docXml.indexOf('</w:tr>',firstRowStart)+7;
+    const rowTpl=docXml.substring(firstRowStart,firstRowEnd);
+    const replaceNthText=(xml,n,newVal)=>{
+      let pos=0;
+      for(let i=0;i<=n;i++){
+        pos=xml.indexOf('<w:t>',pos);
+        if(pos<0)pos=xml.indexOf('<w:t ',pos);
+        if(pos<0)return xml;
+        if(i===n){const closeTag=xml.indexOf('</w:t>',pos);const openEnd=xml.indexOf('>',pos)+1;return xml.substring(0,openEnd)+newVal+xml.substring(closeTag)}
+        pos=xml.indexOf('</w:t>',pos)+6;
+      }
+      return xml;
+    };
+    const newRows=items.map(it=>{
+      let row=rowTpl;
+      row=replaceNthText(row,0,it.spanishName||it.sku);
+      row=replaceNthText(row,1,(it.hsCode||'').replace('.',''));
+      row=replaceNthText(row,2,it.nico||'');
+      row=replaceNthText(row,3,it.qty.toLocaleString());
+      row=replaceNthText(row,4,'PIEZA');
+      row=replaceNthText(row,5,(it.unitPrice||0).toFixed(2));
+      row=row.replace(/<w:highlight w:val="yellow"\/>/g,'');
+      return row;
+    }).join('');
+    let newDocXml=docXml.substring(0,firstRowStart)+newRows+docXml.substring(lastRowEnd);
+    newDocXml=newDocXml.replace(/<w:highlight[^/]*\/>/g,'').replace(/<w:highlight[^>]*>[^<]*<\/w:highlight>/g,'');
+    const finalXml=newDocXml.replace(/40,491\.00/g,totalValue.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
+    unzipped['word/document.xml']=fflate.strToU8(finalXml);
+    const rezipped=fflate.zipSync(unzipped,{level:6});
+    const date=new Date().toISOString().slice(0,10);
+    const destLabel=mexDests.length===1?mexDests[0]:'MEX_Combined';
+    const blob=new Blob([rezipped],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');
+    a.href=url;a.download='A10_Combined_'+destLabel+'_'+date+'.docx';a.click();
     URL.revokeObjectURL(url);
   }catch(e){alert('A10 export error: '+e.message);console.error(e)}
   if(pov)pov.style.display='none';
