@@ -209,6 +209,7 @@ body.viewer .fa-admin{display:none!important}
   <span style="font-size:10px;color:var(--tt)">©2026 Vladislav Abramov | <span style="font-weight:600">SM²ARTA™</span> — FA Goods Module</span>
   <span style="margin-left:auto;display:flex;gap:6px">
     <button class="rbtn" onclick="FA_exportAll()" style="background:var(--ps);color:var(--pu);border-color:#D4C5FE">⬇ Export</button>
+    <button class="rbtn" onclick="FA_exportJSON()" style="background:var(--cs,var(--bg));color:var(--cy,var(--ts));border-color:#A5F3FC" title="Export FA demand as JSON for ML5K /fa-manual-demand/import">⬇ JSON</button>
     <button class="rbtn" onclick="FA_help()" style="background:var(--bg);color:var(--ts)">? Help</button>
   </span>
 </div>
@@ -1619,6 +1620,47 @@ async function FA_sync(){
   }
   if(btn){btn.disabled=false;btn.textContent='⟳ Sync'}
   FA_render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORT JSON — shape compatible with ML5K /fa-manual-demand/import
+// ═══════════════════════════════════════════════════════════════
+// Shape: { items: [ { sku, name, venue, fa, qty, biDate, note, ppu }, ... ] }
+// ML5K's mapFaGoods() picks these exact field names (with aliases).
+// One file per export — operator downloads it and uploads on the ML5K
+// FA Demand page via Paste (textarea accepts JSON too) or the import
+// endpoint directly.
+function FA_exportJSON(){
+  if(!FA_DEMAND||FA_DEMAND.length===0){alert('No FA demand to export.');return}
+  const items=FA_DEMAND.filter(d=>d&&d.sku&&d.venue&&d.qty>0).map(d=>{
+    const n=FA_NOM[d.sku]||{};
+    const o={
+      id:d.id,                    // carried as ml3k_id for traceability
+      sku:d.sku,
+      name:d.name||n.name||d.sku,
+      venue:d.venue,              // free-text venue NAME; ML5K resolves against venues.name (case-insensitive)
+      fa:d.fa||'',
+      qty:d.qty,
+      biDate:d.biDate||''
+    };
+    if(d.note)o.note=d.note;
+    if(n.ppu&&n.ppu>1)o.ppu=n.ppu;   // only include when non-default
+    return o;
+  });
+  const payload={
+    _source:'ml3k_fa_goods',
+    _exportedAt:new Date().toISOString(),
+    _count:items.length,
+    items
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`fa-demand-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  console.log('[FA] Exported '+items.length+' demand items to JSON');
 }
 
 // ═══════════════════════════════════════════════════════════════
