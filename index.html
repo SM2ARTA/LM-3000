@@ -9822,6 +9822,58 @@ function cortRowHtml(c){
   return h;
 }
 
+// ── Notify zone: dispatch date = today + 4 days, not yet locked ──
+function _lmNotifyZone(t){
+  const dd=LM_getDateOverride(t)||t.dd||'';
+  if(!dd)return false;
+  if(LM_isDispatched(t))return false;
+  const now=new Date();now.setHours(12,0,0,0);
+  const tgt=new Date(now);tgt.setDate(tgt.getDate()+4);
+  return dk(tgt)===dd;
+}
+function LM_notifyEmail(truckId){
+  const tr=(PLAN_CACHE[sel]||[]).find(x=>x.id===truckId)||(()=>{for(const v in PLAN_CACHE){const f=PLAN_CACHE[v].find(x=>x.id===truckId);if(f)return f}return null})();
+  if(!tr)return;
+  const dd=LM_getDateOverride(tr)||tr.dd||'';
+  const nDate=dd?fF(new Date(dd+'T12:00:00')):'';
+  const tmr=new Date();tmr.setDate(tmr.getDate()+1);
+  const tDate=fF(tmr);
+  const cc='materials@fwc2026.org';
+  const subject='ACTION REQUIRED! Action required: Review your '+nDate+' deliveries in SM\u00B2ARTA';
+  const body=[
+    'Hello,',
+    '',
+    'You have FF&E items scheduled for delivery on '+nDate+'.',
+    '',
+    'Please log into SM\u00B2ARTA and review your line items for that date before tomorrow at 9:00 AM. After that deadline, your items will be locked, and the truck will be built.',
+    '',
+    'WHAT TO DO:',
+    '',
+    '1. Log into SM\u00B2ARTA and filter by your venue and the bump-in date above.',
+    '2. Want an item delivered on that date? Leave it as-is \u2014 no action needed.',
+    '3. Don\u0027t need it that date? Change the bump-in date to a later date.',
+    '4. Complete all changes before '+tDate+' at 9:00 AM.',
+    '',
+    'PREFERRED TRUCK ARRIVAL TIME:',
+    '',
+    'Please reply to this email with your preferred truck arrival time. Our distribution team will do their best to accommodate your request.',
+    '',
+    'REMINDERS',
+    '',
+    '- Warehouse items only: This process applies to non-CORT, non-Staples items only.',
+    '- CORT changes: Contact your CORT point of contact via group chat.',
+    '- Staples: Dates cannot be changed \u2014 follow the dates shared previously.',
+    '- No weekend deliveries: If any line items have a Saturday or Sunday bump-in date, please reschedule to a weekday.',
+    '',
+    'Questions? Reply to this email and we\u0027ll get back to you.',
+    '',
+    'Regards,',
+    'Materials Management Team'
+  ].join('\n');
+  const mailto='mailto:?cc='+encodeURIComponent(cc)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  window.open(mailto);
+}
+
 // ── Shared truck card (used in V26 timeline + LM trucks view) ──
 // t: truck object, opts: {tCap, displayName, dayLabel, onClickFn, exportFn, showExcludeCheckbox, isLM}
 function renderTruckCard(t,opts){
@@ -9852,6 +9904,7 @@ function renderTruckCard(t,opts){
       ${(()=>{const _lsr=LM_getLsr(t);const _dest=t.destLabel||t.dest||opts.displayName||'';const _faIt=_faItemsForTruck(t.id,_dest,_lsr);if(!_faIt.length)return'';const _fmtBi=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}catch(e){return d}};const byGrp={};_faIt.forEach(i=>{const k=i._groupSku||i.biDate||'';if(!byGrp[k])byGrp[k]={count:0,qty:0,plt:0,fas:new Set(),biDate:i.biDate||''};byGrp[k].count++;byGrp[k].qty+=i.qty;byGrp[k].plt=i._groupPlt||byGrp[k].plt||i.pallets||0;byGrp[k].fas.add(i.fa||'FA');if(i.biDate)byGrp[k].biDate=i.biDate});const totalPlt=Object.values(byGrp).reduce((s,g)=>s+g.plt,0);const totalQty=Object.values(byGrp).reduce((s,g)=>s+g.qty,0);const totalCount=_faIt.length;const allFas=new Set();Object.values(byGrp).forEach(g=>g.fas.forEach(f=>allFas.add(f)));const bis=[...new Set(Object.values(byGrp).map(g=>g.biDate).filter(Boolean))].sort();const biStr=bis.length===1?' · BI: '+_fmtBi(bis[0]):(bis.length>1?' · BI: '+_fmtBi(bis[0])+'–'+_fmtBi(bis[bis.length-1]):'');return`<div style="font-size:9px;margin-top:2px"><span class="bg bgs" style="background:#ECFEFF;color:#0891B2;border:1px solid #A5F3FC">📦 FA: ${totalCount} items · ${totalQty}qty · ${totalPlt}plt${biStr}</span></div>`})()}
     </div></div>
     <div style="display:flex;align-items:center;gap:6px">
+      ${_lmNotifyZone(t)?`<button class="tc-xl" onclick="event.stopPropagation();LM_notifyEmail('${t.id}')" title="Notify venue (dispatch in 4 days)" style="background:var(--os);color:var(--or);border-color:#F5D6B8">📧</button>`:''}
       ${opts.exportFn?`<button class="tc-xl" onclick="event.stopPropagation();${opts.exportFn}" title="Download shipping order (.xlsx)">⬇</button>`:''}
       <div class="tfn" style="color:${fc}">${pDisp}<span>/${tCap}</span></div>
     </div></div>
